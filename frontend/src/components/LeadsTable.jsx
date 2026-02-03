@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import Swal from 'sweetalert2';
 
 const LeadsTable = ({ source, title }) => {
     const [leads, setLeads] = useState([]);
@@ -28,7 +29,7 @@ const LeadsTable = ({ source, title }) => {
             if (searchTerm) params.q = searchTerm;
             if (statusFilter) params.status = statusFilter;
 
-            const response = await axios.get('http://localhost:8000/leads/', {
+            const response = await axios.get('http://localhost:8001/leads/', {
                 params,
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -75,14 +76,14 @@ const LeadsTable = ({ source, title }) => {
         try {
             const token = localStorage.getItem('token');
             // 1. Get Roles to find 'asesor' id
-            const rolesRes = await axios.get('http://localhost:8000/roles/', {
+            const rolesRes = await axios.get('http://localhost:8001/roles/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const asesorRole = rolesRes.data.find(r => r.name === 'asesor');
 
             if (asesorRole) {
                 // 2. Get Users with that role
-                const usersRes = await axios.get('http://localhost:8000/users/', {
+                const usersRes = await axios.get('http://localhost:8001/users/', {
                     params: { role_id: asesorRole.id },
                     headers: { Authorization: `Bearer ${token}` }
                 });
@@ -102,7 +103,7 @@ const LeadsTable = ({ source, title }) => {
         if (!selectedAdvisor) return;
         try {
             const token = localStorage.getItem('token');
-            await axios.put('http://localhost:8000/leads/bulk-assign', {
+            await axios.put('http://localhost:8001/leads/bulk-assign', {
                 lead_ids: selectedLeads,
                 assigned_to_id: parseInt(selectedAdvisor)
             }, {
@@ -113,10 +114,10 @@ const LeadsTable = ({ source, title }) => {
             setIsAssignModalOpen(false);
             setSelectedLeads([]);
             fetchLeads(); // Refresh data
-            alert("Asignación completada.");
+            Swal.fire('Asignación Completada', 'Los leads han sido asignados correctamente.', 'success');
         } catch (error) {
             console.error("Error assigning leads", error);
-            alert("Error al asignar leads.");
+            Swal.fire('Error', 'Error al asignar leads.', 'error');
         }
     };
 

@@ -8,9 +8,13 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import CompaniesList from './pages/CompaniesList';
 import UsersList from './pages/UsersList';
+
 import UserForm from './pages/UserForm';
 import InventoryList from './pages/InventoryList';
 import VehicleForm from './pages/VehicleForm';
+import LeadsBoard from './pages/LeadsBoard';
+import SalesDashboard from './pages/SalesDashboard'; // Admin Sales Dashboard
+import MySales from './pages/MySales'; // Advisor My Sales
 import IntegrationsConfig from './pages/IntegrationsConfig';
 import FacebookLeads from './pages/leads/FacebookLeads';
 import TikTokLeads from './pages/leads/TikTokLeads';
@@ -44,21 +48,28 @@ function App() {
           {/* Protected Routes */}
           <Route element={<PrivateRoute />}>
             <Route element={<Layout />}>
-              <Route path="/admin/dashboard" element={<Reports />} />
+              <Route path="/admin/dashboard" element={<Dashboard />} />
 
               {/* Super Admin & Company Admin Routes */}
               <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin']} />}>
                 <Route path="/admin/users" element={<UsersList />} />
                 <Route path="/admin/users/new" element={<UserForm />} />
                 <Route path="/admin/users/:id" element={<UserForm />} />
+                <Route path="/admin/integrations" element={<IntegrationsConfig />} />
+              </Route>
 
+              {/* Shared Routes (Admin, Super Admin, Advisor) */}
+              <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor']} />}>
                 {/* Inventory Routes */}
                 <Route path="/admin/inventory" element={<InventoryList />} />
                 <Route path="/admin/inventory/new" element={<VehicleForm />} />
                 <Route path="/admin/inventory/:id" element={<VehicleForm />} />
-                <Route path="/admin/integrations" element={<IntegrationsConfig />} />
 
                 {/* Leads Routes */}
+                <Route path="/admin/leads" element={<LeadsBoard />} />
+                <Route path="/admin/sales" element={<SalesDashboard />} />
+                <Route path="/admin/my-sales" element={<MySales />} />
+
                 <Route path="/admin/leads/facebook" element={<FacebookLeads />} />
                 <Route path="/admin/leads/tiktok" element={<TikTokLeads />} />
                 <Route path="/admin/leads/whatsapp" element={<WhatsAppLeads />} />
@@ -81,7 +92,7 @@ function App() {
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </Router>
-    </AuthProvider>
+    </AuthProvider >
   );
 }
 

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
+from datetime import datetime
 
 class CompanyBase(BaseModel):
     name: str
@@ -37,12 +38,18 @@ class UserCreate(UserBase):
     password: str
     role_id: int
     company_id: Optional[int] = None
+    commission_percentage: Optional[float] = 0.0
+    base_salary: Optional[int] = None
+    payment_dates: Optional[str] = None
 
 class UserUpdate(BaseModel):
     email: Optional[str] = None
     password: Optional[str] = None
     role_id: Optional[int] = None
     company_id: Optional[int] = None
+    commission_percentage: Optional[float] = None
+    base_salary: Optional[int] = None
+    payment_dates: Optional[str] = None
 
 class User(UserBase):
     id: int
@@ -50,6 +57,10 @@ class User(UserBase):
     role: Optional[Role] = None
     company_id: Optional[int] = None
     company: Optional[Company] = None
+    commission_percentage: Optional[float] = 0.0
+    base_salary: Optional[int] = None
+    payment_dates: Optional[str] = None
+    created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -95,7 +106,6 @@ class LeadBase(BaseModel):
     phone: Optional[str] = None
     message: Optional[str] = None
     status: Optional[str] = "new"
-    updated_at: Optional[str] = None
 
 class LeadCreate(LeadBase):
     company_id: Optional[int] = None
@@ -104,13 +114,29 @@ class LeadUpdate(BaseModel):
     status: Optional[str] = None
     message: Optional[str] = None
     assigned_to_id: Optional[int] = None
+    comment: Optional[str] = None # For history tracking
+
+class LeadHistory(BaseModel):
+    id: int
+    lead_id: int
+    user_id: Optional[int] = None
+    previous_status: Optional[str] = None
+    new_status: Optional[str] = None
+    comment: Optional[str] = None
+    created_at: Optional[datetime] = None
+    
+    # Optional: Embed User info if needed
+    # user: Optional[User] = None
+    
+    model_config = ConfigDict(from_attributes=True)
 
 class Lead(LeadBase):
     id: int
-    created_at: Optional[str] = None
+    created_at: Optional[datetime] = None
     company_id: int
     assigned_to_id: Optional[int] = None
     assigned_to: Optional[User] = None
+    history: List[LeadHistory] = []
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -151,6 +177,8 @@ class CarBrand(CarBrandBase):
     models: List[CarModel] = []
     model_config = ConfigDict(from_attributes=True)
 
+
+
 # --- VEHICLES ---
 class VehicleBase(BaseModel):
     make: str
@@ -187,4 +215,42 @@ class Vehicle(VehicleBase):
 
 class VehicleList(BaseModel):
     items: List[Vehicle]
+    total: int
+
+# --- SALES ---
+from datetime import datetime
+
+class SaleBase(BaseModel):
+    sale_price: int
+    
+class SaleCreate(SaleBase):
+    vehicle_id: int
+    lead_id: Optional[int] = None
+    company_id: Optional[int] = None
+    seller_id: Optional[int] = None
+
+class SaleUpdate(BaseModel):
+    status: str # approved, rejected
+
+class Sale(SaleBase):
+    id: int
+    vehicle_id: int
+    lead_id: Optional[int] = None
+    seller_id: int
+    company_id: int
+    commission_percentage: float
+    commission_amount: float
+    net_revenue: float
+    status: str
+    sale_date: Optional[datetime] = None
+    
+    vehicle: Optional[Vehicle] = None
+    leads: Optional[Lead] = None # Using plural purely to avoid shadowing, though singular is logic
+    seller: Optional[User] = None
+    approved_by: Optional[User] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class SaleList(BaseModel):
+    items: List[Sale]
     total: int

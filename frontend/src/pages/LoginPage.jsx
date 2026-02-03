@@ -19,14 +19,14 @@ const LoginPage = () => {
             formData.append('username', email);
             formData.append('password', password);
 
-            const response = await axios.post('http://localhost:8000/token', formData, {
+            const response = await axios.post('http://localhost:8001/token', formData, {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 }
             });
 
             // Use context login which sets token and fetches user
-            login(response.data.access_token);
+            await login(response.data.access_token);
             navigate('/admin/dashboard');
 
         } catch (err) {

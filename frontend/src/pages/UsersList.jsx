@@ -18,7 +18,7 @@ const UsersList = () => {
             const params = { skip, limit };
             if (search) params.q = search;
 
-            const response = await axios.get('http://localhost:8000/users/', {
+            const response = await axios.get('http://localhost:8001/users/', {
                 params,
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -82,7 +82,9 @@ const UsersList = () => {
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rol</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Empresa ID</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registro</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Comisión %</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sueldo</th>
                                 <th scope="col" className="relative px-6 py-3"><span className="sr-only">Editar</span></th>
                             </tr>
                         </thead>
@@ -122,7 +124,13 @@ const UsersList = () => {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {user.company_id ? user.company_id : '-'}
+                                                {user.created_at ? new Date(user.created_at).toLocaleDateString() : '-'}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                {user.commission_percentage ? `${user.commission_percentage}%` : '0%'}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                {user.base_salary ? `$${user.base_salary.toLocaleString()}` : '-'}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                 <Link to={`/admin/users/${user.id}`} className="text-blue-600 hover:text-blue-900 hover:underline">Editar</Link>
@@ -168,8 +176,8 @@ const UsersList = () => {
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 };
 

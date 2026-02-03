@@ -18,7 +18,7 @@ const CompaniesList = () => {
             const params = { skip, limit };
             if (search) params.q = search;
 
-            const response = await axios.get('http://localhost:8000/companies/', {
+            const response = await axios.get('http://localhost:8001/companies/', {
                 params,
                 headers: { Authorization: `Bearer ${token}` }
             });

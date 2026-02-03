@@ -1,16 +1,29 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import Swal from 'sweetalert2';
 
 const Layout = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
     const location = useLocation();
-    const { user, logout } = useAuth();
+    const { user, logout, loading } = useAuth(); // Destructure loading
+
+    console.log("Layout Render - User:", user, "Loading:", loading);
+
+    if (loading) {
+        return <div className="min-h-screen flex items-center justify-center bg-gray-100 text-slate-500">Cargando menú...</div>;
+    }
+
+    // Role Map Fallback
+    const ROLE_MAP = { 1: 'super_admin', 2: 'admin', 3: 'asesor', 4: 'user' };
 
     // Role Checks
-    // Handle role being an object (new) or string (legacy)
-    const roleName = user?.role?.name || (typeof user?.role === 'string' ? user?.role : '');
+    // Handle role being an object (new), string (legacy), or fallback to ID
+    let roleName = user?.role?.name || (typeof user?.role === 'string' ? user?.role : '');
+    if (!roleName && user?.role_id) {
+        roleName = ROLE_MAP[user.role_id] || '';
+    }
 
     const isGlobalAdmin = roleName === 'super_admin' && !user?.company_id;
     const isCompanyAdmin = roleName === 'admin' || (roleName === 'super_admin' && user?.company_id);
@@ -43,6 +56,27 @@ const Layout = () => {
             {!isCollapsed && <span className="font-medium whitespace-nowrap overflow-hidden transition-all duration-300">{label}</span>}
         </Link>
     );
+
+    const handleLogout = () => {
+        Swal.fire({
+            title: '¿Cerrar Sesión?',
+            text: "¿Estás seguro que deseas salir del sistema?",
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, cerrar sesión',
+            cancelButtonText: 'Cancelar',
+            customClass: {
+                confirmButton: 'bg-blue-600 text-white px-4 py-2 rounded-lg ml-2',
+                cancelButton: 'bg-red-600 text-white px-4 py-2 rounded-lg'
+            },
+            buttonsStyling: false
+        }).then((result) => {
+            if (result.isConfirmed) {
+                logout();
+                window.location.href = '/login';
+            }
+        });
+    };
 
     return (
         <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row font-sans">
@@ -94,9 +128,14 @@ const Layout = () => {
                         >
                             <span className="font-bold text-xl">A</span>
                         </div>
-                        <span className="font-bold text-lg tracking-wide whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">
-                            {user?.company?.name || 'AutosQP'}
-                        </span>
+                        <div className="flex flex-col min-w-0">
+                            <span className="font-bold text-lg tracking-wide whitespace-nowrap overflow-hidden text-ellipsis capitalize">
+                                {user?.email?.split('@')[0].replace('.', ' ') || 'Usuario'}
+                            </span>
+                            <span className="text-xs text-blue-200 truncate font-normal opacity-80">
+                                {isAdvisor ? 'Asesor Comercial' : (user?.company?.name || 'AutosQP')}
+                            </span>
+                        </div>
                     </div>
 
                     {/* Only show logo icon centered when collapsed */}
@@ -143,36 +182,48 @@ const Layout = () => {
                         </>
                     )}
 
-                    {/* Company Admin Links */}
-                    {isCompanyAdmin && (
+                    {/* Company Admin & Advisor Links */}
+                    {(isCompanyAdmin || isAdvisor) && (
                         <>
                             <NavItem
                                 to="/admin/inventory"
                                 label="Inventario"
                                 icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>}
                             />
+
+                            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 mt-4 px-4">CRM</div>
                             <NavItem
-                                to="/admin/users"
-                                label="Usuarios"
-                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>}
+                                to="/admin/leads"
+                                label="Tablero de Leads"
+                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
                             />
+
+                            {isCompanyAdmin && (
+                                <>
+                                    <NavItem
+                                        to="/admin/sales"
+                                        label="Finanzas y Ventas"
+                                        icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                                    />
+
+                                    <hr className="my-4 border-gray-700" />
+                                    <NavItem
+                                        to="/admin/users"
+                                        label="Usuarios"
+                                        icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>}
+                                    />
+                                </>
+                            )}
                         </>
                     )}
 
-                    {/* Advisor Links */}
+                    {/* Advisor - Mis Ventas only (Inventory is above) */}
                     {isAdvisor && (
-                        <>
-                            <NavItem
-                                to="/admin/inventory"
-                                label="Inventario"
-                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>}
-                            />
-                            <NavItem
-                                to="#"
-                                label="Mis Ventas"
-                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-                            />
-                        </>
+                        <NavItem
+                            to="/admin/my-sales"
+                            label="Mis Ventas"
+                            icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                        />
                     )}
 
                     {/* Customer Links */}
@@ -215,6 +266,13 @@ const Layout = () => {
                             />
 
                             <div className="my-4 border-t border-white/10 mx-4"></div>
+                        </>
+                    )}
+
+                    {(roleName === 'admin' || roleName === 'super_admin') && (
+                        <>
+                            <hr className="my-4 border-gray-700" />
+
 
                             <NavItem
                                 to="/admin/integrations"
@@ -228,7 +286,7 @@ const Layout = () => {
                 {/* User Profile / Logout */}
                 <div className="p-4 border-t border-white/10">
                     <button
-                        onClick={() => { logout(); window.location.href = '/login'; }}
+                        onClick={handleLogout}
                         className={`
                             w-full flex items-center gap-3 py-3 px-4 rounded-xl text-red-300 hover:bg-red-500/20 hover:text-red-200 transition-colors
                             ${isCollapsed ? 'justify-center px-0' : ''}

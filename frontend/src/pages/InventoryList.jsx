@@ -1,12 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
+import Swal from 'sweetalert2';
+import { useAuth } from '../context/AuthContext';
 
 const InventoryList = () => {
+    const { user } = useAuth();
+    const isAdvisor = user?.role?.name === 'asesor' || user?.role === 'asesor';
+
     const [vehicles, setVehicles] = useState([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
     const [limit] = useState(50); // Max 50 per page as requested
+    const [activeTab, setActiveTab] = useState('available'); // 'available' or 'sold'
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -15,10 +21,10 @@ const InventoryList = () => {
         try {
             const token = localStorage.getItem('token');
             const skip = (page - 1) * limit;
-            const params = { skip, limit };
+            const params = { skip, limit, status: activeTab }; // Filter by status
             if (search) params.q = search;
 
-            const response = await axios.get('http://localhost:8000/vehicles/', {
+            const response = await axios.get('http://localhost:8001/vehicles/', {
                 params,
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -32,8 +38,9 @@ const InventoryList = () => {
     };
 
     useEffect(() => {
+        setPage(1); // Reset page when tab changes
         fetchVehicles();
-    }, [page, search]);
+    }, [page, search, activeTab]);
 
     const handleSearch = (e) => {
         setSearch(e.target.value);
@@ -41,17 +48,33 @@ const InventoryList = () => {
     };
 
     const handleMarkSold = async (vehicleId) => {
-        if (!window.confirm("¿Estás seguro de marcar este vehículo como VENDIDO?")) return;
+        const result = await Swal.fire({
+            title: '¿Estás seguro?',
+            text: "¿Quieres marcar este vehículo como VENDIDO?",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, marcar vendido',
+            cancelButtonText: 'Cancelar',
+            customClass: {
+                confirmButton: 'bg-blue-600 text-white px-4 py-2 rounded-lg ml-2',
+                cancelButton: 'bg-red-600 text-white px-4 py-2 rounded-lg'
+            },
+            buttonsStyling: false
+        });
+
+        if (!result.isConfirmed) return;
+
         try {
             const token = localStorage.getItem('token');
-            await axios.put(`http://localhost:8000/vehicles/${vehicleId}`,
+            await axios.put(`http://localhost:8001/vehicles/${vehicleId}`,
                 { status: 'sold' },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
+            Swal.fire('Vendido', 'El vehículo ha sido marcado como vendido.', 'success');
             fetchVehicles(); // Refresh list
         } catch (error) {
             console.error("Error marking as sold", error);
-            alert("Error al actualizar el estado");
+            Swal.fire('Error', 'Error al actualizar el estado', 'error');
         }
     };
 
@@ -68,14 +91,67 @@ const InventoryList = () => {
                     <h1 className="text-3xl font-extrabold text-slate-800">Inventario de Vehículos</h1>
                     <p className="text-slate-500 mt-2">Gestiona el inventario de tu concesionario.</p>
                 </div>
-                <div className="mt-4 md:mt-0">
+                <div className="mt-4 md:mt-0 flex gap-2">
+                    <button
+                        onClick={async () => {
+                            const brands = ['Renault', 'Chevrolet', 'Mazda', 'Toyota', 'Kia', 'Ford'];
+                            const models = ['Logan', 'Spark', 'Mazda 3', 'Hilux', 'Picanto', 'Fiesta'];
+                            const rand = Math.floor(Math.random() * brands.length);
+                            const demoVehicle = {
+                                make: brands[rand],
+                                model: models[rand],
+                                year: 2018 + Math.floor(Math.random() * 7),
+                                price: (20 + Math.floor(Math.random() * 80)) * 1000000,
+                                plate: "DEM-" + Math.floor(100 + Math.random() * 900),
+                                mileage: Math.floor(Math.random() * 50000),
+                                color: "Gris",
+                                status: "available",
+                                description: "Vehículo de prueba generado automáticamente"
+                            };
+                            try {
+                                const token = localStorage.getItem('token');
+                                await axios.post('http://localhost:8001/vehicles/', demoVehicle, {
+                                    headers: { Authorization: `Bearer ${token}` }
+                                });
+                                fetchVehicles();
+                                Swal.fire('Simulación', 'Vehículo de prueba creado', 'success');
+                            } catch (error) {
+                                Swal.fire('Error', "Error simulando vehículo: " + error.message, 'error');
+                            }
+                        }}
+                        className="px-4 py-2 bg-purple-600 text-white font-bold rounded-lg shadow hover:bg-purple-700 transition text-sm"
+                    >
+                        + Simular Vehículo
+                    </button>
                     <Link to="/admin/inventory/new" className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg shadow hover:bg-blue-700 transition">
                         + Nuevo Vehículo
                     </Link>
                 </div>
             </header>
 
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
+            {/* Status Tabs */}
+            <div className="flex space-x-1 mb-4 border-b border-gray-200">
+                <button
+                    onClick={() => setActiveTab('available')}
+                    className={`px-6 py-2 font-medium text-sm rounded-t-lg transition-colors ${activeTab === 'available'
+                        ? 'bg-white text-blue-600 border-t border-l border-r border-gray-200'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                        }`}
+                >
+                    Disponibles
+                </button>
+                <button
+                    onClick={() => setActiveTab('sold')}
+                    className={`px-6 py-2 font-medium text-sm rounded-t-lg transition-colors ${activeTab === 'sold'
+                        ? 'bg-white text-blue-600 border-t border-l border-r border-gray-200'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                        }`}
+                >
+                    Vendidos
+                </button>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100 rounded-tl-none">
                 {/* Search Bar */}
                 <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center">
                     <div className="relative w-full md:w-96">
@@ -144,7 +220,7 @@ const InventoryList = () => {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                                                    ${vehicle.status === 'available' ? 'bg-green-100 text-green-800' :
+                                                        ${vehicle.status === 'available' ? 'bg-green-100 text-green-800' :
                                                     vehicle.status === 'sold' ? 'bg-red-100 text-red-800' :
                                                         'bg-yellow-100 text-yellow-800'}`}>
                                                 {vehicle.status === 'available' ? 'Disponible' :
@@ -152,16 +228,24 @@ const InventoryList = () => {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
-                                            <Link to={`/admin/inventory/${vehicle.id}`} className="text-blue-600 hover:text-blue-900 hover:underline">Editar</Link>
+                                            {isAdvisor ? (
+                                                <Link to={`/admin/inventory/${vehicle.id}`} className="text-gray-600 hover:text-blue-600 hover:underline">
+                                                    Ver Detalles
+                                                </Link>
+                                            ) : (
+                                                <>
+                                                    <Link to={`/admin/inventory/${vehicle.id}`} className="text-blue-600 hover:text-blue-900 hover:underline">Editar</Link>
 
-                                            {vehicle.status !== 'sold' && (
-                                                <button
-                                                    onClick={() => handleMarkSold(vehicle.id)}
-                                                    className="text-green-600 hover:text-green-900 hover:underline"
-                                                    title="Marcar como Vendido"
-                                                >
-                                                    Vendido
-                                                </button>
+                                                    {vehicle.status !== 'sold' && (
+                                                        <button
+                                                            onClick={() => handleMarkSold(vehicle.id)}
+                                                            className="text-green-600 hover:text-green-900 hover:underline"
+                                                            title="Marcar como Vendido"
+                                                        >
+                                                            Vendido
+                                                        </button>
+                                                    )}
+                                                </>
                                             )}
                                         </td>
                                     </tr>

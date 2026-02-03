@@ -26,12 +26,12 @@ const UserForm = () => {
                 const headers = { Authorization: `Bearer ${token}` };
 
                 // Fetch Roles
-                const rolesRes = await axios.get('http://localhost:8000/roles/', { headers });
+                const rolesRes = await axios.get('http://localhost:8001/roles/', { headers });
                 setRoles(rolesRes.data);
 
                 // Fetch Companies if Super Admin
                 if (!currentUser?.company_id) {
-                    const compRes = await axios.get('http://localhost:8000/companies/?limit=100', { headers });
+                    const compRes = await axios.get('http://localhost:8001/companies/?limit=100', { headers });
                     setCompanies(compRes.data.items);
                 }
             } catch (error) {
@@ -46,7 +46,7 @@ const UserForm = () => {
                 try {
                     const token = localStorage.getItem('token');
                     console.log(`Fetching user ${id}...`);
-                    const response = await axios.get(`http://localhost:8000/users/${id}`, {
+                    const response = await axios.get(`http://localhost:8001/users/${id}`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
                     console.log("User data loaded:", response.data);
@@ -94,8 +94,10 @@ const UserForm = () => {
             if (isEditing && !payload.password) {
                 delete payload.password;
             }
-            if (payload.company_id === '') {
+            if (payload.company_id === '' || payload.company_id === '0') {
                 payload.company_id = null;
+            } else if (payload.company_id) {
+                payload.company_id = parseInt(payload.company_id);
             }
             // Ensure role_id is integer
             if (payload.role_id) {
@@ -103,15 +105,17 @@ const UserForm = () => {
             }
 
             if (isEditing) {
-                await axios.put(`http://localhost:8000/users/${id}`, payload, { headers });
+                await axios.put(`http://localhost:8001/users/${id}`, payload, { headers });
                 setStatus({ type: 'success', message: 'Usuario actualizado exitosamente!' });
             } else {
-                await axios.post('http://localhost:8000/users/', payload, { headers });
+                await axios.post('http://localhost:8001/users/', payload, { headers });
                 setStatus({ type: 'success', message: 'Usuario creado exitosamente!' });
-                if (!isEditing) {
-                    navigate('/admin/users');
-                }
             }
+
+            // Redirect after short delay to show success message
+            setTimeout(() => {
+                navigate('/admin/users');
+            }, 1000);
         } catch (error) {
             console.error(error);
             const errorMsg = error.response?.data?.detail || 'Error al conectar con el servidor';
@@ -185,8 +189,8 @@ const UserForm = () => {
                             </select>
                         </div>
 
-                        {/* Only show Company select for Global Super Admin (no company_id) */}
-                        {!currentUser?.company_id && (
+                        {/* Dropdown de Empresa: Visible si es Super Admin (sin company_id) O si hemos cargado empresas */}
+                        {(!currentUser?.company_id || companies.length > 0) && (
                             <div>
                                 <label className="block text-sm font-medium text-slate-600 mb-1">Empresa</label>
                                 <select
@@ -195,7 +199,7 @@ const UserForm = () => {
                                     onChange={handleChange}
                                     className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
                                 >
-                                    <option value="">Sin Empresa</option>
+                                    <option value="">Sin Empresa (Global)</option>
                                     {companies.map(company => (
                                         <option key={company.id} value={company.id}>
                                             {company.name}
@@ -204,6 +208,49 @@ const UserForm = () => {
                                 </select>
                             </div>
                         )}
+
+                        {/* Commission Field - Only for Admin/SuperAdmin to set on others */}
+                        <div>
+                            <label className="block text-sm font-medium text-slate-600 mb-1">Comisión (%)</label>
+                            <input
+                                type="number"
+                                name="commission_percentage"
+                                step="0.1"
+                                min="0"
+                                max="100"
+                                value={user.commission_percentage || 0}
+                                onChange={handleChange}
+                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                placeholder="Ej: 5.0"
+                            />
+                            <p className="text-xs text-gray-400 mt-1">Porcentaje aplicado a las ventas de este usuario.</p>
+                        </div>
+
+                        {/* Base Salary */}
+                        <div>
+                            <label className="block text-sm font-medium text-slate-600 mb-1">Sueldo Base</label>
+                            <input
+                                type="number"
+                                name="base_salary"
+                                value={user.base_salary || ''}
+                                onChange={handleChange}
+                                placeholder="0"
+                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                            />
+                        </div>
+
+                        {/* Payment Dates */}
+                        <div>
+                            <label className="block text-sm font-medium text-slate-600 mb-1">Fechas de Pago</label>
+                            <input
+                                type="text"
+                                name="payment_dates"
+                                value={user.payment_dates || ''}
+                                onChange={handleChange}
+                                placeholder="Ej: 15 y 30"
+                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                            />
+                        </div>
                     </div>
 
                     <div className="pt-4">

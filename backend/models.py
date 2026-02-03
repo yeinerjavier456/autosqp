@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Enum as SqEnum, JSON
+from sqlalchemy import Column, Integer, String, ForeignKey, Enum as SqEnum, JSON, DateTime
 from sqlalchemy.orm import relationship
 from database import Base
 import enum
+import datetime
 
 class UserRole(str, enum.Enum):
     SUPER_ADMIN = "super_admin"
@@ -53,6 +54,55 @@ class CarModel(Base):
     
     brand = relationship("CarBrand", back_populates="models")
 
+class LeadSource(str, enum.Enum):
+    FACEBOOK = "facebook"
+    WHATSAPP = "whatsapp"
+    INSTAGRAM = "instagram"
+    TIKTOK = "tiktok"
+    WEB = "web"
+    OTHER = "other"
+
+class LeadStatus(str, enum.Enum):
+    NEW = "new"
+    CONTACTED = "contacted"
+    INTERESTED = "interested"
+    QUALIFIED = "qualified"
+    LOST = "lost"
+    SOLD = "sold"
+
+class Lead(Base):
+    __tablename__ = "leads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100))
+    email = Column(String(100), nullable=True)
+    phone = Column(String(50), nullable=True)
+    source = Column(String(50), default=LeadSource.WEB) 
+    status = Column(String(50), default=LeadStatus.NEW)
+    message = Column(String(1000), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    company_id = Column(Integer, ForeignKey("companies.id"))
+    company = relationship("Company", back_populates="leads")
+    
+    assigned_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    assigned_to = relationship("User", back_populates="leads")
+    history = relationship("LeadHistory", back_populates="lead")
+
+class LeadHistory(Base):
+    __tablename__ = "lead_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True) # changes can be system too
+    previous_status = Column(String(50))
+    new_status = Column(String(50))
+    comment = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    lead = relationship("Lead", back_populates="history")
+    user = relationship("User")
+
 class User(Base):
     __tablename__ = "users"
 
@@ -62,9 +112,46 @@ class User(Base):
     # role = Column(String(50)) # Deprecated in favor of role_id
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
+    commission_percentage = Column(Integer, default=0) # e.g. 5 for 5%
+    
+    # New fields
+    base_salary = Column(Integer, nullable=True) # Sueldo base
+    payment_dates = Column(String(100), nullable=True) # Fechas de pago e.g. "15 y 30"
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
     
     company = relationship("Company", back_populates="users")
     role = relationship("Role") # Relationship to Role model
+    leads = relationship("Lead", back_populates="assigned_to")
+    sales = relationship("Sale", foreign_keys="[Sale.seller_id]", back_populates="seller")
+
+class SaleStatus(str, enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+class Sale(Base):
+    __tablename__ = "sales"
+
+    id = Column(Integer, primary_key=True, index=True)
+    vehicle_id = Column(Integer, ForeignKey("vehicles.id"), unique=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+    seller_id = Column(Integer, ForeignKey("users.id"))
+    company_id = Column(Integer, ForeignKey("companies.id"))
+    
+    sale_price = Column(Integer) # Final price sold
+    commission_percentage = Column(Integer) # Snapshot of % at time of sale
+    commission_amount = Column(Integer) # Calculated amount
+    net_revenue = Column(Integer) # sale_price - commission_amount
+    
+    status = Column(String(50), default=SaleStatus.PENDING)
+    approved_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    sale_date = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    vehicle = relationship("Vehicle")
+    lead = relationship("Lead")
+    seller = relationship("User", foreign_keys=[seller_id], back_populates="sales")
+    company = relationship("Company")
+    approved_by = relationship("User", foreign_keys=[approved_by_id])
 
 class IntegrationSettings(Base):
     __tablename__ = "integration_settings"
@@ -94,37 +181,7 @@ class IntegrationSettings(Base):
     company = relationship("Company", back_populates="integration_settings")
 
 
-class LeadSource(str, enum.Enum):
-    FACEBOOK = "facebook"
-    TIKTOK = "tiktok"
-    WHATSAPP = "whatsapp"
-    INSTAGRAM = "instagram"
-    OTHER = "other"
 
-class LeadStatus(str, enum.Enum):
-    NEW = "new"
-    CONTACTED = "contacted"
-    CONVERTED = "converted"
-    CLOSED = "closed"
-
-class Lead(Base):
-    __tablename__ = "leads"
-
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(String(50)) # Using string for simplicity, or DateTime
-    updated_at = Column(String(50), nullable=True)
-    source = Column(String(50)) # e.g. "facebook"
-    name = Column(String(100), nullable=True)
-    email = Column(String(100), nullable=True)
-    phone = Column(String(50), nullable=True)
-    message = Column(String(500), nullable=True)
-    status = Column(String(50), default="new")
-    
-    company_id = Column(Integer, ForeignKey("companies.id"))
-    company = relationship("Company", back_populates="leads")
-    
-    assigned_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    assigned_to = relationship("User")
 
 class VehicleStatus(str, enum.Enum):
     AVAILABLE = "available"

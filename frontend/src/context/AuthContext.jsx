@@ -7,9 +7,9 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    const login = (token) => {
+    const login = async (token) => {
         localStorage.setItem('token', token);
-        fetchUser();
+        await fetchUser();
     };
 
     const logout = () => {
@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }) => {
         }
 
         try {
-            const response = await axios.get('http://localhost:8000/users/me', {
+            const response = await axios.get('http://localhost:8001/users/me', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setUser(response.data);
@@ -40,6 +40,21 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         fetchUser();
+
+        // Global 401 Interceptor
+        const interceptor = axios.interceptors.response.use(
+            response => response,
+            error => {
+                if (error.response && error.response.status === 401) {
+                    logout();
+                }
+                return Promise.reject(error);
+            }
+        );
+
+        return () => {
+            axios.interceptors.response.eject(interceptor);
+        };
     }, []);
 
     return (
