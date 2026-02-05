@@ -130,6 +130,19 @@ class LeadHistory(BaseModel):
     
     model_config = ConfigDict(from_attributes=True)
 
+# --- CONVERSATION / MESSAGES (Simplified for Lead Response) ---
+class MessageSimple(BaseModel):
+    id: int
+    sender_type: str
+    content: Optional[str] = None
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+class ConversationSimple(BaseModel):
+    id: int
+    messages: List[MessageSimple] = []
+    model_config = ConfigDict(from_attributes=True)
+
 class Lead(LeadBase):
     id: int
     created_at: Optional[datetime] = None
@@ -137,6 +150,7 @@ class Lead(LeadBase):
     assigned_to_id: Optional[int] = None
     assigned_to: Optional[User] = None
     history: List[LeadHistory] = []
+    conversation: Optional[ConversationSimple] = None
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -253,4 +267,50 @@ class Sale(SaleBase):
 
 class SaleList(BaseModel):
     items: List[Sale]
+    total: int
+
+# --- CREDITS / SOLICITUDES ---
+class CreditApplicationBase(BaseModel):
+    client_name: str
+    phone: str
+    email: Optional[str] = None
+    desired_vehicle: str
+    monthly_income: Optional[int] = 0
+    other_income: Optional[int] = 0
+    occupation: str # Empleado, Independiente, Pensionado
+    application_mode: Optional[str] = "individual"
+    down_payment: Optional[int] = 0
+    notes: Optional[str] = None
+    status: Optional[str] = "pending"
+
+class CreditApplicationCreate(CreditApplicationBase):
+    company_id: Optional[int] = None
+    assigned_to_id: Optional[int] = None
+
+class CreditApplicationUpdate(BaseModel):
+    client_name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    desired_vehicle: Optional[str] = None
+    monthly_income: Optional[int] = None
+    other_income: Optional[int] = None
+    occupation: Optional[str] = None
+    application_mode: Optional[str] = None
+    down_payment: Optional[int] = None
+    notes: Optional[str] = None
+    status: Optional[str] = None
+    assigned_to_id: Optional[int] = None
+
+class CreditApplication(CreditApplicationBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    company_id: int
+    assigned_to_id: Optional[int] = None
+    assigned_to: Optional[User] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class CreditApplicationList(BaseModel):
+    items: List[CreditApplication]
     total: int

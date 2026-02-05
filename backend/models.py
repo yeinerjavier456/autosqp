@@ -88,6 +88,7 @@ class Lead(Base):
     assigned_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     assigned_to = relationship("User", back_populates="leads")
     history = relationship("LeadHistory", back_populates="lead")
+    conversation = relationship("Conversation", back_populates="lead", uselist=False)
 
 class LeadHistory(Base):
     __tablename__ = "lead_history"
@@ -205,3 +206,76 @@ class Vehicle(Base):
     
     company_id = Column(Integer, ForeignKey("companies.id"))
     company = relationship("Company", back_populates="vehicles")
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+    company_id = Column(Integer, ForeignKey("companies.id"))
+    last_message_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    lead = relationship("Lead", back_populates="conversation")
+    company = relationship("Company")
+    messages = relationship("Message", back_populates="conversation")
+
+class MessageType(str, enum.Enum):
+    TEXT = "text"
+    IMAGE = "image"
+    VIDEO = "video"
+    document = "document"
+    AUDIO = "audio"
+    OTHER = "other"
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"))
+    sender_type = Column(String(50)) # 'user' or 'lead'
+    content = Column(String(2000), nullable=True) # Text content or Caption
+    media_url = Column(String(1000), nullable=True)
+    message_type = Column(String(20), default=MessageType.TEXT) # text, image, etc
+    whatsapp_message_id = Column(String(100), nullable=True)
+    status = Column(String(20), default="sent") # sent, delivered, read
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    conversation = relationship("Conversation", back_populates="messages")
+
+
+class CreditStatus(str, enum.Enum):
+    PENDING = "pending" # Solicitud Recibida
+    IN_REVIEW = "in_review" # En Estudio
+    APPROVED = "approved" # Aprobado
+    REJECTED = "rejected" # Rechazado
+    COMPLETED = "completed" # Finalizado/Vendido
+
+class CreditApplication(Base):
+    __tablename__ = "credit_applications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_name = Column(String(100))
+    phone = Column(String(50))
+    email = Column(String(100), nullable=True)
+    
+    # Financial Profile
+    desired_vehicle = Column(String(100)) # e.g. "Mazda 3 2020"
+    monthly_income = Column(Integer, nullable=True)
+    other_income = Column(Integer, default=0)
+    occupation = Column(String(50)) # Empleado, Independiente, Pensionado
+    application_mode = Column(String(50), default="individual") # Individual, Conjoint
+    down_payment = Column(Integer, default=0) # Cuota inicial disponible
+    
+    status = Column(String(50), default=CreditStatus.PENDING)
+    notes = Column(String(2000), nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    
+    company_id = Column(Integer, ForeignKey("companies.id"))
+    assigned_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    
+    company = relationship("Company")
+    assigned_to = relationship("User")
+

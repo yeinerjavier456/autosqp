@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, get_db
 import models, schemas, auth_utils
+from routers import whatsapp, credits # Import the new router
 from jose import JWTError, jwt
 import datetime
 
@@ -12,6 +13,10 @@ import datetime
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="AutosQP API", description="API para gestión de compra venta de carros")
+
+app.include_router(whatsapp.router) # Register the router
+app.include_router(credits.router) # Register credits router
+
 
 # Configure CORS
 app.add_middleware(
@@ -27,30 +32,7 @@ def ping():
     print("DEBUG: Ping called", flush=True)
     return {"message": "pong"}
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, auth_utils.SECRET_KEY, algorithms=[auth_utils.ALGORITHM])
-        user_id: int = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-    
-    user = db.query(models.User).options(
-        joinedload(models.User.role),
-        joinedload(models.User.company)
-    ).filter(models.User.id == user_id).first()
-    
-    if user is None:
-        raise credentials_exception
-    return user
+from dependencies import get_current_user, oauth2_scheme
 
 @app.post("/token", response_model=schemas.Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -308,7 +290,8 @@ def read_leads(
 ):
     query = db.query(models.Lead).options(
         joinedload(models.Lead.assigned_to),
-        joinedload(models.Lead.history)
+        joinedload(models.Lead.history),
+        joinedload(models.Lead.conversation).joinedload(models.Conversation.messages)
     )
     
     # Filter by user company

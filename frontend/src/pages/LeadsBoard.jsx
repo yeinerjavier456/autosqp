@@ -109,14 +109,21 @@ const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragS
 
 // History Modal Component
 const HistoryModal = ({ lead, onClose }) => {
+    const [activeTab, setActiveTab] = useState('history');
+
     if (!lead) return null;
+
+    // Sort messages by date if they exist
+    const messages = lead.conversation?.messages
+        ? [...lead.conversation.messages].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+        : [];
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
             <div className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl animate-fade-in-up border border-gray-100 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
                     <div>
-                        <h2 className="text-xl font-bold text-gray-800">Historial de Seguimiento</h2>
+                        <h2 className="text-xl font-bold text-gray-800">Detalles del Lead</h2>
                         <p className="text-sm text-gray-500">Cliente: <span className="font-semibold text-blue-600">{lead.name}</span></p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition">
@@ -124,41 +131,87 @@ const HistoryModal = ({ lead, onClose }) => {
                     </button>
                 </div>
 
+                {/* Tabs */}
+                <div className="flex border-b border-gray-200 mb-4">
+                    <button
+                        onClick={() => setActiveTab('history')}
+                        className={`flex-1 py-2 text-sm font-bold text-center border-b-2 transition ${activeTab === 'history' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                    >
+                        Historial de Cambios
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('messages')}
+                        className={`flex-1 py-2 text-sm font-bold text-center border-b-2 transition ${activeTab === 'messages' ? 'border-green-600 text-green-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                    >
+                        Mensajes ({messages.length})
+                    </button>
+                </div>
+
                 <div className="overflow-y-auto custom-scrollbar pr-2 flex-1 space-y-4">
-                    {lead.history && lead.history.length > 0 ? (
-                        [...lead.history].reverse().map((record) => (
-                            <div key={record.id} className="flex gap-4 group">
-                                <div className="flex flex-col items-center">
-                                    <div className="w-2 h-2 rounded-full bg-blue-400 mt-2 ring-4 ring-white"></div>
-                                    <div className="w-0.5 flex-1 bg-gray-100 group-last:hidden"></div>
-                                </div>
-                                <div className="flex-1 pb-6">
-                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 group-hover:border-blue-100 transition shadow-sm">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div className="flex items-center gap-2">
-                                                <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded text-white bg-gray-400`}>
-                                                    {record.previous_status || 'N/A'}
-                                                </span>
-                                                <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
-                                                <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded text-white 
-                                                    ${record.new_status === 'sold' ? 'bg-green-500' :
-                                                        record.new_status === 'lost' ? 'bg-gray-500' : 'bg-blue-500'}`}>
-                                                    {record.new_status}
+                    {activeTab === 'history' ? (
+                        lead.history && lead.history.length > 0 ? (
+                            [...lead.history].reverse().map((record) => (
+                                <div key={record.id} className="flex gap-4 group">
+                                    <div className="flex flex-col items-center">
+                                        <div className="w-2 h-2 rounded-full bg-blue-400 mt-2 ring-4 ring-white"></div>
+                                        <div className="w-0.5 flex-1 bg-gray-100 group-last:hidden"></div>
+                                    </div>
+                                    <div className="flex-1 pb-6">
+                                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 group-hover:border-blue-100 transition shadow-sm">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded text-white bg-gray-400`}>
+                                                        {record.previous_status || 'N/A'}
+                                                    </span>
+                                                    <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                                                    <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded text-white 
+                                                        ${record.new_status === 'sold' ? 'bg-green-500' :
+                                                            record.new_status === 'lost' ? 'bg-gray-500' : 'bg-blue-500'}`}>
+                                                        {record.new_status}
+                                                    </span>
+                                                </div>
+                                                <span className="text-xs text-gray-400 font-mono">
+                                                    {record.created_at ? new Date(record.created_at).toLocaleString() : 'Reciente'}
                                                 </span>
                                             </div>
-                                            <span className="text-xs text-gray-400 font-mono">
-                                                {record.created_at ? new Date(record.created_at).toLocaleString() : 'Reciente'}
-                                            </span>
+                                            <p className="text-sm text-gray-700 italic">"{record.comment || 'Sin comentario'}"</p>
                                         </div>
-                                        <p className="text-sm text-gray-700 italic">"{record.comment || 'Sin comentario'}"</p>
                                     </div>
                                 </div>
+                            ))
+                        ) : (
+                            <div className="text-center py-12 text-gray-400 italic bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                                No hay historial registrado para este lead.
                             </div>
-                        ))
+                        )
                     ) : (
-                        <div className="text-center py-12 text-gray-400 italic bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                            No hay historial registrado para este lead.
-                        </div>
+                        // Messages View
+                        messages.length > 0 ? (
+                            <div className="space-y-3">
+                                {messages.map((msg) => (
+                                    <div key={msg.id} className={`flex ${msg.sender_type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                        <div className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-sm ${msg.sender_type === 'user'
+                                                ? 'bg-green-100 text-green-900 rounded-tr-none'
+                                                : 'bg-white border border-gray-200 text-slate-800 rounded-tl-none'
+                                            }`}>
+                                            <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content || '(Multimedia)'}</p>
+                                            <div className={`text-[10px] mt-1 flex items-center gap-1 ${msg.sender_type === 'user' ? 'text-green-700' : 'text-slate-400'}`}>
+                                                <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                {msg.sender_type === 'user' && ( // Mock read receipts
+                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-12 text-gray-400 italic bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                                <svg className="w-12 h-12 mx-auto text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                                <p>No hay mensajes en esta conversación.</p>
+                                <p className="text-xs mt-1">Si es un lead de WhatsApp, los mensajes aparecerán aquí.</p>
+                            </div>
+                        )
                     )}
                 </div>
             </div>
@@ -187,9 +240,51 @@ const LeadsBoard = () => {
     const [selectedLeadForHistory, setSelectedLeadForHistory] = useState(null);
     const [showHistoryModal, setShowHistoryModal] = useState(false);
 
+    // Modal State - New Lead
+    const [showAddLeadModal, setShowAddLeadModal] = useState(false);
+    const [newLeadForm, setNewLeadForm] = useState({
+        name: '',
+        email: '',
+        phone: '',
+        source: 'web',
+        message: '',
+        status: 'new'
+    });
+
     useEffect(() => {
         fetchLeads();
     }, []);
+
+    const handleCreateLead = async (e) => {
+        e.preventDefault();
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post('http://localhost:8001/leads', {
+                ...newLeadForm,
+                company_id: user?.company_id || 1
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            setLeads(prev => [response.data, ...prev]);
+            setShowAddLeadModal(false);
+            setNewLeadForm({ name: '', email: '', phone: '', source: 'web', message: '', status: 'new' });
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Lead Creado',
+                text: 'El lead se ha creado exitosamente.',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        } catch (error) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: "Error creando el lead: " + (error.response?.data?.detail || error.message)
+            });
+        }
+    };
 
     const fetchLeads = async () => {
         try {
@@ -378,33 +473,11 @@ const LeadsBoard = () => {
                     <p className="text-slate-500 mt-1 font-medium">Arrastra y suelta para gestionar el ciclo de vida de tus clientes.</p>
                 </div>
                 <button
-                    onClick={() => {
-                        const demoLead = {
-                            name: "Cliente Nuevo " + Math.floor(Math.random() * 1000),
-                            message: "Estoy interesado en conocer los planes de financiamiento.",
-                            source: ["web", "facebook", "instagram", "whatsapp"][Math.floor(Math.random() * 4)],
-                            phone: "300" + Math.floor(Math.random() * 9000000),
-                            company_id: user?.company_id || 1,
-                            status: "new"
-                        };
-                        const token = localStorage.getItem('token');
-                        axios.post('http://localhost:8001/leads', demoLead, { headers: { Authorization: `Bearer ${token}` } })
-                            .then(res => {
-                                setLeads(prev => [res.data, ...prev]);
-                                Swal.fire({
-                                    toast: true,
-                                    position: 'top-end',
-                                    icon: 'success',
-                                    title: 'Lead simulado creado',
-                                    showConfirmButton: false,
-                                    timer: 3000
-                                });
-                            });
-                    }}
+                    onClick={() => setShowAddLeadModal(true)}
                     className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-5 py-2.5 rounded-xl hover:shadow-lg hover:scale-105 transition-all font-bold text-sm"
                 >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
-                    Simular Lead
+                    Nuevo Lead Manual
                 </button>
             </div>
 
@@ -601,6 +674,96 @@ const LeadsBoard = () => {
                     lead={selectedLeadForHistory}
                     onClose={() => setShowHistoryModal(false)}
                 />
+            )}
+
+            {/* Add Lead Manual Modal */}
+            {showAddLeadModal && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl p-8 w-full max-w-lg shadow-2xl animate-fade-in-up border border-gray-100 max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold text-gray-800">Nuevo Lead</h2>
+                            <button onClick={() => setShowAddLeadModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                        </div>
+
+                        <form onSubmit={handleCreateLead} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Nombre Completo</label>
+                                <input
+                                    type="text"
+                                    required
+                                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    value={newLeadForm.name}
+                                    onChange={e => setNewLeadForm({ ...newLeadForm, name: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">Teléfono</label>
+                                    <input
+                                        type="tel"
+                                        className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={newLeadForm.phone}
+                                        onChange={e => setNewLeadForm({ ...newLeadForm, phone: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">Email (Opcional)</label>
+                                    <input
+                                        type="email"
+                                        className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={newLeadForm.email}
+                                        onChange={e => setNewLeadForm({ ...newLeadForm, email: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Fuente</label>
+                                <select
+                                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    value={newLeadForm.source}
+                                    onChange={e => setNewLeadForm({ ...newLeadForm, source: e.target.value })}
+                                >
+                                    <option value="web">Web / Directo</option>
+                                    <option value="facebook">Facebook Ads</option>
+                                    <option value="instagram">Instagram Ads</option>
+                                    <option value="whatsapp">WhatsApp</option>
+                                    <option value="tiktok">TikTok</option>
+                                    <option value="referral">Referido</option>
+                                    <option value="showroom">Showroom (Físico)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Mensaje / Interés Inicial</label>
+                                <textarea
+                                    rows="3"
+                                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    placeholder="¿En qué vehículo está interesado?"
+                                    value={newLeadForm.message}
+                                    onChange={e => setNewLeadForm({ ...newLeadForm, message: e.target.value })}
+                                ></textarea>
+                            </div>
+
+                            <div className="flex gap-4 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAddLeadModal(false)}
+                                    className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-bold shadow-lg"
+                                >
+                                    Crear Lead
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             )}
         </div>
     );

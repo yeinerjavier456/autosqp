@@ -21,6 +21,8 @@ import TikTokLeads from './pages/leads/TikTokLeads';
 import WhatsAppLeads from './pages/leads/WhatsAppLeads';
 import InstagramLeads from './pages/leads/InstagramLeads';
 import Reports from './pages/Reports';
+import WhatsAppDashboard from './pages/WhatsAppDashboard';
+import CreditBoard from './pages/CreditBoard';
 
 const PrivateRoute = ({ allowedRoles }) => {
   const { user, loading } = useAuth();
@@ -74,6 +76,12 @@ function App() {
                 <Route path="/admin/leads/tiktok" element={<TikTokLeads />} />
                 <Route path="/admin/leads/whatsapp" element={<WhatsAppLeads />} />
                 <Route path="/admin/leads/instagram" element={<InstagramLeads />} />
+
+                {/* Messaging */}
+                <Route path="/admin/whatsapp" element={<WhatsAppDashboard />} />
+
+                {/* Credits & Requests */}
+                <Route path="/admin/credits" element={<CreditBoard />} />
               </Route>
 
               {/* Global Super Admin Only Routes */}
