@@ -1,38 +1,19 @@
-version: '3.8'
-
 services:
-  # Servicio de Base de Datos (MariaDB)
-  db:
-    image: mariadb:10.11
-    restart: always
-    volumes:
-      - mysql_data:/var/lib/mysql
-    environment:
-      - MYSQL_ROOT_PASSWORD=root
-      - MYSQL_DATABASE=autosqp
-      - MYSQL_USER=user
-      - MYSQL_PASSWORD=password
-    ports:
-      - "3306:3306"
-
-  # Servicio Backend (FastAPI)
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     restart: always
-    depends_on:
-      - db
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=mysql+pymysql://root:root@db:3306/autosqp
-      # Aquí puedes agregar otras variables si están en tu .env, o usar env_file:
-      # - SECRET_KEY=tu_clave_secreta_aqui
-      # env_file:
-      #   - ./backend/.env
+      - DB_HOST=172.31.30.44
+      - DB_PORT=3306
+      - DB_NAME=autosqp
+      - DB_USER=autosqp_user
+      - DB_PASSWORD=BaseAutos2025*
+      - DATABASE_URL=mysql+pymysql://autosqp_user:BaseAutos2025*@172.31.30.44:3306/autosqp
 
-      # Servicio Frontend (React/Nginx)
   frontend:
     build:
       context: ./frontend
@@ -42,6 +23,3 @@ services:
       - "80:80"
     depends_on:
       - backend
-
-volumes:
-  mysql_data:
