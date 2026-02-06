@@ -1,18 +1,19 @@
 version: '3.8'
 
 services:
-  # Servicio de Base de Datos (PostgreSQL)
+  # Servicio de Base de Datos (MariaDB)
   db:
-    image: postgres:15-alpine
+    image: mariadb:10.11
     restart: always
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=autosqp_db
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=autosqp
+      - MYSQL_USER=user
+      - MYSQL_PASSWORD=password
     ports:
-      - "5432:5432"
+      - "3306:3306"
 
   # Servicio Backend (FastAPI)
   backend:
@@ -25,13 +26,13 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/autosqp_db
+      - DATABASE_URL=mysql+pymysql://root:root@db:3306/autosqp
       # Aquí puedes agregar otras variables si están en tu .env, o usar env_file:
       # - SECRET_KEY=tu_clave_secreta_aqui
       # env_file:
       #   - ./backend/.env
 
-  # Servicio Frontend (React/Nginx)
+      # Servicio Frontend (React/Nginx)
   frontend:
     build:
       context: ./frontend
@@ -43,4 +44,4 @@ services:
       - backend
 
 volumes:
-  pgdata:
+  mysql_data:
