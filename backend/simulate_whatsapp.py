@@ -2,6 +2,7 @@ import requests
 import json
 import datetime
 
+
 # URL of your local backend
 URL = "http://localhost:8000/whatsapp/webhook"
 
