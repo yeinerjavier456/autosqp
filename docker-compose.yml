@@ -1,0 +1,25 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=172.31.30.44
+      - DB_PORT=3306
+      - DB_NAME=autosqp
+      - DB_USER=autosqp_user
+      - DB_PASSWORD=BaseAutos2025*
+      - DATABASE_URL=mysql+pymysql://autosqp_user:BaseAutos2025*@172.31.30.44:3306/autosqp
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
