@@ -69,6 +69,30 @@ npm run dev
 
 El frontend estará disponible generalmente en `http://localhost:5173`.
 
+## 🚀 Despliegue (Deployment)
+
+Para poner en producción la aplicación por separado:
+
+### Backend (Python)
+1. Asegúrate de tener las variables de entorno configuradas en tu servidor (ver `.env`).
+2. Instala las dependencias: `pip install -r requirements.txt` (ahora incluye `gunicorn`).
+3. Ejecuta con un servidor de producción como Gunicorn (Linux) o Uvicorn:
+   ```bash
+   gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app
+   # O en Windows/Dev:
+   uvicorn main:app --host 0.0.0.0 --port 8000
+   ```
+4. **Nota Importante**: Si despliegas en un dominio real (ej. `mi-api.com`), actualiza `backend/main.py` para permitir el origen del frontend en `CORSMiddleware`.
+
+### Frontend (React)
+1. **Configuración de API**: El frontend actualmente apunta a `http://localhost:8000`. 
+   - Antes de construir para producción, busca y reemplaza `http://localhost:8000` por la URL de tu backend en producción en la carpeta `src`.
+2. Construye la aplicación:
+   ```bash
+   npm run build
+   ```
+3. Sube el contenido de la carpeta `dist/` a tu proveedor de hosting estático (Netlify, Vercel, S3, etc.).
+
 ## 📦 Estructura del Proyecto
 
 ```
