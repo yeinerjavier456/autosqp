@@ -23,8 +23,14 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
+<<<<<<< HEAD
         "http://54.226.30.192:3000",
         "http://54.226.30.192:3000",
+=======
+        "http://localhost:3000",
+        "http://34.229.164.25:3000",
+        "http://54.226.30.192:3000", # New IP
+>>>>>>> 1e32948 (Fix CORS and requirements for AWS deployment)
     ],
     allow_credentials=True,
     allow_methods=["*"],
