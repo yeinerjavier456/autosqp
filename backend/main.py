@@ -358,7 +358,7 @@ def bulk_assign_leads(
     return {"message": f"Successfully assigned {result} leads to user {target_user.email}"}
 
 
-@app.post("/leads/", response_model=schemas.Lead)
+@app.post("/leads", response_model=schemas.Lead)
 def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db)):
     import datetime
     import random
