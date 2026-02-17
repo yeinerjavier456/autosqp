@@ -45,7 +45,7 @@ const VehicleForm = () => {
 
     const fetchBrands = async () => {
         try {
-            const response = await axios.get('http://localhost:8000/brands/');
+            const response = await axios.get('http://54.226.30.192:8000/brands/');
             setBrands(response.data);
         } catch (error) {
             console.error("Error fetching brands", error);
@@ -64,7 +64,7 @@ const VehicleForm = () => {
 
     const fetchModels = async (brandId) => {
         try {
-            const response = await axios.get(`http://localhost:8000/brands/${brandId}/models/`);
+            const response = await axios.get(`http://54.226.30.192:8000/brands/${brandId}/models/`);
             setModelsList(response.data);
         } catch (error) {
             console.error("Error fetching models", error);
@@ -75,7 +75,7 @@ const VehicleForm = () => {
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get(`http://localhost:8000/vehicles/${id}`, {
+            const response = await axios.get(`http://54.226.30.192:8000/vehicles/${id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = response.data;
@@ -112,7 +112,7 @@ const VehicleForm = () => {
     const handleSeedBrands = async () => {
         try {
             setLoading(true);
-            const response = await axios.post('http://localhost:8000/seed/brands');
+            const response = await axios.post('http://54.226.30.192:8000/seed/brands');
             Swal.fire('Info', response.data.message, 'info');
             fetchBrands();
         } catch (error) {
@@ -151,7 +151,7 @@ const VehicleForm = () => {
             formData.append('file', file);
 
             try {
-                const response = await axios.post('http://localhost:8000/upload/', formData, {
+                const response = await axios.post('http://54.226.30.192:8000/upload/', formData, {
                     headers: {
                         'Content-Type': 'multipart/form-data',
                         Authorization: `Bearer ${token}`
@@ -191,13 +191,13 @@ const VehicleForm = () => {
         try {
             if (id) {
                 // Update
-                await axios.put(`http://localhost:8000/vehicles/${id}`, payload, {
+                await axios.put(`http://54.226.30.192:8000/vehicles/${id}`, payload, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 Swal.fire('Éxito', "Vehículo actualizado correctamente", 'success');
             } else {
                 // Create
-                await axios.post('http://localhost:8000/vehicles/', payload, {
+                await axios.post('http://54.226.30.192:8000/vehicles/', payload, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 Swal.fire('Éxito', "Vehículo creado correctamente", 'success');

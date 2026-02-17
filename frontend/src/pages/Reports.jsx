@@ -34,7 +34,7 @@ const Reports = () => {
         const fetchStats = async () => {
             try {
                 const token = localStorage.getItem('token');
-                const response = await axios.get('http://localhost:8000/reports/stats', {
+                const response = await axios.get('http://54.226.30.192:8000/reports/stats', {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 setStats(response.data);

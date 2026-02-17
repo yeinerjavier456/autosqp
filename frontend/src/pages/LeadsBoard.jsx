@@ -259,7 +259,7 @@ const LeadsBoard = () => {
         e.preventDefault();
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.post('http://localhost:8000/leads', {
+            const response = await axios.post('http://54.226.30.192:8000/leads', {
                 ...newLeadForm,
                 company_id: user?.company_id || 1
             }, {
@@ -289,7 +289,7 @@ const LeadsBoard = () => {
     const fetchLeads = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8000/leads', {
+            const response = await axios.get('http://54.226.30.192:8000/leads', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setLeads(Array.isArray(response.data.items) ? response.data.items : []);
@@ -303,7 +303,7 @@ const LeadsBoard = () => {
     const fetchAvailableVehicles = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8000/vehicles/?status=available', {
+            const response = await axios.get('http://54.226.30.192:8000/vehicles/?status=available', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setAvailableVehicles(response.data.items || []);
@@ -315,7 +315,7 @@ const LeadsBoard = () => {
     const fetchAdvisors = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8000/users/', {
+            const response = await axios.get('http://54.226.30.192:8000/users/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const validRoles = ['advisor', 'seller', 'vendedor', 'asesor'];
@@ -394,7 +394,7 @@ const LeadsBoard = () => {
             setShowCommentModal(false);
 
             const token = localStorage.getItem('token');
-            await axios.put(`http://localhost:8000/leads/${leadId}`,
+            await axios.put(`http://54.226.30.192:8000/leads/${leadId}`,
                 {
                     status: newStatus,
                     comment: statusComment
@@ -426,11 +426,11 @@ const LeadsBoard = () => {
                 payload.seller_id = parseInt(saleForm.seller_id);
             }
 
-            await axios.post('http://localhost:8000/sales/', payload, {
+            await axios.post('http://54.226.30.192:8000/sales/', payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            await axios.put(`http://localhost:8000/leads/${selectedLeadForSale.id}`,
+            await axios.put(`http://54.226.30.192:8000/leads/${selectedLeadForSale.id}`,
                 { status: 'sold', comment: `Venta registrada: Vehículo ID ${saleForm.vehicle_id}` },
                 { headers: { Authorization: `Bearer ${token}` } }
             );

@@ -39,7 +39,7 @@ const CreditBoard = () => {
     const fetchCredits = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8000/credits', {
+            const response = await axios.get('http://54.226.30.192:8000/credits', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setCredits(response.data.items);
@@ -73,7 +73,7 @@ const CreditBoard = () => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.put(`http://localhost:8000/credits/${creditId}`,
+            await axios.put(`http://54.226.30.192:8000/credits/${creditId}`,
                 { status: newStatus },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -99,7 +99,7 @@ const CreditBoard = () => {
                 status: 'pending'
             };
 
-            const response = await axios.post('http://localhost:8000/credits', payload, {
+            const response = await axios.post('http://54.226.30.192:8000/credits', payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
