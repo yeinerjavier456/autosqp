@@ -284,7 +284,7 @@ def update_integration_settings(company_id: int, settings_update: schemas.Integr
 
 # --- LEADS ENDPOINTS ---
 
-@app.get("/leads/", response_model=schemas.LeadList)
+@app.get("/leads", response_model=schemas.LeadList)
 def read_leads(
     source: str = None, 
     status: str = None,
