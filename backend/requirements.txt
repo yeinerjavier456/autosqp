@@ -13,3 +13,5 @@ pyjwt
 pymysql
 requests
 gunicorn
+python-jose[cryptography]
+bcrypt==4.0.1
