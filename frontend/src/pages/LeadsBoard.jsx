@@ -108,16 +108,32 @@ const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragS
 };
 
 // History Modal Component
-const HistoryModal = ({ lead, onClose }) => {
-    const [activeTab, setActiveTab] = useState('history');
+const HistoryModal = ({ lead, onClose, onUpdate }) => {
+    const [newComment, setNewComment] = useState('');
+    const [newStatus, setNewStatus] = useState(lead?.status || 'new');
+    const [loading, setLoading] = useState(false);
 
     if (!lead) return null;
 
-    // Sort messages by date if they exist
-    const messages = lead.conversation?.messages
-        ? [...lead.conversation.messages].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-        : [];
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!newComment.trim()) {
+            Swal.fire('Error', 'Debes escribir una nota o comentario', 'warning');
+            return;
+        }
 
+        setLoading(true);
+        try {
+            await onUpdate(lead.id, newStatus, newComment);
+            setNewComment('');
+            // Optional: Close modal or keep open to see history update?
+            // User likely wants to see it added. The onUpdate should refresh data.
+        } catch (error) {
+            console.error("Update failed", error);
+        } finally {
+            setLoading(false);
+        }
+    };
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
             <div className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl animate-fade-in-up border border-gray-100 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
@@ -131,87 +147,87 @@ const HistoryModal = ({ lead, onClose }) => {
                     </button>
                 </div>
 
-                {/* Tabs */}
+                <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                        <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        Agregar Nota / Actualizar Estado
+                    </h3>
+                    <form onSubmit={handleSubmit} className="space-y-3">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1">Estado</label>
+                            <select
+                                value={newStatus}
+                                onChange={(e) => setNewStatus(e.target.value)}
+                                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="new">Nuevo</option>
+                                <option value="contacted">Contactado</option>
+                                <option value="interested">Interesado</option>
+                                <option value="lost">Perdido</option>
+                                <option value="sold">Vendido</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1">Nota / Comentario</label>
+                            <textarea
+                                value={newComment}
+                                onChange={(e) => setNewComment(e.target.value)}
+                                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                                rows="2"
+                                placeholder="Escribe detalles del seguimiento..."
+                            ></textarea>
+                        </div>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full bg-blue-600 text-white text-sm font-bold py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+                        >
+                            {loading ? 'Guardando...' : 'Guardar Nota y Actualizar'}
+                        </button>
+                    </form>
+                </div>
+
                 <div className="flex border-b border-gray-200 mb-4">
-                    <button
-                        onClick={() => setActiveTab('history')}
-                        className={`flex-1 py-2 text-sm font-bold text-center border-b-2 transition ${activeTab === 'history' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-                    >
+                    <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide border-b-2 border-blue-600 py-2 inline-block">
                         Historial de Cambios
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('messages')}
-                        className={`flex-1 py-2 text-sm font-bold text-center border-b-2 transition ${activeTab === 'messages' ? 'border-green-600 text-green-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-                    >
-                        Mensajes ({messages.length})
-                    </button>
+                    </h3>
                 </div>
 
                 <div className="overflow-y-auto custom-scrollbar pr-2 flex-1 space-y-4">
-                    {activeTab === 'history' ? (
-                        lead.history && lead.history.length > 0 ? (
-                            [...lead.history].reverse().map((record) => (
-                                <div key={record.id} className="flex gap-4 group">
-                                    <div className="flex flex-col items-center">
-                                        <div className="w-2 h-2 rounded-full bg-blue-400 mt-2 ring-4 ring-white"></div>
-                                        <div className="w-0.5 flex-1 bg-gray-100 group-last:hidden"></div>
-                                    </div>
-                                    <div className="flex-1 pb-6">
-                                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 group-hover:border-blue-100 transition shadow-sm">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded text-white bg-gray-400`}>
-                                                        {record.previous_status || 'N/A'}
-                                                    </span>
-                                                    <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
-                                                    <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded text-white 
+                    {lead.history && lead.history.length > 0 ? (
+                        [...lead.history].reverse().map((record) => (
+                            <div key={record.id} className="flex gap-4 group">
+                                <div className="flex flex-col items-center">
+                                    <div className="w-2 h-2 rounded-full bg-blue-400 mt-2 ring-4 ring-white"></div>
+                                    <div className="w-0.5 flex-1 bg-gray-100 group-last:hidden"></div>
+                                </div>
+                                <div className="flex-1 pb-6">
+                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 group-hover:border-blue-100 transition shadow-sm">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded text-white bg-gray-400`}>
+                                                    {record.previous_status || 'N/A'}
+                                                </span>
+                                                <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                                                <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded text-white 
                                                         ${record.new_status === 'sold' ? 'bg-green-500' :
-                                                            record.new_status === 'lost' ? 'bg-gray-500' : 'bg-blue-500'}`}>
-                                                        {record.new_status}
-                                                    </span>
-                                                </div>
-                                                <span className="text-xs text-gray-400 font-mono">
-                                                    {record.created_at ? new Date(record.created_at).toLocaleString() : 'Reciente'}
+                                                        record.new_status === 'lost' ? 'bg-gray-500' : 'bg-blue-500'}`}>
+                                                    {record.new_status}
                                                 </span>
                                             </div>
-                                            <p className="text-sm text-gray-700 italic">"{record.comment || 'Sin comentario'}"</p>
+                                            <span className="text-xs text-gray-400 font-mono">
+                                                {record.created_at ? new Date(record.created_at).toLocaleString() : 'Reciente'}
+                                            </span>
                                         </div>
+                                        <p className="text-sm text-gray-700 italic">"{record.comment || 'Sin comentario'}"</p>
                                     </div>
                                 </div>
-                            ))
-                        ) : (
-                            <div className="text-center py-12 text-gray-400 italic bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                                No hay historial registrado para este lead.
                             </div>
-                        )
+                        ))
                     ) : (
-                        // Messages View
-                        messages.length > 0 ? (
-                            <div className="space-y-3">
-                                {messages.map((msg) => (
-                                    <div key={msg.id} className={`flex ${msg.sender_type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                        <div className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-sm ${msg.sender_type === 'user'
-                                                ? 'bg-green-100 text-green-900 rounded-tr-none'
-                                                : 'bg-white border border-gray-200 text-slate-800 rounded-tl-none'
-                                            }`}>
-                                            <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content || '(Multimedia)'}</p>
-                                            <div className={`text-[10px] mt-1 flex items-center gap-1 ${msg.sender_type === 'user' ? 'text-green-700' : 'text-slate-400'}`}>
-                                                <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                                {msg.sender_type === 'user' && ( // Mock read receipts
-                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="text-center py-12 text-gray-400 italic bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                                <svg className="w-12 h-12 mx-auto text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                                <p>No hay mensajes en esta conversación.</p>
-                                <p className="text-xs mt-1">Si es un lead de WhatsApp, los mensajes aparecerán aquí.</p>
-                            </div>
-                        )
+                        <div className="text-center py-12 text-gray-400 italic bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                            No hay historial registrado para este lead.
+                        </div>
                     )}
                 </div>
             </div>
@@ -259,7 +275,7 @@ const LeadsBoard = () => {
         e.preventDefault();
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.post('http://54.226.30.192:8000/leads', {
+            const response = await axios.post('http://localhost:8000/leads', {
                 ...newLeadForm,
                 company_id: user?.company_id || 1
             }, {
@@ -289,7 +305,7 @@ const LeadsBoard = () => {
     const fetchLeads = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('http://54.226.30.192:8000/leads', {
+            const response = await axios.get('http://localhost:8000/leads', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setLeads(Array.isArray(response.data.items) ? response.data.items : []);
@@ -303,7 +319,7 @@ const LeadsBoard = () => {
     const fetchAvailableVehicles = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('http://54.226.30.192:8000/vehicles/?status=available', {
+            const response = await axios.get('http://localhost:8000/vehicles/?status=available', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setAvailableVehicles(response.data.items || []);
@@ -315,7 +331,7 @@ const LeadsBoard = () => {
     const fetchAdvisors = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('http://54.226.30.192:8000/users/', {
+            const response = await axios.get('http://localhost:8000/users/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const validRoles = ['advisor', 'seller', 'vendedor', 'asesor'];
@@ -394,7 +410,7 @@ const LeadsBoard = () => {
             setShowCommentModal(false);
 
             const token = localStorage.getItem('token');
-            await axios.put(`http://54.226.30.192:8000/leads/${leadId}`,
+            await axios.put(`http://localhost:8000/leads/${leadId}`,
                 {
                     status: newStatus,
                     comment: statusComment
@@ -412,6 +428,43 @@ const LeadsBoard = () => {
         }
     };
 
+    const handleUpdateHistory = async (leadId, newStatus, comment) => {
+        try {
+            const token = localStorage.getItem('token');
+            await axios.put(`http://localhost:8000/leads/${leadId}`,
+                {
+                    status: newStatus,
+                    comment: comment
+                },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            // Optimistic update or refresh
+            setLeads(prev => prev.map(l => {
+                if (l.id === leadId) {
+                    return { ...l, status: newStatus };
+                }
+                return l;
+            }));
+
+            // Re-fetch to get the new history record
+            fetchLeads(); // Or fetch specific lead if optimized
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Actualizado',
+                text: 'El lead ha sido actualizado correctamente.',
+                timer: 1500,
+                showConfirmButton: false
+            });
+            setShowHistoryModal(false); // Optional: close or keep open
+        } catch (error) {
+            console.error("Error updating lead history", error);
+            Swal.fire('Error', 'No se pudo actualizar el lead', 'error');
+            throw error; // Propagate to modal to stop loading state
+        }
+    };
+
     const handleConfirmSale = async (e) => {
         e.preventDefault();
         try {
@@ -426,11 +479,11 @@ const LeadsBoard = () => {
                 payload.seller_id = parseInt(saleForm.seller_id);
             }
 
-            await axios.post('http://54.226.30.192:8000/sales/', payload, {
+            await axios.post('http://localhost:8000/sales/', payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            await axios.put(`http://54.226.30.192:8000/leads/${selectedLeadForSale.id}`,
+            await axios.put(`http://localhost:8000/leads/${selectedLeadForSale.id}`,
                 { status: 'sold', comment: `Venta registrada: Vehículo ID ${saleForm.vehicle_id}` },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -673,6 +726,7 @@ const LeadsBoard = () => {
                 <HistoryModal
                     lead={selectedLeadForHistory}
                     onClose={() => setShowHistoryModal(false)}
+                    onUpdate={handleUpdateHistory}
                 />
             )}
 

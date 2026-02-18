@@ -13,6 +13,7 @@ class UserRole(str, enum.Enum):
     USUARIO = "usuario"
     VENDEDOR = "vendedor"
     COORDINADOR = "coordinador"
+    ALIADO = "aliado"
 
 class Company(Base):
     __tablename__ = "companies"
@@ -86,7 +87,11 @@ class Lead(Base):
     company = relationship("Company", back_populates="leads")
     
     assigned_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    assigned_to = relationship("User", back_populates="leads")
+    assigned_to = relationship("User", foreign_keys=[assigned_to_id], back_populates="leads")
+    
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_by = relationship("User", foreign_keys=[created_by_id], back_populates="leads_created")
+
     history = relationship("LeadHistory", back_populates="lead")
     conversation = relationship("Conversation", back_populates="lead", uselist=False)
 
@@ -119,10 +124,12 @@ class User(Base):
     base_salary = Column(Integer, nullable=True) # Sueldo base
     payment_dates = Column(String(100), nullable=True) # Fechas de pago e.g. "15 y 30"
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    last_active = Column(DateTime, default=datetime.datetime.utcnow)
     
     company = relationship("Company", back_populates="users")
     role = relationship("Role") # Relationship to Role model
-    leads = relationship("Lead", back_populates="assigned_to")
+    leads = relationship("Lead", foreign_keys="[Lead.assigned_to_id]", back_populates="assigned_to")
+    leads_created = relationship("Lead", foreign_keys="[Lead.created_by_id]", back_populates="created_by")
     sales = relationship("Sale", foreign_keys="[Sale.seller_id]", back_populates="seller")
 
 class SaleStatus(str, enum.Enum):
@@ -279,3 +286,16 @@ class CreditApplication(Base):
     company = relationship("Company")
     assigned_to = relationship("User")
 
+class InternalMessage(Base):
+    __tablename__ = "internal_messages"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"))
+    sender_id = Column(Integer, ForeignKey("users.id"))
+    recipient_id = Column(Integer, ForeignKey("users.id"), nullable=True) # Valid for DMs, Null for Broadcast
+    content = Column(String(2000))
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    company = relationship("Company")
+    sender = relationship("User", foreign_keys=[sender_id])
+    recipient = relationship("User", foreign_keys=[recipient_id])

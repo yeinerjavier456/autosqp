@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useChat } from '../context/ChatContext';
 import Swal from 'sweetalert2';
 
 const Layout = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
     const location = useLocation();
-    const { user, logout, loading } = useAuth(); // Destructure loading
+    const { user, logout, loading } = useAuth();
+    const { unreadCount } = useChat();
 
     console.log("Layout Render - User:", user, "Loading:", loading);
 
@@ -29,6 +31,7 @@ const Layout = () => {
     const isCompanyAdmin = roleName === 'admin' || (roleName === 'super_admin' && user?.company_id);
     const isAdvisor = roleName === 'asesor';
     const isCustomer = roleName === 'user';
+    const isAliado = roleName === 'aliado';
 
     // Dynamic Styling
     const primaryColor = user?.company?.primary_color || '#0f172a'; // Default slate-900
@@ -52,8 +55,24 @@ const Layout = () => {
             style={isActive(to) ? { backgroundColor: secondaryColor } : {}}
             title={isCollapsed ? label : ''}
         >
-            <div className="w-6 h-6 flex-shrink-0">{icon}</div>
-            {!isCollapsed && <span className="font-medium whitespace-nowrap overflow-hidden transition-all duration-300">{label}</span>}
+            <div className="w-6 h-6 flex-shrink-0 relative">
+                {icon}
+                {label === 'Chat Interno' && unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-bounce">
+                        {unreadCount}
+                    </span>
+                )}
+            </div>
+            {!isCollapsed && (
+                <div className="flex justify-between items-center w-full">
+                    <span className="font-medium whitespace-nowrap overflow-hidden transition-all duration-300">{label}</span>
+                    {label === 'Chat Interno' && unreadCount > 0 && (
+                        <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full ml-auto">
+                            {unreadCount}
+                        </span>
+                    )}
+                </div>
+            )}
         </Link>
     );
 
@@ -133,7 +152,7 @@ const Layout = () => {
                                 {user?.email?.split('@')[0].replace('.', ' ') || 'Usuario'}
                             </span>
                             <span className="text-xs text-blue-200 truncate font-normal opacity-80">
-                                {isAdvisor ? 'Asesor Comercial' : (user?.company?.name || 'AutosQP')}
+                                {isAdvisor ? 'Asesor Comercial' : (isAliado ? 'Aliado' : (user?.company?.name || 'AutosQP'))}
                             </span>
                         </div>
                     </div>
@@ -160,11 +179,26 @@ const Layout = () => {
 
                 <nav className="flex-1 px-2 space-y-2 overflow-y-auto custom-scrollbar">
                     {/* Common Dashboard Link */}
-                    <NavItem
-                        to="/admin/dashboard"
-                        label="Dashboard"
-                        icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>}
-                    />
+                    {isAliado ? (
+                        <>
+                            <NavItem
+                                to="/aliado/dashboard"
+                                label="Tablero de Leads"
+                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
+                            />
+                            <NavItem
+                                to="/internal-chat"
+                                label="Chat Interno"
+                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" /></svg>}
+                            />
+                        </>
+                    ) : (
+                        <NavItem
+                            to="/admin/dashboard"
+                            label="Dashboard"
+                            icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>}
+                        />
+                    )}
 
                     {/* Global Super Admin Links */}
                     {isGlobalAdmin && (
@@ -182,8 +216,8 @@ const Layout = () => {
                         </>
                     )}
 
-                    {/* Company Admin & Advisor Links */}
-                    {(isCompanyAdmin || isAdvisor) && (
+                    {/* Company Admin & Advisor & Aliado Links */}
+                    {(isCompanyAdmin || isAdvisor || isAliado) && (
                         <>
                             <NavItem
                                 to="/admin/inventory"
@@ -191,12 +225,17 @@ const Layout = () => {
                                 icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>}
                             />
 
-                            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 mt-4 px-4">CRM</div>
-                            <NavItem
-                                to="/admin/leads"
-                                label="Tablero de Leads"
-                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
-                            />
+                            {/* CRM only for Admin/Advisor */}
+                            {(isCompanyAdmin || isAdvisor) && (
+                                <>
+                                    <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 mt-4 px-4">CRM</div>
+                                    <NavItem
+                                        to="/admin/leads"
+                                        label="Tablero de Leads"
+                                        icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
+                                    />
+                                </>
+                            )}
 
                             {isCompanyAdmin && (
                                 <>
@@ -263,6 +302,12 @@ const Layout = () => {
                                 to="/admin/leads/instagram"
                                 label="Instagram"
                                 icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+                            />
+
+                            <NavItem
+                                to="/internal-chat"
+                                label="Chat Interno"
+                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" /></svg>}
                             />
 
                             <NavItem

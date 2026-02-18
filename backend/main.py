@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Query, Query
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import Optional, List
 from sqlalchemy.orm import Session, joinedload
@@ -67,6 +67,13 @@ def read_users(
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(get_current_user)
 ):
+    today = datetime.datetime.utcnow()
+    five_min_ago = today - datetime.timedelta(minutes=5)
+
+    # Update current user last_active
+    current_user.last_active = today
+    db.commit()
+
     query = db.query(models.User)
     
     # If user belongs to a company, limit scope to that company specific users
@@ -81,6 +88,14 @@ def read_users(
     
     total = query.count()
     users = query.offset(skip).limit(limit).all()
+
+    # Compute is_online for each user
+    for user in users:
+        if user.last_active and user.last_active > five_min_ago:
+            user.is_online = True
+        else:
+            user.is_online = False
+
     return {"items": users, "total": total}
 
 @app.post("/users/", response_model=schemas.User)
@@ -308,6 +323,16 @@ def read_leads(
     if current_user.role and current_user.role.name in ['asesor', 'vendedor']:
         query = query.filter(models.Lead.assigned_to_id == current_user.id)
     
+    # Filter by Aliado - Only see leads created by them OR assigned to them
+    if current_user.role and current_user.role.name == 'aliado':
+        from sqlalchemy import or_
+        query = query.filter(
+            or_(
+                models.Lead.created_by_id == current_user.id,
+                models.Lead.assigned_to_id == current_user.id
+            )
+        )
+
     if source:
         query = query.filter(models.Lead.source == source)
     
@@ -359,43 +384,48 @@ def bulk_assign_leads(
 
 
 @app.post("/leads", response_model=schemas.Lead)
-def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db)):
+def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     import datetime
     import random
     
-    # 1. Determine Company (simplified logic: assumes payload has company_id)
-    if not lead.company_id:
-         raise HTTPException(status_code=400, detail="Company ID required for assignment")
+    # 1. Determine Company
+    company_id = lead.company_id
+    if not company_id:
+        if current_user.company_id:
+            company_id = current_user.company_id
+        else:
+             raise HTTPException(status_code=400, detail="Company ID required for assignment")
 
-    # 2. Auto-Assign to 'asesor'
-    # Find 'asesor' role id
-    asesor_role = db.query(models.Role).filter(models.Role.name == "asesor").first()
-    assigned_user_id = None
+    # 2. Assignment Logic
+    assigned_user_id = lead.assigned_to_id
     
-    if asesor_role:
-        # Find users in this company with 'asesor' role
-        potential_agents = db.query(models.User).filter(
-            models.User.company_id == lead.company_id,
-            models.User.role_id == asesor_role.id
-        ).all()
+    # Automatic Assignment if not provided
+    if not assigned_user_id:
+        # Find 'asesor' role id
+        asesor_role = db.query(models.Role).filter(models.Role.name == "asesor").first()
         
-        if potential_agents:
-            # Pick one randomly (Round Robin implies state, random is stateless and fair enough for now)
-            chosen_agent = random.choice(potential_agents)
-            assigned_user_id = chosen_agent.id
-            print(f"Lead automatically assigned to: {chosen_agent.email}")
+        if asesor_role:
+            # Find users in this company with 'asesor' role
+            potential_agents = db.query(models.User).filter(
+                models.User.company_id == company_id,
+                models.User.role_id == asesor_role.id
+            ).all()
+            
+            if potential_agents:
+                chosen_agent = random.choice(potential_agents)
+                assigned_user_id = chosen_agent.id
     
     new_lead = models.Lead(
-        created_at=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        updated_at=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        created_at=datetime.datetime.now(),
         source=lead.source,
         name=lead.name,
         email=lead.email,
         phone=lead.phone,
         message=lead.message,
         status=lead.status,
-        company_id=lead.company_id,
-        assigned_to_id=assigned_user_id
+        company_id=company_id,
+        assigned_to_id=assigned_user_id,
+        created_by_id=current_user.id
     )
     db.add(new_lead)
     db.commit()
@@ -609,19 +639,33 @@ def create_lead(
     # Exclude company_id because we pass it manually
     lead_data = lead.dict(exclude={'company_id'})
     
-    # Automatic Assignment Logic
-    import random
-    available_advisors = db.query(models.User).join(models.Role).filter(
-        models.User.company_id == company_id,
-        models.Role.name.in_(['asesor', 'vendedor'])
-    ).all()
+    # Manual Assignment by Aliado/Admin
+    assigned_to_id = lead.assigned_to_id
     
-    assigned_to_id = None
-    if available_advisors:
-        selected_advisor = random.choice(available_advisors)
-        assigned_to_id = selected_advisor.id
+    # Automatic Assignment Logic (Fallback if not manually assigned)
+    if not assigned_to_id:
+        import random
+        available_advisors = db.query(models.User).join(models.Role).filter(
+            models.User.company_id == company_id,
+            models.Role.name.in_(['asesor', 'vendedor'])
+        ).all()
+        
+        if available_advisors:
+            selected_advisor = random.choice(available_advisors)
+            assigned_to_id = selected_advisor.id
     
-    db_lead = models.Lead(**lead_data, company_id=company_id, assigned_to_id=assigned_to_id)
+    # Verify the manually assigned user belongs to the company
+    elif assigned_to_id:
+        target_user = db.query(models.User).filter(models.User.id == assigned_to_id).first()
+        if not target_user or target_user.company_id != company_id:
+             raise HTTPException(status_code=400, detail="Invalid assigned user (not in company)")
+
+    db_lead = models.Lead(
+        **lead_data, 
+        company_id=company_id, 
+        assigned_to_id=assigned_to_id,
+        created_by_id=current_user.id # Track who created it
+    )
     db.add(db_lead)
     db.commit()
     db.refresh(db_lead)
@@ -641,13 +685,17 @@ def update_lead(
     if current_user.company_id and lead.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Not authorized")
     
-    # Check for status change and log history
-    if lead_update.status and lead_update.status != lead.status:
+    # Check for status change OR comment to log history
+    # If status changes, or if there's a comment (even without status change), we log it.
+    has_status_change = lead_update.status and lead_update.status != lead.status
+    has_comment = lead_update.comment and len(lead_update.comment.strip()) > 0
+    
+    if has_status_change or has_comment:
         new_history = models.LeadHistory(
             lead_id=lead.id,
             user_id=current_user.id,
             previous_status=lead.status,
-            new_status=lead_update.status,
+            new_status=lead_update.status if lead_update.status else lead.status,
             comment=lead_update.comment
         )
         db.add(new_history)
@@ -1012,70 +1060,71 @@ def get_finance_stats(db: Session = Depends(get_db), current_user: models.User =
         "monthly_commissions": monthly_commissions,
         "payroll_expenses": payroll_expenses
     }
-def create_vehicle(
-    vehicle: schemas.VehicleCreate,
+
+# --- INTERNAL CHAT ENDPOINTS ---
+
+@app.get("/internal-messages", response_model=List[schemas.InternalMessage])
+def get_internal_messages(
+    date: str = Query(None), # YYYY-MM-DD
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # Determine company
-    company_id = vehicle.company_id
-    if not company_id:
-        # Fallback to user's company
-        company_id = current_user.company_id
-        
-    if not company_id:
-        raise HTTPException(status_code=400, detail="Company ID required")
-        
-    if current_user.company_id and current_user.company_id != company_id:
-         raise HTTPException(status_code=403, detail="Cannot create vehicle for another company")
-
-    new_vehicle = models.Vehicle(
-        make=vehicle.make,
-        model=vehicle.model,
-        year=vehicle.year,
-        price=vehicle.price,
-        plate=vehicle.plate,
-        mileage=vehicle.mileage,
-        color=vehicle.color,
-        description=vehicle.description,
-        status=vehicle.status,
-        photos=vehicle.photos or [],
-        company_id=company_id
+    # Filter by company
+    query = db.query(models.InternalMessage).filter(models.InternalMessage.company_id == current_user.company_id)
+    
+    # Filter Permissions: 
+    # Show message IF:
+    # 1. recipient_id is NULL (Broadcast)
+    # 2. recipient_id == current_user.id (Received DM)
+    # 3. sender_id == current_user.id (Sent DM)
+    from sqlalchemy import or_
+    query = query.filter(
+        or_(
+            models.InternalMessage.recipient_id == None,
+            models.InternalMessage.recipient_id == current_user.id,
+            models.InternalMessage.sender_id == current_user.id
+        )
     )
-    db.add(new_vehicle)
-    db.commit()
-    db.refresh(new_vehicle)
-    return new_vehicle
-
-@app.get("/vehicles/{vehicle_id}", response_model=schemas.Vehicle)
-def read_vehicle(vehicle_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == vehicle_id).first()
-    if not vehicle:
-        raise HTTPException(status_code=404, detail="Vehicle not found")
+    
+    if date:
+        try:
+            date_obj = datetime.datetime.strptime(date, "%Y-%m-%d").date()
+            # Filter by date range (start of day to end of day)
+            start_of_day = datetime.datetime.combine(date_obj, datetime.time.min)
+            end_of_day = datetime.datetime.combine(date_obj, datetime.time.max)
+            query = query.filter(models.InternalMessage.created_at >= start_of_day, models.InternalMessage.created_at <= end_of_day)
+        except ValueError:
+             raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+    else:
+        # Default to today
+        today = datetime.datetime.utcnow().date()
+        start_of_day = datetime.datetime.combine(today, datetime.time.min)
+        query = query.filter(models.InternalMessage.created_at >= start_of_day)
         
-    if current_user.company_id and vehicle.company_id != current_user.company_id:
-        raise HTTPException(status_code=403, detail="Not authorized")
-        
-    return vehicle
+    return query.order_by(models.InternalMessage.created_at.asc()).all()
 
-@app.put("/vehicles/{vehicle_id}", response_model=schemas.Vehicle)
-def update_vehicle(
-    vehicle_id: int, 
-    vehicle_update: schemas.VehicleUpdate,
+@app.post("/internal-messages", response_model=schemas.InternalMessage)
+def create_internal_message(
+    message: schemas.InternalMessageCreate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == vehicle_id).first()
-    if not vehicle:
-        raise HTTPException(status_code=404, detail="Vehicle not found")
+    # Verify recipient strictly if provided
+    recipient_id = message.recipient_id
+    if recipient_id:
+        recipient = db.query(models.User).filter(models.User.id == recipient_id).first()
+        if not recipient:
+            raise HTTPException(status_code=404, detail="Recipient not found")
+        if recipient.company_id != current_user.company_id:
+             raise HTTPException(status_code=403, detail="Cannot message users from other companies")
 
-    if current_user.company_id and vehicle.company_id != current_user.company_id:
-        raise HTTPException(status_code=403, detail="Not authorized")
-        
-    # Update fields
-    for field, value in vehicle_update.dict(exclude_unset=True).items():
-        setattr(vehicle, field, value)
-        
+    db_message = models.InternalMessage(
+        content=message.content,
+        company_id=current_user.company_id,
+        sender_id=current_user.id,
+        recipient_id=recipient_id
+    )
+    db.add(db_message)
     db.commit()
-    db.refresh(vehicle)
-    return vehicle
+    db.refresh(db_message)
+    return db_message

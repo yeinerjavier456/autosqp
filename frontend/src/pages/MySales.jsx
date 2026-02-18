@@ -45,7 +45,7 @@ const MySales = () => {
             // But usually "My Sales" means successful ones. 
             // Let's show ALL so they can see pending commissions.
 
-            const response = await axios.get('http://54.226.30.192:8000/sales/', {
+            const response = await axios.get('http://localhost:8000/sales/', {
                 headers: { Authorization: `Bearer ${token}` },
                 params
             });

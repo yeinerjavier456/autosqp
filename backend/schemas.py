@@ -1,6 +1,87 @@
-from pydantic import BaseModel, ConfigDict
-from typing import Optional, List
+from pydantic import BaseModel, EmailStr, ConfigDict
+from typing import List, Optional, Any, Dict
 from datetime import datetime
+import enum
+
+# --- ENUMS ---
+
+class LeadSource(str, enum.Enum):
+    FACEBOOK = "facebook"
+    WHATSAPP = "whatsapp"
+    INSTAGRAM = "instagram"
+    TIKTOK = "tiktok"
+    WEB = "web"
+    OTHER = "other"
+
+class LeadStatus(str, enum.Enum):
+    NEW = "new"
+    CONTACTED = "contacted"
+    INTERESTED = "interested"
+    QUALIFIED = "qualified"
+    LOST = "lost"
+    SOLD = "sold"
+
+class VehicleStatus(str, enum.Enum):
+    AVAILABLE = "available"
+    RESERVED = "reserved"
+    SOLD = "sold"
+
+class SaleStatus(str, enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+# --- BASE SCHEMAS ---
+
+class UserBase(BaseModel):
+    email: EmailStr
+    role_id: int
+    company_id: Optional[int] = None
+    commission_percentage: Optional[float] = 0.0
+    base_salary: Optional[int] = None
+    payment_dates: Optional[str] = None
+
+class UserCreate(UserBase):
+    password: str
+
+class RoleBase(BaseModel):
+    name: str
+    label: str
+
+class Role(RoleBase):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+
+class UserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    password: Optional[str] = None
+    role_id: Optional[int] = None
+    company_id: Optional[int] = None
+    commission_percentage: Optional[float] = None
+    base_salary: Optional[int] = None
+    payment_dates: Optional[str] = None
+
+class User(UserBase):
+    id: int
+    created_at: Optional[datetime] = None
+    role: Optional[Role] = None
+    last_active: Optional[datetime] = None
+    is_online: Optional[bool] = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+class UserList(BaseModel):
+    items: List[User]
+    total: int
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+
+# --- COMPANY ---
 
 class CompanyBase(BaseModel):
     name: str
@@ -13,67 +94,11 @@ class CompanyCreate(CompanyBase):
 
 class Company(CompanyBase):
     id: int
-    
-    model_config = ConfigDict(from_attributes=True)
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-class TokenData(BaseModel):
-    id: Optional[int] = None
-
-class RoleBase(BaseModel):
-    name: str
-    label: str
-
-class Role(RoleBase):
-    id: int
-    model_config = ConfigDict(from_attributes=True)
-
-class UserBase(BaseModel):
-    email: str
-
-class UserCreate(UserBase):
-    password: str
-    role_id: int
-    company_id: Optional[int] = None
-    commission_percentage: Optional[float] = 0.0
-    base_salary: Optional[int] = None
-    payment_dates: Optional[str] = None
-
-class UserUpdate(BaseModel):
-    email: Optional[str] = None
-    password: Optional[str] = None
-    role_id: Optional[int] = None
-    company_id: Optional[int] = None
-    commission_percentage: Optional[float] = None
-    base_salary: Optional[int] = None
-    payment_dates: Optional[str] = None
-
-class User(UserBase):
-    id: int
-    role_id: Optional[int] = None
-    role: Optional[Role] = None
-    company_id: Optional[int] = None
-    company: Optional[Company] = None
-    commission_percentage: Optional[float] = 0.0
-    base_salary: Optional[int] = None
-    payment_dates: Optional[str] = None
-    created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
-
-class DashboardStats(BaseModel):
-    companies_count: int
-    users_count: int
-
-class UserList(BaseModel):
-    items: list[User]
-    total: int
 
 class CompanyList(BaseModel):
-    items: list[Company]
+    items: List[Company]
     total: int
 
 class IntegrationSettingsBase(BaseModel):
@@ -93,64 +118,85 @@ class IntegrationSettingsUpdate(IntegrationSettingsBase):
 class IntegrationSettings(IntegrationSettingsBase):
     id: int
     company_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+# --- MESSAGES & CONVERSATIONS ---
+
+class MessageBase(BaseModel):
+    content: Optional[str] = None
+    sender_type: str # user, lead
+    media_url: Optional[str] = None
+    message_type: str = "text"
+
+class MessageCreate(MessageBase):
+    conversation_id: int
+
+class Message(MessageBase):
+    id: int
+    created_at: datetime
+    status: str
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class ConversationBase(BaseModel):
+    lead_id: int
+    company_id: int
+
+class Conversation(ConversationBase):
+    id: int
+    last_message_at: datetime
+    messages: List[Message] = []
     
     model_config = ConfigDict(from_attributes=True)
 
 # --- LEADS ---
-from typing import List
 
-class LeadBase(BaseModel):
-    source: str
-    name: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    message: Optional[str] = None
-    status: Optional[str] = "new"
-
-class LeadCreate(LeadBase):
-    company_id: Optional[int] = None
-
-class LeadUpdate(BaseModel):
-    status: Optional[str] = None
-    message: Optional[str] = None
-    assigned_to_id: Optional[int] = None
-    comment: Optional[str] = None # For history tracking
-
-class LeadHistory(BaseModel):
-    id: int
-    lead_id: int
-    user_id: Optional[int] = None
+class LeadHistoryBase(BaseModel):
     previous_status: Optional[str] = None
     new_status: Optional[str] = None
     comment: Optional[str] = None
-    created_at: Optional[datetime] = None
-    
-    # Optional: Embed User info if needed
-    # user: Optional[User] = None
-    
-    model_config = ConfigDict(from_attributes=True)
 
-# --- CONVERSATION / MESSAGES (Simplified for Lead Response) ---
-class MessageSimple(BaseModel):
+class LeadHistory(LeadHistoryBase):
     id: int
-    sender_type: str
-    content: Optional[str] = None
     created_at: datetime
+    user_id: Optional[int] = None
+    user: Optional[User] = None
+    
     model_config = ConfigDict(from_attributes=True)
 
-class ConversationSimple(BaseModel):
-    id: int
-    messages: List[MessageSimple] = []
-    model_config = ConfigDict(from_attributes=True)
+class LeadBase(BaseModel):
+    source: str
+    name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    status: Optional[str] = LeadStatus.NEW
+    message: Optional[str] = None
+    company_id: Optional[int] = None
+    assigned_to_id: Optional[int] = None
+
+class LeadCreate(LeadBase):
+    pass
+
+class LeadUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    status: Optional[str] = None
+    message: Optional[str] = None
+    assigned_to_id: Optional[int] = None
+    comment: Optional[str] = None # Virtual field for history
+
+class LeadBulkAssign(BaseModel):
+    lead_ids: List[int]
+    assigned_to_id: int
 
 class Lead(LeadBase):
     id: int
-    created_at: Optional[datetime] = None
-    company_id: int
-    assigned_to_id: Optional[int] = None
+    created_at: datetime
+    created_by_id: Optional[int] = None
     assigned_to: Optional[User] = None
     history: List[LeadHistory] = []
-    conversation: Optional[ConversationSimple] = None
+    conversation: Optional[Conversation] = None
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -158,42 +204,8 @@ class LeadList(BaseModel):
     items: List[Lead]
     total: int
 
-class LeadBulkAssign(BaseModel):
-    lead_ids: List[int]
-    assigned_to_id: int
-
-class ReportsStats(BaseModel):
-    total_leads: int
-    conversion_rate: float
-    leads_by_status: dict
-    leads_by_source: dict
-    leads_by_advisor: dict
-    # New metrics (Mocked for now)
-    leads_by_brand: dict
-    leads_by_model: dict
-    avg_response_time: list # List of values for a line chart e.g. [30, 25, 20...] mins over time
-
-# --- BRANDS & MODELS ---
-class CarModelBase(BaseModel):
-    name: str
-
-class CarModel(CarModelBase):
-    id: int
-    brand_id: int
-    model_config = ConfigDict(from_attributes=True)
-
-class CarBrandBase(BaseModel):
-    name: str
-    logo_url: Optional[str] = None
-
-class CarBrand(CarBrandBase):
-    id: int
-    models: List[CarModel] = []
-    model_config = ConfigDict(from_attributes=True)
-
-
-
 # --- VEHICLES ---
+
 class VehicleBase(BaseModel):
     make: str
     model: str
@@ -203,11 +215,12 @@ class VehicleBase(BaseModel):
     mileage: Optional[int] = 0
     color: Optional[str] = None
     description: Optional[str] = None
-    status: Optional[str] = "available"
+    status: Optional[str] = VehicleStatus.AVAILABLE
     photos: Optional[List[str]] = []
+    company_id: Optional[int] = None
 
 class VehicleCreate(VehicleBase):
-    company_id: Optional[int] = None
+    pass
 
 class VehicleUpdate(BaseModel):
     make: Optional[str] = None
@@ -231,37 +244,47 @@ class VehicleList(BaseModel):
     items: List[Vehicle]
     total: int
 
+class CarBrandBase(BaseModel):
+    name: str
+    logo_url: Optional[str] = None
+
+class CarBrand(CarBrandBase):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+
+class CarModelBase(BaseModel):
+    name: str
+
+class CarModel(CarModelBase):
+    id: int
+    brand_id: int
+    model_config = ConfigDict(from_attributes=True)
+
 # --- SALES ---
-from datetime import datetime
 
 class SaleBase(BaseModel):
+    vehicle_id: int
+    lead_id: Optional[int] = None
+    seller_id: Optional[int] = None # Optional override by admin
     sale_price: int
     
 class SaleCreate(SaleBase):
-    vehicle_id: int
-    lead_id: Optional[int] = None
-    company_id: Optional[int] = None
-    seller_id: Optional[int] = None
-
-class SaleUpdate(BaseModel):
-    status: str # approved, rejected
+    pass
 
 class Sale(SaleBase):
     id: int
-    vehicle_id: int
-    lead_id: Optional[int] = None
-    seller_id: int
     company_id: int
-    commission_percentage: float
-    commission_amount: float
-    net_revenue: float
     status: str
-    sale_date: Optional[datetime] = None
+    commission_percentage: float
+    commission_amount: int
+    net_revenue: int
+    sale_date: datetime
+    approved_by_id: Optional[int] = None
     
     vehicle: Optional[Vehicle] = None
-    leads: Optional[Lead] = None # Using plural purely to avoid shadowing, though singular is logic
+    lea: Optional[Lead] = None # Typo fixed
+    lead: Optional[Lead] = None
     seller: Optional[User] = None
-    approved_by: Optional[User] = None
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -269,7 +292,24 @@ class SaleList(BaseModel):
     items: List[Sale]
     total: int
 
-# --- CREDITS / SOLICITUDES ---
+# --- STATS ---
+
+class DashboardStats(BaseModel):
+    companies_count: int
+    users_count: int
+
+class ReportsStats(BaseModel):
+    total_leads: int
+    conversion_rate: float
+    leads_by_status: Dict[str, int]
+    leads_by_source: Dict[str, int]
+    leads_by_advisor: Dict[str, int]
+    leads_by_brand: Dict[str, int]
+    leads_by_model: Dict[str, int]
+    avg_response_time: List[int]
+
+# --- CREDITS ---
+
 class CreditApplicationBase(BaseModel):
     client_name: str
     phone: str
@@ -277,7 +317,7 @@ class CreditApplicationBase(BaseModel):
     desired_vehicle: str
     monthly_income: Optional[int] = 0
     other_income: Optional[int] = 0
-    occupation: str # Empleado, Independiente, Pensionado
+    occupation: str 
     application_mode: Optional[str] = "individual"
     down_payment: Optional[int] = 0
     notes: Optional[str] = None
@@ -307,10 +347,28 @@ class CreditApplication(CreditApplicationBase):
     updated_at: datetime
     company_id: int
     assigned_to_id: Optional[int] = None
-    assigned_to: Optional[User] = None
     
     model_config = ConfigDict(from_attributes=True)
 
 class CreditApplicationList(BaseModel):
     items: List[CreditApplication]
     total: int
+
+# --- INTERNAL CHAT ---
+
+class InternalMessageBase(BaseModel):
+    content: str
+    recipient_id: Optional[int] = None
+
+class InternalMessageCreate(InternalMessageBase):
+    pass
+
+class InternalMessage(InternalMessageBase):
+    id: int
+    company_id: int
+    sender_id: int
+    created_at: datetime
+    sender: Optional[User] = None 
+    recipient: Optional[User] = None 
+
+    model_config = ConfigDict(from_attributes=True)

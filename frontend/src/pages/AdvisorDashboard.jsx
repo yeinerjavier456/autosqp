@@ -10,7 +10,7 @@ const AdvisorDashboard = () => {
         const fetchStats = async () => {
             try {
                 const token = localStorage.getItem('token');
-                const response = await axios.get('http://54.226.30.192:8000/stats/advisor', {
+                const response = await axios.get('http://localhost:8000/stats/advisor', {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 setStats(response.data);

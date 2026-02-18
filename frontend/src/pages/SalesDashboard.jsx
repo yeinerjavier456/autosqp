@@ -26,11 +26,11 @@ const SalesDashboard = () => {
             const headers = { Authorization: `Bearer ${token}` };
 
             // Fetch Stats
-            const statsRes = await axios.get('http://54.226.30.192:8000/finance/stats', { headers });
+            const statsRes = await axios.get('http://localhost:8000/finance/stats', { headers });
             setStats(statsRes.data);
 
             // Fetch Sales List
-            const salesRes = await axios.get(`http://54.226.30.192:8000/sales/?status=${filterStatus}`, { headers });
+            const salesRes = await axios.get(`http://localhost:8000/sales/?status=${filterStatus}`, { headers });
             setSales(salesRes.data.items);
 
         } catch (error) {
@@ -59,7 +59,7 @@ const SalesDashboard = () => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.put(`http://54.226.30.192:8000/sales/${saleId}/approve`, {}, {
+            await axios.put(`http://localhost:8000/sales/${saleId}/approve`, {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             Swal.fire('Éxito', "Venta aprobada exitosamente", 'success');
