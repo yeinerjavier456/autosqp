@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Enum as SqEnum, JSON, DateTime
+from sqlalchemy import Boolean, Column, Integer, String, ForeignKey, Enum as SqEnum, JSON, DateTime
 from sqlalchemy.orm import relationship
 from database import Base
 import enum
@@ -80,6 +80,7 @@ class Lead(Base):
     phone = Column(String(50), nullable=True)
     source = Column(String(50), default=LeadSource.WEB) 
     status = Column(String(50), default=LeadStatus.NEW)
+    status_updated_at = Column(DateTime, default=datetime.datetime.utcnow) # Track when status changed
     message = Column(String(1000), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     
@@ -160,6 +161,71 @@ class Sale(Base):
     seller = relationship("User", foreign_keys=[seller_id], back_populates="sales")
     company = relationship("Company")
     approved_by = relationship("User", foreign_keys=[approved_by_id])
+
+class NotificationType(str, enum.Enum):
+    INFO = "info"
+    WARNING = "warning"
+    SUCCESS = "success"
+    ERROR = "error"
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    title = Column(String(100))
+    message = Column(String(500))
+    type = Column(String(20), default=NotificationType.INFO)
+    is_read = Column(Integer, default=0) # 0: unread, 1: read
+    link = Column(String(200), nullable=True) # Optional link to resource
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    user = relationship("User", backref="notifications")
+
+class LeadReminder(Base):
+    __tablename__ = "lead_reminders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    reminder_date = Column(DateTime)
+    note = Column(String(500))
+    is_completed = Column(Integer, default=0) # 0: pending, 1: completed/notified
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    user = relationship("User", backref="reminders")
+    lead = relationship("Lead", backref="reminders")
+
+class AutomationRule(Base):
+    __tablename__ = "automation_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100))
+    event_type = Column(String(50)) # 'time_in_status', 'status_change', 'general'
+    condition_value = Column(String(50)) # e.g. 'new', 'contacted' (the status to watch)
+    time_value = Column(Integer, default=0)
+    time_unit = Column(String(20), default='minutes') # 'minutes', 'hours', 'days'
+    
+    recipient_type = Column(String(50)) # 'assigned_advisor', 'all_admins', 'specific_user'
+    specific_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    
+    company_id = Column(Integer, ForeignKey("companies.id")) # specific to company
+    
+    is_repeating = Column(Boolean, default=False)
+    repeat_interval = Column(Integer, default=0) # in minutes
+    
+    is_active = Column(Integer, default=1) # 1: active, 0: inactive
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class SentAlertLog(Base):
+    __tablename__ = "sent_alert_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    rule_id = Column(Integer, ForeignKey("automation_rules.id"))
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    sent_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
 
 class IntegrationSettings(Base):
     __tablename__ = "integration_settings"

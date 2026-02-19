@@ -99,7 +99,64 @@ class Company(CompanyBase):
 
 class CompanyList(BaseModel):
     items: List[Company]
+    items: List[Company]
     total: int
+
+# --- NOTIFICATIONS & REMINDERS ---
+
+class NotificationBase(BaseModel):
+    title: str
+    message: str
+    type: str = "info"
+    link: Optional[str] = None
+
+class NotificationCreate(NotificationBase):
+    user_id: int
+
+class Notification(NotificationBase):
+    id: int
+    user_id: int
+    is_read: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class LeadReminderBase(BaseModel):
+    lead_id: int
+    reminder_date: datetime
+    note: str
+
+class LeadReminderCreate(LeadReminderBase):
+    pass
+
+class LeadReminder(LeadReminderBase):
+    id: int
+    user_id: int
+    is_completed: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class AutomationRuleBase(BaseModel):
+    name: str
+    event_type: str
+    condition_value: str
+    time_value: int
+    time_unit: str
+    recipient_type: str
+    specific_user_id: Optional[int] = None
+    is_repeating: bool = False
+    repeat_interval: int = 0
+    is_active: int = 1
+
+class AutomationRuleCreate(AutomationRuleBase):
+    pass
+
+class AutomationRule(AutomationRuleBase):
+    id: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 class IntegrationSettingsBase(BaseModel):
     facebook_access_token: Optional[str] = None

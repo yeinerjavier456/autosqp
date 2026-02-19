@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, get_db
 import models, schemas, auth_utils
-from routers import whatsapp, credits # Import the new router
+from routers import whatsapp, credits, notifications, rules, vehicles # Import the new routers
 from jose import JWTError, jwt
 import datetime
 import os
@@ -16,6 +16,9 @@ app = FastAPI(title="AutosQP API", description="API para gestión de compra vent
 
 app.include_router(whatsapp.router) # Register the router
 app.include_router(credits.router) # Register credits router
+app.include_router(notifications.router)
+app.include_router(rules.router)
+app.include_router(vehicles.router)
 
 
 # Configure CORS
@@ -669,6 +672,19 @@ def create_lead(
     db.add(db_lead)
     db.commit()
     db.refresh(db_lead)
+    
+    # Create Notification for assigned user
+    if db_lead.assigned_to_id:
+        notification = models.Notification(
+            user_id=db_lead.assigned_to_id,
+            title="Nuevo Lead Asignado",
+            message=f"Se te ha asignado un nuevo lead: {db_lead.name}",
+            type="info",
+            link=f"/leads/{db_lead.id}"
+        )
+        db.add(notification)
+        db.commit()
+        
     return db_lead
 
 @app.put("/leads/{lead_id}", response_model=schemas.Lead)
@@ -691,6 +707,9 @@ def update_lead(
     has_comment = lead_update.comment and len(lead_update.comment.strip()) > 0
     
     if has_status_change or has_comment:
+        if has_status_change:
+            lead.status_updated_at = datetime.datetime.utcnow()
+            
         new_history = models.LeadHistory(
             lead_id=lead.id,
             user_id=current_user.id,

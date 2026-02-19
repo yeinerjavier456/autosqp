@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationsContext';
 import Swal from 'sweetalert2';
 
 // Draggable Lead Card Component
@@ -109,9 +110,14 @@ const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragS
 
 // History Modal Component
 const HistoryModal = ({ lead, onClose, onUpdate }) => {
+    const { createReminder } = useNotifications();
     const [newComment, setNewComment] = useState('');
     const [newStatus, setNewStatus] = useState(lead?.status || 'new');
     const [loading, setLoading] = useState(false);
+
+    // Reminder State
+    const [reminderDate, setReminderDate] = useState('');
+    const [reminderNote, setReminderNote] = useState('');
 
     if (!lead) return null;
 
@@ -126,109 +132,162 @@ const HistoryModal = ({ lead, onClose, onUpdate }) => {
         try {
             await onUpdate(lead.id, newStatus, newComment);
             setNewComment('');
-            // Optional: Close modal or keep open to see history update?
-            // User likely wants to see it added. The onUpdate should refresh data.
         } catch (error) {
             console.error("Update failed", error);
         } finally {
             setLoading(false);
         }
     };
+
+    const handleCreateReminder = async () => {
+        if (!reminderDate || !reminderNote) {
+            Swal.fire('Error', 'Fecha y nota son requeridas', 'warning');
+            return;
+        }
+        await createReminder(lead.id, reminderDate, reminderNote);
+        setReminderDate('');
+        setReminderNote('');
+    };
+
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
-            <div className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl animate-fade-in-up border border-gray-100 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl animate-fade-in-up border border-gray-100 max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-4">
                     <div>
                         <h2 className="text-xl font-bold text-gray-800">Detalles del Lead</h2>
                         <p className="text-sm text-gray-500">Cliente: <span className="font-semibold text-blue-600">{lead.name}</span></p>
+                        <p className="text-sm text-gray-500 mt-1">Asignado a: <span className="font-semibold text-indigo-600">{lead.assigned_to ? (lead.assigned_to.email) : 'Sin asignar'}</span></p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition">
                         <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                 </div>
 
-                <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                    <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                        <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                        Agregar Nota / Actualizar Estado
-                    </h3>
-                    <form onSubmit={handleSubmit} className="space-y-3">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1">Estado</label>
-                            <select
-                                value={newStatus}
-                                onChange={(e) => setNewStatus(e.target.value)}
-                                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                <div className="overflow-y-auto custom-scrollbar pr-2 flex-1 space-y-6">
+
+                    {/* Reminder Section */}
+                    <div className="bg-indigo-50/60 p-4 rounded-xl border border-indigo-100">
+                        <h3 className="text-sm font-bold text-indigo-800 mb-3 flex items-center gap-2">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            Programar Recordatorio
+                        </h3>
+                        <div className="flex flex-col sm:flex-row gap-3 items-end">
+                            <div className="w-full sm:flex-1">
+                                <label className="block text-[10px] font-bold text-indigo-700 uppercase mb-1">Fecha y Hora</label>
+                                <input
+                                    type="datetime-local"
+                                    className="w-full border border-indigo-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                    value={reminderDate}
+                                    onChange={(e) => setReminderDate(e.target.value)}
+                                />
+                            </div>
+                            <div className="w-full sm:flex-[2]">
+                                <label className="block text-[10px] font-bold text-indigo-700 uppercase mb-1">Nota</label>
+                                <input
+                                    type="text"
+                                    placeholder="Ej: Llamar..."
+                                    className="w-full border border-indigo-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                    value={reminderNote}
+                                    onChange={(e) => setReminderNote(e.target.value)}
+                                />
+                            </div>
+                            <button
+                                onClick={handleCreateReminder}
+                                className="w-full sm:w-auto bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 transition shadow-sm h-[38px]"
                             >
-                                <option value="new">Nuevo</option>
-                                <option value="contacted">Contactado</option>
-                                <option value="interested">Interesado</option>
-                                <option value="lost">Perdido</option>
-                                <option value="sold">Vendido</option>
-                            </select>
+                                Agendar
+                            </button>
                         </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1">Nota / Comentario</label>
-                            <textarea
-                                value={newComment}
-                                onChange={(e) => setNewComment(e.target.value)}
-                                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-                                rows="2"
-                                placeholder="Escribe detalles del seguimiento..."
-                            ></textarea>
-                        </div>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full bg-blue-600 text-white text-sm font-bold py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
-                        >
-                            {loading ? 'Guardando...' : 'Guardar Nota y Actualizar'}
-                        </button>
-                    </form>
-                </div>
+                    </div>
 
-                <div className="flex border-b border-gray-200 mb-4">
-                    <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide border-b-2 border-blue-600 py-2 inline-block">
-                        Historial de Cambios
-                    </h3>
-                </div>
-
-                <div className="overflow-y-auto custom-scrollbar pr-2 flex-1 space-y-4">
-                    {lead.history && lead.history.length > 0 ? (
-                        [...lead.history].reverse().map((record) => (
-                            <div key={record.id} className="flex gap-4 group">
-                                <div className="flex flex-col items-center">
-                                    <div className="w-2 h-2 rounded-full bg-blue-400 mt-2 ring-4 ring-white"></div>
-                                    <div className="w-0.5 flex-1 bg-gray-100 group-last:hidden"></div>
+                    {/* Status Update Section */}
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                            <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                            Agregar Nota / Actualizar Estado
+                        </h3>
+                        <form onSubmit={handleSubmit} className="space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="sm:col-span-1">
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Estado</label>
+                                    <select
+                                        value={newStatus}
+                                        onChange={(e) => setNewStatus(e.target.value)}
+                                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                    >
+                                        <option value="new">Nuevo</option>
+                                        <option value="contacted">Contactado</option>
+                                        <option value="interested">Interesado</option>
+                                        <option value="lost">Perdido</option>
+                                        <option value="sold">Vendido</option>
+                                    </select>
                                 </div>
-                                <div className="flex-1 pb-6">
-                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 group-hover:border-blue-100 transition shadow-sm">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div className="flex items-center gap-2">
-                                                <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded text-white bg-gray-400`}>
-                                                    {record.previous_status || 'N/A'}
-                                                </span>
-                                                <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
-                                                <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded text-white 
-                                                        ${record.new_status === 'sold' ? 'bg-green-500' :
-                                                        record.new_status === 'lost' ? 'bg-gray-500' : 'bg-blue-500'}`}>
-                                                    {record.new_status}
-                                                </span>
-                                            </div>
-                                            <span className="text-xs text-gray-400 font-mono">
-                                                {record.created_at ? new Date(record.created_at).toLocaleString() : 'Reciente'}
-                                            </span>
-                                        </div>
-                                        <p className="text-sm text-gray-700 italic">"{record.comment || 'Sin comentario'}"</p>
-                                    </div>
+                                <div className="sm:col-span-2">
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Nota / Comentario</label>
+                                    <textarea
+                                        value={newComment}
+                                        onChange={(e) => setNewComment(e.target.value)}
+                                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                        rows="1"
+                                        placeholder="Escribe detalles..."
+                                    ></textarea>
                                 </div>
                             </div>
-                        ))
-                    ) : (
-                        <div className="text-center py-12 text-gray-400 italic bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                            No hay historial registrado para este lead.
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className="w-full bg-blue-600 text-white text-sm font-bold py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+                            >
+                                {loading ? 'Guardando...' : 'Guardar Nota y Actualizar'}
+                            </button>
+                        </form>
+                    </div>
+
+                    {/* History List */}
+                    <div>
+                        <div className="flex border-b border-gray-200 mb-4">
+                            <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide border-b-2 border-blue-600 py-2 inline-block">
+                                Historial de Cambios
+                            </h3>
                         </div>
-                    )}
+                        <div className="space-y-4">
+                            {lead.history && lead.history.length > 0 ? (
+                                [...lead.history].reverse().map((record) => (
+                                    <div key={record.id} className="flex gap-4 group">
+                                        <div className="flex flex-col items-center">
+                                            <div className="w-2 h-2 rounded-full bg-blue-400 mt-2 ring-4 ring-white"></div>
+                                            <div className="w-0.5 flex-1 bg-gray-100 group-last:hidden"></div>
+                                        </div>
+                                        <div className="flex-1 pb-6">
+                                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 group-hover:border-blue-100 transition shadow-sm">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded text-white bg-gray-400`}>
+                                                            {record.previous_status || 'N/A'}
+                                                        </span>
+                                                        <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                                                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded text-white 
+                                                                ${record.new_status === 'sold' ? 'bg-green-500' :
+                                                                record.new_status === 'lost' ? 'bg-gray-500' : 'bg-blue-500'}`}>
+                                                            {record.new_status}
+                                                        </span>
+                                                    </div>
+                                                    <span className="text-[10px] text-gray-400 font-mono">
+                                                        {record.created_at ? new Date(record.created_at).toLocaleString() : 'Reciente'}
+                                                    </span>
+                                                </div>
+                                                <p className="text-sm text-gray-700 italic">"{record.comment || 'Sin comentario'}"</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-center py-12 text-gray-400 italic bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                                    No hay historial registrado para este lead.
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
