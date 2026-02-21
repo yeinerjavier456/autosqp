@@ -27,6 +27,8 @@ app.add_middleware(
         "http://localhost:3000",
         "http://34.229.164.25:3000",
         "http://54.226.30.192:3000", # New IP
+        "http://54.226.30.192", # Server Frontend IP
+        "https://54.226.30.192", # HTTPS variant just in case
     ],
     allow_credentials=True,
     allow_methods=["*"],
