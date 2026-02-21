@@ -19,7 +19,7 @@ const LoginPage = () => {
             formData.append('username', email);
             formData.append('password', password);
 
-            const response = await axios.post('http://localhost:8000/token', formData, {
+            const response = await axios.post('http://54.226.30.192:8000/token', formData, {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 }
