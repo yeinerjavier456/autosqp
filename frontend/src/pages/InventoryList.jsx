@@ -24,7 +24,7 @@ const InventoryList = () => {
             const params = { skip, limit, status: activeTab }; // Filter by status
             if (search) params.q = search;
 
-            const response = await axios.get('http://localhost:8000/vehicles/', {
+            const response = await axios.get('http://54.226.30.192:8000/vehicles/', {
                 params,
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -66,7 +66,7 @@ const InventoryList = () => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.put(`http://localhost:8000/vehicles/${vehicleId}`,
+            await axios.put(`http://54.226.30.192:8000/vehicles/${vehicleId}`,
                 { status: 'sold' },
                 { headers: { Authorization: `Bearer ${token}` } }
             );

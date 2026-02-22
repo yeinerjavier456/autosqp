@@ -35,7 +35,7 @@ const AliadoDashboard = () => {
         try {
             const token = localStorage.getItem('token');
             // Backend filters leads created by or assigned to this Aliado
-            const response = await axios.get('http://localhost:8000/leads', {
+            const response = await axios.get('http://54.226.30.192:8000/leads', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setLeads(Array.isArray(response.data.items) ? response.data.items : []);
@@ -49,7 +49,7 @@ const AliadoDashboard = () => {
     const fetchAdvisors = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8000/users/', {
+            const response = await axios.get('http://54.226.30.192:8000/users/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             // Filter only advisors/sellers
@@ -79,7 +79,7 @@ const AliadoDashboard = () => {
                 return;
             }
 
-            const response = await axios.post('http://localhost:8000/leads', payload, {
+            const response = await axios.post('http://54.226.30.192:8000/leads', payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -148,7 +148,7 @@ const AliadoDashboard = () => {
             const lead = leads.find(l => l.id === leadId);
             if (!lead) return;
 
-            const response = await axios.put(`http://localhost:8000/leads/${leadId}`,
+            const response = await axios.put(`http://54.226.30.192:8000/leads/${leadId}`,
                 {
                     status: status || lead.status, // Keep same status if undefined
                     comment: comment

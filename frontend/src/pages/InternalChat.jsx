@@ -38,7 +38,7 @@ const InternalChat = () => {
     const fetchUsers = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8000/users/', {
+            const response = await axios.get('http://54.226.30.192:8000/users/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setUsersList(response.data.items || []);
@@ -50,7 +50,7 @@ const InternalChat = () => {
     const fetchMessages = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get(`http://localhost:8000/internal-messages?date=${selectedDate}`, {
+            const response = await axios.get(`http://54.226.30.192:8000/internal-messages?date=${selectedDate}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setMessages(response.data);
@@ -67,7 +67,7 @@ const InternalChat = () => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.post('http://localhost:8000/internal-messages',
+            await axios.post('http://54.226.30.192:8000/internal-messages',
                 {
                     content: newMessage,
                     recipient_id: recipientId ? parseInt(recipientId) : null
