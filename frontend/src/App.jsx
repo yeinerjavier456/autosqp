@@ -60,7 +60,7 @@ function App() {
               {/* Public Routes */}
               <Route path="/autos" element={<PublicInventory />} />
               <Route path="/autos/:id" element={<VehicleDetail />} /> {/* New Route */}
-              
+
               <Route path="/" element={<Navigate to="/autos" replace />} />
               <Route path="/login" element={<LoginPage />} />
 
@@ -118,8 +118,7 @@ function App() {
                     <Route path="/admin/companies-list" element={<CompaniesList />} />
                   </Route>
 
-                  {/* Redirect root to admin for authenticated users */}
-                  <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
+                  {/* NOTE: I removed the duplicate Route path="/" here because it intercepts the global "/" public route */}
                 </Route>
               </Route>
 
