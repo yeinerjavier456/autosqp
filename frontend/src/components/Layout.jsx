@@ -350,8 +350,27 @@ const Layout = () => {
                     )}
                 </nav>
 
-                {/* User Profile / Logout */}
+                {/* Public Web Link */}
                 <div className="p-4 border-t border-white/10">
+                    <a
+                        href="/autos"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`
+                            w-full flex items-center gap-3 py-3 px-4 rounded-xl text-green-300 hover:bg-green-500/20 hover:text-green-200 transition-colors
+                            ${isCollapsed ? 'justify-center px-0' : ''}
+                        `}
+                        title="Ver Mi Web (Inventario Público)"
+                    >
+                        <div className="w-5 h-5 flex-shrink-0">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
+                        </div>
+                        {!isCollapsed && <span className="font-bold text-sm">Ver Mi Web</span>}
+                    </a>
+                </div>
+
+                {/* User Profile / Logout */}
+                <div className="p-4 border-t border-white/10 pt-2">
                     <button
                         onClick={handleLogout}
                         className={`
