@@ -60,6 +60,7 @@ function App() {
               {/* Public Routes */}
               <Route path="/autos" element={<PublicInventory />} />
               <Route path="/autos/:id" element={<VehicleDetail />} /> {/* New Route */}
+              
               <Route path="/" element={<Navigate to="/autos" replace />} />
               <Route path="/login" element={<LoginPage />} />
 
