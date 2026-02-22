@@ -26,12 +26,18 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
-
         "http://localhost:3000",
         "http://34.229.164.25:3000",
-        "http://54.226.30.192:3000", # New IP
-        "http://54.226.30.192", # Server Frontend IP
-        "https://54.226.30.192", # HTTPS variant just in case
+        "http://54.226.30.192:3000", # Old IP port
+        "http://54.226.30.192", # Old Server IP
+        "https://54.226.30.192", 
+        "http://3.234.117.124:3000", # New Elastic IP port
+        "http://3.234.117.124",      # New Elastic IP
+        "https://3.234.117.124",     # New Elastic IP HTTPS
+        "http://autosqp.co",         # Domain HTTP
+        "https://autosqp.co",        # Domain HTTPS
+        "http://www.autosqp.co",     # WWW Domain HTTP
+        "https://www.autosqp.co",    # WWW Domain HTTPS
     ],
     allow_credentials=True,
     allow_methods=["*"],
