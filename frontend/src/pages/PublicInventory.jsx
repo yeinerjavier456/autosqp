@@ -38,7 +38,7 @@ const PublicInventory = () => {
 
     const fetchMakes = async () => {
         try {
-            const res = await axios.get('http://localhost:8000/vehicles/makes');
+            const res = await axios.get('http://54.226.30.192:8000/vehicles/makes');
             setMakes(res.data);
         } catch (error) {
             console.error("Error fetching makes", error);
@@ -60,7 +60,7 @@ const PublicInventory = () => {
             if (filters.mileage_max) params.mileage_max = filters.mileage_max;
             if (filters.color) params.color = filters.color;
 
-            const res = await axios.get('http://localhost:8000/vehicles/public', { params });
+            const res = await axios.get('http://54.226.30.192:8000/vehicles/public', { params });
             setVehicles(res.data);
         } catch (error) {
             console.error("Error fetching vehicles", error);

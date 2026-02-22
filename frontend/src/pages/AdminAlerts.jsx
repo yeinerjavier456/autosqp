@@ -32,7 +32,7 @@ const AdminAlerts = () => {
     const fetchRules = async () => {
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.get('http://localhost:8000/rules/', {
+            const res = await axios.get('http://54.226.30.192:8000/rules/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setRules(res.data);
@@ -46,7 +46,7 @@ const AdminAlerts = () => {
     const fetchUsers = async () => {
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.get('http://localhost:8000/users/', {
+            const res = await axios.get('http://54.226.30.192:8000/users/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setUsers(res.data.items || []);
@@ -66,11 +66,11 @@ const AdminAlerts = () => {
             };
 
             if (editingId) {
-                await axios.put(`http://localhost:8000/rules/${editingId}`, payload, {
+                await axios.put(`http://54.226.30.192:8000/rules/${editingId}`, payload, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
             } else {
-                await axios.post('http://localhost:8000/rules/', payload, {
+                await axios.post('http://54.226.30.192:8000/rules/', payload, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
             }
@@ -98,7 +98,7 @@ const AdminAlerts = () => {
         if (result.isConfirmed) {
             try {
                 const token = localStorage.getItem('token');
-                await axios.delete(`http://localhost:8000/rules/${id}`, {
+                await axios.delete(`http://54.226.30.192:8000/rules/${id}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 fetchRules();

@@ -767,6 +767,59 @@ def receive_webhook_lead(
 
 # --- VEHICLES ENDPOINTS ---
 
+@app.get("/vehicles/makes")
+def get_public_makes(db: Session = Depends(get_db)):
+    # Returns distinct makes from available vehicles
+    makes = db.query(models.Vehicle.make).filter(models.Vehicle.status == 'available').distinct().all()
+    return [m[0] for m in makes if m[0]]
+
+@app.get("/vehicles/public")
+def get_public_vehicles(
+    q: Optional[str] = None,
+    make: Optional[str] = None,
+    model: Optional[str] = None,
+    year_from: Optional[int] = None,
+    year_to: Optional[int] = None,
+    price_min: Optional[int] = None,
+    price_max: Optional[int] = None,
+    mileage_min: Optional[int] = None,
+    mileage_max: Optional[int] = None,
+    color: Optional[str] = None,
+    limit: int = 50,
+    db: Session = Depends(get_db)
+):
+    query = db.query(models.Vehicle).filter(models.Vehicle.status == 'available')
+    
+    if q:
+        search = f"%{q}%"
+        query = query.filter(
+            (models.Vehicle.make.ilike(search)) |
+            (models.Vehicle.model.ilike(search)) |
+            (models.Vehicle.plate.ilike(search))
+        )
+    if make:
+        query = query.filter(models.Vehicle.make.ilike(f"%{make}%"))
+    if model:
+        query = query.filter(models.Vehicle.model.ilike(f"%{model}%"))
+    if color:
+        query = query.filter(models.Vehicle.color.ilike(f"%{color}%"))
+    if year_from is not None:
+        query = query.filter(models.Vehicle.year >= year_from)
+    if year_to is not None:
+        query = query.filter(models.Vehicle.year <= year_to)
+    if price_min is not None:
+        query = query.filter(models.Vehicle.price >= price_min)
+    if price_max is not None:
+        query = query.filter(models.Vehicle.price <= price_max)
+    if mileage_min is not None:
+        query = query.filter(models.Vehicle.mileage >= mileage_min)
+    if mileage_max is not None:
+        query = query.filter(models.Vehicle.mileage <= mileage_max)
+        
+    vehicles = query.order_by(models.Vehicle.id.desc()).limit(limit).all()
+    # Serialize to dict to match expected frontend structure if needed, or rely on FastAPI's response_model
+    return vehicles
+
 @app.get("/vehicles/", response_model=schemas.VehicleList)
 def read_vehicles(
     q: str = None,

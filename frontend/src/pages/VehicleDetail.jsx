@@ -13,7 +13,7 @@ const VehicleDetail = () => {
     useEffect(() => {
         const fetchVehicle = async () => {
             try {
-                const res = await axios.get(`http://localhost:8000/vehicles/public/${id}`);
+                const res = await axios.get(`http://54.226.30.192:8000/vehicles/public/${id}`);
                 setVehicle(res.data);
                 if (res.data.photos && res.data.photos.length > 0) {
                     setSelectedImage(res.data.photos[0]);
