@@ -250,130 +250,138 @@ def sync_historical_messages(source: str = "facebook", db: Session = Depends(get
     from datetime import datetime as dt
     
     # Platform parameter 'platform=instagram' is required to fetch IG messages.
-    url = f"https://graph.facebook.com/v18.0/me/conversations"
+    base_url = f"https://graph.facebook.com/v18.0/me/conversations"
     params = {
-        "fields": "id,updated_time,participants,messages{id,message,created_time,from,to,attachments}",
+        "fields": "id,updated_time,participants,messages.limit(50){id,message,created_time,from,to,attachments}",
         "access_token": token,
         "limit": 50,
         "platform": "instagram" if source == "instagram" else "messenger"
     }
     
     try:
-        response = requests.get(url, params=params)
-        data = response.json()
-        
-        if response.status_code != 200 or "error" in data:
-            error_msg = data.get("error", {}).get("message", "Error from Meta API")
-            raise HTTPException(status_code=400, detail=error_msg)
-            
-        conversations_data = data.get("data", [])
         synced_count = 0
         new_leads_count = 0
         
-        for conv in conversations_data:
-            participants = conv.get("participants", {}).get("data", [])
-            if not participants:
-                continue
-                
-            # Identificar al cliente (el que NO es la Page)
-            # Como no sabemos siempre el Page ID, asumiremos que si son 2, el que no mandó el último msg o simplemente agarramos el primero que tenga email/nombre raro
-            client = None
-            for p in participants:
-                # Often the page name is known or we just pick the one that sent a message
-                client = p
-                
-            if len(participants) == 2:
-                # We assume the Page is one of them. For simplicity, we create lead with the participant info.
-                client = participants[0] # Very naive approach, usually we exclude the Page ID.
-                # In Graph API, usually Participants[0] is the user, Participants[1] is the Page.
-                
-            sender_id = client.get("id")
-            sender_name = client.get("name", "Usuario Desconocido")
+        url = base_url
+        while url and new_leads_count < 1000: # Soft stop at 1000 leads to prevent infinite loop memory issues
+            response = requests.get(url, params=params if url == base_url else None)
+            data = response.json()
             
-            # Buscar o crear Lead
-            lead = db.query(models.Lead).filter(
-                models.Lead.phone == sender_id, 
-                models.Lead.source == source
-            ).first()
+            if response.status_code != 200 or "error" in data:
+                error_msg = data.get("error", {}).get("message", "Error from Meta API")
+                raise HTTPException(status_code=400, detail=error_msg)
+                
+            conversations_data = data.get("data", [])
+            if not conversations_data:
+                break
+                
+            for conv in conversations_data:
+                participants = conv.get("participants", {}).get("data", [])
+                if not participants:
+                    continue
+                
+                # Identificar al cliente (el que NO es la Page)
+                # Como no sabemos siempre el Page ID, asumiremos que si son 2, el que no mandó el último msg o simplemente agarramos el primero que tenga email/nombre raro
+                client = None
+                for p in participants:
+                    # Often the page name is known or we just pick the one that sent a message
+                    client = p
+                
+                if len(participants) == 2:
+                    # We assume the Page is one of them. For simplicity, we create lead with the participant info.
+                    client = participants[0] # Very naive approach, usually we exclude the Page ID.
+                    # In Graph API, usually Participants[0] is the user, Participants[1] is the Page.
+                
+                sender_id = client.get("id")
+                sender_name = client.get("name", "Usuario Desconocido")
             
-            if not lead:
-                lead = models.Lead(
-                    name=sender_name,
-                    phone=sender_id,
-                    source=source,
-                    status="new",
-                    company_id=company_id
-                )
-                db.add(lead)
-                db.commit()
-                db.refresh(lead)
-                new_leads_count += 1
+                # Buscar o crear Lead
+                lead = db.query(models.Lead).filter(
+                    models.Lead.phone == sender_id, 
+                    models.Lead.source == source
+                ).first()
+            
+                if not lead:
+                    lead = models.Lead(
+                        name=sender_name,
+                        phone=sender_id,
+                        source=source,
+                        status="new",
+                        company_id=company_id
+                    )
+                    db.add(lead)
+                    db.commit()
+                    db.refresh(lead)
+                    new_leads_count += 1
                 
-            # Buscar o crear Conversación
-            conversation = db.query(models.Conversation).filter(models.Conversation.lead_id == lead.id).first()
-            if not conversation:
-                conversation = models.Conversation(
-                    lead_id=lead.id,
-                    company_id=company_id,
-                    last_message_at=datetime.datetime.utcnow()
-                )
-                db.add(conversation)
-                db.commit()
-                db.refresh(conversation)
+                # Buscar o crear Conversación
+                conversation = db.query(models.Conversation).filter(models.Conversation.lead_id == lead.id).first()
+                if not conversation:
+                    conversation = models.Conversation(
+                        lead_id=lead.id,
+                        company_id=company_id,
+                        last_message_at=datetime.datetime.utcnow()
+                    )
+                    db.add(conversation)
+                    db.commit()
+                    db.refresh(conversation)
                 
-            # Procesar mensajes de esta conversación
-            messages_data = conv.get("messages", {}).get("data", [])
-            for msg in reversed(messages_data): # From oldest to newest
-                meta_msg_id = msg.get("id")
+                # Procesar mensajes de esta conversación
+                messages_data = conv.get("messages", {}).get("data", [])
+                for msg in reversed(messages_data): # From oldest to newest
+                    meta_msg_id = msg.get("id")
                 
-                # Check if exists
-                existing_msg = db.query(models.Message).filter(models.Message.whatsapp_message_id == meta_msg_id).first()
-                if existing_msg:
-                    continue # Already synced
+                    # Check if exists
+                    existing_msg = db.query(models.Message).filter(models.Message.whatsapp_message_id == meta_msg_id).first()
+                    if existing_msg:
+                        continue # Already synced
                     
-                content = msg.get("message", "")
-                created_time_str = msg.get("created_time")
+                    content = msg.get("message", "")
+                    created_time_str = msg.get("created_time")
                 
-                # Meta API returns ISO 8601 like: 2024-02-22T10:00:00+0000
-                if created_time_str:
-                    try:
-                        # Python 3.11+ supports ISO format directly, but we can clean it up just in case
-                        clean_time_str = created_time_str.replace('+0000', '+00:00')
-                        created_time = dt.fromisoformat(clean_time_str).replace(tzinfo=None)
-                    except ValueError:
+                    # Meta API returns ISO 8601 like: 2024-02-22T10:00:00+0000
+                    if created_time_str:
+                        try:
+                            # Python 3.11+ supports ISO format directly, but we can clean it up just in case
+                            clean_time_str = created_time_str.replace('+0000', '+00:00')
+                            created_time = dt.fromisoformat(clean_time_str).replace(tzinfo=None)
+                        except ValueError:
+                            created_time = datetime.datetime.utcnow()
+                    else:
                         created_time = datetime.datetime.utcnow()
+                
+                    msg_from_id = msg.get("from", {}).get("id")
+                
+                    # Determine sender
+                    sender_type = "lead" if msg_from_id == sender_id else "user"
+                
+                    new_msg = models.Message(
+                        conversation_id=conversation.id,
+                        sender_type=sender_type,
+                        content=content,
+                        message_type="text",
+                        status="delivered",
+                        whatsapp_message_id=meta_msg_id,
+                        created_at=created_time
+                    )
+                    db.add(new_msg)
+                    synced_count += 1
+                
+                # Update last action
+                updated_time_str = conv.get("updated_time")
+                if updated_time_str:
+                    try:
+                        clean_upd_time = updated_time_str.replace('+0000', '+00:00')
+                        conversation.last_message_at = dt.fromisoformat(clean_upd_time).replace(tzinfo=None)
+                    except ValueError:
+                       conversation.last_message_at = datetime.datetime.utcnow()
                 else:
-                    created_time = datetime.datetime.utcnow()
-                
-                msg_from_id = msg.get("from", {}).get("id")
-                
-                # Determine sender
-                sender_type = "lead" if msg_from_id == sender_id else "user"
-                
-                new_msg = models.Message(
-                    conversation_id=conversation.id,
-                    sender_type=sender_type,
-                    content=content,
-                    message_type="text",
-                    status="delivered",
-                    whatsapp_message_id=meta_msg_id,
-                    created_at=created_time
-                )
-                db.add(new_msg)
-                synced_count += 1
-                
-            # Update last action
-            updated_time_str = conv.get("updated_time")
-            if updated_time_str:
-                try:
-                    clean_upd_time = updated_time_str.replace('+0000', '+00:00')
-                    conversation.last_message_at = dt.fromisoformat(clean_upd_time).replace(tzinfo=None)
-                except ValueError:
-                   conversation.last_message_at = datetime.datetime.utcnow()
-            else:
-                conversation.last_message_at = datetime.datetime.utcnow()
+                    conversation.last_message_at = datetime.datetime.utcnow()
             
             db.commit()
+            
+            # Meta Pagination: fetch the next page of conversations
+            url = data.get("paging", {}).get("next")
             
         return {"status": "success", "synced_messages": synced_count, "new_leads": new_leads_count}
         
