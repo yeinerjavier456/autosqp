@@ -241,7 +241,7 @@ def sync_historical_messages(source: str = "facebook", db: Session = Depends(get
         raise HTTPException(status_code=400, detail=f"No hay token configurado para {source}")
 
     import requests
-    from dateutil import parser
+    from datetime import datetime as dt
     
     # Platform parameter 'platform=instagram' might be needed if separating, but usually page token sees all if linked.
     # We query conversations
@@ -326,7 +326,17 @@ def sync_historical_messages(source: str = "facebook", db: Session = Depends(get
                     
                 content = msg.get("message", "")
                 created_time_str = msg.get("created_time")
-                created_time = parser.parse(created_time_str).replace(tzinfo=None) if created_time_str else datetime.datetime.utcnow()
+                
+                # Meta API returns ISO 8601 like: 2024-02-22T10:00:00+0000
+                if created_time_str:
+                    try:
+                        # Python 3.11+ supports ISO format directly, but we can clean it up just in case
+                        clean_time_str = created_time_str.replace('+0000', '+00:00')
+                        created_time = dt.fromisoformat(clean_time_str).replace(tzinfo=None)
+                    except ValueError:
+                        created_time = datetime.datetime.utcnow()
+                else:
+                    created_time = datetime.datetime.utcnow()
                 
                 msg_from_id = msg.get("from", {}).get("id")
                 
@@ -346,7 +356,16 @@ def sync_historical_messages(source: str = "facebook", db: Session = Depends(get
                 synced_count += 1
                 
             # Update last action
-            conversation.last_message_at = parser.parse(conv.get("updated_time")).replace(tzinfo=None) if conv.get("updated_time") else datetime.datetime.utcnow()
+            updated_time_str = conv.get("updated_time")
+            if updated_time_str:
+                try:
+                    clean_upd_time = updated_time_str.replace('+0000', '+00:00')
+                    conversation.last_message_at = dt.fromisoformat(clean_upd_time).replace(tzinfo=None)
+                except ValueError:
+                   conversation.last_message_at = datetime.datetime.utcnow()
+            else:
+                conversation.last_message_at = datetime.datetime.utcnow()
+            
             db.commit()
             
         return {"status": "success", "synced_messages": synced_count, "new_leads": new_leads_count}
