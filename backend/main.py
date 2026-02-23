@@ -134,6 +134,7 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
     hashed_password = auth_utils.get_password_hash(user.password)
     new_user = models.User(
         email=user.email,
+        full_name=user.full_name,
         hashed_password=hashed_password,
         role_id=user.role_id, 
         company_id=user.company_id
@@ -174,6 +175,8 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
         db_user.company_id = user_update.company_id
     
     # Update new fields
+    if user_update.full_name is not None:
+        db_user.full_name = user_update.full_name
     if user_update.commission_percentage is not None:
         db_user.commission_percentage = user_update.commission_percentage
     if user_update.base_salary is not None:
