@@ -257,8 +257,9 @@ def sync_historical_messages(source: str = "facebook", db: Session = Depends(get
         response = requests.get(url, params=params)
         data = response.json()
         
-        if "error" in data:
-            raise HTTPException(status_code=400, detail=data["error"].get("message", "Error from Meta API"))
+        if response.status_code != 200 or "error" in data:
+            error_msg = data.get("error", {}).get("message", "Error from Meta API")
+            raise HTTPException(status_code=400, detail=error_msg)
             
         conversations_data = data.get("data", [])
         synced_count = 0
@@ -371,6 +372,8 @@ def sync_historical_messages(source: str = "facebook", db: Session = Depends(get
             
         return {"status": "success", "synced_messages": synced_count, "new_leads": new_leads_count}
         
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error syncing Meta: {e}")
         raise HTTPException(status_code=500, detail=str(e))
