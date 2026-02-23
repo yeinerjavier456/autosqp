@@ -262,9 +262,9 @@ def sync_historical_messages(source: str = "facebook", db: Session = Depends(get
         synced_count = 0
         new_leads_count = 0
         
-        url = base_url
-        while url and new_leads_count < 1000: # Soft stop at 1000 leads to prevent infinite loop memory issues
-            response = requests.get(url, params=params if url == base_url else None)
+        has_next = True
+        while has_next and new_leads_count < 1000: # Soft stop at 1000 leads to prevent infinite loop memory issues
+            response = requests.get(base_url, params=params)
             data = response.json()
             
             if response.status_code != 200 or "error" in data:
@@ -380,8 +380,17 @@ def sync_historical_messages(source: str = "facebook", db: Session = Depends(get
             
             db.commit()
             
-            # Meta Pagination: fetch the next page of conversations
-            url = data.get("paging", {}).get("next")
+            # Meta Pagination: extract the 'after' cursor and update params
+            paging = data.get("paging", {})
+            if "next" in paging:
+                cursors = paging.get("cursors", {})
+                after_cursor = cursors.get("after")
+                if after_cursor:
+                    params["after"] = after_cursor
+                else:
+                    has_next = False
+            else:
+                has_next = False
             
         return {"status": "success", "synced_messages": synced_count, "new_leads": new_leads_count}
         
