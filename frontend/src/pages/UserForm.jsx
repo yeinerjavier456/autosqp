@@ -26,12 +26,12 @@ const UserForm = () => {
                 const headers = { Authorization: `Bearer ${token}` };
 
                 // Fetch Roles
-                const rolesRes = await axios.get('http://3.234.117.124:8000/roles/', { headers });
+                const rolesRes = await axios.get('https://autosqp.co/api/roles/', { headers });
                 setRoles(rolesRes.data);
 
                 // Fetch Companies if Super Admin
                 if (!currentUser?.company_id) {
-                    const compRes = await axios.get('http://3.234.117.124:8000/companies/?limit=100', { headers });
+                    const compRes = await axios.get('https://autosqp.co/api/companies/?limit=100', { headers });
                     setCompanies(compRes.data.items);
                 }
             } catch (error) {
@@ -46,7 +46,7 @@ const UserForm = () => {
                 try {
                     const token = localStorage.getItem('token');
                     console.log(`Fetching user ${id}...`);
-                    const response = await axios.get(`http://3.234.117.124:8000/users/${id}`, {
+                    const response = await axios.get(`https://autosqp.co/api/users/${id}`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
                     console.log("User data loaded:", response.data);
@@ -105,10 +105,10 @@ const UserForm = () => {
             }
 
             if (isEditing) {
-                await axios.put(`http://3.234.117.124:8000/users/${id}`, payload, { headers });
+                await axios.put(`https://autosqp.co/api/users/${id}`, payload, { headers });
                 setStatus({ type: 'success', message: 'Usuario actualizado exitosamente!' });
             } else {
-                await axios.post('http://3.234.117.124:8000/users/', payload, { headers });
+                await axios.post('https://autosqp.co/api/users/', payload, { headers });
                 setStatus({ type: 'success', message: 'Usuario creado exitosamente!' });
             }
 

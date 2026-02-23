@@ -21,7 +21,7 @@ const AdminCompanySettings = () => {
             const fetchCompany = async () => {
                 try {
                     const token = localStorage.getItem('token');
-                    const response = await axios.get(`http://3.234.117.124:8000/companies/${id}`, {
+                    const response = await axios.get(`https://autosqp.co/api/companies/${id}`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
                     setCompany(response.data);
@@ -54,10 +54,10 @@ const AdminCompanySettings = () => {
             if (isEditing) {
                 // Pending: Implement PUT in backend. For now, we simulate success or warn user.
                 // let's assume we implement PUT below.
-                await axios.put(`http://3.234.117.124:8000/companies/${id}`, company, { headers });
+                await axios.put(`https://autosqp.co/api/companies/${id}`, company, { headers });
                 setStatus({ type: 'success', message: `Empresa "${company.name}" actualizada exitosamente!` });
             } else {
-                const response = await axios.post('http://3.234.117.124:8000/companies/', company, { headers });
+                const response = await axios.post('https://autosqp.co/api/companies/', company, { headers });
                 setStatus({ type: 'success', message: `Empresa "${response.data.name}" creada exitosamente!` });
                 // navigate(`/admin/companies/${response.data.id}`); // Optional: redirect to edit mode
             }

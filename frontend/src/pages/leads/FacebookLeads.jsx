@@ -37,7 +37,7 @@ const FacebookLeads = () => {
     const fetchConversations = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('http://3.234.117.124:8000/meta/conversations?source=facebook', {
+            const response = await axios.get('https://autosqp.co/api/meta/conversations?source=facebook', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setConversations(response.data);
@@ -52,7 +52,7 @@ const FacebookLeads = () => {
         setIsSyncing(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.post('http://3.234.117.124:8000/meta/sync-historical?source=facebook', {}, {
+            const response = await axios.post('https://autosqp.co/api/meta/sync-historical?source=facebook', {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             alert(`Sincronización Completada.\n- Mensajes sincronizados: ${response.data.synced_messages}\n- Nuevos Leads: ${response.data.new_leads}`);
@@ -68,7 +68,7 @@ const FacebookLeads = () => {
     const fetchMessages = async (conversationId) => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get(`http://3.234.117.124:8000/meta/conversations/${conversationId}/messages`, {
+            const response = await axios.get(`https://autosqp.co/api/meta/conversations/${conversationId}/messages`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setMessages(response.data);
@@ -90,7 +90,7 @@ const FacebookLeads = () => {
                 message_type: 'text'
             };
 
-            await axios.post(`http://3.234.117.124:8000/meta/conversations/${selectedConversation.id}/send`, payload, {
+            await axios.post(`https://autosqp.co/api/meta/conversations/${selectedConversation.id}/send`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 

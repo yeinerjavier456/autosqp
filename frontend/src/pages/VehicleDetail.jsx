@@ -13,7 +13,7 @@ const VehicleDetail = () => {
     useEffect(() => {
         const fetchVehicle = async () => {
             try {
-                const res = await axios.get(`http://3.234.117.124:8000/vehicles/public/${id}`);
+                const res = await axios.get(`https://autosqp.co/api/vehicles/public/${id}`);
                 setVehicle(res.data);
                 if (res.data.photos && res.data.photos.length > 0) {
                     setSelectedImage(res.data.photos[0]);

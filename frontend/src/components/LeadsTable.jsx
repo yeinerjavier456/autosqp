@@ -29,7 +29,7 @@ const LeadsTable = ({ source, title }) => {
             if (searchTerm) params.q = searchTerm;
             if (statusFilter) params.status = statusFilter;
 
-            const response = await axios.get('http://3.234.117.124:8000/leads/', {
+            const response = await axios.get('https://autosqp.co/api/leads/', {
                 params,
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -76,14 +76,14 @@ const LeadsTable = ({ source, title }) => {
         try {
             const token = localStorage.getItem('token');
             // 1. Get Roles to find 'asesor' id
-            const rolesRes = await axios.get('http://3.234.117.124:8000/roles/', {
+            const rolesRes = await axios.get('https://autosqp.co/api/roles/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const asesorRole = rolesRes.data.find(r => r.name === 'asesor');
 
             if (asesorRole) {
                 // 2. Get Users with that role
-                const usersRes = await axios.get('http://3.234.117.124:8000/users/', {
+                const usersRes = await axios.get('https://autosqp.co/api/users/', {
                     params: { role_id: asesorRole.id },
                     headers: { Authorization: `Bearer ${token}` }
                 });
@@ -103,7 +103,7 @@ const LeadsTable = ({ source, title }) => {
         if (!selectedAdvisor) return;
         try {
             const token = localStorage.getItem('token');
-            await axios.put('http://3.234.117.124:8000/leads/bulk-assign', {
+            await axios.put('https://autosqp.co/api/leads/bulk-assign', {
                 lead_ids: selectedLeads,
                 assigned_to_id: parseInt(selectedAdvisor)
             }, {

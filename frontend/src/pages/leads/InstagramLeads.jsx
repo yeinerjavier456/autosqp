@@ -35,7 +35,7 @@ const InstagramLeads = () => {
     const fetchConversations = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('http://3.234.117.124:8000/meta/conversations?source=instagram', {
+            const response = await axios.get('https://autosqp.co/api/meta/conversations?source=instagram', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setConversations(response.data);
@@ -50,7 +50,7 @@ const InstagramLeads = () => {
         setIsSyncing(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.post('http://3.234.117.124:8000/meta/sync-historical?source=instagram', {}, {
+            const response = await axios.post('https://autosqp.co/api/meta/sync-historical?source=instagram', {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             alert(`Sincronización Completada.\n- Mensajes sincronizados: ${response.data.synced_messages}\n- Nuevos Leads: ${response.data.new_leads}`);
@@ -66,7 +66,7 @@ const InstagramLeads = () => {
     const fetchMessages = async (conversationId) => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get(`http://3.234.117.124:8000/meta/conversations/${conversationId}/messages`, {
+            const response = await axios.get(`https://autosqp.co/api/meta/conversations/${conversationId}/messages`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setMessages(response.data);
@@ -88,7 +88,7 @@ const InstagramLeads = () => {
                 message_type: 'text'
             };
 
-            await axios.post(`http://3.234.117.124:8000/meta/conversations/${selectedConversation.id}/send`, payload, {
+            await axios.post(`https://autosqp.co/api/meta/conversations/${selectedConversation.id}/send`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 

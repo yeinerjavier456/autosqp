@@ -32,7 +32,7 @@ const AdminAlerts = () => {
     const fetchRules = async () => {
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.get('http://3.234.117.124:8000/rules/', {
+            const res = await axios.get('https://autosqp.co/api/rules/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setRules(res.data);
@@ -46,7 +46,7 @@ const AdminAlerts = () => {
     const fetchUsers = async () => {
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.get('http://3.234.117.124:8000/users/', {
+            const res = await axios.get('https://autosqp.co/api/users/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setUsers(res.data.items || []);
@@ -66,11 +66,11 @@ const AdminAlerts = () => {
             };
 
             if (editingId) {
-                await axios.put(`http://3.234.117.124:8000/rules/${editingId}`, payload, {
+                await axios.put(`https://autosqp.co/api/rules/${editingId}`, payload, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
             } else {
-                await axios.post('http://3.234.117.124:8000/rules/', payload, {
+                await axios.post('https://autosqp.co/api/rules/', payload, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
             }
@@ -98,7 +98,7 @@ const AdminAlerts = () => {
         if (result.isConfirmed) {
             try {
                 const token = localStorage.getItem('token');
-                await axios.delete(`http://3.234.117.124:8000/rules/${id}`, {
+                await axios.delete(`https://autosqp.co/api/rules/${id}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 fetchRules();

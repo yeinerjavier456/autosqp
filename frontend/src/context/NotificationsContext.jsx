@@ -20,7 +20,7 @@ export const NotificationsProvider = ({ children }) => {
     const fetchNotifications = async () => {
         if (!user) return;
         try {
-            const response = await axios.get('http://3.234.117.124:8000/notifications/', {
+            const response = await axios.get('https://autosqp.co/api/notifications/', {
                 headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
             });
             const data = response.data;
@@ -34,7 +34,7 @@ export const NotificationsProvider = ({ children }) => {
     // Mark as Read
     const markAsRead = async (id) => {
         try {
-            await axios.post(`http://3.234.117.124:8000/notifications/read/${id}`, {}, {
+            await axios.post(`https://autosqp.co/api/notifications/read/${id}`, {}, {
                 headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
             });
             // Optimistic update
@@ -48,7 +48,7 @@ export const NotificationsProvider = ({ children }) => {
     // Mark All as Read
     const markAllAsRead = async () => {
         try {
-            await axios.post(`http://3.234.117.124:8000/notifications/mark-all-read`, {}, {
+            await axios.post(`https://autosqp.co/api/notifications/mark-all-read`, {}, {
                 headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
             });
             setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
@@ -61,7 +61,7 @@ export const NotificationsProvider = ({ children }) => {
     // Create Reminder
     const createReminder = async (leadId, reminderDate, note) => {
         try {
-            await axios.post(`http://3.234.117.124:8000/notifications/leads/${leadId}/reminders`, {
+            await axios.post(`https://autosqp.co/api/notifications/leads/${leadId}/reminders`, {
                 lead_id: leadId,
                 reminder_date: reminderDate, // ISO check needed?
                 note: note
