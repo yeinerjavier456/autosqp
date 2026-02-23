@@ -14,6 +14,7 @@ class UserRole(str, enum.Enum):
     VENDEDOR = "vendedor"
     COORDINADOR = "coordinador"
     ALIADO = "aliado"
+    COMPRAS = "compras"
 
 class Company(Base):
     __tablename__ = "companies"

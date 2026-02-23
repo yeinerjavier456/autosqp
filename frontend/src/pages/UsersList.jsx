@@ -104,7 +104,9 @@ const UsersList = () => {
                                     const roleLabel = user.role?.label || (roleName === 'super_admin' ? 'Super Admin' :
                                         roleName === 'admin' ? 'Administrador' :
                                             roleName === 'asesor' ? 'Asesor' :
-                                                roleName === 'user' ? 'Usuario' : 'Sin Rol');
+                                                roleName === 'aliado' ? 'Aliado' :
+                                                    roleName === 'compras' ? 'Compras' :
+                                                        roleName === 'user' ? 'Usuario' : 'Sin Rol');
 
                                     return (
                                         <tr key={user.id} className="hover:bg-gray-50 transition">
@@ -119,7 +121,9 @@ const UsersList = () => {
                                                     ${roleName === 'super_admin' ? 'bg-purple-100 text-purple-800' :
                                                         roleName === 'admin' ? 'bg-blue-100 text-blue-800' :
                                                             roleName === 'asesor' ? 'bg-orange-100 text-orange-800' :
-                                                                'bg-green-100 text-green-800'}`}>
+                                                                roleName === 'aliado' ? 'bg-yellow-100 text-yellow-800' :
+                                                                    roleName === 'compras' ? 'bg-pink-100 text-pink-800' :
+                                                                        'bg-green-100 text-green-800'}`}>
                                                     {roleLabel}
                                                 </span>
                                             </td>

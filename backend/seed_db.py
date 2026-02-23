@@ -12,7 +12,9 @@ def seed_super_admin():
             {"name": "super_admin", "label": "Súper Admin Global"},
             {"name": "admin", "label": "Administrador de Empresa"},
             {"name": "asesor", "label": "Asesor / Vendedor"},
-            {"name": "user", "label": "Usuario Básico"}
+            {"name": "user", "label": "Usuario Básico"},
+            {"name": "aliado", "label": "Aliado Estratégico"},
+            {"name": "compras", "label": "Gestor de Compras"}
         ]
         
         for r in roles:
