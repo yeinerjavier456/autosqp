@@ -35,6 +35,7 @@ class SaleStatus(str, enum.Enum):
 
 class UserBase(BaseModel):
     email: EmailStr
+    full_name: Optional[str] = None
     role_id: int
     company_id: Optional[int] = None
     commission_percentage: Optional[float] = 0.0
@@ -54,6 +55,7 @@ class Role(RoleBase):
 
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
+    full_name: Optional[str] = None
     password: Optional[str] = None
     role_id: Optional[int] = None
     company_id: Optional[int] = None

@@ -80,6 +80,7 @@ const UsersList = () => {
                         <thead className="bg-gray-50">
                             <tr>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rol</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registro</th>
@@ -95,7 +96,7 @@ const UsersList = () => {
                                 </tr>
                             ) : users.length === 0 ? (
                                 <tr>
-                                    <td colSpan="5" className="px-6 py-10 text-center text-gray-500">No se encontraron usuarios.</td>
+                                    <td colSpan="6" className="px-6 py-10 text-center text-gray-500">No se encontraron usuarios.</td>
                                 </tr>
                             ) : (
                                 users.map((user) => {
@@ -114,7 +115,10 @@ const UsersList = () => {
                                                 #{user.id}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm font-medium text-gray-900">{user.email}</div>
+                                                <div className="text-sm font-medium text-gray-900">{user.full_name || <span className="text-gray-400 italic">Sin nombre</span>}</div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="text-sm text-gray-500">{user.email}</div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full

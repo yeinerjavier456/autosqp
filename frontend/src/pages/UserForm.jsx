@@ -9,6 +9,7 @@ const UserForm = () => {
     const { user: currentUser } = useAuth();
 
     const [user, setUser] = useState({
+        full_name: '',
         email: '',
         password: '',
         role_id: '',
@@ -142,6 +143,18 @@ const UserForm = () => {
 
             <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100 max-w-2xl">
                 <form onSubmit={handleSave} className="space-y-6">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-600 mb-1">Nombre Completo</label>
+                        <input
+                            type="text"
+                            name="full_name"
+                            value={user.full_name || ''}
+                            onChange={handleChange}
+                            placeholder="Ej: Juan Pérez"
+                            className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-black bg-white"
+                        />
+                    </div>
+
                     <div>
                         <label className="block text-sm font-medium text-slate-600 mb-1">Email</label>
                         <input

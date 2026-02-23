@@ -116,6 +116,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(100), unique=True, index=True)
+    full_name = Column(String(150), nullable=True) # Nombre Completo
     hashed_password = Column(String(255))
     # role = Column(String(50)) # Deprecated in favor of role_id
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=True)
