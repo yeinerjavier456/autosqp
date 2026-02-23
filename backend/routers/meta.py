@@ -243,13 +243,13 @@ def sync_historical_messages(source: str = "facebook", db: Session = Depends(get
     import requests
     from datetime import datetime as dt
     
-    # Platform parameter 'platform=instagram' might be needed if separating, but usually page token sees all if linked.
-    # We query conversations
+    # Platform parameter 'platform=instagram' is required to fetch IG messages.
     url = f"https://graph.facebook.com/v18.0/me/conversations"
     params = {
         "fields": "id,updated_time,participants,messages{id,message,created_time,from,to,attachments}",
         "access_token": token,
-        "limit": 50
+        "limit": 50,
+        "platform": "instagram" if source == "instagram" else "messenger"
     }
     
     try:
