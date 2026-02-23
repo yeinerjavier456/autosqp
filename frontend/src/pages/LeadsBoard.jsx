@@ -119,6 +119,10 @@ const HistoryModal = ({ lead, onClose, onUpdate }) => {
     const [messages, setMessages] = useState([]);
     const [loadingMessages, setLoadingMessages] = useState(false);
 
+    // Reply State
+    const [replyMessage, setReplyMessage] = useState('');
+    const [sendingReply, setSendingReply] = useState(false);
+
     // Reminder State
     const [reminderDate, setReminderDate] = useState('');
     const [reminderNote, setReminderNote] = useState('');
@@ -142,6 +146,53 @@ const HistoryModal = ({ lead, onClose, onUpdate }) => {
             console.error("Error fetching lead messages", error);
         } finally {
             setLoadingMessages(false);
+        }
+    };
+
+    const handleSendReply = async (e) => {
+        e.preventDefault();
+        if (!replyMessage.trim()) return;
+
+        // Ensure we have a conversation ID (from existing messages)
+        const conversationId = messages.length > 0 ? messages[0].conversation_id : null;
+        if (!conversationId && lead.source !== 'whatsapp') {
+            Swal.fire('Atención', 'Este cliente aún no ha iniciado una conversación en Meta.', 'info');
+            return;
+        }
+
+        setSendingReply(true);
+        try {
+            const token = localStorage.getItem('token');
+            const source = lead.source?.toLowerCase();
+
+            if (source === 'whatsapp') {
+                // Determine Whatsapp Route
+                await axios.post('https://autosqp.co/api/whatsapp/send_message', {
+                    phone_number: lead.phone,
+                    message_text: replyMessage
+                }, { headers: { Authorization: `Bearer ${token}` } });
+
+            } else if (source === 'facebook' || source === 'instagram') {
+                // Determine Meta Route
+                await axios.post(`https://autosqp.co/api/meta/conversations/${conversationId}/send`, {
+                    conversation_id: conversationId,
+                    sender_type: 'user',
+                    content: replyMessage,
+                    message_type: 'text'
+                }, { headers: { Authorization: `Bearer ${token}` } });
+            } else {
+                Swal.fire('Error', 'Este lead no proviene de una red social conectada.', 'error');
+                setSendingReply(false);
+                return;
+            }
+
+            setReplyMessage('');
+            fetchMessages(); // Refresh chat
+        } catch (error) {
+            console.error("Error sending reply", error);
+            Swal.fire('Error', 'No se pudo enviar el mensaje', 'error');
+        } finally {
+            setSendingReply(false);
         }
     };
 
@@ -290,8 +341,8 @@ const HistoryModal = ({ lead, onClose, onUpdate }) => {
                                                 </span>
                                             </div>
                                             <div className={`px-4 py-2 rounded-2xl max-w-[85%] ${msg.sender_type === 'user'
-                                                    ? 'bg-blue-600 text-white rounded-br-sm shadow-sm'
-                                                    : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm'
+                                                ? 'bg-blue-600 text-white rounded-br-sm shadow-sm'
+                                                : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm'
                                                 }`}>
                                                 <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                                             </div>
@@ -302,6 +353,29 @@ const HistoryModal = ({ lead, onClose, onUpdate }) => {
                                     ))
                                 )}
                             </div>
+
+                            {/* Reply Input Form */}
+                            {(lead.source === 'facebook' || lead.source === 'instagram' || lead.source === 'whatsapp') && (
+                                <form onSubmit={handleSendReply} className="bg-white border-t border-gray-200 p-2 flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder={`Responder por ${lead.source}...`}
+                                        className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={replyMessage}
+                                        onChange={(e) => setReplyMessage(e.target.value)}
+                                        disabled={sendingReply}
+                                    />
+                                    <button
+                                        type="submit"
+                                        disabled={!replyMessage.trim() || sendingReply}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm font-bold transition disabled:opacity-50 flex items-center gap-1"
+                                    >
+                                        {sendingReply ? '...' : (
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                                        )}
+                                    </button>
+                                </form>
+                            )}
                         </div>
                     )}
 
