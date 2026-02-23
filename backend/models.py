@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String, ForeignKey, Enum as SqEnum, JSON, DateTime
+from sqlalchemy import Boolean, Column, Integer, String, ForeignKey, Enum as SqEnum, JSON, DateTime, Text
 from sqlalchemy.orm import relationship
 from database import Base
 import enum
@@ -234,22 +234,22 @@ class IntegrationSettings(Base):
     company_id = Column(Integer, ForeignKey("companies.id"), unique=True)
     
     # Facebook
-    facebook_access_token = Column(String(255), nullable=True)
+    facebook_access_token = Column(Text, nullable=True)
     facebook_pixel_id = Column(String(100), nullable=True)
     
     # Instagram
-    instagram_access_token = Column(String(255), nullable=True)
+    instagram_access_token = Column(Text, nullable=True)
     
     # TikTok
-    tiktok_access_token = Column(String(255), nullable=True)
+    tiktok_access_token = Column(Text, nullable=True)
     tiktok_pixel_id = Column(String(100), nullable=True)
     
     # WhatsApp
-    whatsapp_api_key = Column(String(255), nullable=True)
+    whatsapp_api_key = Column(Text, nullable=True)
     whatsapp_phone_number_id = Column(String(100), nullable=True)
     
     # ChatGPT
-    openai_api_key = Column(String(255), nullable=True)
+    openai_api_key = Column(Text, nullable=True)
     gw_model = Column(String(50), default="gpt-4o")
 
     company = relationship("Company", back_populates="integration_settings")
