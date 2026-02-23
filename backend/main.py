@@ -193,7 +193,39 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
         
     return db_user
 
+@app.delete("/users/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    # 1. Check if the executing user has permission (Admin or Super Admin)
+    role_obj = db.query(models.Role).filter(models.Role.id == current_user.role_id).first()
+    if not role_obj or role_obj.name not in ["super_admin", "admin"]:
+        raise HTTPException(status_code=403, detail="No tienes permisos para eliminar usuarios")
+        
+    # 2. Prevent self-deletion
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="No puedes eliminarte a ti mismo")
 
+    # 3. Find user
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        
+    # 4. If current user is just 'admin', they can only delete users in their same company
+    if role_obj.name == "admin":
+        if db_user.company_id != current_user.company_id:
+            raise HTTPException(status_code=403, detail="No puedes eliminar usuarios de otra empresa")
+            
+        # Prevent 'admin' from deleting a 'super_admin'
+        target_role = db.query(models.Role).filter(models.Role.id == db_user.role_id).first()
+        if target_role and target_role.name == "super_admin":
+            raise HTTPException(status_code=403, detail="No puedes eliminar a un Súper Administrador")
+            
+    try:
+        db.delete(db_user)
+        db.commit()
+        return {"status": "success", "message": "Usuario eliminado correctamente"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"No se pudo eliminar el usuario porque tiene registros dependientes (ej: ventas o leads asigandos). {str(e)}")
 
 @app.get("/dashboard/stats", response_model=schemas.DashboardStats)
 def get_dashboard_stats(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):

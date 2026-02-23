@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import Swal from 'sweetalert2';
 
 const UserForm = () => {
     const { id } = useParams();
@@ -121,6 +122,36 @@ const UserForm = () => {
             console.error(error);
             const errorMsg = error.response?.data?.detail || 'Error al conectar con el servidor';
             setStatus({ type: 'error', message: `Error: ${errorMsg}` });
+        }
+    };
+
+    const handleDelete = async () => {
+        const result = await Swal.fire({
+            title: '¿Estás seguro?',
+            text: "Cuidado: Esto eliminará al usuario permanentemente y reasignará o dejará huérfanos sus leads/ventas.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (result.isConfirmed) {
+            setStatus({ type: 'loading', message: 'Eliminando...' });
+            try {
+                const token = localStorage.getItem('token');
+                await axios.delete(`https://autosqp.co/api/users/${id}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                Swal.fire('¡Eliminado!', 'El usuario ha sido eliminado.', 'success');
+                navigate('/admin/users');
+            } catch (error) {
+                console.error("Error deleting user", error);
+                const errorMsg = error.response?.data?.detail || 'No se pudo eliminar el usuario';
+                setStatus({ type: 'error', message: `Error: ${errorMsg}` });
+                Swal.fire('Error', errorMsg, 'error');
+            }
         }
     };
 
@@ -266,14 +297,25 @@ const UserForm = () => {
                         </div>
                     </div>
 
-                    <div className="pt-4">
+                    <div className="pt-4 flex flex-col md:flex-row gap-4">
                         <button
                             type="submit"
                             disabled={status.type === 'loading'}
-                            className="w-full py-3 px-6 bg-blue-600 text-white font-bold rounded-lg shadow-lg hover:bg-blue-700 transition transform hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed"
+                            className="flex-1 py-3 px-6 bg-blue-600 text-white font-bold rounded-lg shadow-lg hover:bg-blue-700 transition transform hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed"
                         >
                             {status.type === 'loading' ? 'Guardando...' : 'Guardar Usuario'}
                         </button>
+
+                        {isEditing && (currentUser?.role?.name === 'super_admin' || currentUser?.role?.name === 'admin') && (
+                            <button
+                                type="button"
+                                onClick={handleDelete}
+                                disabled={status.type === 'loading'}
+                                className="flex-1 py-3 px-6 bg-red-600 text-white font-bold rounded-lg shadow-lg hover:bg-red-700 transition transform hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed"
+                            >
+                                Eliminar Usuario
+                            </button>
+                        )}
                     </div>
                 </form>
             </div>
