@@ -7,6 +7,7 @@ const FacebookLeads = () => {
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState("");
     const [loading, setLoading] = useState(true);
+    const [isSyncing, setIsSyncing] = useState(false);
     const messagesEndRef = useRef(null);
 
     useEffect(() => {
@@ -43,6 +44,24 @@ const FacebookLeads = () => {
             setLoading(false);
         } catch (error) {
             console.error("Error fetching conventions", error);
+        }
+    };
+
+    const handleSyncHistorical = async () => {
+        if (!window.confirm("¿Seguro que deseas sincronizar el historial? Esto descargará los últimos 50 chats de tu Facebook.")) return;
+        setIsSyncing(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post('http://3.234.117.124:8000/meta/sync-historical?source=facebook', {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            alert(`Sincronización Completada.\n- Mensajes sincronizados: ${response.data.synced_messages}\n- Nuevos Leads: ${response.data.new_leads}`);
+            fetchConversations();
+        } catch (error) {
+            console.error("Error syncing historical messages", error);
+            alert("Error al sincronizar. Asegúrate de tener el Token de Facebook en Integraciones.");
+        } finally {
+            setIsSyncing(false);
         }
     };
 
@@ -91,12 +110,29 @@ const FacebookLeads = () => {
         <div className="h-[calc(100vh-100px)] flex bg-white rounded-2xl overflow-hidden shadow-xl border border-gray-200">
             {/* Sidebar */}
             <div className="w-1/3 bg-white border-r border-gray-200 flex flex-col">
-                <div className="p-4 bg-blue-50 border-b border-blue-100 flex items-center gap-2">
-                    <svg className="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
-                    <div>
-                        <h2 className="text-xl font-bold text-blue-900">Facebook</h2>
-                        <p className="text-xs text-blue-600">Messenger Chats</p>
+                <div className="p-4 bg-blue-50 border-b border-blue-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <svg className="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
+                        <div>
+                            <h2 className="text-xl font-bold text-blue-900">Facebook</h2>
+                            <p className="text-xs text-blue-600">Messenger Chats</p>
+                        </div>
                     </div>
+                    <button
+                        onClick={handleSyncHistorical}
+                        disabled={isSyncing}
+                        className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full shadow transition-colors disabled:opacity-50"
+                        title="Sincronizar Historial"
+                    >
+                        {isSyncing ? (
+                            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        ) : (
+                            <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        )}
+                    </button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto">
