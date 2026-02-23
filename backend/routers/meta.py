@@ -234,8 +234,14 @@ def sync_historical_messages(source: str = "facebook", db: Session = Depends(get
     settings = db.query(models.IntegrationSettings).filter(models.IntegrationSettings.company_id == company_id).first()
     
     token = None
-    if source == "facebook" or source == "instagram":
-        token = settings.facebook_access_token if settings and settings.facebook_access_token else os.getenv("META_ACCESS_TOKEN")
+    if source == "instagram":
+        token = settings.instagram_access_token
+    elif source == "facebook":
+        token = settings.facebook_access_token
+        
+    # Global fallback if not configured in DB (for dev purposes)
+    if not token:
+        token = os.getenv("META_ACCESS_TOKEN")
         
     if not token:
         raise HTTPException(status_code=400, detail=f"No hay token configurado para {source}")
