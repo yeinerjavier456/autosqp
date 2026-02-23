@@ -737,6 +737,32 @@ def update_lead(
     db.refresh(lead)
     return lead
 
+@app.get("/leads/{lead_id}/messages")
+def get_lead_messages(
+    lead_id: int, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    # Retrieve the lead first to check company scope
+    lead = db.query(models.Lead).filter(models.Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+        
+    if current_user.company_id and lead.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    # Get the conversation for this lead
+    conversation = db.query(models.Conversation).filter(models.Conversation.lead_id == lead_id).first()
+    if not conversation:
+        return [] # No messages yet
+        
+    # Get messages associated with this conversation
+    messages = db.query(models.Message).filter(
+        models.Message.conversation_id == conversation.id
+    ).order_by(models.Message.created_at.desc()).all()
+    
+    return messages
+
 @app.post("/webhooks/leads/{source}")
 def receive_webhook_lead(
     source: str, 
