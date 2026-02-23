@@ -18,7 +18,7 @@ const UsersList = () => {
             const params = { skip, limit };
             if (search) params.q = search;
 
-            const response = await axios.get('https://autosqp.co/api/users/', {
+            const response = await axios.get('http://3.234.117.124:8000/users/', {
                 params,
                 headers: { Authorization: `Bearer ${token}` }
             });

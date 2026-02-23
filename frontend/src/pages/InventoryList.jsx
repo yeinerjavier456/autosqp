@@ -24,7 +24,7 @@ const InventoryList = () => {
             const params = { skip, limit, status: activeTab }; // Filter by status
             if (search) params.q = search;
 
-            const response = await axios.get('https://autosqp.co/api/vehicles/', {
+            const response = await axios.get('http://3.234.117.124:8000/vehicles/', {
                 params,
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -66,7 +66,7 @@ const InventoryList = () => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.put(`https://autosqp.co/api/vehicles/${vehicleId}`,
+            await axios.put(`http://3.234.117.124:8000/vehicles/${vehicleId}`,
                 { status: 'sold' },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -110,7 +110,7 @@ const InventoryList = () => {
                             };
                             try {
                                 const token = localStorage.getItem('token');
-                                await axios.post('https://autosqp.co/api/vehicles/', demoVehicle, {
+                                await axios.post('http://3.234.117.124:8000/vehicles/', demoVehicle, {
                                     headers: { Authorization: `Bearer ${token}` }
                                 });
                                 fetchVehicles();

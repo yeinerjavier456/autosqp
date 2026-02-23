@@ -19,7 +19,7 @@ const LoginPage = () => {
             formData.append('username', email);
             formData.append('password', password);
 
-            const response = await axios.post('https://autosqp.co/api/token', formData, {
+            const response = await axios.post('http://3.234.117.124:8000/token', formData, {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 }

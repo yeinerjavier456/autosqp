@@ -42,7 +42,7 @@ const IntegrationsConfig = () => {
 
             try {
                 const token = localStorage.getItem('token');
-                const response = await axios.get(`https://autosqp.co/api/companies/${user.company_id}/integrations`, {
+                const response = await axios.get(`http://3.234.117.124:8000/companies/${user.company_id}/integrations`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 // Merge with defaults to ensure controlled inputs
@@ -74,7 +74,7 @@ const IntegrationsConfig = () => {
         try {
             const token = localStorage.getItem('token');
             await axios.put(
-                `https://autosqp.co/api/companies/${user.company_id}/integrations`,
+                `http://3.234.117.124:8000/companies/${user.company_id}/integrations`,
                 settings,
                 { headers: { Authorization: `Bearer ${token}` } }
             );

@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }) => {
         }
 
         try {
-            const response = await axios.get('https://autosqp.co/api/users/me', {
+            const response = await axios.get('http://3.234.117.124:8000/users/me', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setUser(response.data);

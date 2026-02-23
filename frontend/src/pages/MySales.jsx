@@ -45,7 +45,7 @@ const MySales = () => {
             // But usually "My Sales" means successful ones. 
             // Let's show ALL so they can see pending commissions.
 
-            const response = await axios.get('https://autosqp.co/api/sales/', {
+            const response = await axios.get('http://3.234.117.124:8000/sales/', {
                 headers: { Authorization: `Bearer ${token}` },
                 params
             });
