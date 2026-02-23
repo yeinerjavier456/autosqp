@@ -1,5 +1,5 @@
 from database import SessionLocal
-from models import Lead, Conversation, Message, LeadHistory
+from models import Lead, Conversation, Message, LeadHistory, Sale, LeadReminder, SentAlertLog
 import time
 
 def clear_meta_data():
@@ -19,7 +19,10 @@ def clear_meta_data():
         print(f"Se encontraron {len(leads)} leads. Borrando mensajes y conversaciones...")
 
         for lead in leads:
-            # 1. Borrar Historial de estados del Lead
+            # 1. Borrar dependencias secundarias primero (Ventas, Recordatorios, Alertas, Historial de estados)
+            db.query(Sale).filter(Sale.lead_id == lead.id).delete(synchronize_session=False)
+            db.query(LeadReminder).filter(LeadReminder.lead_id == lead.id).delete(synchronize_session=False)
+            db.query(SentAlertLog).filter(SentAlertLog.lead_id == lead.id).delete(synchronize_session=False)
             db.query(LeadHistory).filter(LeadHistory.lead_id == lead.id).delete(synchronize_session=False)
             
             # 2. Encontrar la Conversacion
