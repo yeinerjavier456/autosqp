@@ -241,6 +241,7 @@ def sync_historical_messages(source: str = "facebook", db: Session = Depends(get
         raise HTTPException(status_code=400, detail=f"No hay token configurado para {source}")
 
     import requests
+    import datetime
     from datetime import datetime as dt
     
     # Platform parameter 'platform=instagram' might be needed if separating, but usually page token sees all if linked.
