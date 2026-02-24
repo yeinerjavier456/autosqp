@@ -17,8 +17,8 @@ const InstagramLeads = () => {
         // Poll for new conversations every 10 seconds
         const interval = setInterval(fetchConversations, 10000);
 
-        // Background sync meta historical every 15 seconds
-        const syncInterval = setInterval(backgroundSync, 15000);
+        // Background sync meta historical every 5 seconds as requested
+        const syncInterval = setInterval(backgroundSync, 5000);
 
         return () => {
             clearInterval(interval);
@@ -64,7 +64,7 @@ const InstagramLeads = () => {
             });
             // Don't call fetchConversations here to avoid re-rendering loop, the other interval handles it
         } catch (error) {
-            console.error("Silent sync failed", error);
+            // Silently ignore sync errors (like 400 for unconfigured tokens) to avoid console spam
         }
     };
 
