@@ -302,12 +302,23 @@ def sync_historical_messages(source: str = "facebook", db: Session = Depends(get
                 ).first()
             
                 if not lead:
+                    import random
+                    assigned_user_id = None
+                    potential_agents = db.query(models.User).join(models.Role).filter(
+                        models.User.company_id == company_id,
+                        models.Role.name.in_(["asesor", "vendedor"])
+                    ).all()
+
+                    if potential_agents:
+                        assigned_user_id = random.choice(potential_agents).id
+
                     lead = models.Lead(
                         name=sender_name,
                         phone=sender_id,
                         source=source,
                         status="new",
-                        company_id=company_id
+                        company_id=company_id,
+                        assigned_to_id=assigned_user_id
                     )
                     db.add(lead)
                     db.commit()
