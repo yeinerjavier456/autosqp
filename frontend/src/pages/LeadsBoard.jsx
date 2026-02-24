@@ -435,6 +435,10 @@ const LeadsBoard = () => {
     const [leads, setLeads] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    // Filter States
+    const [searchTerm, setSearchTerm] = useState('');
+    const [dateFilter, setDateFilter] = useState(''); // format: YYYY-MM-DD
+
     // Modal State - Sales
     const [showSaleModal, setShowSaleModal] = useState(false);
     const [selectedLeadForSale, setSelectedLeadForSale] = useState(null);
@@ -705,7 +709,25 @@ const LeadsBoard = () => {
         }
     };
 
-    const filterByStatus = (status) => leads.filter(l => l.status === status);
+    const filterByStatus = (status) => {
+        return leads.filter(l => {
+            if (l.status !== status) return false;
+
+            if (searchTerm) {
+                const term = searchTerm.toLowerCase();
+                const matchName = l.name?.toLowerCase().includes(term);
+                const matchPhone = l.phone?.toLowerCase().includes(term);
+                if (!matchName && !matchPhone) return false;
+            }
+
+            if (dateFilter) {
+                const leadDate = l.created_at ? l.created_at.substring(0, 10) : '';
+                if (leadDate !== dateFilter) return false;
+            }
+
+            return true;
+        });
+    };
 
     if (loading) return (
         <div className="flex justify-center items-center h-[calc(100vh-100px)]">
@@ -727,6 +749,40 @@ const LeadsBoard = () => {
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
                     Nuevo Lead Manual
                 </button>
+            </div>
+
+            {/* Filters Row */}
+            <div className="flex flex-col md:flex-row gap-4 mb-6 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                <div className="flex-1 relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                    <input
+                        type="text"
+                        placeholder="Buscar por nombre o teléfono..."
+                        className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-shadow text-sm"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                <div className="md:w-72 flex items-center gap-2">
+                    <label className="text-sm font-semibold text-slate-600 whitespace-nowrap">Fecha exacta:</label>
+                    <input
+                        type="date"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 text-sm"
+                        value={dateFilter}
+                        onChange={(e) => setDateFilter(e.target.value)}
+                    />
+                    {dateFilter && (
+                        <button
+                            onClick={() => setDateFilter('')}
+                            className="text-red-500 hover:text-red-700 p-2 font-bold text-lg"
+                            title="Limpiar fecha"
+                        >
+                            &times;
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Kanban Board */}
