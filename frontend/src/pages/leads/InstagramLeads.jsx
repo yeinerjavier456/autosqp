@@ -12,8 +12,18 @@ const InstagramLeads = () => {
 
     useEffect(() => {
         fetchConversations();
+        backgroundSync();
+
+        // Poll for new conversations every 10 seconds
         const interval = setInterval(fetchConversations, 10000);
-        return () => clearInterval(interval);
+
+        // Background sync meta historical every 15 seconds
+        const syncInterval = setInterval(backgroundSync, 15000);
+
+        return () => {
+            clearInterval(interval);
+            clearInterval(syncInterval);
+        };
     }, []);
 
     useEffect(() => {
@@ -42,6 +52,19 @@ const InstagramLeads = () => {
             setLoading(false);
         } catch (error) {
             console.error("Error fetching conventions", error);
+        }
+    };
+
+    const backgroundSync = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            // Silent sync
+            await axios.post('https://autosqp.co/api/meta/sync-historical?source=instagram', {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            // Don't call fetchConversations here to avoid re-rendering loop, the other interval handles it
+        } catch (error) {
+            console.error("Silent sync failed", error);
         }
     };
 
