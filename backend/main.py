@@ -220,6 +220,12 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: model
             raise HTTPException(status_code=403, detail="No puedes eliminar a un Súper Administrador")
             
     try:
+        # 5. Remove relationships before deleting to avoid MySQL Integrity Error 1451
+        db.query(models.LeadHistory).filter(models.LeadHistory.user_id == user_id).update({"user_id": None})
+        db.query(models.Lead).filter(models.Lead.assigned_to_id == user_id).update({"assigned_to_id": None})
+        db.query(models.Lead).filter(models.Lead.created_by_id == user_id).update({"created_by_id": None})
+        db.query(models.Sale).filter(models.Sale.seller_id == user_id).update({"seller_id": None})
+        
         db.delete(db_user)
         db.commit()
         return {"status": "success", "message": "Usuario eliminado correctamente"}
