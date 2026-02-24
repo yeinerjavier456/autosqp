@@ -380,15 +380,19 @@ def sync_historical_messages(source: str = "facebook", db: Session = Depends(get
             
             db.commit()
             
-            # Meta Pagination: extract the 'after' cursor and update params
+            # Meta Pagination: extract from 'next' URL to preserve our custom params safely
             paging = data.get("paging", {})
-            if "next" in paging:
-                cursors = paging.get("cursors", {})
-                after_cursor = cursors.get("after")
-                if after_cursor:
-                    params["after"] = after_cursor
-                else:
-                    has_next = False
+            next_url = paging.get("next")
+            if next_url:
+                import urllib.parse as urlparse
+                from urllib.parse import parse_qs
+                parsed = urlparse.urlparse(next_url)
+                qs = parse_qs(parsed.query)
+                
+                # Forward any new pagination keys from Meta into our next request parameters
+                for key, val in qs.items():
+                    if key not in ["access_token", "limit", "platform", "fields"]:
+                        params[key] = val[0]
             else:
                 has_next = False
             

@@ -23,6 +23,14 @@ class Message(MessageBase):
         orm_mode = True
 
 # --- Conversation Schemas ---
+class LeadInfo(BaseModel):
+    id: int
+    name: str
+    phone: Optional[str] = None
+    
+    class Config:
+        orm_mode = True
+
 class ConversationBase(BaseModel):
     lead_id: Optional[int] = None
     company_id: int
@@ -33,7 +41,7 @@ class ConversationCreate(ConversationBase):
 class Conversation(ConversationBase):
     id: int
     last_message_at: datetime
-    # We can include messages here if needed, but usually fetch separately for pagination
+    lead: Optional[LeadInfo] = None
     # messages: List[Message] = []
 
     class Config:
