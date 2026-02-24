@@ -109,7 +109,8 @@ const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragS
 };
 
 // History Modal Component
-const HistoryModal = ({ lead, onClose, onUpdate }) => {
+const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign }) => {
+    const [assignedAdvisor, setAssignedAdvisor] = useState(lead?.assigned_to?.id || '');
     const { createReminder } = useNotifications();
     const [newComment, setNewComment] = useState('');
     const [newStatus, setNewStatus] = useState(lead?.status || 'new');
@@ -233,7 +234,21 @@ const HistoryModal = ({ lead, onClose, onUpdate }) => {
                     <div>
                         <h2 className="text-xl font-bold text-gray-800">Detalles del Lead</h2>
                         <p className="text-sm text-gray-500">Cliente: <span className="font-semibold text-blue-600">{lead.name}</span></p>
-                        <p className="text-sm text-gray-500 mt-1">Asignado a: <span className="font-semibold text-indigo-600">{lead.assigned_to ? (lead.assigned_to.email) : 'Sin asignar'}</span></p>
+                        <div className="text-sm text-gray-500 mt-2 flex items-center gap-2">Asignado a:
+                            <select
+                                className="border border-gray-300 rounded px-2 py-1 text-sm bg-gray-50 focus:ring-blue-500 outline-none font-semibold text-indigo-600"
+                                value={assignedAdvisor}
+                                onChange={(e) => {
+                                    setAssignedAdvisor(e.target.value);
+                                    if (onAssign) onAssign(lead.id, e.target.value);
+                                }}
+                            >
+                                <option value="">Sin asignar</option>
+                                {advisors && advisors.map(adv => (
+                                    <option key={adv.id} value={adv.id}>{adv.full_name || adv.email}</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition">
                         <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -664,6 +679,33 @@ const LeadsBoard = () => {
         }
     };
 
+    const handleAssignLead = async (leadId, advisorId) => {
+        try {
+            const token = localStorage.getItem('token');
+            // If empty string, send null
+            const payload = {
+                assigned_to_id: advisorId ? parseInt(advisorId) : null,
+                comment: `Lead asignado a un nuevo responsable`
+            };
+
+            await axios.put(`https://autosqp.co/api/leads/${leadId}`, payload, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Lead Asignado',
+                text: 'El responsable del lead ha sido actualizado.',
+                timer: 1500,
+                showConfirmButton: false
+            });
+            fetchLeads(); // Refresh board to show new assignee initial
+        } catch (error) {
+            console.error("Error assigning lead", error);
+            Swal.fire('Error', 'No se pudo asignar el lead', 'error');
+        }
+    };
+
     const handleConfirmSale = async (e) => {
         e.preventDefault();
         try {
@@ -978,6 +1020,8 @@ const LeadsBoard = () => {
                     lead={selectedLeadForHistory}
                     onClose={() => setShowHistoryModal(false)}
                     onUpdate={handleUpdateHistory}
+                    advisors={advisors}
+                    onAssign={handleAssignLead}
                 />
             )}
 
