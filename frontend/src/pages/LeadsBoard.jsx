@@ -483,6 +483,7 @@ const LeadsBoard = () => {
 
     useEffect(() => {
         fetchLeads();
+        fetchAdvisors();
     }, []);
 
     const handleCreateLead = async (e) => {
