@@ -100,8 +100,20 @@ const InstagramLeads = () => {
     };
 
     const formatTime = (dateString) => {
+        if (!dateString) return '';
         const date = new Date(dateString);
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const now = new Date();
+        const isToday = date.getDate() === now.getDate() &&
+            date.getMonth() === now.getMonth() &&
+            date.getFullYear() === now.getFullYear();
+
+        const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        if (isToday) {
+            return timeStr;
+        } else {
+            return `${date.toLocaleDateString([], { day: '2-digit', month: '2-digit' })} ${timeStr}`;
+        }
     };
 
     return (
