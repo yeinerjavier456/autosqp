@@ -358,7 +358,7 @@ def read_leads(
     status: str = None,
     q: str = None,
     skip: int = 0, 
-    limit: int = 50, 
+    limit: int = 1000, 
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(get_current_user)
 ):
