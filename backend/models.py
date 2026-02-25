@@ -268,13 +268,22 @@ class Vehicle(Base):
     __tablename__ = "vehicles"
 
     id = Column(Integer, primary_key=True, index=True)
-    make = Column(String(100)) # Marca
-    model = Column(String(100)) # Modelo
+    make = Column(String(100)) # Marca o (Marca y Modelo combinados)
+    model = Column(String(100), nullable=True) # Modelo (ahora opcional)
     year = Column(Integer) # Año
-    price = Column(Integer) # Precio
+    price = Column(Integer) # Precio de Venta
+    purchase_price = Column(Integer, nullable=True) # PRECIO COMPRA
+    faseco = Column(Integer, nullable=True) # FASECO
     plate = Column(String(20), index=True) # Placa
-    mileage = Column(Integer, nullable=True) # Kilometraje
-    color = Column(String(50), nullable=True)
+    mileage = Column(Integer, nullable=True) # Kilómetros
+    color = Column(String(50), nullable=True) # Color
+    fuel_type = Column(String(50), nullable=True) # Combustible
+    transmission = Column(String(50), nullable=True) # Transmisión
+    engine = Column(String(50), nullable=True) # Motor
+    soat = Column(DateTime, nullable=True) # Soat (Vencimiento)
+    tecno = Column(DateTime, nullable=True) # Tecno (Vencimiento)
+    internal_code = Column(String(50), nullable=True) # Cod
+    location = Column(String(100), nullable=True) # Ubicación
     description = Column(String(500), nullable=True)
     status = Column(String(50), default="available") # available, reserved, sold
     photos = Column(JSON, nullable=True) # List of image URLs

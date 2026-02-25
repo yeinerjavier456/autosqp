@@ -20,9 +20,18 @@ const VehicleForm = () => {
         model: '',
         year: new Date().getFullYear(),
         price: '',
+        purchase_price: '',
+        faseco: '',
         plate: '',
         mileage: '',
         color: '',
+        fuel_type: '',
+        transmission: '',
+        engine: '',
+        soat: '',
+        tecno: '',
+        internal_code: '',
+        location: '',
         description: '',
         status: 'available',
         photos: []
@@ -80,15 +89,24 @@ const VehicleForm = () => {
             });
             const data = response.data;
             setFormData({
-                make: data.make,
-                model: data.model,
-                year: data.year,
-                price: data.price,
-                plate: data.plate,
+                make: data.make || '',
+                model: data.model || '',
+                year: data.year || '',
+                price: data.price || '',
+                purchase_price: data.purchase_price || '',
+                faseco: data.faseco || '',
+                plate: data.plate || '',
                 mileage: data.mileage || '',
                 color: data.color || '',
+                fuel_type: data.fuel_type || '',
+                transmission: data.transmission || '',
+                engine: data.engine || '',
+                soat: data.soat ? data.soat.split('T')[0] : '', // format valid info datetime to date input
+                tecno: data.tecno ? data.tecno.split('T')[0] : '',
+                internal_code: data.internal_code || '',
+                location: data.location || '',
                 description: data.description || '',
-                status: data.status,
+                status: data.status || 'available',
                 photos: data.photos || []
             });
         } catch (error) {
@@ -183,9 +201,13 @@ const VehicleForm = () => {
         const token = localStorage.getItem('token');
         const payload = {
             ...formData,
-            year: parseInt(formData.year),
-            price: parseInt(formData.price),
-            mileage: formData.mileage ? parseInt(formData.mileage) : 0
+            year: parseInt(formData.year) || null,
+            price: parseInt(formData.price) || 0,
+            purchase_price: formData.purchase_price ? parseInt(formData.purchase_price) : null,
+            faseco: formData.faseco ? parseInt(formData.faseco) : null,
+            mileage: formData.mileage ? parseInt(formData.mileage) : 0,
+            soat: formData.soat ? new Date(formData.soat).toISOString() : null,
+            tecno: formData.tecno ? new Date(formData.tecno).toISOString() : null
         };
 
         try {
@@ -254,9 +276,9 @@ const VehicleForm = () => {
                             </span>
                         </div>
                         <div className="space-y-1">
-                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Precio</h3>
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Precio de Venta</h3>
                             <p className="text-2xl font-bold text-emerald-600">
-                                {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(formData.price)}
+                                {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(formData.price || 0)}
                             </p>
                         </div>
                         <div className="space-y-1">
@@ -265,7 +287,35 @@ const VehicleForm = () => {
                         </div>
                         <div className="space-y-1">
                             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Color</h3>
-                            <p className="text-lg font-medium text-gray-900">{formData.color}</p>
+                            <p className="text-lg font-medium text-gray-900">{formData.color || 'N/A'}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Combustible</h3>
+                            <p className="text-lg font-medium text-gray-900">{formData.fuel_type || 'N/A'}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Transmisión</h3>
+                            <p className="text-lg font-medium text-gray-900">{formData.transmission || 'N/A'}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Motor</h3>
+                            <p className="text-lg font-medium text-gray-900">{formData.engine || 'N/A'}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Ubicación</h3>
+                            <p className="text-lg font-medium text-gray-900">{formData.location || 'N/A'}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Código Interno</h3>
+                            <p className="text-lg font-medium text-gray-900">{formData.internal_code || 'N/A'}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Vencimiento SOAT</h3>
+                            <p className="text-lg font-medium text-gray-900">{formData.soat || 'N/A'}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Vencimiento TECNO</h3>
+                            <p className="text-lg font-medium text-gray-900">{formData.tecno || 'N/A'}</p>
                         </div>
                         <div className="space-y-1">
                             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Estado</h3>
@@ -397,8 +447,62 @@ const VehicleForm = () => {
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Color</label>
                                 <input type="text" name="color" value={formData.color} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
                             </div>
+                        </div>
+
+                        <div className="col-span-1 md:col-span-2 mt-4 pt-4 border-t border-gray-100">
+                            <h3 className="text-md font-bold text-gray-800 mb-4">Información Técnica Avanzada</h3>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Estado</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Transmisión</label>
+                                <select name="transmission" value={formData.transmission} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                    <option value="">Seleccione...</option>
+                                    <option value="Automatica">Automática</option>
+                                    <option value="Mecanica">Mecánica</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Combustible</label>
+                                <select name="fuel_type" value={formData.fuel_type} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                    <option value="">Seleccione...</option>
+                                    <option value="Gasolina">Gasolina</option>
+                                    <option value="Diesel">Diesel</option>
+                                    <option value="Hibrido">Híbrido</option>
+                                    <option value="Electrico">Eléctrico</option>
+                                    <option value="Gas">Gas</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Motor</label>
+                                <input type="text" name="engine" value={formData.engine} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ej: 2.0" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Ubicación física</label>
+                                <input type="text" name="location" value={formData.location} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ej: OUTLET" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Vencimiento SOAT</label>
+                                <input type="date" name="soat" value={formData.soat} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Vencimiento TECNOMECÁNICA</label>
+                                <input type="date" name="tecno" value={formData.tecno} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Precio de Compra Interno (COP)</label>
+                                <input type="number" name="purchase_price" value={formData.purchase_price} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Total Faseco (COP)</label>
+                                <input type="number" name="faseco" value={formData.faseco} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Código Interno</label>
+                                <input type="text" name="internal_code" value={formData.internal_code} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ej: 00QP" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Estado Público</label>
                                 <select
                                     name="status"
                                     value={formData.status}
@@ -506,7 +610,7 @@ const VehicleForm = () => {
                     )}
                 </div>
             </form>
-        </div>
+        </div >
     );
 };
 

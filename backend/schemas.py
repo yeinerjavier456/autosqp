@@ -267,12 +267,21 @@ class LeadList(BaseModel):
 
 class VehicleBase(BaseModel):
     make: str
-    model: str
+    model: Optional[str] = None
     year: int
     price: int
+    purchase_price: Optional[int] = None
+    faseco: Optional[int] = None
     plate: str
     mileage: Optional[int] = 0
     color: Optional[str] = None
+    fuel_type: Optional[str] = None
+    transmission: Optional[str] = None
+    engine: Optional[str] = None
+    soat: Optional[datetime] = None
+    tecno: Optional[datetime] = None
+    internal_code: Optional[str] = None
+    location: Optional[str] = None
     description: Optional[str] = None
     status: Optional[str] = VehicleStatus.AVAILABLE
     photos: Optional[List[str]] = []
@@ -286,9 +295,18 @@ class VehicleUpdate(BaseModel):
     model: Optional[str] = None
     year: Optional[int] = None
     price: Optional[int] = None
+    purchase_price: Optional[int] = None
+    faseco: Optional[int] = None
     plate: Optional[str] = None
     mileage: Optional[int] = None
     color: Optional[str] = None
+    fuel_type: Optional[str] = None
+    transmission: Optional[str] = None
+    engine: Optional[str] = None
+    soat: Optional[datetime] = None
+    tecno: Optional[datetime] = None
+    internal_code: Optional[str] = None
+    location: Optional[str] = None
     description: Optional[str] = None
     status: Optional[str] = None
     photos: Optional[List[str]] = None

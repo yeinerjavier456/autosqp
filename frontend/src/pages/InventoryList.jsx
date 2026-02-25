@@ -178,6 +178,7 @@ const InventoryList = () => {
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Año</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Placa</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ST/TC</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
                                 <th scope="col" className="relative px-6 py-3"><span className="sr-only">Acciones</span></th>
                             </tr>
@@ -217,6 +218,12 @@ const InventoryList = () => {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                                             {formatPrice(vehicle.price)}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
+                                            <div className="flex flex-col gap-1">
+                                                <span className={`${vehicle.soat ? 'text-green-600' : 'text-gray-400'}`}>ST: {vehicle.soat ? new Date(vehicle.soat).toLocaleDateString() : 'N/A'}</span>
+                                                <span className={`${vehicle.tecno ? 'text-blue-600' : 'text-gray-400'}`}>TC: {vehicle.tecno ? new Date(vehicle.tecno).toLocaleDateString() : 'N/A'}</span>
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
