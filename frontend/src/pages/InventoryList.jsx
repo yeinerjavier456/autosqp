@@ -54,7 +54,7 @@ const InventoryList = () => {
     const handleChangeStatus = async (vehicle) => {
         const { value: newStatus } = await Swal.fire({
             title: 'Cambiar Estado',
-            text: `Selecciona el nuevo estado para ${vehicle.plate}:`,
+            text: `Selecciona el nuevo estado para: ${vehicle.make} ${vehicle.model} (${vehicle.year})`,
             input: 'select',
             inputOptions: {
                 'available': 'Disponible',
@@ -70,7 +70,7 @@ const InventoryList = () => {
             customClass: {
                 confirmButton: 'bg-blue-600 text-white px-4 py-2 rounded-lg ml-2',
                 cancelButton: 'bg-gray-400 text-white px-4 py-2 rounded-lg',
-                input: 'w-full p-2 border border-gray-300 rounded mb-4'
+                input: 'border border-gray-300 rounded-lg p-2 text-gray-700 w-4/5 flex justify-center mx-auto outline-none focus:ring-2 focus:ring-blue-500'
             },
             buttonsStyling: false
         });
