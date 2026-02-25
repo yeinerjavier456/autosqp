@@ -29,12 +29,12 @@ const LeadsTable = ({ source, title }) => {
             if (searchTerm) params.q = searchTerm;
             if (statusFilter) params.status = statusFilter;
 
-            const response = await axios.get('https://autosqp.co/api/leads/', {
+            const response = await axios.get('https://autosqp.co/api/leads', {
                 params,
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setLeads(response.data.items);
-            setTotal(response.data.total);
+            setLeads(response.data.items || []);
+            setTotal(response.data.total || 0);
             // Clear selection on refresh/filter change ideally? 
             // setSelectedLeads([]); 
         } catch (error) {
