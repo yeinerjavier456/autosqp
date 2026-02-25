@@ -2,7 +2,6 @@ import os
 import pandas as pd
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
-from getpass import getpass
 import numbers
 
 load_dotenv()
@@ -36,12 +35,14 @@ def clean_excel_date(val):
 def import_inventory():
     file_path = "INVENTARIO PAGINA WEB CRM.xlsx"
     if not os.path.exists(file_path):
-        print(f"Error: {file_path} not found in the current directory.")
-        return
+        # Maybe it's one directory up? (Running from backend)
+        file_path = "../INVENTARIO PAGINA WEB CRM.xlsx"
+        if not os.path.exists(file_path):
+            print(f"Error: {file_path} not found.")
+            return
         
     print(f"Leyendo archivo de Excel: {file_path}...")
     df = pd.read_excel(file_path, header=1)
-    
     status_col = "🚨🚨🚨🚨"
     
     inserted = 0
@@ -49,6 +50,14 @@ def import_inventory():
     errors = 0
     
     with engine.connect() as conn:
+        # Determine the company ID dynamically! Important!
+        company = conn.execute(text("SELECT id FROM companies LIMIT 1")).fetchone()
+        if not company:
+            print("❌ Error Fatal: No hay ninguna compañía (company) en la base de datos.")
+            return
+        default_company_id = company[0]
+        print(f"Usando Company ID: {default_company_id} por defecto.")
+
         for idx, row in df.iterrows():
             make_model = str(row.get("Marca & Modelo", ""))
             if pd.isna(make_model) or make_model.strip() == "nan" or make_model.strip() == "":
@@ -90,12 +99,10 @@ def import_inventory():
             tecno = clean_excel_date(row.get("Tecno:"))
             
             try:
-                # Check if vehicle exists
                 check_query = text("SELECT id FROM vehicles WHERE plate = :plate")
                 result = conn.execute(check_query, {"plate": plate}).fetchone()
                 
                 if result:
-                    # Update
                     update_query = text("""
                         UPDATE vehicles 
                         SET make = :make, year = :year, color = :color, fuel_type = :fuel,
@@ -116,9 +123,6 @@ def import_inventory():
                     })
                     updated += 1
                 else:
-                    # Insert
-                    # Ensure company_id is provided or nullable. In model company_id is Integer. Let's use 1 as default for the main company if required.
-                    # Or left null if allowed.
                     insert_query = text("""
                         INSERT INTO vehicles (
                             make, year, color, fuel_type, transmission, engine, mileage, plate,
@@ -127,7 +131,7 @@ def import_inventory():
                         ) VALUES (
                             :make, :year, :color, :fuel, :transmission, :engine, :mileage, :plate,
                             :purchase_price, :faseco, :price, :status, :internal_code, :location,
-                            :soat, :tecno, 1
+                            :soat, :tecno, :company_id
                         )
                     """)
                     conn.execute(insert_query, {
@@ -136,21 +140,22 @@ def import_inventory():
                         "purchase_price": purchase_price, "faseco": faseco,
                         "price": price, "status": status,
                         "internal_code": internal_code, "location": location,
-                        "soat": soat, "tecno": tecno
+                        "soat": soat, "tecno": tecno, "company_id": default_company_id
                     })
                     inserted += 1
                 conn.commit()
             except Exception as e:
-                print(f"Error procesando placa {plate}: {e}")
+                print(f"❌ Error crítico procesando placa {plate}: {e}")
                 errors += 1
                 conn.rollback()
                 
-    print("\n--- RESUMEN DE IMPORTACIÓN AUTOMÁTICA ---")
+    print("\n--- 🚘 RESUMEN DE IMPORTACIÓN AUTOMÁTICA ---")
     print(f"Vehículos nuevos insertados: {inserted}")
     print(f"Vehículos existentes actualizados: {updated}")
-    print(f"Errores: {errors}")
+    print(f"Registros fallidos: {errors}")
 
 if __name__ == "__main__":
     print("Iniciando carga masiva desde Excel...")
     import_inventory()
     print("Operación completada.")
+
