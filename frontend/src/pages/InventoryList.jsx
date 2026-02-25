@@ -51,34 +51,49 @@ const InventoryList = () => {
         setPage(1);
     };
 
-    const handleMarkSold = async (vehicleId) => {
-        const result = await Swal.fire({
-            title: '¿Estás seguro?',
-            text: "¿Quieres marcar este vehículo como VENDIDO?",
-            icon: 'warning',
+    const handleChangeStatus = async (vehicle) => {
+        const { value: newStatus } = await Swal.fire({
+            title: 'Cambiar Estado',
+            text: `Selecciona el nuevo estado para ${vehicle.plate}:`,
+            input: 'select',
+            inputOptions: {
+                'available': 'Disponible',
+                'alistamiento': 'Alistamiento',
+                'desembolso': 'Desembolso',
+                'reserved': 'Reservado',
+                'sold': 'Vendido'
+            },
+            inputValue: vehicle.status,
             showCancelButton: true,
-            confirmButtonText: 'Sí, marcar vendido',
+            confirmButtonText: 'Guardar',
             cancelButtonText: 'Cancelar',
             customClass: {
                 confirmButton: 'bg-blue-600 text-white px-4 py-2 rounded-lg ml-2',
-                cancelButton: 'bg-red-600 text-white px-4 py-2 rounded-lg'
+                cancelButton: 'bg-gray-400 text-white px-4 py-2 rounded-lg',
+                input: 'w-full p-2 border border-gray-300 rounded mb-4'
             },
             buttonsStyling: false
         });
 
-        if (!result.isConfirmed) return;
-
-        try {
-            const token = localStorage.getItem('token');
-            await axios.put(`https://autosqp.co/api/vehicles/${vehicleId}`,
-                { status: 'sold' },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-            Swal.fire('Vendido', 'El vehículo ha sido marcado como vendido.', 'success');
-            fetchVehicles(); // Refresh list
-        } catch (error) {
-            console.error("Error marking as sold", error);
-            Swal.fire('Error', 'Error al actualizar el estado', 'error');
+        if (newStatus && newStatus !== vehicle.status) {
+            try {
+                const token = localStorage.getItem('token');
+                await axios.put(`https://autosqp.co/api/vehicles/${vehicle.id}`,
+                    { status: newStatus },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                Swal.fire({
+                    title: '¡Actualizado!',
+                    text: 'El estado del vehículo ha sido cambiado.',
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+                fetchVehicles(); // Refresh list
+            } catch (error) {
+                console.error("Error cambiando estado", error);
+                Swal.fire('Error', 'No se pudo actualizar el estado', 'error');
+            }
         }
     };
 
@@ -300,11 +315,11 @@ const InventoryList = () => {
 
                                                     {vehicle.status !== 'sold' && (
                                                         <button
-                                                            onClick={() => handleMarkSold(vehicle.id)}
-                                                            className="p-1.5 text-green-600 hover:bg-green-50 focus:ring-2 focus:ring-green-500 rounded-lg transition-colors"
-                                                            title="Marcar como Vendido"
+                                                            onClick={() => handleChangeStatus(vehicle)}
+                                                            className="p-1.5 text-orange-500 hover:bg-orange-50 focus:ring-2 focus:ring-orange-500 rounded-lg transition-colors"
+                                                            title="Cambiar Estado"
                                                         >
-                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
                                                         </button>
                                                     )}
 
