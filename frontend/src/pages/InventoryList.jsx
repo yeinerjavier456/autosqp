@@ -142,12 +142,30 @@ const InventoryList = () => {
                 </button>
                 <button
                     onClick={() => setActiveTab('sold')}
-                    className={`px-6 py-2 font-medium text-sm rounded-t-lg transition-colors ${activeTab === 'sold'
+                    className={`px-4 py-2 font-medium text-sm rounded-t-lg transition-colors ${activeTab === 'sold'
                         ? 'bg-white text-blue-600 border-t border-l border-r border-gray-200'
                         : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
                         }`}
                 >
                     Vendidos
+                </button>
+                <button
+                    onClick={() => setActiveTab('alistamiento')}
+                    className={`px-4 py-2 font-medium text-sm rounded-t-lg transition-colors ${activeTab === 'alistamiento'
+                        ? 'bg-white text-blue-600 border-t border-l border-r border-gray-200'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                        }`}
+                >
+                    Alistamiento
+                </button>
+                <button
+                    onClick={() => setActiveTab('desembolso')}
+                    className={`px-4 py-2 font-medium text-sm rounded-t-lg transition-colors ${activeTab === 'desembolso'
+                        ? 'bg-white text-blue-600 border-t border-l border-r border-gray-200'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                        }`}
+                >
+                    Desembolso
                 </button>
             </div>
 
@@ -229,9 +247,14 @@ const InventoryList = () => {
                                             <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
                                                         ${vehicle.status === 'available' ? 'bg-green-100 text-green-800' :
                                                     vehicle.status === 'sold' ? 'bg-red-100 text-red-800' :
-                                                        'bg-yellow-100 text-yellow-800'}`}>
+                                                        vehicle.status === 'alistamiento' ? 'bg-purple-100 text-purple-800' :
+                                                            vehicle.status === 'desembolso' ? 'bg-indigo-100 text-indigo-800' :
+                                                                'bg-yellow-100 text-yellow-800'}`}>
                                                 {vehicle.status === 'available' ? 'Disponible' :
-                                                    vehicle.status === 'sold' ? 'Vendido' : 'Reservado'}
+                                                    vehicle.status === 'sold' ? 'Vendido' :
+                                                        vehicle.status === 'alistamiento' ? 'Alistamiento' :
+                                                            vehicle.status === 'desembolso' ? 'Desembolso' :
+                                                                'Reservado'}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">

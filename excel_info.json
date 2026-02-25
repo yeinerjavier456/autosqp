@@ -1,0 +1,65 @@
+{
+  "unique_statuses": [
+    "VENDIDO ",
+    "DISPONIBLE",
+    "ALISTAMIENTO",
+    "RESERVADO",
+    "DESEMBOLSO"
+  ],
+  "sample": [
+    {
+      "Marca & Modelo": "RENAULT KWID ZEN",
+      "Año:": 2020.0,
+      "Color:": "Gris",
+      "Combustible:": "Gasolina",
+      "Transmisión:": "Automatica",
+      "Motor:": 2.5,
+      "Kilómetros:": 76000.0,
+      "Placa:": "GSN577",
+      "Soat:": "----",
+      "Tecno:": "-----",
+      "PRECIO DE VENTA": 38990000,
+      "🚨🚨🚨🚨": "VENDIDO ",
+      "Cod:": "00QP",
+      "FASECO:": 38990000,
+      "PRECIO COMPRA :": 36990000,
+      "Ubicacion:": "OUTLET "
+    },
+    {
+      "Marca & Modelo": "RENAULT LOGAN AUTENTHIQUE",
+      "Año:": 2019.0,
+      "Color:": "Blanco",
+      "Combustible:": "Gasolina",
+      "Transmisión:": "Automatica",
+      "Motor:": 2.0,
+      "Kilómetros:": 106000.0,
+      "Placa:": "FOP619",
+      "Soat:": "2026-11-29 00:00:00",
+      "Tecno:": "2026-11-04 00:00:00",
+      "PRECIO DE VENTA": 45900000,
+      "🚨🚨🚨🚨": "VENDIDO ",
+      "Cod:": "00QP",
+      "FASECO:": 45900000,
+      "PRECIO COMPRA :": 43900000,
+      "Ubicacion:": "OUTLET "
+    },
+    {
+      "Marca & Modelo": "NISSAN SENTRA SR 2020 AT",
+      "Año:": 2020.0,
+      "Color:": "Rojo",
+      "Combustible:": "Gasolina",
+      "Transmisión:": "Automatica",
+      "Motor:": 2.0,
+      "Kilómetros:": 79000.0,
+      "Placa:": "GFM895",
+      "Soat:": 46204,
+      "Tecno:": 46388,
+      "PRECIO DE VENTA": 68990000,
+      "🚨🚨🚨🚨": "DISPONIBLE",
+      "Cod:": "00QP",
+      "FASECO:": 68990000,
+      "PRECIO COMPRA :": 66990000,
+      "Ubicacion:": "OUTLET "
+    }
+  ]
+}

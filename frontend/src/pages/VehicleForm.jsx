@@ -510,7 +510,9 @@ const VehicleForm = () => {
                                     className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                                 >
                                     <option value="available">Disponible</option>
+                                    <option value="alistamiento">Alistamiento</option>
                                     <option value="reserved">Reservado</option>
+                                    <option value="desembolso">Desembolso</option>
                                     <option value="sold">Vendido</option>
                                 </select>
                             </div>
