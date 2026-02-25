@@ -230,7 +230,7 @@ const VehicleDetail = () => {
                             </div>
 
                             <a
-                                href={`https://wa.me/573000000000?text=Hola, estoy interesado en el ${vehicle.make} ${vehicle.model} de ${formatPrice(vehicle.price)}`}
+                                href={`https://wa.me/573227704222?text=Hola, estoy interesado en el ${vehicle.make} ${vehicle.model} de ${formatPrice(vehicle.price)}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-green-500/30 transition transform hover:-translate-y-0.5 flex items-center justify-center gap-2 mt-6"

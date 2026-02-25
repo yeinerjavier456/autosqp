@@ -116,29 +116,40 @@ def import_inventory(file_path="INVENTARIO PAGINA WEB CRM.xlsx", default_company
             tecno = clean_excel_date(row.get("Tecno:"))
             
             try:
-                check_query = text("SELECT id FROM vehicles WHERE plate = :plate")
+                check_query = text("SELECT id, mileage FROM vehicles WHERE plate = :plate ORDER BY id DESC LIMIT 1")
                 result = conn.execute(check_query, {"plate": plate}).fetchone()
                 
                 if result:
-                    update_query = text("""
-                        UPDATE vehicles 
-                        SET make = :make, year = :year, color = :color, fuel_type = :fuel,
-                            transmission = :transmission, engine = :engine, mileage = :mileage,
-                            purchase_price = :purchase_price, faseco = :faseco,
-                            price = :price, status = :status,
-                            internal_code = :internal_code, location = :location,
-                            soat = :soat, tecno = :tecno
-                        WHERE plate = :plate
-                    """)
-                    conn.execute(update_query, {
-                        "make": make_model, "year": year, "color": color, "fuel": fuel,
-                        "transmission": transmission, "engine": engine_str, "mileage": mileage,
-                        "purchase_price": purchase_price, "faseco": faseco,
-                        "price": price, "status": status,
-                        "internal_code": internal_code, "location": location,
-                        "soat": soat, "tecno": tecno, "plate": plate
-                    })
-                    updated += 1
+                    existing_id = result[0]
+                    existing_mileage = result[1]
+                    
+                    # Logica solicitada: 
+                    # Si el kilometraje es DIFERENTE, insertar como uno nuevo en vez de actualizar
+                    # Si el kilometraje es IGUAL, ignorarlo
+                    if existing_mileage != mileage:
+                        insert_query = text("""
+                            INSERT INTO vehicles (
+                                make, year, color, fuel_type, transmission, engine, mileage, plate,
+                                purchase_price, faseco, price, status, internal_code, location,
+                                soat, tecno, company_id
+                            ) VALUES (
+                                :make, :year, :color, :fuel, :transmission, :engine, :mileage, :plate,
+                                :purchase_price, :faseco, :price, :status, :internal_code, :location,
+                                :soat, :tecno, :company_id
+                            )
+                        """)
+                        conn.execute(insert_query, {
+                            "make": make_model, "year": year, "color": color, "fuel": fuel,
+                            "transmission": transmission, "engine": engine_str, "mileage": mileage, "plate": plate,
+                            "purchase_price": purchase_price, "faseco": faseco,
+                            "price": price, "status": status,
+                            "internal_code": internal_code, "location": location,
+                            "soat": soat, "tecno": tecno, "company_id": default_company_id
+                        })
+                        inserted += 1
+                    else:
+                        # Ignorarlo si tienen el mismo kilometraje
+                        updated += 1 # We reuse updated counter to mean "ignored/matched" for reporting purposes.
                 else:
                     insert_query = text("""
                         INSERT INTO vehicles (
