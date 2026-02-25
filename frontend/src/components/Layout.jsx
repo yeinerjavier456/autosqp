@@ -42,7 +42,10 @@ const Layout = () => {
     const closeSidebar = () => setIsSidebarOpen(false);
     const toggleCollapse = () => setIsCollapsed(!isCollapsed);
 
-    const isActive = (path) => location.pathname.startsWith(path);
+    const isActive = (path) => {
+        if (path === '/admin/leads') return location.pathname === '/admin/leads';
+        return location.pathname.startsWith(path);
+    };
 
     const NavItem = ({ to, icon, label }) => (
         <Link

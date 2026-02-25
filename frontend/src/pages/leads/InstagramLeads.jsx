@@ -8,6 +8,7 @@ const InstagramLeads = () => {
     const [newMessage, setNewMessage] = useState("");
     const [loading, setLoading] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [searchTerm, setSearchTerm] = useState("");
     const messagesEndRef = useRef(null);
 
     useEffect(() => {
@@ -168,6 +169,20 @@ const InstagramLeads = () => {
                     </button>
                 </div>
 
+                {/* Search Bar */}
+                <div className="px-4 pb-3 bg-pink-50 border-b border-pink-100">
+                    <div className="relative">
+                        <input
+                            type="text"
+                            placeholder="Buscar cliente o teléfono..."
+                            className="w-full pl-9 pr-4 py-2 bg-white border border-pink-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pink-500 transition-all"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        <svg className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    </div>
+                </div>
+
                 <div className="flex-1 overflow-y-auto">
                     {loading ? (
                         <div className="p-4 text-center text-gray-400">Cargando chats...</div>
@@ -175,23 +190,30 @@ const InstagramLeads = () => {
                         <div className="p-8 text-center text-gray-400">No hay DMs de Instagram.</div>
                     ) : (
                         <ul>
-                            {conversations.map(conv => (
-                                <li
-                                    key={conv.id}
-                                    onClick={() => setSelectedConversation(conv)}
-                                    className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-slate-50 transition ${selectedConversation?.id === conv.id ? 'bg-slate-50 border-l-4 border-l-pink-500' : ''}`}
-                                >
-                                    <div className="flex justify-between items-start">
-                                        <div className="font-semibold text-slate-800">
-                                            {conv.lead ? (conv.lead.name || conv.lead.phone) : 'Desconocido'}
+                            {conversations
+                                .filter(conv => {
+                                    const query = searchTerm.toLowerCase();
+                                    const name = (conv.lead?.name || '').toLowerCase();
+                                    const phone = (conv.lead?.phone || '').toLowerCase();
+                                    return name.includes(query) || phone.includes(query);
+                                })
+                                .map(conv => (
+                                    <li
+                                        key={conv.id}
+                                        onClick={() => setSelectedConversation(conv)}
+                                        className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-slate-50 transition ${selectedConversation?.id === conv.id ? 'bg-slate-50 border-l-4 border-l-pink-500' : ''}`}
+                                    >
+                                        <div className="flex justify-between items-start">
+                                            <div className="font-semibold text-slate-800">
+                                                {conv.lead ? (conv.lead.name || conv.lead.phone) : 'Desconocido'}
+                                            </div>
+                                            <div className="text-xs text-slate-400">
+                                                {formatTime(conv.last_message_at)}
+                                            </div>
                                         </div>
-                                        <div className="text-xs text-slate-400">
-                                            {formatTime(conv.last_message_at)}
-                                        </div>
-                                    </div>
-                                    <div className="text-sm text-slate-500 truncate mt-1">Click para ver mensajes</div>
-                                </li>
-                            ))}
+                                        <div className="text-sm text-slate-500 truncate mt-1">Click para ver mensajes</div>
+                                    </li>
+                                ))}
                         </ul>
                     )}
                 </div>
