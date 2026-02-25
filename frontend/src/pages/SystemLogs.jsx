@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 
 function SystemLogs() {
-    const { user, isSuperAdmin, isAdmin } = useAuth();
+    const { user } = useAuth();
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -38,7 +38,8 @@ function SystemLogs() {
         }
     };
 
-    if (!isSuperAdmin && !isAdmin) {
+    const roleName = user?.role?.name;
+    if (roleName !== 'super_admin' && roleName !== 'admin') {
         return (
             <div className="flex flex-col items-center justify-center h-full text-center">
                 <h2 className="text-2xl font-bold text-gray-800">Acceso Denegado</h2>

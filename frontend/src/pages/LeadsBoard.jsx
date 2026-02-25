@@ -556,6 +556,7 @@ const LeadsBoard = () => {
     useEffect(() => {
         fetchLeads();
         fetchAdvisors();
+        fetchAvailableVehicles();
     }, []);
 
     const handleCreateLead = async (e) => {
