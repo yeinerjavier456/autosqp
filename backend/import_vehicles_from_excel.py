@@ -49,14 +49,13 @@ def clean_number(val):
     except Exception:
         return None
 
-def import_inventory():
-    file_path = "INVENTARIO PAGINA WEB CRM.xlsx"
+def import_inventory(file_path="INVENTARIO PAGINA WEB CRM.xlsx", default_company_id=1):
     if not os.path.exists(file_path):
         # Maybe it's one directory up? (Running from backend)
-        file_path = "../INVENTARIO PAGINA WEB CRM.xlsx"
+        file_path = f"../{file_path}"
         if not os.path.exists(file_path):
             print(f"Error: {file_path} not found.")
-            return
+            return {"error": f"File {file_path} not found"}
         
     print(f"Leyendo archivo de Excel: {file_path}...")
     df = pd.read_excel(file_path, header=1)
@@ -65,6 +64,7 @@ def import_inventory():
     inserted = 0
     updated = 0
     errors = 0
+    error_details = []
     
     with engine.connect() as conn:
         # Determine the company ID dynamically! Important!
@@ -164,12 +164,20 @@ def import_inventory():
             except Exception as e:
                 print(f"❌ Error crítico procesando placa {plate}: {e}")
                 errors += 1
+                error_details.append({"plate": plate, "error": str(e)})
                 conn.rollback()
                 
     print("\n--- 🚘 RESUMEN DE IMPORTACIÓN AUTOMÁTICA ---")
     print(f"Vehículos nuevos insertados: {inserted}")
     print(f"Vehículos existentes actualizados: {updated}")
     print(f"Registros fallidos: {errors}")
+
+    return {
+        "inserted": inserted,
+        "updated": updated,
+        "errors": errors,
+        "error_details": error_details
+    }
 
 if __name__ == "__main__":
     print("Iniciando carga masiva desde Excel...")

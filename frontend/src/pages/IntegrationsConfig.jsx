@@ -22,6 +22,8 @@ const IntegrationsConfig = () => {
     const [activeTab, setActiveTab] = useState('facebook');
     const [status, setStatus] = useState({ type: '', message: '' });
     const [loading, setLoading] = useState(true);
+    const [uploadFile, setUploadFile] = useState(null);
+    const [uploading, setUploading] = useState(false);
 
     // Initial state matching backend schema
     const [settings, setSettings] = useState({
@@ -88,6 +90,43 @@ const IntegrationsConfig = () => {
         }
     };
 
+    const handleUploadExcel = async () => {
+        if (!uploadFile) return;
+        setUploading(true);
+        setStatus({ type: 'loading', message: 'Leyendo datos, esto puede tardar unos segundos...' });
+
+        const formData = new FormData();
+        formData.append('file', uploadFile);
+
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post(
+                `https://autosqp.co/api/vehicles/upload`,
+                formData,
+                {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                        Authorization: `Bearer ${token}`
+                    }
+                }
+            );
+
+            const { inserted, updated, errors } = response.data;
+            setStatus({
+                type: 'success',
+                message: `✅ Importado: ${inserted} nuevos, ${updated} actualizados. ❌ Errores: ${errors}`
+            });
+            setTimeout(() => setStatus({ type: '', message: '' }), 10000);
+        } catch (error) {
+            console.error(error);
+            setStatus({ type: 'error', message: error.response?.data?.detail || 'Error al importar archivo. Verifica el formato.' });
+            setTimeout(() => setStatus({ type: '', message: '' }), 5000);
+        } finally {
+            setUploading(false);
+            setUploadFile(null);
+        }
+    };
+
     if (loading) return <div className="p-10 text-center text-slate-500">Cargando integraciones...</div>;
 
     return (
@@ -131,6 +170,12 @@ const IntegrationsConfig = () => {
                         label="ChatGPT / AI"
                         onClick={() => setActiveTab('gpt')}
                         icon={<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M22.28 9.06a8.55 8.55 0 0 0-1.28-4.47 8.76 8.76 0 0 0-3.32-3.15 8.61 8.61 0 0 0-6.91-.4 8.67 8.67 0 0 0-4.48 2.5 8.62 8.62 0 0 0-2.52 4.48A8.61 8.61 0 0 0 4.15 15a8.59 8.59 0 0 0 1.28 4.47 8.76 8.76 0 0 0 3.32 3.15 8.68 8.68 0 0 0 3.84.88 8.62 8.62 0 0 0 3.06-.57 8.68 8.68 0 0 0 4.48-2.5 8.57 8.57 0 0 0 2.5-4.48 8.68 8.68 0 0 0-.4-6.91ZM10.74 3a6.83 6.83 0 0 1 3.86 1.36 1.21 1.21 0 0 1 .4 1.57l-.05.07-.12.18-.76 1.32-.47.81a6.6 6.6 0 0 0-4.07.6c-.19.09-.4.15-.61.16-.42.06-.85-.09-1.16-.38l-1.3-1.34a1.22 1.22 0 0 1 .15-1.84A6.73 6.73 0 0 1 10.74 3Zm-6.52 7a6.69 6.69 0 0 1 .84-3.52 1.22 1.22 0 0 1 1.62-.31l.07.05.18.11 1.35.77.8.46a6.56 6.56 0 0 0 2.22 3.49c.14.15.26.33.34.52.17.4.11.86-.15 1.21l-1.32 1.32a1.22 1.22 0 0 1-1.84-.13A6.74 6.74 0 0 1 4.22 10Zm2.94 8.73a6.79 6.79 0 0 1-2.9-2.92 1.22 1.22 0 0 1 .32-1.63l.06-.05.18-.11 1.35-.77.8-.46a6.61 6.61 0 0 0 4.12.22c.2-.06.4-.16.57-.31.33-.29.5-.72.45-1.15l-.26-1.85a1.22 1.22 0 0 1 .91-1.36 6.79 6.79 0 0 1 6.13.91 1.22 1.22 0 0 1 .32 1.63l-.06.05-.18.12-1.34.76-.8.46a6.57 6.57 0 0 0-2.23-3.48 1.58 1.58 0 0 1-.35-.53 1.22 1.22 0 0 1 .16-1.2l1.32-1.33a1.22 1.22 0 0 1 1.84.13 6.77 6.77 0 0 1 1.09 3.86 6.83 6.83 0 0 1-3.86 3.09 1.21 1.21 0 0 1-1.57-.4l-.06-.06-.11-.18-.77-1.33-.46-.8a6.59 6.59 0 0 0-4.06-.6 1.45 1.45 0 0 1-1.78.22l-1.34-1.34a1.22 1.22 0 0 1-.15-1.84Zm-6.52 7a6.69 6.69 0 0 1 .84-3.52 1.22 1.22 0 0 1 1.62-.31l.07.05.18.11 1.35.77.8.46a6.56 6.56 0 0 0 2.22 3.49c.14.15.26.33.34.52.17.4.11.86-.15 1.21l-1.32 1.32a1.22 1.22 0 0 1-1.84-.13A6.74 6.74 0 0 1 4.22 10Zm2.94 8.73a6.79 6.79 0 0 1-2.9-2.92 1.22 1.22 0 0 1 .32-1.63l.06-.05.18-.11 1.35-.77.8-.46a6.61 6.61 0 0 0 4.12.22c.2-.06.4-.16.57-.31.33-.29.5-.72.45-1.15l-.26-1.85a1.22 1.22 0 0 1 .91-1.36 6.79 6.79 0 0 1 6.13.91 1.22 1.22 0 0 1 .32 1.63l-.06.05-.18.12-1.34.76-.8.46a6.57 6.57 0 0 0-2.23-3.48 1.58 1.58 0 0 1-.35-.53 1.22 1.22 0 0 1 .16-1.2l1.32-1.33a1.22 1.22 0 0 1 1.84.13 6.77 6.77 0 0 1 1.09 3.86 6.83 6.83 0 0 1-3.86 3.09 1.21 1.21 0 0 1-1.57-.4l-.06-.06-.11-.18-.77-1.33-.46-.8a6.59 6.59 0 0 0-4.06-.6 1.45 1.45 0 0 1-1.78.22l-1.34-1.34a1.22 1.22 0 0 1-.15-1.84Z" /></svg>}
+                    />
+                    <IntegrationTab
+                        active={activeTab === 'import'}
+                        label="Importar Inventario"
+                        onClick={() => setActiveTab('import')}
+                        icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>}
                     />
                 </div>
 
@@ -256,15 +301,54 @@ const IntegrationsConfig = () => {
                         </div>
                     )}
 
-                    <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
-                        <button
-                            type="submit"
-                            disabled={status.type === 'loading'}
-                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-md transition-all transform hover:-translate-y-0.5 disabled:opacity-70"
-                        >
-                            {status.type === 'loading' ? 'Guardando...' : 'Guardar Configuración'}
-                        </button>
-                    </div>
+                    {/* Import Tab */}
+                    {activeTab === 'import' && (
+                        <div className="space-y-6 fade-in">
+                            <h2 className="text-xl font-bold text-slate-800 border-b pb-2">Importar Inventario desde Excel</h2>
+
+                            <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg text-sm mb-4">
+                                <p className="font-semibold mb-1">Instrucciones:</p>
+                                <ul className="list-disc pl-5 space-y-1">
+                                    <li>Sube el archivo Excel con el formato "INVENTARIO PAGINA WEB CRM.xlsx".</li>
+                                    <li>Las columnas deben coincidir con la plantilla oficial (Marca & Modelo, Año, Precio, etc).</li>
+                                    <li>Los vehículos nuevos se agregarán, los existentes (por Placa) se actualizarán.</li>
+                                </ul>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-600 mb-2">Seleccionar archivo Excel (.xlsx)</label>
+                                <input
+                                    type="file"
+                                    accept=".xlsx, .xls"
+                                    onChange={(e) => setUploadFile(e.target.files[0])}
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200"
+                                />
+                            </div>
+
+                            <div className="pt-4 flex justify-end">
+                                <button
+                                    type="button"
+                                    onClick={handleUploadExcel}
+                                    disabled={uploading || !uploadFile}
+                                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-xl shadow-md transition-all disabled:opacity-50"
+                                >
+                                    {uploading ? 'Procesando archivo...' : 'Subir e Importar Inventario'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab !== 'import' && (
+                        <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
+                            <button
+                                type="submit"
+                                disabled={status.type === 'loading'}
+                                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-md transition-all transform hover:-translate-y-0.5 disabled:opacity-70"
+                            >
+                                {status.type === 'loading' ? 'Guardando...' : 'Guardar Configuración'}
+                            </button>
+                        </div>
+                    )}
                 </form>
             </div>
         </div>

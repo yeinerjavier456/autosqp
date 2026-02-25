@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Optional
 import models, schemas
 from database import get_db
+import os
+import shutil
+from import_vehicles_from_excel import import_inventory
 
 router = APIRouter(
     prefix="/vehicles",
@@ -116,7 +119,14 @@ def create_vehicle(vehicle: schemas.VehicleCreate, db: Session = Depends(get_db)
     return db_vehicle
 
 @router.get("/", response_model=schemas.VehicleList)
-def read_vehicles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+def read_vehicles(
+    skip: int = 0, 
+    limit: int = 100, 
+    q: Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
     """
     Get all vehicles (internal/admin view).
     Could filter by company.
@@ -125,10 +135,61 @@ def read_vehicles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
     if current_user.company_id:
         query = query.filter(models.Vehicle.company_id == current_user.company_id)
     
+    if q:
+        search = f"%{q}%"
+        query = query.filter(
+            or_(
+                models.Vehicle.make.ilike(search),
+                models.Vehicle.model.ilike(search),
+                models.Vehicle.plate.ilike(search)
+            )
+        )
+
+    if status:
+        query = query.filter(models.Vehicle.status == status)
+
     total = query.count()
-    items = query.offset(skip).limit(limit).all()
+    items = query.order_by(models.Vehicle.id.desc()).offset(skip).limit(limit).all()
     
     return {"items": items, "total": total}
+
+@router.post("/upload")
+def upload_vehicles_excel(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Sube un archivo Excel y lanza el script de importación masiva.
+    """
+    if not current_user.company_id:
+        raise HTTPException(status_code=400, detail="El usuario no tiene una compañía asociada")
+
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="El archivo debe ser un Excel (.xlsx o .xls)")
+
+    # Save temp file
+    temp_file_path = f"temp_upload_{file.filename}"
+    try:
+        with open(temp_file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Ejecutar el importador pasando la ruta temporal y el id de firma
+        results = import_inventory(file_path=temp_file_path, default_company_id=current_user.company_id)
+        
+        if "error" in results:
+            raise HTTPException(status_code=500, detail=results["error"])
+            
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error interno durante la importación: {str(e)}")
+    finally:
+        # Clean up temp file
+        if os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path)
+            except:
+                pass
 
 @router.get("/{vehicle_id}", response_model=schemas.Vehicle)
 def read_vehicle(vehicle_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
