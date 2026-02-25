@@ -32,6 +32,23 @@ def clean_excel_date(val):
     except Exception:
         return None
 
+def clean_number(val):
+    if pd.isna(val) or val == "" or str(val).strip() == "":
+        return None
+    try:
+        # Check if it's already a number
+        if isinstance(val, (int, float)):
+            return int(val)
+            
+        # If string, remove $ , . and spaces
+        cleaned = str(val).replace("$", "").replace(".", "").replace(",", "").replace(" ", "").strip()
+        if not cleaned: 
+            return None
+            
+        return int(float(cleaned))
+    except Exception:
+        return None
+
 def import_inventory():
     file_path = "INVENTARIO PAGINA WEB CRM.xlsx"
     if not os.path.exists(file_path):
@@ -72,11 +89,11 @@ def import_inventory():
             status = status_map.get(raw_status, "available")
             
             # Extract basic data safely
-            year = int(row.get("Año:", 0)) if not pd.isna(row.get("Año:")) else 0
-            price = int(row.get("PRECIO DE VENTA", 0)) if not pd.isna(row.get("PRECIO DE VENTA")) else 0
-            purchase_price = int(row.get("PRECIO COMPRA :", 0)) if not pd.isna(row.get("PRECIO COMPRA :")) else None
-            faseco = int(row.get("FASECO:", 0)) if not pd.isna(row.get("FASECO:")) else None
-            mileage = int(row.get("Kilómetros:", 0)) if not pd.isna(row.get("Kilómetros:")) else 0
+            year = clean_number(row.get("Año:")) or 0
+            price = clean_number(row.get("PRECIO DE VENTA")) or 0
+            purchase_price = clean_number(row.get("PRECIO COMPRA :"))
+            faseco = clean_number(row.get("FASECO:"))
+            mileage = clean_number(row.get("Kilómetros:")) or 0
             
             # Extract strings safely
             color = str(row.get("Color:", "")).strip()[:50]
