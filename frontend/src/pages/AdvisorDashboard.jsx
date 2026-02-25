@@ -61,7 +61,7 @@ const AdvisorDashboard = () => {
                         {Object.entries({
                             new: 'Nuevos',
                             contacted: 'Contactados',
-                            interested: 'Interesados',
+                            interested: 'En proceso',
                             sold: 'Vendidos',
                             lost: 'Perdidos'
                         }).map(([key, label]) => {

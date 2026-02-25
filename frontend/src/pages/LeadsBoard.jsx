@@ -863,7 +863,7 @@ const LeadsBoard = () => {
                                     <option value="">Todos los Estados</option>
                                     <option value="new">Nuevos</option>
                                     <option value="contacted">Contactados</option>
-                                    <option value="interested">Interesados</option>
+                                    <option value="interested">En proceso</option>
                                     <option value="sold">Vendidos</option>
                                     <option value="lost">Perdidos</option>
                                 </select>
@@ -939,7 +939,7 @@ const LeadsBoard = () => {
                     onViewHistory={handleViewHistory}
                 />
                 <KanbanColumn
-                    title="Interesados"
+                    title="En proceso"
                     status="interested"
                     color="text-orange-600"
                     leads={filterByStatus('interested')}
