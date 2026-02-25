@@ -38,12 +38,16 @@ const InventoryList = () => {
     };
 
     useEffect(() => {
-        setPage(1); // Reset page when tab changes
         fetchVehicles();
     }, [page, search, activeTab]);
 
     const handleSearch = (e) => {
         setSearch(e.target.value);
+        setPage(1);
+    };
+
+    const handleTabChange = (tab) => {
+        setActiveTab(tab);
         setPage(1);
     };
 
@@ -161,7 +165,7 @@ const InventoryList = () => {
             {/* Status Tabs */}
             <div className="flex space-x-1 mb-4 border-b border-gray-200">
                 <button
-                    onClick={() => setActiveTab('available')}
+                    onClick={() => handleTabChange('available')}
                     className={`px-6 py-2 font-medium text-sm rounded-t-lg transition-colors ${activeTab === 'available'
                         ? 'bg-white text-blue-600 border-t border-l border-r border-gray-200'
                         : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
@@ -170,7 +174,7 @@ const InventoryList = () => {
                     Disponibles
                 </button>
                 <button
-                    onClick={() => setActiveTab('sold')}
+                    onClick={() => handleTabChange('sold')}
                     className={`px-4 py-2 font-medium text-sm rounded-t-lg transition-colors ${activeTab === 'sold'
                         ? 'bg-white text-blue-600 border-t border-l border-r border-gray-200'
                         : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
@@ -179,7 +183,7 @@ const InventoryList = () => {
                     Vendidos
                 </button>
                 <button
-                    onClick={() => setActiveTab('alistamiento')}
+                    onClick={() => handleTabChange('alistamiento')}
                     className={`px-4 py-2 font-medium text-sm rounded-t-lg transition-colors ${activeTab === 'alistamiento'
                         ? 'bg-white text-blue-600 border-t border-l border-r border-gray-200'
                         : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
@@ -188,7 +192,7 @@ const InventoryList = () => {
                     Alistamiento
                 </button>
                 <button
-                    onClick={() => setActiveTab('desembolso')}
+                    onClick={() => handleTabChange('desembolso')}
                     className={`px-4 py-2 font-medium text-sm rounded-t-lg transition-colors ${activeTab === 'desembolso'
                         ? 'bg-white text-blue-600 border-t border-l border-r border-gray-200'
                         : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
@@ -225,7 +229,6 @@ const InventoryList = () => {
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Año</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Placa</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ST/TC</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
                                 <th scope="col" className="relative px-6 py-3"><span className="sr-only">Acciones</span></th>
                             </tr>
@@ -251,9 +254,9 @@ const InventoryList = () => {
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm font-medium text-gray-900">{vehicle.make} {vehicle.model}</div>
-                                            <div className="text-xs text-gray-500">{vehicle.color}</div>
+                                        <td className="px-6 py-4 whitespace-normal min-w-[200px]">
+                                            <div className="text-sm font-medium text-gray-900 leading-tight">{vehicle.make} {vehicle.model}</div>
+                                            <div className="text-xs text-gray-500 mt-1">{vehicle.color}</div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                             {vehicle.year}
@@ -265,12 +268,6 @@ const InventoryList = () => {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                                             {formatPrice(vehicle.price)}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
-                                            <div className="flex flex-col gap-1">
-                                                <span className={`${vehicle.soat ? 'text-green-600' : 'text-gray-400'}`}>ST: {vehicle.soat ? new Date(vehicle.soat).toLocaleDateString() : 'N/A'}</span>
-                                                <span className={`${vehicle.tecno ? 'text-blue-600' : 'text-gray-400'}`}>TC: {vehicle.tecno ? new Date(vehicle.tecno).toLocaleDateString() : 'N/A'}</span>
-                                            </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
