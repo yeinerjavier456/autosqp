@@ -453,7 +453,9 @@ const LeadsBoard = () => {
     // Filter States
     const [searchTerm, setSearchTerm] = useState('');
     const [dateFilter, setDateFilter] = useState('');
-    const [assignedFilter, setAssignedFilter] = useState(''); // format: YYYY-MM-DD
+    const [assignedFilter, setAssignedFilter] = useState('');
+    const [userFilter, setUserFilter] = useState('');
+    const [globalStatusFilter, setGlobalStatusFilter] = useState('');
 
     // Modal State - Sales
     const [showSaleModal, setShowSaleModal] = useState(false);
@@ -774,6 +776,14 @@ const LeadsBoard = () => {
                 if (assignedFilter === 'unassigned' && l.assigned_to) return false;
             }
 
+            if (userFilter) {
+                if (!l.assigned_to || l.assigned_to.id !== parseInt(userFilter)) return false;
+            }
+
+            if (globalStatusFilter) {
+                if (l.status !== globalStatusFilter) return false;
+            }
+
             return true;
         });
     };
@@ -815,11 +825,45 @@ const LeadsBoard = () => {
                     />
                 </div>
 
-                <div className="flex items-center gap-2 w-full md:w-auto">
+                <div className="flex flex-col md:flex-row items-center gap-2 w-full md:w-auto">
                     <select
-                        className="w-full md:w-48 px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 text-sm bg-white"
+                        className="w-full md:w-40 px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 text-sm bg-white"
+                        value={globalStatusFilter}
+                        onChange={(e) => setGlobalStatusFilter(e.target.value)}
+                    >
+                        <option value="">Todos los Estados</option>
+                        <option value="new">Nuevos</option>
+                        <option value="contacted">Contactados</option>
+                        <option value="converted">Interesados</option>
+                        <option value="quoted">Cotizados</option>
+                        <option value="negotiation">En Negociación</option>
+                        <option value="sold">Vendidos</option>
+                        <option value="closed">Perdidos</option>
+                    </select>
+
+                    <select
+                        className="w-full md:w-40 px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 text-sm bg-white"
+                        value={userFilter}
+                        onChange={(e) => {
+                            setUserFilter(e.target.value);
+                            // Clear unassigned if selecting a specific user to avoid logic conflicts
+                            if (e.target.value) setAssignedFilter('');
+                        }}
+                    >
+                        <option value="">Cualquier Usuario</option>
+                        {advisors.map(adv => (
+                            <option key={adv.id} value={adv.id}>{adv.email}</option>
+                        ))}
+                    </select>
+
+                    <select
+                        className="w-full md:w-44 px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 text-sm bg-white focus:mb-0 mb-2 md:mb-0"
                         value={assignedFilter}
-                        onChange={(e) => setAssignedFilter(e.target.value)}
+                        onChange={(e) => {
+                            setAssignedFilter(e.target.value);
+                            // Clear user filter if using general assigned/unassigned
+                            if (e.target.value) setUserFilter('');
+                        }}
                     >
                         <option value="">Todas las asignaciones</option>
                         <option value="assigned">✅ Asignados</option>
