@@ -109,12 +109,17 @@ const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragS
 };
 
 // History Modal Component
-const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign }) => {
+const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVehicles }) => {
     const [assignedAdvisor, setAssignedAdvisor] = useState(lead?.assigned_to?.id || '');
     const { createReminder } = useNotifications();
     const [newComment, setNewComment] = useState('');
     const [newStatus, setNewStatus] = useState(lead?.status || 'new');
     const [loading, setLoading] = useState(false);
+
+    // Process Detail States
+    const [hasVehicle, setHasVehicle] = useState(lead?.process_detail?.has_vehicle ?? true);
+    const [selectedVehicleId, setSelectedVehicleId] = useState(lead?.process_detail?.vehicle_id || '');
+    const [desiredVehicle, setDesiredVehicle] = useState(lead?.process_detail?.desired_vehicle || '');
 
     // Load Lead Messages
     const [messages, setMessages] = useState([]);
@@ -201,14 +206,35 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!newComment.trim()) {
+
+        // Si no es status 'interested', comprobamos el comment
+        if (!newComment.trim() && newStatus !== 'interested' && newStatus === lead?.status) {
             Swal.fire('Error', 'Debes escribir una nota o comentario', 'warning');
             return;
         }
 
+        if (newStatus === 'interested') {
+            if (hasVehicle && !selectedVehicleId) {
+                Swal.fire('Atención', 'Debes seleccionar un vehículo disponible del inventario.', 'warning');
+                return;
+            }
+            if (!hasVehicle && !desiredVehicle.trim()) {
+                Swal.fire('Atención', 'Debes indicar qué vehículo busca el cliente.', 'warning');
+                return;
+            }
+        }
+
         setLoading(true);
         try {
-            await onUpdate(lead.id, newStatus, newComment);
+            let processDetail = null;
+            if (newStatus === 'interested') {
+                processDetail = {
+                    has_vehicle: hasVehicle,
+                    vehicle_id: hasVehicle ? parseInt(selectedVehicleId) : null,
+                    desired_vehicle: !hasVehicle ? desiredVehicle : null
+                };
+            }
+            await onUpdate(lead.id, newStatus, newComment, processDetail);
             setNewComment('');
         } catch (error) {
             console.error("Update failed", error);
@@ -325,6 +351,48 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign }) => {
                                     ></textarea>
                                 </div>
                             </div>
+
+                            {/* Process Detail conditional UI */}
+                            {newStatus === 'interested' && (
+                                <div className="p-3 bg-orange-50 rounded-lg border border-orange-100 flex flex-col gap-3 animate-fade-in shadow-sm">
+                                    <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer w-fit">
+                                        <input
+                                            type="checkbox"
+                                            className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500 cursor-pointer"
+                                            checked={hasVehicle}
+                                            onChange={(e) => setHasVehicle(e.target.checked)}
+                                        />
+                                        ¿Tenemos el vehículo deseado en inventario?
+                                    </label>
+                                    {hasVehicle ? (
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Seleccionar Vehículo / Placa</label>
+                                            <select
+                                                className="w-full text-sm border border-orange-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-orange-500 bg-white shadow-inner"
+                                                value={selectedVehicleId}
+                                                onChange={(e) => setSelectedVehicleId(e.target.value)}
+                                            >
+                                                <option value="">-- Buscar Auto Disponible --</option>
+                                                {availableVehicles?.map(v => (
+                                                    <option key={v.id} value={v.id}>{v.make} {v.model} - Placa: {v.plate}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Vehículo de Interés que Busca (Texto Libre)</label>
+                                            <input
+                                                type="text"
+                                                className="w-full text-sm border border-orange-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-orange-500 bg-white shadow-inner"
+                                                value={desiredVehicle}
+                                                onChange={(e) => setDesiredVehicle(e.target.value)}
+                                                placeholder="Ej: Toyota Hilux 2020 Color Blanco..."
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             <button
                                 type="submit"
                                 disabled={loading}
@@ -647,14 +715,19 @@ const LeadsBoard = () => {
         }
     };
 
-    const handleUpdateHistory = async (leadId, newStatus, comment) => {
+    const handleUpdateHistory = async (leadId, newStatus, comment, processDetail = null) => {
         try {
             const token = localStorage.getItem('token');
+            const payload = {
+                status: newStatus,
+                comment: comment
+            };
+            if (processDetail) {
+                payload.process_detail = processDetail;
+            }
+
             await axios.put(`https://autosqp.co/api/leads/${leadId}`,
-                {
-                    status: newStatus,
-                    comment: comment
-                },
+                payload,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
@@ -1111,6 +1184,7 @@ const LeadsBoard = () => {
                     onUpdate={handleUpdateHistory}
                     advisors={advisors}
                     onAssign={handleAssignLead}
+                    availableVehicles={availableVehicles}
                 />
             )}
 

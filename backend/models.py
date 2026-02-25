@@ -96,6 +96,7 @@ class Lead(Base):
 
     history = relationship("LeadHistory", back_populates="lead")
     conversation = relationship("Conversation", back_populates="lead", uselist=False)
+    process_detail = relationship("LeadProcessDetail", back_populates="lead", uselist=False)
 
 class LeadHistory(Base):
     __tablename__ = "lead_history"
@@ -110,6 +111,21 @@ class LeadHistory(Base):
     
     lead = relationship("Lead", back_populates="history")
     user = relationship("User")
+
+class LeadProcessDetail(Base):
+    __tablename__ = "lead_process_details"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), unique=True)
+    has_vehicle = Column(Boolean, default=False)
+    vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=True) # Si tiene el vehículo
+    desired_vehicle = Column(String(200), nullable=True) # Si no lo tiene
+    
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    lead = relationship("Lead", back_populates="process_detail")
+    vehicle = relationship("Vehicle")
 
 class User(Base):
     __tablename__ = "users"

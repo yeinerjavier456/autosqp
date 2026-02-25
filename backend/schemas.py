@@ -223,6 +223,22 @@ class LeadHistory(LeadHistoryBase):
     
     model_config = ConfigDict(from_attributes=True)
 
+class LeadProcessDetailBase(BaseModel):
+    has_vehicle: bool = False
+    vehicle_id: Optional[int] = None
+    desired_vehicle: Optional[str] = None
+
+class LeadProcessDetailCreate(LeadProcessDetailBase):
+    pass
+
+class LeadProcessDetail(LeadProcessDetailBase):
+    id: int
+    lead_id: int
+    created_at: datetime
+    updated_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
 class LeadBase(BaseModel):
     source: str
     name: str
@@ -244,7 +260,8 @@ class LeadUpdate(BaseModel):
     message: Optional[str] = None
     assigned_to_id: Optional[int] = None
     comment: Optional[str] = None # Virtual field for history
-
+    process_detail: Optional[LeadProcessDetailCreate] = None # Para recibir los detalles de proceso
+    
 class LeadBulkAssign(BaseModel):
     lead_ids: List[int]
     assigned_to_id: int
@@ -256,6 +273,7 @@ class Lead(LeadBase):
     assigned_to: Optional[User] = None
     history: List[LeadHistory] = []
     conversation: Optional[Conversation] = None
+    process_detail: Optional[LeadProcessDetail] = None
     
     model_config = ConfigDict(from_attributes=True)
 

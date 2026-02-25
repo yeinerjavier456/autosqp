@@ -826,10 +826,23 @@ def update_lead(
         )
         db.add(new_history)
         
-    for field, value in lead_update.dict(exclude_unset=True).items():
-        if field == 'comment':
-            continue # Skip comment field as it's not on Lead model
+    process_detail_data = lead_update.process_detail
+    
+    for field, value in lead_update.dict(exclude={'comment', 'process_detail'}, exclude_unset=True).items():
         setattr(lead, field, value)
+        
+    # Handle Process Detail Upsert
+    if process_detail_data:
+        existing_detail = db.query(models.LeadProcessDetail).filter(models.LeadProcessDetail.lead_id == lead.id).first()
+        if existing_detail:
+            for k, v in process_detail_data.dict().items():
+                setattr(existing_detail, k, v)
+        else:
+            new_detail = models.LeadProcessDetail(
+                lead_id=lead.id,
+                **process_detail_data.dict()
+            )
+            db.add(new_detail)
         
     db.commit()
     db.refresh(lead)
