@@ -456,6 +456,7 @@ const LeadsBoard = () => {
     const [assignedFilter, setAssignedFilter] = useState('');
     const [userFilter, setUserFilter] = useState('');
     const [globalStatusFilter, setGlobalStatusFilter] = useState('');
+    const [showFiltersMenu, setShowFiltersMenu] = useState(false);
 
     // Modal State - Sales
     const [showSaleModal, setShowSaleModal] = useState(false);
@@ -811,7 +812,7 @@ const LeadsBoard = () => {
             </div>
 
             {/* Filters Row */}
-            <div className="flex flex-col md:flex-row gap-4 mb-6 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+            <div className="flex flex-col md:flex-row gap-4 mb-6 bg-white p-4 rounded-2xl shadow-sm border border-slate-200 relative">
                 <div className="flex-1 relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -825,68 +826,92 @@ const LeadsBoard = () => {
                     />
                 </div>
 
-                <div className="flex flex-col md:flex-row items-center gap-2 w-full md:w-auto">
-                    <select
-                        className="w-full md:w-40 px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 text-sm bg-white"
-                        value={globalStatusFilter}
-                        onChange={(e) => setGlobalStatusFilter(e.target.value)}
+                <div className="relative">
+                    <button
+                        onClick={() => setShowFiltersMenu(!showFiltersMenu)}
+                        className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-sm font-semibold transition-colors ${showFiltersMenu || globalStatusFilter || userFilter || assignedFilter || dateFilter ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
                     >
-                        <option value="">Todos los Estados</option>
-                        <option value="new">Nuevos</option>
-                        <option value="contacted">Contactados</option>
-                        <option value="converted">Interesados</option>
-                        <option value="quoted">Cotizados</option>
-                        <option value="negotiation">En Negociación</option>
-                        <option value="sold">Vendidos</option>
-                        <option value="closed">Perdidos</option>
-                    </select>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                        Filtros {(globalStatusFilter || userFilter || assignedFilter || dateFilter) && (<span className="w-2 h-2 rounded-full bg-blue-600"></span>)}
+                    </button>
 
-                    <select
-                        className="w-full md:w-40 px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 text-sm bg-white"
-                        value={userFilter}
-                        onChange={(e) => {
-                            setUserFilter(e.target.value);
-                            // Clear unassigned if selecting a specific user to avoid logic conflicts
-                            if (e.target.value) setAssignedFilter('');
-                        }}
-                    >
-                        <option value="">Cualquier Usuario</option>
-                        {advisors.map(adv => (
-                            <option key={adv.id} value={adv.id}>{adv.email}</option>
-                        ))}
-                    </select>
+                    {/* Dropdown Menu */}
+                    {showFiltersMenu && (
+                        <div className="absolute right-0 top-12 mt-2 w-72 md:w-80 bg-white rounded-2xl shadow-xl border border-gray-100 z-40 p-5 origin-top-right animate-fade-in-down py-6 grid gap-4">
+                            <div className="flex items-center justify-between border-b pb-2">
+                                <h3 className="font-bold text-gray-800">Filtros Avanzados</h3>
+                                {(globalStatusFilter || userFilter || assignedFilter || dateFilter) && (
+                                    <button
+                                        onClick={() => {
+                                            setGlobalStatusFilter('');
+                                            setUserFilter('');
+                                            setAssignedFilter('');
+                                            setDateFilter('');
+                                        }}
+                                        className="text-xs text-red-500 hover:text-red-700 font-semibold"
+                                    >Limpiar todo</button>
+                                )}
+                            </div>
 
-                    <select
-                        className="w-full md:w-44 px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 text-sm bg-white focus:mb-0 mb-2 md:mb-0"
-                        value={assignedFilter}
-                        onChange={(e) => {
-                            setAssignedFilter(e.target.value);
-                            // Clear user filter if using general assigned/unassigned
-                            if (e.target.value) setUserFilter('');
-                        }}
-                    >
-                        <option value="">Todas las asignaciones</option>
-                        <option value="assigned">✅ Asignados</option>
-                        <option value="unassigned">⏳ Sin Asignar</option>
-                    </select>
-                </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado en Tablero</label>
+                                <select
+                                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 text-sm bg-slate-50 hover:bg-white transition-colors"
+                                    value={globalStatusFilter}
+                                    onChange={(e) => setGlobalStatusFilter(e.target.value)}
+                                >
+                                    <option value="">Todos los Estados</option>
+                                    <option value="new">Nuevos</option>
+                                    <option value="contacted">Contactados</option>
+                                    <option value="interested">Interesados</option>
+                                    <option value="sold">Vendidos</option>
+                                    <option value="lost">Perdidos</option>
+                                </select>
+                            </div>
 
-                <div className="md:w-72 flex items-center gap-2">
-                    <label className="text-sm font-semibold text-slate-600 whitespace-nowrap">Fecha exacta:</label>
-                    <input
-                        type="date"
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 text-sm"
-                        value={dateFilter}
-                        onChange={(e) => setDateFilter(e.target.value)}
-                    />
-                    {dateFilter && (
-                        <button
-                            onClick={() => setDateFilter('')}
-                            className="text-red-500 hover:text-red-700 p-2 font-bold text-lg"
-                            title="Limpiar fecha"
-                        >
-                            &times;
-                        </button>
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Asesor Encargado</label>
+                                <select
+                                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 text-sm bg-slate-50 hover:bg-white transition-colors"
+                                    value={userFilter}
+                                    onChange={(e) => {
+                                        setUserFilter(e.target.value);
+                                        if (e.target.value) setAssignedFilter('');
+                                    }}
+                                >
+                                    <option value="">Cualquier Usuario</option>
+                                    {advisors.map(adv => (
+                                        <option key={adv.id} value={adv.id}>{adv.email}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Asignación Global</label>
+                                <select
+                                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 text-sm bg-slate-50 hover:bg-white transition-colors"
+                                    value={assignedFilter}
+                                    onChange={(e) => {
+                                        setAssignedFilter(e.target.value);
+                                        if (e.target.value) setUserFilter('');
+                                    }}
+                                >
+                                    <option value="">Todas las asignaciones</option>
+                                    <option value="assigned">✅ Asignados</option>
+                                    <option value="unassigned">⏳ Sin Asignar</option>
+                                </select>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Fecha Exacta</label>
+                                <input
+                                    type="date"
+                                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 text-sm bg-slate-50 hover:bg-white transition-colors"
+                                    value={dateFilter}
+                                    onChange={(e) => setDateFilter(e.target.value)}
+                                />
+                            </div>
+                        </div>
                     )}
                 </div>
             </div>
