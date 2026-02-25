@@ -15,6 +15,8 @@ export const NotificationsProvider = ({ children }) => {
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(false);
+    const isInitialFetch = React.useRef(true);
+    const maxNotifId = React.useRef(0);
 
     // Fetch Notifications
     const fetchNotifications = async () => {
@@ -26,6 +28,36 @@ export const NotificationsProvider = ({ children }) => {
             const data = response.data;
             setNotifications(data);
             setUnreadCount(data.filter(n => n.is_read === 0).length);
+
+            if (data.length > 0) {
+                let currentMaxId = Math.max(...data.map(n => n.id));
+
+                if (!isInitialFetch.current) {
+                    const newNotifs = data.filter(n => n.id > maxNotifId.current && n.is_read === 0);
+                    if (newNotifs.length > 0) {
+                        const latest = newNotifs[0]; // Mostrar la más reciente
+                        Swal.fire({
+                            title: latest.title || 'Nueva Notificación',
+                            text: latest.message,
+                            toast: true,
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            timer: 8000,
+                            timerProgressBar: true,
+                            icon: latest.type === 'warning' ? 'warning' : 'info',
+                            didOpen: (toast) => {
+                                toast.addEventListener('mouseenter', Swal.stopTimer)
+                                toast.addEventListener('mouseleave', Swal.resumeTimer)
+                            }
+                        });
+                    }
+                }
+                maxNotifId.current = Math.max(maxNotifId.current, currentMaxId);
+            }
+
+            if (isInitialFetch.current) {
+                isInitialFetch.current = false;
+            }
         } catch (error) {
             console.error("Error fetching notifications:", error);
         }
@@ -61,9 +93,13 @@ export const NotificationsProvider = ({ children }) => {
     // Create Reminder
     const createReminder = async (leadId, reminderDate, note) => {
         try {
+            // Convertir la fecha local a UTC para el backend
+            const localDate = new Date(reminderDate);
+            const utcString = localDate.toISOString().substring(0, 16);
+
             await axios.post(`https://autosqp.co/api/notifications/leads/${leadId}/reminders`, {
                 lead_id: leadId,
-                reminder_date: reminderDate, // ISO check needed?
+                reminder_date: utcString,
                 note: note
             }, {
                 headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
