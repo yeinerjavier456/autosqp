@@ -449,3 +449,22 @@ class InternalMessage(InternalMessageBase):
     recipient: Optional[User] = None 
 
     model_config = ConfigDict(from_attributes=True)
+
+class SystemLogBase(BaseModel):
+    user_id: Optional[int] = None
+    action: str
+    entity_type: Optional[str] = None
+    entity_id: Optional[int] = None
+    details: Optional[str] = None
+    ip_address: Optional[str] = None
+
+class SystemLog(SystemLogBase):
+    id: int
+    created_at: datetime
+    user: Optional[User] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class SystemLogList(BaseModel):
+    items: List[SystemLog]
+    total: int

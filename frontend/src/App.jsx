@@ -30,6 +30,7 @@ import WhatsAppDashboard from './pages/WhatsAppDashboard';
 import CreditBoard from './pages/CreditBoard';
 import AliadoDashboard from './pages/AliadoDashboard';
 import InternalChat from './pages/InternalChat';
+import SystemLogs from './pages/SystemLogs';
 
 const PrivateRoute = ({ allowedRoles }) => {
   const { user, loading } = useAuth();
@@ -77,6 +78,7 @@ function App() {
                     <Route path="/admin/users/:id" element={<UserForm />} />
                     <Route path="/admin/integrations" element={<IntegrationsConfig />} />
                     <Route path="/admin/alerts" element={<AdminAlerts />} />
+                    <Route path="/admin/logs" element={<SystemLogs />} />
                   </Route>
 
                   {/* Shared Routes (Admin, Super Admin, Advisor) */}

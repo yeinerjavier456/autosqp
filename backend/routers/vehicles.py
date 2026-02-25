@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Optional
@@ -7,6 +7,25 @@ from database import get_db
 import os
 import shutil
 from import_vehicles_from_excel import import_inventory
+
+# Attempting to import log_action_to_db (will require circular import bypassing if done wrong, but from main is fine if deferred)
+# Instead of direct import which might cause circular loops since main imports routers, we'll rewrite log_action_to_db directly or use it inline:
+
+def log_action_to_db(db: Session, user_id: int, action: str, entity_type: str, entity_id: int, details: str = None, ip_address: str = None):
+    try:
+        new_log = models.SystemLog(
+            user_id=user_id,
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            details=details,
+            ip_address=ip_address
+        )
+        db.add(new_log)
+        db.commit()
+    except Exception as e:
+        print(f"Failed to log action in router: {e}", flush=True)
+        db.rollback()
 
 router = APIRouter(
     prefix="/vehicles",
@@ -116,6 +135,10 @@ def create_vehicle(vehicle: schemas.VehicleCreate, db: Session = Depends(get_db)
     db.add(db_vehicle)
     db.commit()
     db.refresh(db_vehicle)
+    
+    # Log Action
+    log_action_to_db(db, current_user.id, "CREATE", "Vehicle", db_vehicle.id, f"Vehículo creado: {db_vehicle.make} {db_vehicle.model} ({db_vehicle.plate})")
+    
     return db_vehicle
 
 @router.get("/", response_model=schemas.VehicleList)
@@ -180,6 +203,8 @@ def upload_vehicles_excel(
         if "error" in results:
             raise HTTPException(status_code=500, detail=results["error"])
             
+        log_action_to_db(db, current_user.id, "IMPORT_EXCEL", "Vehicle", None, f"Importados correctamente mediante Excel")
+            
         return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error interno durante la importación: {str(e)}")
@@ -225,6 +250,9 @@ def update_vehicle(vehicle_id: int, vehicle_update: schemas.VehicleUpdate, db: S
 
     db.commit()
     db.refresh(db_vehicle)
+    
+    log_action_to_db(db, current_user.id, "UPDATE", "Vehicle", db_vehicle.id, f"Vehículo modificado: {db_vehicle.make} {db_vehicle.model}")
+    
     return db_vehicle
 
 @router.delete("/{vehicle_id}")
@@ -239,6 +267,10 @@ def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db), current_user:
     if current_user.company_id and db_vehicle.company_id != current_user.company_id:
          raise HTTPException(status_code=403, detail="Not authorized to delete this vehicle")
 
+    vehicle_plate = db_vehicle.plate
     db.delete(db_vehicle)
     db.commit()
+    
+    log_action_to_db(db, current_user.id, "DELETE", "Vehicle", vehicle_id, f"Vehículo eliminado: placa {vehicle_plate}")
+    
     return {"message": "Vehicle deleted successfully"}

@@ -376,3 +376,17 @@ class InternalMessage(Base):
     company = relationship("Company")
     sender = relationship("User", foreign_keys=[sender_id])
     recipient = relationship("User", foreign_keys=[recipient_id])
+
+class SystemLog(Base):
+    __tablename__ = "system_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True) # Que usuario hizo la accion. Null = Sistema
+    action = Column(String(50)) # e.g. "LOGIN", "CREATE_VEHICLE", "UPDATE_LEAD", "DELETE_USER"
+    entity_type = Column(String(50), nullable=True) # e.g. "Vehicle", "Lead", "User", "Auth"
+    entity_id = Column(Integer, nullable=True) # El ID del registro afectado
+    details = Column(Text, nullable=True) # Descripcion libre o JSON stringified con los cambios
+    ip_address = Column(String(50), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    user = relationship("User")

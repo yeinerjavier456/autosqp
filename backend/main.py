@@ -64,7 +64,27 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     access_token = auth_utils.create_access_token(
         data={"sub": str(user.id), "role": user.role.name if user.role else "user"}
     )
+    
+    # Log the successful login
+    log_action_to_db(db, user.id, "LOGIN", "Auth", user.id, "User logged in successfully")
+    
     return {"access_token": access_token, "token_type": "bearer"}
+
+def log_action_to_db(db: Session, user_id: int, action: str, entity_type: str, entity_id: int, details: str = None, ip_address: str = None):
+    try:
+        new_log = models.SystemLog(
+            user_id=user_id,
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            details=details,
+            ip_address=ip_address
+        )
+        db.add(new_log)
+        db.commit()
+    except Exception as e:
+        print(f"Failed to log action: {e}", flush=True)
+        db.rollback()
 
 
 
@@ -142,6 +162,9 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+    
+    log_action_to_db(db, current_user.id, "CREATE", "User", new_user.id, f"Usuario creado: {new_user.email} con Rol ID {new_user.role_id}")
+    
     return new_user
 
 
@@ -191,6 +214,8 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
         
+    log_action_to_db(db, current_user.id, "UPDATE", "User", db_user.id, f"Usuario modificado: {db_user.email}")
+        
     return db_user
 
 @app.delete("/users/{user_id}")
@@ -219,6 +244,8 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: model
         if target_role and target_role.name == "super_admin":
             raise HTTPException(status_code=403, detail="No puedes eliminar a un Súper Administrador")
             
+    user_email_snapshot = db_user.email
+            
     try:
         # 5. Remove relationships before deleting to avoid MySQL Integrity Error 1451
         db.query(models.LeadHistory).filter(models.LeadHistory.user_id == user_id).update({"user_id": None})
@@ -228,10 +255,37 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: model
         
         db.delete(db_user)
         db.commit()
+        
+        log_action_to_db(db, current_user.id, "DELETE", "User", user_id, f"Usuario eliminado: {user_email_snapshot}")
+        
         return {"status": "success", "message": "Usuario eliminado correctamente"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=f"No se pudo eliminar el usuario porque tiene registros dependientes (ej: ventas o leads asigandos). {str(e)}")
+
+# --- SYSTEM LOGS ENDPOINTS ---
+
+@app.get("/logs/", response_model=schemas.SystemLogList)
+def read_system_logs(
+    skip: int = 0, 
+    limit: int = 50, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Get all system logs.
+    Restricted to Admins and Super Admins.
+    """
+    role_obj = db.query(models.Role).filter(models.Role.id == current_user.role_id).first()
+    if not role_obj or role_obj.name not in ["super_admin", "admin"]:
+        raise HTTPException(status_code=403, detail="No tienes permisos para ver auditoría")
+
+    query = db.query(models.SystemLog)
+    
+    total = query.count()
+    items = query.order_by(models.SystemLog.created_at.desc()).offset(skip).limit(limit).all()
+    
+    return {"items": items, "total": total}
 
 @app.get("/dashboard/stats", response_model=schemas.DashboardStats)
 def get_dashboard_stats(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -723,6 +777,9 @@ def create_lead(
     db.commit()
     db.refresh(db_lead)
     
+    log_action_to_db(db, current_user.id, "CREATE", "Lead", db_lead.id, f"Lead creado: {db_lead.name} ({db_lead.email or db_lead.phone})")
+    
+    
     # Create Notification for assigned user
     if db_lead.assigned_to_id:
         notification = models.Notification(
@@ -776,6 +833,9 @@ def update_lead(
         
     db.commit()
     db.refresh(lead)
+    
+    log_action_to_db(db, current_user.id, "UPDATE", "Lead", lead.id, f"Lead modificado: {lead.name} a estado {lead.status}")
+    
     return lead
 
 @app.get("/leads/{lead_id}/messages")
