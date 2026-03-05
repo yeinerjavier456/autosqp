@@ -137,7 +137,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
     // Notes & Files State
     const [noteContent, setNoteContent] = useState('');
     const [uploadingNote, setUploadingNote] = useState(false);
-    const [selectedFile, setSelectedFile] = useState(null);
+    const [selectedFiles, setSelectedFiles] = useState([]);
     const [uploadingFile, setUploadingFile] = useState(false);
     const [leadNotes, setLeadNotes] = useState([]);
     const [leadFiles, setLeadFiles] = useState([]);
@@ -237,24 +237,32 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
 
     const handleFileUpload = async (e) => {
         e.preventDefault();
-        if (!selectedFile) return;
+        if (!selectedFiles || selectedFiles.length === 0) return;
         setUploadingFile(true);
         try {
             const token = localStorage.getItem('token');
-            const formData = new FormData();
-            formData.append('file', selectedFile);
-            const res = await axios.post(`https://autosqp.co/api/leads/${lead.id}/files`, formData, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'multipart/form-data'
-                }
-            });
-            setLeadFiles([...leadFiles, res.data]);
-            setSelectedFile(null);
-            Swal.fire('Éxito', 'Archivo subido', 'success');
+            const newUploadedFiles = [];
+
+            for (const file of selectedFiles) {
+                const formData = new FormData();
+                formData.append('file', file);
+                const res = await axios.post(`https://autosqp.co/api/leads/${lead.id}/files`, formData, {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'multipart/form-data'
+                    }
+                });
+                newUploadedFiles.push(res.data);
+            }
+
+            setLeadFiles(prevFiles => [...prevFiles, ...newUploadedFiles]);
+            setSelectedFiles([]);
+            const fileInput = document.getElementById("file-upload-input");
+            if (fileInput) fileInput.value = "";
+            Swal.fire('Éxito', `${newUploadedFiles.length} Archivo(s) subido(s) correctamente`, 'success');
         } catch (error) {
             console.error("Error uploading file", error);
-            Swal.fire('Error', 'No se pudo subir el archivo', 'error');
+            Swal.fire('Error', 'No se pudieron subir los archivos', 'error');
         } finally {
             setUploadingFile(false);
         }
@@ -490,18 +498,20 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                                         <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Archivos Adjuntos / Documentos</h4>
                                         <div className="flex gap-2 mb-3 items-center">
                                             <input
+                                                id="file-upload-input"
                                                 type="file"
+                                                multiple
                                                 accept="image/*,.pdf,.doc,.docx"
                                                 className="flex-1 text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-orange-100 file:text-orange-700 hover:file:bg-orange-200"
-                                                onChange={(e) => setSelectedFile(e.target.files[0])}
+                                                onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
                                             />
                                             <button
                                                 type="button"
                                                 onClick={handleFileUpload}
-                                                disabled={uploadingFile || !selectedFile}
+                                                disabled={uploadingFile || selectedFiles.length === 0}
                                                 className="bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-orange-700 disabled:opacity-50"
                                             >
-                                                {uploadingFile ? 'Subiendo...' : 'Subir'}
+                                                {uploadingFile ? 'Subiendo...' : `Subir ${selectedFiles.length > 0 ? `(${selectedFiles.length})` : ''}`}
                                             </button>
                                         </div>
                                         {/* Lista de archivos */}
