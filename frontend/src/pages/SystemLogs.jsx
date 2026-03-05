@@ -108,11 +108,11 @@ function SystemLogs() {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-                                                {log.entity_type || 'General'} {log.entity_id ? `(#${log.entity_id})` : ''}
+                                                {{ 'User': 'Usuario', 'Lead': 'Lead', 'Vehicle': 'Vehículo', 'Auth': 'Autenticación', 'Sale': 'Venta' }[log.entity_type] || log.entity_type || 'General'} {log.entity_id ? `(#${log.entity_id})` : ''}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-700">
-                                            {log.action}
+                                            {{ 'CREATE': 'CREACIÓN', 'UPDATE': 'ACTUALIZACIÓN', 'DELETE': 'ELIMINACIÓN', 'LOGIN': 'INICIO DE SESIÓN' }[log.action] || log.action}
                                         </td>
                                         <td className="px-6 py-4 text-sm text-gray-500 max-w-xs break-words whitespace-pre-wrap">
                                             {log.details || '-'}

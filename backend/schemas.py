@@ -20,6 +20,7 @@ class LeadStatus(str, enum.Enum):
     QUALIFIED = "qualified"
     LOST = "lost"
     SOLD = "sold"
+    ALLY_MANAGED = "ally_managed"
 
 class VehicleStatus(str, enum.Enum):
     AVAILABLE = "available"
@@ -227,6 +228,7 @@ class LeadProcessDetailBase(BaseModel):
     has_vehicle: bool = False
     vehicle_id: Optional[int] = None
     desired_vehicle: Optional[str] = None
+    business_sheet_url: Optional[str] = None
 
 class LeadProcessDetailCreate(LeadProcessDetailBase):
     pass
@@ -236,6 +238,39 @@ class LeadProcessDetail(LeadProcessDetailBase):
     lead_id: int
     created_at: datetime
     updated_at: datetime
+    business_sheet_url: Optional[str] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class LeadNoteBase(BaseModel):
+    content: str
+
+class LeadNoteCreate(LeadNoteBase):
+    pass
+
+class LeadNote(LeadNoteBase):
+    id: int
+    lead_id: int
+    user_id: Optional[int] = None
+    created_at: datetime
+    user: Optional[User] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class LeadFileBase(BaseModel):
+    file_name: str
+    file_type: Optional[str] = None
+
+class LeadFileCreate(LeadFileBase):
+    pass
+
+class LeadFile(LeadFileBase):
+    id: int
+    lead_id: int
+    user_id: Optional[int] = None
+    file_path: str
+    created_at: datetime
+    user: Optional[User] = None
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -274,6 +309,8 @@ class Lead(LeadBase):
     history: List[LeadHistory] = []
     conversation: Optional[Conversation] = None
     process_detail: Optional[LeadProcessDetail] = None
+    notes: List[LeadNote] = []
+    files: List[LeadFile] = []
     
     model_config = ConfigDict(from_attributes=True)
 

@@ -26,7 +26,8 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory }) => {
                     status === 'new' ? '#3b82f6' :
                         status === 'contacted' ? '#eab308' :
                             status === 'interested' ? '#f97316' :
-                                status === 'sold' ? '#22c55e' : '#9ca3af',
+                                status === 'sold' ? '#22c55e' :
+                                    status === 'ally_managed' ? '#8b5cf6' : '#9ca3af',
                 borderLeftWidth: '6px'
             }}
         >
@@ -133,9 +134,19 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
     const [reminderDate, setReminderDate] = useState('');
     const [reminderNote, setReminderNote] = useState('');
 
+    // Notes & Files State
+    const [noteContent, setNoteContent] = useState('');
+    const [uploadingNote, setUploadingNote] = useState(false);
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [uploadingFile, setUploadingFile] = useState(false);
+    const [leadNotes, setLeadNotes] = useState([]);
+    const [leadFiles, setLeadFiles] = useState([]);
+
     useEffect(() => {
         if (lead && lead.id) {
             fetchMessages();
+            setLeadNotes(lead.notes || []);
+            setLeadFiles(lead.files || []);
         }
     }, [lead]);
 
@@ -199,6 +210,53 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
             Swal.fire('Error', 'No se pudo enviar el mensaje', 'error');
         } finally {
             setSendingReply(false);
+        }
+    };
+
+    const handleAddNote = async (e) => {
+        e.preventDefault();
+        if (!noteContent.trim()) return;
+        setUploadingNote(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await axios.post(`https://autosqp.co/api/leads/${lead.id}/notes`, {
+                content: noteContent
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setLeadNotes([...leadNotes, res.data]);
+            setNoteContent('');
+            Swal.fire('Éxito', 'Nota agregada', 'success');
+        } catch (error) {
+            console.error("Error adding note", error);
+            Swal.fire('Error', 'No se pudo agregar la nota', 'error');
+        } finally {
+            setUploadingNote(false);
+        }
+    };
+
+    const handleFileUpload = async (e) => {
+        e.preventDefault();
+        if (!selectedFile) return;
+        setUploadingFile(true);
+        try {
+            const token = localStorage.getItem('token');
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            const res = await axios.post(`https://autosqp.co/api/leads/${lead.id}/files`, formData, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+            setLeadFiles([...leadFiles, res.data]);
+            setSelectedFile(null);
+            Swal.fire('Éxito', 'Archivo subido', 'success');
+        } catch (error) {
+            console.error("Error uploading file", error);
+            Swal.fire('Error', 'No se pudo subir el archivo', 'error');
+        } finally {
+            setUploadingFile(false);
         }
     };
 
@@ -335,9 +393,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                                     >
                                         <option value="new">Nuevo</option>
                                         <option value="contacted">Contactado</option>
-                                        <option value="interested">Interesado</option>
-                                        <option value="lost">Perdido</option>
+                                        <option value="interested">En proceso</option>
                                         <option value="sold">Vendido</option>
+                                        <option value="ally_managed">Gestionado por Aliado</option>
+                                        <option value="lost">Perdido</option>
                                     </select>
                                 </div>
                                 <div className="sm:col-span-2">
@@ -390,6 +449,79 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                                             />
                                         </div>
                                     )}
+
+                                    {/* SECCIÓN DE NOTAS MÚLTIPLES */}
+                                    <div className="mt-4 border-t border-orange-200 pt-3">
+                                        <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Notas del Proceso</h4>
+                                        <div className="flex gap-2 mb-3">
+                                            <input
+                                                type="text"
+                                                className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-orange-500 bg-white"
+                                                placeholder="Agregar una nueva nota..."
+                                                value={noteContent}
+                                                onChange={(e) => setNoteContent(e.target.value)}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={handleAddNote}
+                                                disabled={uploadingNote || !noteContent.trim()}
+                                                className="bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-orange-700 disabled:opacity-50"
+                                            >
+                                                {uploadingNote ? 'Guardando...' : 'Agregar'}
+                                            </button>
+                                        </div>
+                                        {/* Lista de notas */}
+                                        {leadNotes.length > 0 && (
+                                            <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                                                {leadNotes.map((note) => (
+                                                    <div key={note.id} className="bg-white p-2 rounded border border-gray-100 shadow-sm text-sm">
+                                                        <p className="text-gray-800">{note.content}</p>
+                                                        <span className="text-[10px] text-gray-400">
+                                                            {new Date(note.created_at).toLocaleString()}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* SECCIÓN DE ARCHIVOS */}
+                                    <div className="mt-4 border-t border-orange-200 pt-3">
+                                        <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Archivos Adjuntos / Documentos</h4>
+                                        <div className="flex gap-2 mb-3 items-center">
+                                            <input
+                                                type="file"
+                                                accept="image/*,.pdf,.doc,.docx"
+                                                className="flex-1 text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-orange-100 file:text-orange-700 hover:file:bg-orange-200"
+                                                onChange={(e) => setSelectedFile(e.target.files[0])}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={handleFileUpload}
+                                                disabled={uploadingFile || !selectedFile}
+                                                className="bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-orange-700 disabled:opacity-50"
+                                            >
+                                                {uploadingFile ? 'Subiendo...' : 'Subir'}
+                                            </button>
+                                        </div>
+                                        {/* Lista de archivos */}
+                                        {leadFiles.length > 0 && (
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                                                {leadFiles.map((file) => (
+                                                    <a key={file.id} href={`https://autosqp.co/api${file.file_path}`} target="_blank" rel="noopener noreferrer" className="bg-white p-2 rounded border border-gray-200 hover:border-orange-500 transition shadow-sm flex flex-col items-center gap-1 group">
+                                                        {file.file_type && file.file_type.includes('image') ? (
+                                                            <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center overflow-hidden">
+                                                                <img src={`https://autosqp.co/api${file.file_path}`} alt="File" className="w-full h-full object-cover" />
+                                                            </div>
+                                                        ) : (
+                                                            <svg className="w-8 h-8 text-gray-400 group-hover:text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                                                        )}
+                                                        <span className="text-[10px] text-gray-600 truncate w-full text-center">{file.file_name}</span>
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
 
@@ -487,8 +619,9 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                                                         <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                                                         <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded text-white 
                                                                 ${record.new_status === 'sold' ? 'bg-green-500' :
-                                                                record.new_status === 'lost' ? 'bg-gray-500' : 'bg-blue-500'}`}>
-                                                            {record.new_status}
+                                                                record.new_status === 'ally_managed' ? 'bg-purple-500' :
+                                                                    record.new_status === 'lost' ? 'bg-gray-500' : 'bg-blue-500'}`}>
+                                                            {record.new_status === 'ally_managed' ? 'gestionado por aliado' : record.new_status}
                                                         </span>
                                                     </div>
                                                     <span className="text-[10px] text-gray-400 font-mono">
@@ -939,6 +1072,7 @@ const LeadsBoard = () => {
                                     <option value="contacted">Contactados</option>
                                     <option value="interested">En proceso</option>
                                     <option value="sold">Vendidos</option>
+                                    <option value="ally_managed">Gestionados por Aliado</option>
                                     <option value="lost">Perdidos</option>
                                 </select>
                             </div>
@@ -1033,6 +1167,16 @@ const LeadsBoard = () => {
                     onViewHistory={handleViewHistory}
                 />
                 <KanbanColumn
+                    title="Gestionado por Aliado"
+                    status="ally_managed"
+                    color="text-purple-600"
+                    leads={filterByStatus('ally_managed')}
+                    onDragStart={handleDragStart}
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                    onViewHistory={handleViewHistory}
+                />
+                <KanbanColumn
                     title="Perdidos"
                     status="lost"
                     color="text-gray-400"
@@ -1055,7 +1199,8 @@ const LeadsBoard = () => {
                                     pendingStatusChange?.newStatus === 'contacted' ? 'CONTACTADO' :
                                         pendingStatusChange?.newStatus === 'interested' ? 'INTERESADO' :
                                             pendingStatusChange?.newStatus === 'lost' ? 'PERDIDO' :
-                                                pendingStatusChange?.newStatus === 'sold' ? 'VENDIDO' : pendingStatusChange?.newStatus}
+                                                pendingStatusChange?.newStatus === 'sold' ? 'VENDIDO' :
+                                                    pendingStatusChange?.newStatus === 'ally_managed' ? 'GESTIONADO POR ALIADO' : pendingStatusChange?.newStatus}
                             </span>.
                             <br />Por favor, indica el motivo o un comentario para el seguimiento.
                         </p>

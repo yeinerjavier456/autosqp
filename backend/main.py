@@ -66,7 +66,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     )
     
     # Log the successful login
-    log_action_to_db(db, user.id, "LOGIN", "Auth", user.id, "User logged in successfully")
+    log_action_to_db(db, user.id, "LOGIN", "Auth", user.id, "Usuario inició sesión exitosamente")
     
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -419,7 +419,9 @@ def read_leads(
     query = db.query(models.Lead).options(
         joinedload(models.Lead.assigned_to),
         joinedload(models.Lead.history),
-        joinedload(models.Lead.conversation).joinedload(models.Conversation.messages)
+        joinedload(models.Lead.conversation).joinedload(models.Conversation.messages),
+        joinedload(models.Lead.notes),
+        joinedload(models.Lead.files)
     )
     
     # Filter by user company
@@ -850,6 +852,76 @@ def update_lead(
     log_action_to_db(db, current_user.id, "UPDATE", "Lead", lead.id, f"Lead modificado: {lead.name} a estado {lead.status}")
     
     return lead
+
+# --- LEAD NOTES AND FILES ENDPOINTS ---
+
+@app.post("/leads/{lead_id}/notes", response_model=schemas.LeadNote)
+def create_lead_note(
+    lead_id: int, 
+    note: schemas.LeadNoteCreate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    lead = db.query(models.Lead).filter(models.Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+        
+    if current_user.company_id and lead.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    db_note = models.LeadNote(
+        lead_id=lead_id,
+        user_id=current_user.id,
+        content=note.content
+    )
+    db.add(db_note)
+    db.commit()
+    db.refresh(db_note)
+    
+    log_action_to_db(db, current_user.id, "CREATE", "LeadNote", db_note.id, f"Nota agregada al lead {lead.name}")
+    
+    return db_note
+
+@app.post("/leads/{lead_id}/files", response_model=schemas.LeadFile)
+async def upload_lead_file(
+    lead_id: int, 
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    import os
+    import uuid
+    import shutil
+    
+    lead = db.query(models.Lead).filter(models.Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+        
+    if current_user.company_id and lead.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    os.makedirs("static/leads", exist_ok=True)
+    file_extension = file.filename.split(".")[-1]
+    unique_filename = f"{uuid.uuid4()}.{file_extension}"
+    file_path = f"static/leads/{unique_filename}"
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    db_file = models.LeadFile(
+        lead_id=lead_id,
+        user_id=current_user.id,
+        file_name=file.filename,
+        file_path=f"/{file_path}",
+        file_type=file.content_type
+    )
+    db.add(db_file)
+    db.commit()
+    db.refresh(db_file)
+    
+    log_action_to_db(db, current_user.id, "CREATE", "LeadFile", db_file.id, f"Archivo adjuntado al lead {lead.name}")
+    
+    return db_file
 
 @app.get("/leads/{lead_id}/messages")
 def get_lead_messages(

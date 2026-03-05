@@ -71,6 +71,7 @@ class LeadStatus(str, enum.Enum):
     QUALIFIED = "qualified"
     LOST = "lost"
     SOLD = "sold"
+    ALLY_MANAGED = "ally_managed"
 
 class Lead(Base):
     __tablename__ = "leads"
@@ -97,6 +98,34 @@ class Lead(Base):
     history = relationship("LeadHistory", back_populates="lead")
     conversation = relationship("Conversation", back_populates="lead", uselist=False)
     process_detail = relationship("LeadProcessDetail", back_populates="lead", uselist=False)
+    notes = relationship("LeadNote", back_populates="lead", cascade="all, delete-orphan")
+    files = relationship("LeadFile", back_populates="lead", cascade="all, delete-orphan")
+
+class LeadNote(Base):
+    __tablename__ = "lead_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    lead = relationship("Lead", back_populates="notes")
+    user = relationship("User")
+
+class LeadFile(Base):
+    __tablename__ = "lead_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    file_name = Column(String(255), nullable=False)
+    file_path = Column(String(1000), nullable=False)
+    file_type = Column(String(50), nullable=True) # e.g., image/png, application/pdf
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    lead = relationship("Lead", back_populates="files")
+    user = relationship("User")
 
 class LeadHistory(Base):
     __tablename__ = "lead_history"
@@ -120,6 +149,7 @@ class LeadProcessDetail(Base):
     has_vehicle = Column(Boolean, default=False)
     vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=True) # Si tiene el vehículo
     desired_vehicle = Column(String(200), nullable=True) # Si no lo tiene
+    business_sheet_url = Column(String(500), nullable=True) # Ruta del archivo
     
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
