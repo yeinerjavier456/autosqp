@@ -337,7 +337,9 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                             >
                                 <option value="">Sin asignar</option>
                                 {advisors && advisors.map(adv => (
-                                    <option key={adv.id} value={adv.id}>{adv.full_name || adv.email}</option>
+                                    <option key={adv.id} value={adv.id}>
+                                        {adv.full_name || adv.email} - {adv.role?.name || (typeof adv.role === 'string' ? adv.role : 'Usuario')}
+                                    </option>
                                 ))}
                             </select>
                         </div>
@@ -1307,7 +1309,7 @@ const LeadsBoard = () => {
                                         <option value="">(Yo mismo) - {user.email}</option>
                                         {advisors.map(adv => (
                                             <option key={adv.id} value={adv.id}>
-                                                {adv.email} {adv.id === selectedLeadForSale?.assigned_to?.id ? '(Asignado)' : ''}
+                                                {adv.full_name || adv.email} - {adv.role?.name || (typeof adv.role === 'string' ? adv.role : 'Usuario')} {adv.id === selectedLeadForSale?.assigned_to?.id ? '(Asignado)' : ''}
                                             </option>
                                         ))}
                                     </select>
