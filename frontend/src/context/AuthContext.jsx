@@ -9,7 +9,7 @@ export const AuthProvider = ({ children }) => {
 
     const login = async (token) => {
         localStorage.setItem('token', token);
-        await fetchUser();
+        return await fetchUser();
     };
 
     const logout = () => {
@@ -29,10 +29,12 @@ export const AuthProvider = ({ children }) => {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setUser(response.data);
+            return response.data;
         } catch (error) {
             console.error("Error fetching user", error);
             localStorage.removeItem('token');
             setUser(null);
+            return null;
         } finally {
             setLoading(false);
         }

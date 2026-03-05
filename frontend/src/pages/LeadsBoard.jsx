@@ -457,83 +457,83 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                                             />
                                         </div>
                                     )}
-
-                                    {/* SECCIÓN DE NOTAS MÚLTIPLES */}
-                                    <div className="mt-4 border-t border-orange-200 pt-3">
-                                        <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Notas del Proceso</h4>
-                                        <div className="flex gap-2 mb-3">
-                                            <input
-                                                type="text"
-                                                className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-orange-500 bg-white"
-                                                placeholder="Agregar una nueva nota..."
-                                                value={noteContent}
-                                                onChange={(e) => setNoteContent(e.target.value)}
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={handleAddNote}
-                                                disabled={uploadingNote || !noteContent.trim()}
-                                                className="bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-orange-700 disabled:opacity-50"
-                                            >
-                                                {uploadingNote ? 'Guardando...' : 'Agregar'}
-                                            </button>
-                                        </div>
-                                        {/* Lista de notas */}
-                                        {leadNotes.length > 0 && (
-                                            <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-                                                {leadNotes.map((note) => (
-                                                    <div key={note.id} className="bg-white p-2 rounded border border-gray-100 shadow-sm text-sm">
-                                                        <p className="text-gray-800">{note.content}</p>
-                                                        <span className="text-[10px] text-gray-400">
-                                                            {new Date(note.created_at).toLocaleString()}
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* SECCIÓN DE ARCHIVOS */}
-                                    <div className="mt-4 border-t border-orange-200 pt-3">
-                                        <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Archivos Adjuntos / Documentos</h4>
-                                        <div className="flex gap-2 mb-3 items-center">
-                                            <input
-                                                id="file-upload-input"
-                                                type="file"
-                                                multiple
-                                                accept="image/*,.pdf,.doc,.docx"
-                                                className="flex-1 text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-orange-100 file:text-orange-700 hover:file:bg-orange-200"
-                                                onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={handleFileUpload}
-                                                disabled={uploadingFile || selectedFiles.length === 0}
-                                                className="bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-orange-700 disabled:opacity-50"
-                                            >
-                                                {uploadingFile ? 'Subiendo...' : `Subir ${selectedFiles.length > 0 ? `(${selectedFiles.length})` : ''}`}
-                                            </button>
-                                        </div>
-                                        {/* Lista de archivos */}
-                                        {leadFiles.length > 0 && (
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-                                                {leadFiles.map((file) => (
-                                                    <a key={file.id} href={`https://autosqp.co/api${file.file_path}`} target="_blank" rel="noopener noreferrer" className="bg-white p-2 rounded border border-gray-200 hover:border-orange-500 transition shadow-sm flex flex-col items-center gap-1 group">
-                                                        {file.file_type && file.file_type.includes('image') ? (
-                                                            <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center overflow-hidden">
-                                                                <img src={`https://autosqp.co/api${file.file_path}`} alt="File" className="w-full h-full object-cover" />
-                                                            </div>
-                                                        ) : (
-                                                            <svg className="w-8 h-8 text-gray-400 group-hover:text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                                                        )}
-                                                        <span className="text-[10px] text-gray-600 truncate w-full text-center">{file.file_name}</span>
-                                                    </a>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
                                 </div>
                             )}
+
+                            {/* SECCIÓN DE NOTAS MÚLTIPLES - Siempre visible */}
+                            <div className="mt-4 border-t border-gray-200 pt-3">
+                                <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Notas del Proceso</h4>
+                                <div className="flex gap-2 mb-3">
+                                    <input
+                                        type="text"
+                                        className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-orange-500 bg-white"
+                                        placeholder="Agregar una nueva nota..."
+                                        value={noteContent}
+                                        onChange={(e) => setNoteContent(e.target.value)}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleAddNote}
+                                        disabled={uploadingNote || !noteContent.trim()}
+                                        className="bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-orange-700 disabled:opacity-50"
+                                    >
+                                        {uploadingNote ? 'Guardando...' : 'Agregar'}
+                                    </button>
+                                </div>
+                                {/* Lista de notas */}
+                                {leadNotes.length > 0 && (
+                                    <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                                        {leadNotes.map((note) => (
+                                            <div key={note.id} className="bg-white p-2 rounded border border-gray-100 shadow-sm text-sm">
+                                                <p className="text-gray-800">{note.content}</p>
+                                                <span className="text-[10px] text-gray-400">
+                                                    {new Date(note.created_at).toLocaleString()}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* SECCIÓN DE ARCHIVOS */}
+                            <div className="mt-4 border-t border-gray-200 pt-3">
+                                <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Archivos Adjuntos / Documentos</h4>
+                                <div className="flex gap-2 mb-3 items-center">
+                                    <input
+                                        id="file-upload-input"
+                                        type="file"
+                                        multiple
+                                        accept="*"
+                                        className="flex-1 text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-orange-100 file:text-orange-700 hover:file:bg-orange-200"
+                                        onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleFileUpload}
+                                        disabled={uploadingFile || selectedFiles.length === 0}
+                                        className="bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-orange-700 disabled:opacity-50"
+                                    >
+                                        {uploadingFile ? 'Subiendo...' : `Subir ${selectedFiles.length > 0 ? `(${selectedFiles.length})` : ''}`}
+                                    </button>
+                                </div>
+                                {/* Lista de archivos */}
+                                {leadFiles.length > 0 && (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                                        {leadFiles.map((file) => (
+                                            <a key={file.id} href={`https://autosqp.co/api${file.file_path}`} target="_blank" rel="noopener noreferrer" className="bg-white p-2 rounded border border-gray-200 hover:border-orange-500 transition shadow-sm flex flex-col items-center gap-1 group">
+                                                {file.file_type && file.file_type.includes('image') ? (
+                                                    <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center overflow-hidden">
+                                                        <img src={`https://autosqp.co/api${file.file_path}`} alt="File" className="w-full h-full object-cover" />
+                                                    </div>
+                                                ) : (
+                                                    <svg className="w-8 h-8 text-gray-400 group-hover:text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                                                )}
+                                                <span className="text-[10px] text-gray-600 truncate w-full text-center">{file.file_name}</span>
+                                            </a>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
 
                             <button
                                 type="submit"
@@ -668,6 +668,7 @@ const LeadsBoard = () => {
     const [userFilter, setUserFilter] = useState('');
     const [globalStatusFilter, setGlobalStatusFilter] = useState('');
     const [showFiltersMenu, setShowFiltersMenu] = useState(false);
+    const [showMyLeadsOnly, setShowMyLeadsOnly] = useState(false);
 
     // Modal State - Sales
     const [showSaleModal, setShowSaleModal] = useState(false);
@@ -768,8 +769,7 @@ const LeadsBoard = () => {
             const response = await axios.get('https://autosqp.co/api/users/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            const validRoles = ['advisor', 'seller', 'vendedor', 'asesor'];
-            const users = response.data.items.filter(u => validRoles.includes(u.role?.name));
+            const users = response.data.items; // Permite todos los usuarios de la empresa
             setAdvisors(users);
         } catch (error) {
             console.error("Error fetching advisors", error);
@@ -991,35 +991,26 @@ const LeadsBoard = () => {
     };
 
     const filterByStatus = (status) => {
-        return leads.filter(l => {
-            if (l.status !== status) return false;
+        return leads.filter(lead => {
+            const matchesStatus = lead.status === status;
+            const matchesSearch =
+                lead.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                lead.phone?.includes(searchTerm);
 
-            if (searchTerm) {
-                const term = searchTerm.toLowerCase();
-                const matchName = l.name?.toLowerCase().includes(term);
-                const matchPhone = l.phone?.toLowerCase().includes(term);
-                if (!matchName && !matchPhone) return false;
-            }
+            const matchesDate = !dateFilter || lead.created_at?.startsWith(dateFilter);
 
-            if (dateFilter) {
-                const leadDate = l.created_at ? l.created_at.substring(0, 10) : '';
-                if (leadDate !== dateFilter) return false;
-            }
+            // "Mis Leads" Filter (Priority)
+            const matchesMyLeads = !showMyLeadsOnly || lead.assigned_to?.id === user?.id;
 
-            if (assignedFilter) {
-                if (assignedFilter === 'assigned' && !l.assigned_to) return false;
-                if (assignedFilter === 'unassigned' && l.assigned_to) return false;
-            }
+            // Specific User filter
+            const matchesUser = !userFilter || lead.assigned_to?.id === parseInt(userFilter);
 
-            if (userFilter) {
-                if (!l.assigned_to || l.assigned_to.id !== parseInt(userFilter)) return false;
-            }
+            const matchesAssigned = !assignedFilter ||
+                (assignedFilter === 'assigned' ? !!lead.assigned_to : !lead.assigned_to);
 
-            if (globalStatusFilter) {
-                if (l.status !== globalStatusFilter) return false;
-            }
+            const matchesGlobalStatus = !globalStatusFilter || lead.status === globalStatusFilter;
 
-            return true;
+            return matchesStatus && matchesSearch && matchesDate && matchesUser && matchesAssigned && matchesGlobalStatus && matchesMyLeads;
         });
     };
 
@@ -1145,6 +1136,32 @@ const LeadsBoard = () => {
                                     value={dateFilter}
                                     onChange={(e) => setDateFilter(e.target.value)}
                                 />
+                            </div>
+
+                            <div className="md:col-span-1 flex items-end pb-1">
+                                <label className="flex items-center gap-3 cursor-pointer group bg-blue-50/50 px-4 py-2 rounded-xl border border-blue-100/50 hover:bg-blue-50 transition-colors w-full">
+                                    <div className="relative flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-slate-300 transition-all checked:border-blue-600 checked:bg-blue-600 focus:ring-2 focus:ring-blue-400"
+                                            checked={showMyLeadsOnly}
+                                            onChange={(e) => setShowMyLeadsOnly(e.target.checked)}
+                                        />
+                                        <svg
+                                            className="absolute h-3.5 w-3.5 text-white opacity-0 peer-checked:opacity-100 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="4"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        >
+                                            <polyline points="20 6 9 17 4 12"></polyline>
+                                        </svg>
+                                    </div>
+                                    <span className="text-sm font-bold text-blue-800 select-none">Mis Leads 👤</span>
+                                </label>
                             </div>
                         </div>
                     )}

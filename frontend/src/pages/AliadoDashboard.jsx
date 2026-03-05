@@ -374,9 +374,19 @@ const HistoryModal = ({ lead, onClose, onAddNote }) => {
     const [newNote, setNewNote] = useState('');
     const [newStatus, setNewStatus] = useState(lead.status || 'new');
 
+    // Notes & Files State
+    const [noteContent, setNoteContent] = useState('');
+    const [uploadingNote, setUploadingNote] = useState(false);
+    const [selectedFiles, setSelectedFiles] = useState([]);
+    const [uploadingFile, setUploadingFile] = useState(false);
+    const [leadNotes, setLeadNotes] = useState(lead.notes || []);
+    const [leadFiles, setLeadFiles] = useState(lead.files || []);
+
     useEffect(() => {
         if (lead) {
             setNewStatus(lead.status || 'new');
+            setLeadNotes(lead.notes || []);
+            setLeadFiles(lead.files || []);
         }
     }, [lead]);
 
@@ -390,6 +400,79 @@ const HistoryModal = ({ lead, onClose, onAddNote }) => {
         e.preventDefault();
         onAddNote(lead.id, newNote, newStatus);
         setNewNote('');
+    };
+
+    const handleAddInternalNote = async (e) => {
+        e.preventDefault();
+        if (!noteContent.trim()) return;
+        setUploadingNote(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await axios.post(`https://autosqp.co/api/leads/${lead.id}/notes`, {
+                content: noteContent
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setLeadNotes([...leadNotes, res.data]);
+            setNoteContent('');
+            Swal.fire({
+                icon: 'success',
+                title: 'Éxito',
+                text: 'Nota agregada',
+                confirmButtonColor: '#2563eb'
+            });
+        } catch (error) {
+            console.error("Error adding note", error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'No se pudo agregar la nota',
+                confirmButtonColor: '#2563eb'
+            });
+        } finally {
+            setUploadingNote(false);
+        }
+    };
+
+    const handleFileUpload = async (e) => {
+        e.preventDefault();
+        if (!selectedFiles || selectedFiles.length === 0) return;
+        setUploadingFile(true);
+        try {
+            const token = localStorage.getItem('token');
+            const newUploadedFiles = [];
+            for (const file of selectedFiles) {
+                const formData = new FormData();
+                formData.append('file', file);
+                const res = await axios.post(`https://autosqp.co/api/leads/${lead.id}/files`, formData, {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'multipart/form-data'
+                    }
+                });
+                newUploadedFiles.push(res.data);
+            }
+            setLeadFiles(prevFiles => [...prevFiles, ...newUploadedFiles]);
+            setSelectedFiles([]);
+            const fileInput = document.getElementById("aliado-file-upload");
+            if (fileInput) fileInput.value = "";
+            Swal.fire({
+                icon: 'success',
+                title: 'Éxito',
+                text: `${newUploadedFiles.length} Archivo(s) subido(s) correctamente`,
+                confirmButtonColor: '#2563eb'
+            });
+        } catch (error) {
+            console.error("Error uploading file", error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'No se pudieron subir los archivos',
+                confirmButtonColor: '#2563eb'
+            });
+        } finally {
+            setUploadingFile(false);
+        }
     };
 
     return (
@@ -432,10 +515,10 @@ const HistoryModal = ({ lead, onClose, onAddNote }) => {
                         <>
                             {/* Add Note Section */}
                             <form onSubmit={handleNoteSubmit} className="bg-blue-50/50 p-3 rounded-xl border border-blue-100 mb-4">
-                                <label className="block text-xs font-bold text-blue-800 mb-1">Actualizar Estado / Agregar Nota</label>
+                                <label className="block text-xs font-bold text-blue-800 mb-1">Actualizar Estado / Agregar Nota al Historial</label>
                                 <div className="flex flex-col gap-2">
                                     <select
-                                        className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                        className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white font-bold text-blue-700"
                                         value={newStatus}
                                         onChange={(e) => setNewStatus(e.target.value)}
                                     >
@@ -463,6 +546,73 @@ const HistoryModal = ({ lead, onClose, onAddNote }) => {
                                     </div>
                                 </div>
                             </form>
+
+                            {/* SECCIÓN DE NOTAS MÚLTIPLES */}
+                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-4">
+                                <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Notas Detalladas</h4>
+                                <div className="flex gap-2 mb-3">
+                                    <input
+                                        type="text"
+                                        className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                        placeholder="Nueva nota de seguimiento..."
+                                        value={noteContent}
+                                        onChange={(e) => setNoteContent(e.target.value)}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleAddInternalNote}
+                                        disabled={uploadingNote || !noteContent.trim()}
+                                        className="bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 disabled:opacity-50"
+                                    >
+                                        {uploadingNote ? '...' : 'Añadir'}
+                                    </button>
+                                </div>
+                                {leadNotes.length > 0 && (
+                                    <div className="space-y-2 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
+                                        {leadNotes.map((note) => (
+                                            <div key={note.id} className="bg-white p-2 rounded border border-gray-100 shadow-sm text-sm">
+                                                <p className="text-gray-800">{note.content}</p>
+                                                <span className="text-[10px] text-gray-400">
+                                                    {new Date(note.created_at).toLocaleString()}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* SECCIÓN DE ARCHIVOS */}
+                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-4">
+                                <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Documentos y Adjuntos</h4>
+                                <div className="flex gap-2 mb-3 items-center">
+                                    <input
+                                        id="aliado-file-upload"
+                                        type="file"
+                                        multiple
+                                        accept="*"
+                                        className="flex-1 text-[10px] text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-indigo-100 file:text-indigo-700"
+                                        onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleFileUpload}
+                                        disabled={uploadingFile || selectedFiles.length === 0}
+                                        className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-700 disabled:opacity-50"
+                                    >
+                                        {uploadingFile ? '...' : `Subir ${selectedFiles.length > 0 ? `(${selectedFiles.length})` : ''}`}
+                                    </button>
+                                </div>
+                                {leadFiles.length > 0 && (
+                                    <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
+                                        {leadFiles.map((file) => (
+                                            <a key={file.id} href={`https://autosqp.co/api${file.file_path}`} target="_blank" rel="noopener noreferrer" className="bg-white p-2 rounded border border-gray-200 hover:border-indigo-500 transition shadow-sm flex items-center gap-2 group">
+                                                <svg className="w-5 h-5 text-gray-400 group-hover:text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                                                <span className="text-[10px] text-gray-600 truncate flex-1">{file.file_name}</span>
+                                            </a>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
 
                             {lead.history && lead.history.length > 0 ? (
                                 [...lead.history].reverse().map((record) => (

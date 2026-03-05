@@ -26,8 +26,15 @@ const LoginPage = () => {
             });
 
             // Use context login which sets token and fetches user
-            await login(response.data.access_token);
-            navigate('/admin/dashboard');
+            const loggedUser = await login(response.data.access_token);
+
+            const roleName = loggedUser?.role?.name || (typeof loggedUser?.role === 'string' ? loggedUser?.role : '');
+
+            if (roleName === 'asesor' || roleName === 'aliado') {
+                navigate('/admin/leads');
+            } else {
+                navigate('/admin/dashboard');
+            }
 
         } catch (err) {
             console.error(err);

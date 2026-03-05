@@ -107,7 +107,7 @@ def log_action_to_db(db: Session, user_id: int, action: str, entity_type: str, e
 @app.get("/users/", response_model=schemas.UserList)
 def read_users(
     skip: int = 0, 
-    limit: int = 20, 
+    limit: int = 100, 
     q: str = None, 
     role_id: int = None,
     db: Session = Depends(get_db), 
