@@ -5,7 +5,7 @@ from database import DATABASE_URL
 import traceback
 
 def alterar_tabla_business_sheet():
-    engine = create_engine(SQLALCHEMY_DATABASE_URL)
+    engine = create_engine(DATABASE_URL)
     
     try:
         with engine.begin() as conn:
