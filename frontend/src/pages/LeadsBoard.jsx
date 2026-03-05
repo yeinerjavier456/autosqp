@@ -722,13 +722,16 @@ const LeadsBoard = () => {
                 title: 'Lead Creado',
                 text: 'El lead se ha creado exitosamente.',
                 timer: 2000,
-                showConfirmButton: false
+                showConfirmButton: false,
+                confirmButtonColor: '#2563eb'
             });
         } catch (error) {
+            console.error("Error creating lead", error);
             Swal.fire({
                 icon: 'error',
                 title: 'Error',
-                text: "Error creando el lead: " + (error.response?.data?.detail || error.message)
+                text: "Error creando el lead: " + (error.response?.data?.error || error.response?.data?.detail || error.message),
+                confirmButtonColor: '#2563eb'
             });
         }
     };
@@ -854,7 +857,12 @@ const LeadsBoard = () => {
 
         } catch (error) {
             console.error("Error updating lead", error);
-            Swal.fire('Error', 'No se pudo actualizar el estado', 'error');
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'No se pudo actualizar el estado: ' + (error.response?.data?.error || error.message),
+                confirmButtonColor: '#2563eb'
+            });
             fetchLeads(); // Revert
         }
     };
@@ -891,12 +899,18 @@ const LeadsBoard = () => {
                 title: 'Actualizado',
                 text: 'El lead ha sido actualizado correctamente.',
                 timer: 1500,
-                showConfirmButton: false
+                showConfirmButton: false,
+                confirmButtonColor: '#2563eb'
             });
             setShowHistoryModal(false); // Optional: close or keep open
         } catch (error) {
             console.error("Error updating lead history", error);
-            Swal.fire('Error', 'No se pudo actualizar el lead', 'error');
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'No se pudo actualizar el lead: ' + (error.response?.data?.error || error.message),
+                confirmButtonColor: '#2563eb'
+            });
             throw error; // Propagate to modal to stop loading state
         }
     };
@@ -919,7 +933,8 @@ const LeadsBoard = () => {
                 title: 'Lead Asignado',
                 text: 'El responsable del lead ha sido actualizado.',
                 timer: 1500,
-                showConfirmButton: false
+                showConfirmButton: false,
+                confirmButtonColor: '#2563eb'
             });
             fetchLeads(); // Refresh board to show new assignee initial
         } catch (error) {
@@ -962,13 +977,15 @@ const LeadsBoard = () => {
                 title: '¡Venta Registrada!',
                 text: 'La venta ha sido creada exitosamente.',
                 timer: 2000,
-                showConfirmButton: false
+                showConfirmButton: false,
+                confirmButtonColor: '#2563eb'
             });
         } catch (error) {
             Swal.fire({
                 icon: 'error',
                 title: 'Error',
-                text: "Error registrando la venta: " + (error.response?.data?.detail || error.message)
+                text: "Error registrando la venta: " + (error.response?.data?.error || error.response?.data?.detail || error.message),
+                confirmButtonColor: '#2563eb'
             });
         }
     };

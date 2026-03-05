@@ -5,14 +5,28 @@ from sqlalchemy.orm import Session, joinedload
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, get_db
 import models, schemas, auth_utils
+from models import LeadNote, LeadFile # Explicitly for create_all to see them
 from routers import whatsapp, credits, notifications, rules, vehicles, meta # Import the new routers
 from jose import JWTError, jwt
 import datetime
 import os
-# We don't need to call create_all if we are using Alembic, but it's safe to keep for dev if Alembic isn't run
+import traceback
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+# Create tables
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="AutosQP API", description="API para gestión de compra venta de carros")
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    print("CRITICAL ERROR IN REQUEST:", request.url, flush=True)
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "error": str(exc)}
+    )
 
 app.include_router(whatsapp.router) # Register the router
 app.include_router(credits.router) # Register credits router
