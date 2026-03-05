@@ -22,7 +22,7 @@ const AliadoDashboard = () => {
         phone: '',
         source: 'referral', // Default for Aliado
         message: '',
-        status: 'new',
+        status: 'ally_managed', // Default status for Ally leads
         assigned_to_id: ''
     });
 
@@ -91,7 +91,7 @@ const AliadoDashboard = () => {
                 phone: '',
                 source: 'referral',
                 message: '',
-                status: 'new',
+                status: 'ally_managed',
                 assigned_to_id: ''
             });
 
@@ -117,14 +117,16 @@ const AliadoDashboard = () => {
             contacted: 'bg-yellow-100 text-yellow-800',
             interested: 'bg-orange-100 text-orange-800',
             sold: 'bg-green-100 text-green-800',
-            lost: 'bg-gray-100 text-gray-800'
+            lost: 'bg-gray-100 text-gray-800',
+            ally_managed: 'bg-indigo-100 text-indigo-800'
         };
         const labels = {
             new: 'Nuevo',
             contacted: 'Contactado',
             interested: 'Interesado',
             sold: 'Vendido',
-            lost: 'Perdido'
+            lost: 'Perdido',
+            ally_managed: 'Nuevo (En Revisión)' // Mask ally_managed as Nuevo for Aliado
         };
         return (
             <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${colors[status] || 'bg-gray-100'}`}>
@@ -522,7 +524,7 @@ const HistoryModal = ({ lead, onClose, onAddNote }) => {
                                         value={newStatus}
                                         onChange={(e) => setNewStatus(e.target.value)}
                                     >
-                                        <option value="new">Nuevo</option>
+                                        <option value="ally_managed">Nuevo (En Revisión)</option>
                                         <option value="contacted">Contactado</option>
                                         <option value="interested">Interesado</option>
                                         <option value="sold">Vendido</option>
