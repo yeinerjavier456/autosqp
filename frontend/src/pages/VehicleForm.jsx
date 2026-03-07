@@ -66,6 +66,7 @@ const VehicleForm = () => {
             setBrands(brandsData);
 
             if (brandsData.length === 0) {
+                await axios.post('https://autosqp.co/api/seed/brands/external?max_makes=100&max_models_per_make=120&include_models=true');
                 await axios.post('https://autosqp.co/api/seed/brands/from-vehicles');
                 const syncedResponse = await axios.get('https://autosqp.co/api/brands/');
                 setBrands(syncedResponse.data || []);
@@ -144,8 +145,14 @@ const VehicleForm = () => {
     const handleSeedBrands = async () => {
         try {
             setLoading(true);
-            const response = await axios.post('https://autosqp.co/api/seed/brands/from-vehicles');
-            Swal.fire('Info', response.data.message, 'info');
+            const externalResponse = await axios.post('https://autosqp.co/api/seed/brands/external?max_makes=100&max_models_per_make=120&include_models=true');
+            const localResponse = await axios.post('https://autosqp.co/api/seed/brands/from-vehicles');
+
+            Swal.fire(
+                'Catálogo actualizado',
+                `${externalResponse.data.message}. Marcas: ${externalResponse.data.brands_created || 0}, modelos: ${externalResponse.data.models_created || 0}. Local: ${localResponse.data.message}`,
+                'success'
+            );
             fetchBrands();
         } catch (error) {
             console.error("Error seeding", error);
@@ -262,7 +269,7 @@ const VehicleForm = () => {
                 </div>
                 {!isReadOnly && brands.length === 0 && (
                     <button onClick={handleSeedBrands} className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded">
-                        Sincronizar Marcas
+                        Poblar Catálogo
                     </button>
                 )}
             </div>

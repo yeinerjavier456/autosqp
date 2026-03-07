@@ -12,6 +12,8 @@ from jose import JWTError, jwt
 import datetime
 import os
 import traceback
+import requests
+import time
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
@@ -893,6 +895,107 @@ def seed_brands_from_vehicles(db: Session = Depends(get_db)):
         "message": "Sincronizacion completada",
         "brands_created": brands_created,
         "models_created": models_created
+    }
+
+@app.post("/seed/brands/external")
+def seed_brands_external(
+    max_makes: int = Query(80, ge=1, le=250),
+    max_models_per_make: int = Query(120, ge=1, le=500),
+    include_models: bool = Query(True),
+    db: Session = Depends(get_db)
+):
+    """
+    Pobla catalogo desde la API publica vPIC de NHTSA.
+    Fuente:
+    - https://vpic.nhtsa.dot.gov/api/vehicles/GetAllMakes?format=json
+    - https://vpic.nhtsa.dot.gov/api/vehicles/GetModelsForMakeId/{make_id}?format=json
+    """
+    base_url = "https://vpic.nhtsa.dot.gov/api/vehicles"
+
+    try:
+        makes_resp = requests.get(f"{base_url}/GetAllMakes?format=json", timeout=30)
+        makes_resp.raise_for_status()
+        makes_data = makes_resp.json().get("Results", [])
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"No se pudo consultar catalogo externo: {str(exc)}")
+
+    if not makes_data:
+        return {
+            "message": "La fuente externa no devolvio marcas.",
+            "brands_created": 0,
+            "models_created": 0,
+            "makes_processed": 0
+        }
+
+    # Marcas existentes por nombre normalizado
+    existing_brands = db.query(models.CarBrand).all()
+    brands_by_key = {b.name.lower(): b for b in existing_brands if b.name}
+
+    # Modelos existentes por (brand_id, nombre normalizado)
+    existing_models = db.query(models.CarModel).all()
+    models_by_key = {
+        (m.brand_id, m.name.lower()): m
+        for m in existing_models
+        if m.name and m.brand_id
+    }
+
+    brands_created = 0
+    models_created = 0
+    makes_processed = 0
+
+    for raw_make in makes_data[:max_makes]:
+        make_name = normalize_catalog_value(raw_make.get("Make_Name"))
+        make_id = raw_make.get("Make_ID")
+        if not make_name:
+            continue
+
+        make_key = make_name.lower()
+        brand = brands_by_key.get(make_key)
+        if not brand:
+            brand = models.CarBrand(name=make_name)
+            db.add(brand)
+            db.flush()
+            brands_by_key[make_key] = brand
+            brands_created += 1
+
+        makes_processed += 1
+
+        if not include_models or not make_id:
+            continue
+
+        try:
+            models_resp = requests.get(
+                f"{base_url}/GetModelsForMakeId/{int(make_id)}?format=json",
+                timeout=30
+            )
+            models_resp.raise_for_status()
+            models_data = models_resp.json().get("Results", [])
+        except Exception:
+            # Si una marca falla, continuamos con las demas.
+            continue
+
+        for raw_model in models_data[:max_models_per_make]:
+            model_name = normalize_catalog_value(raw_model.get("Model_Name"))
+            if not model_name:
+                continue
+
+            model_key = (brand.id, model_name.lower())
+            if model_key not in models_by_key:
+                new_model = models.CarModel(name=model_name, brand_id=brand.id)
+                db.add(new_model)
+                db.flush()
+                models_by_key[model_key] = new_model
+                models_created += 1
+
+        # Evita activar control de trafico del proveedor externo.
+        time.sleep(0.05)
+
+    db.commit()
+    return {
+        "message": "Catalogo externo sincronizado correctamente",
+        "brands_created": brands_created,
+        "models_created": models_created,
+        "makes_processed": makes_processed
     }
 
 
