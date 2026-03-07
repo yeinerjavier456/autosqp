@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Query, Query
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import Optional, List
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, get_db
 import models, schemas, auth_utils
@@ -726,6 +726,32 @@ def read_brands(db: Session = Depends(get_db)):
 def read_models_by_brand(brand_id: int, db: Session = Depends(get_db)):
     return db.query(models.CarModel).filter(models.CarModel.brand_id == brand_id).order_by(models.CarModel.name).all()
 
+def normalize_catalog_value(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    cleaned = " ".join(str(value).strip().split())
+    return cleaned if cleaned else None
+
+def upsert_brand_model(db: Session, make: Optional[str], model: Optional[str]):
+    make_name = normalize_catalog_value(make)
+    model_name = normalize_catalog_value(model)
+    if not make_name:
+        return
+
+    brand = db.query(models.CarBrand).filter(func.lower(models.CarBrand.name) == make_name.lower()).first()
+    if not brand:
+        brand = models.CarBrand(name=make_name)
+        db.add(brand)
+        db.flush()
+
+    if model_name:
+        existing_model = db.query(models.CarModel).filter(
+            models.CarModel.brand_id == brand.id,
+            func.lower(models.CarModel.name) == model_name.lower()
+        ).first()
+        if not existing_model:
+            db.add(models.CarModel(name=model_name, brand_id=brand.id))
+
 @app.get("/stats/advisor")
 def read_advisor_stats(
     db: Session = Depends(get_db),
@@ -811,6 +837,63 @@ def seed_brands(db: Session = Depends(get_db)):
     
     db.commit()
     return {"message": f"Seeded {count} new models successfully."}
+
+@app.post("/seed/brands/from-vehicles")
+def seed_brands_from_vehicles(db: Session = Depends(get_db)):
+    rows = db.query(models.Vehicle.make, models.Vehicle.model).all()
+    if not rows:
+        return {
+            "message": "No hay vehiculos para sincronizar.",
+            "brands_created": 0,
+            "models_created": 0
+        }
+
+    existing_brands = db.query(models.CarBrand).all()
+    brands_by_key = {b.name.lower(): b for b in existing_brands if b.name}
+
+    existing_models = db.query(models.CarModel).all()
+    models_by_key = {
+        (m.brand_id, m.name.lower()): m
+        for m in existing_models
+        if m.name and m.brand_id
+    }
+
+    brands_created = 0
+    models_created = 0
+
+    for make_raw, model_raw in rows:
+        make_name = normalize_catalog_value(make_raw)
+        model_name = normalize_catalog_value(model_raw)
+
+        if not make_name:
+            continue
+
+        brand_key = make_name.lower()
+        brand = brands_by_key.get(brand_key)
+        if not brand:
+            brand = models.CarBrand(name=make_name)
+            db.add(brand)
+            db.flush()
+            brands_by_key[brand_key] = brand
+            brands_created += 1
+
+        if not model_name:
+            continue
+
+        model_key = (brand.id, model_name.lower())
+        if model_key not in models_by_key:
+            new_model = models.CarModel(name=model_name, brand_id=brand.id)
+            db.add(new_model)
+            db.flush()
+            models_by_key[model_key] = new_model
+            models_created += 1
+
+    db.commit()
+    return {
+        "message": "Sincronizacion completada",
+        "brands_created": brands_created,
+        "models_created": models_created
+    }
 
 
 
@@ -1190,6 +1273,8 @@ def create_vehicle(
     # Default to user's company if not provided and user has one
     if not vehicle.company_id and current_user.company_id:
         vehicle.company_id = current_user.company_id
+
+    upsert_brand_model(db, vehicle.make, vehicle.model)
         
     db_vehicle = models.Vehicle(**vehicle.dict())
     db.add(db_vehicle)
@@ -1235,6 +1320,10 @@ def update_vehicle(
         
     for field, value in vehicle_update.dict(exclude_unset=True).items():
         setattr(vehicle, field, value)
+
+    target_make = vehicle_update.make if vehicle_update.make is not None else vehicle.make
+    target_model = vehicle_update.model if vehicle_update.model is not None else vehicle.model
+    upsert_brand_model(db, target_make, target_model)
         
     db.commit()
     db.refresh(vehicle)

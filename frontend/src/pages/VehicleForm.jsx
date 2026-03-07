@@ -62,7 +62,14 @@ const VehicleForm = () => {
     const fetchBrands = async () => {
         try {
             const response = await axios.get('https://autosqp.co/api/brands/');
-            setBrands(response.data);
+            const brandsData = response.data || [];
+            setBrands(brandsData);
+
+            if (brandsData.length === 0) {
+                await axios.post('https://autosqp.co/api/seed/brands/from-vehicles');
+                const syncedResponse = await axios.get('https://autosqp.co/api/brands/');
+                setBrands(syncedResponse.data || []);
+            }
         } catch (error) {
             console.error("Error fetching brands", error);
         }
@@ -137,7 +144,7 @@ const VehicleForm = () => {
     const handleSeedBrands = async () => {
         try {
             setLoading(true);
-            const response = await axios.post('https://autosqp.co/api/seed/brands');
+            const response = await axios.post('https://autosqp.co/api/seed/brands/from-vehicles');
             Swal.fire('Info', response.data.message, 'info');
             fetchBrands();
         } catch (error) {
@@ -255,7 +262,7 @@ const VehicleForm = () => {
                 </div>
                 {!isReadOnly && brands.length === 0 && (
                     <button onClick={handleSeedBrands} className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded">
-                        Recargar Marcas
+                        Sincronizar Marcas
                     </button>
                 )}
             </div>
