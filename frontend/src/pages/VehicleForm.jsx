@@ -7,7 +7,9 @@ import { useAuth } from '../context/AuthContext';
 
 const VehicleForm = () => {
     const { user } = useAuth();
-    const isAdvisor = user?.role?.name === 'asesor' || user?.role === 'asesor';
+    const roleName = user?.role?.name || (typeof user?.role === 'string' ? user?.role : '');
+    const isCompanyAdmin = roleName === 'admin' || (roleName === 'super_admin' && !!user?.company_id);
+    const isReadOnly = !isCompanyAdmin;
     const { id } = useParams();
     const navigate = useNavigate();
     const isEditMode = !!id;
@@ -46,11 +48,15 @@ const VehicleForm = () => {
     const [showCamera, setShowCamera] = useState(false);
 
     useEffect(() => {
+        if (isReadOnly && !isEditMode) {
+            navigate('/admin/inventory');
+            return;
+        }
         if (isEditMode) {
             fetchVehicle();
         }
         fetchBrands();
-    }, [id]);
+    }, [id, isEditMode, isReadOnly, navigate]);
 
     const fetchBrands = async () => {
         try {
@@ -240,13 +246,13 @@ const VehicleForm = () => {
             <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-8 py-6 text-white flex justify-between items-center">
                 <div>
                     <h2 className="text-2xl font-bold">
-                        {isAdvisor ? 'Ficha Técnica del Vehículo' : (isEditMode ? 'Editar Vehículo' : 'Nuevo Vehículo')}
+                        {isReadOnly ? 'Ficha Técnica del Vehículo' : (isEditMode ? 'Editar Vehículo' : 'Nuevo Vehículo')}
                     </h2>
                     <p className="opacity-80 text-sm mt-1">
-                        {isAdvisor ? 'Información detallada del inventario.' : 'Completa la información del vehículo.'}
+                        {isReadOnly ? 'Información detallada del inventario.' : 'Completa la información del vehículo.'}
                     </p>
                 </div>
-                {!isAdvisor && brands.length === 0 && (
+                {!isReadOnly && brands.length === 0 && (
                     <button onClick={handleSeedBrands} className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded">
                         Recargar Marcas
                     </button>
@@ -254,7 +260,7 @@ const VehicleForm = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="p-8">
-                {isAdvisor ? (
+                {isReadOnly ? (
                     /* --- READ ONLY VIEW FOR ADVISORS --- */
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 mb-8">
                         <div className="space-y-1">
@@ -530,7 +536,7 @@ const VehicleForm = () => {
                     <h3 className="text-lg font-bold text-gray-800 mb-4">Fotos del Vehículo</h3>
 
                     {/* Actions - Hide for Advisors */}
-                    {!isAdvisor && (
+                    {!isReadOnly && (
                         <div className="flex gap-4 mb-4">
                             <button
                                 type="button"
@@ -550,7 +556,7 @@ const VehicleForm = () => {
                     )}
 
                     {/* Camera View */}
-                    {showCamera && !isAdvisor && (
+                    {showCamera && !isReadOnly && (
                         <div className="mb-4 bg-black rounded-lg overflow-hidden flex flex-col items-center p-4">
                             <Webcam
                                 audio={false}
@@ -573,7 +579,7 @@ const VehicleForm = () => {
                         {formData.photos.map((url, index) => (
                             <div key={index} className="relative group">
                                 <img src={url} alt={`Foto ${index}`} className="w-full h-32 object-cover rounded-lg shadow-sm" />
-                                {!isAdvisor && (
+                                {!isReadOnly && (
                                     <button
                                         type="button"
                                         onClick={() => removePhoto(index)}
@@ -586,7 +592,7 @@ const VehicleForm = () => {
                         ))}
                         {formData.photos.length === 0 && (
                             <div className="col-span-full text-center py-8 text-gray-400 border-2 border-dashed border-gray-300 rounded-lg">
-                                {isAdvisor ? 'Este vehículo no tiene fotos registradas.' : 'No hay fotos aún. Sube o toma algunas fotos del vehículo.'}
+                                {isReadOnly ? 'Este vehículo no tiene fotos registradas.' : 'No hay fotos aún. Sube o toma algunas fotos del vehículo.'}
                             </div>
                         )}
                     </div>
@@ -599,9 +605,9 @@ const VehicleForm = () => {
                         onClick={() => navigate('/admin/inventory')}
                         className="px-6 py-2 border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 transition font-medium"
                     >
-                        {isAdvisor ? 'Volver al Inventario' : 'Cancelar'}
+                        {isReadOnly ? 'Volver al Inventario' : 'Cancelar'}
                     </button>
-                    {!isAdvisor && (
+                    {!isReadOnly && (
                         <button
                             type="submit"
                             disabled={submitting}
@@ -617,3 +623,4 @@ const VehicleForm = () => {
 };
 
 export default VehicleForm;
+

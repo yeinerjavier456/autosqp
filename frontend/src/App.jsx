@@ -76,6 +76,7 @@ function App() {
                     <Route path="/admin/users/new" element={<UserForm />} />
                     <Route path="/admin/users/:id" element={<UserForm />} />
                     <Route path="/admin/users/:id" element={<UserForm />} />
+                    <Route path="/admin/inventory/new" element={<VehicleForm />} />
                     <Route path="/admin/integrations" element={<IntegrationsConfig />} />
                     <Route path="/admin/alerts" element={<AdminAlerts />} />
                     <Route path="/admin/logs" element={<SystemLogs />} />
@@ -85,7 +86,6 @@ function App() {
                   <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor', 'aliado']} />}>
                     {/* Inventory Routes */}
                     <Route path="/admin/inventory" element={<InventoryList />} />
-                    <Route path="/admin/inventory/new" element={<VehicleForm />} />
                     <Route path="/admin/inventory/:id" element={<VehicleForm />} />
 
                     {/* Leads Routes */}

@@ -6,7 +6,8 @@ import { useAuth } from '../context/AuthContext';
 
 const InventoryList = () => {
     const { user } = useAuth();
-    const isAdvisor = user?.role?.name === 'asesor' || user?.role === 'asesor';
+    const roleName = user?.role?.name || (typeof user?.role === 'string' ? user?.role : '');
+    const isCompanyAdmin = roleName === 'admin' || (roleName === 'super_admin' && !!user?.company_id);
 
     const [vehicles, setVehicles] = useState([]);
     const [total, setTotal] = useState(0);
@@ -139,7 +140,7 @@ const InventoryList = () => {
                     <h1 className="text-3xl font-extrabold text-slate-800">Inventario de Vehículos</h1>
                     <p className="text-slate-500 mt-2">Gestiona el inventario de tu concesionario.</p>
                 </div>
-                <div className="mt-4 md:mt-0 flex gap-2">
+                {isCompanyAdmin && <div className="mt-4 md:mt-0 flex gap-2">
                     <button
                         onClick={async () => {
                             const brands = ['Renault', 'Chevrolet', 'Mazda', 'Toyota', 'Kia', 'Ford'];
@@ -174,7 +175,7 @@ const InventoryList = () => {
                     <Link to="/admin/inventory/new" className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg shadow hover:bg-blue-700 transition">
                         + Nuevo Vehículo
                     </Link>
-                </div>
+                </div>}
             </header>
 
             {/* Status Tabs */}
@@ -299,7 +300,7 @@ const InventoryList = () => {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
-                                            {isAdvisor ? (
+                                            {!isCompanyAdmin ? (
                                                 <Link to={`/admin/inventory/${vehicle.id}`} className="text-gray-600 hover:text-blue-600 hover:underline">
                                                     Ver Detalles
                                                 </Link>
@@ -323,7 +324,7 @@ const InventoryList = () => {
                                                         </button>
                                                     )}
 
-                                                    {!isAdvisor && (
+                                                    {isCompanyAdmin && (
                                                         <button
                                                             onClick={() => handleDeleteVehicle(vehicle.id)}
                                                             className="p-1.5 text-red-600 hover:bg-red-50 focus:ring-2 focus:ring-red-500 rounded-lg transition-colors"

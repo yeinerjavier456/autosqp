@@ -100,6 +100,12 @@ def log_action_to_db(db: Session, user_id: int, action: str, entity_type: str, e
         print(f"Failed to log action: {e}", flush=True)
         db.rollback()
 
+def ensure_company_inventory_admin(current_user: models.User):
+    role_name = current_user.role.name if current_user.role else ""
+    is_company_admin = role_name == "admin" or (role_name == "super_admin" and bool(current_user.company_id))
+    if not is_company_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores de empresa pueden modificar inventario")
+
 
 
 # --- USER ENDPOINTS ---
@@ -1095,6 +1101,8 @@ def create_vehicle(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    ensure_company_inventory_admin(current_user)
+
     if current_user.company_id and vehicle.company_id and vehicle.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Cannot create vehicle for another company")
         
@@ -1115,6 +1123,8 @@ def update_vehicle(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    ensure_company_inventory_admin(current_user)
+
     vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == vehicle_id).first()
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehicle not found")
@@ -1155,6 +1165,8 @@ def delete_vehicle(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    ensure_company_inventory_admin(current_user)
+
     vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == vehicle_id).first()
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehicle not found")

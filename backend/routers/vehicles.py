@@ -32,6 +32,12 @@ router = APIRouter(
     tags=["vehicles"]
 )
 
+def ensure_company_inventory_admin(current_user: models.User):
+    role_name = current_user.role.name if current_user.role else ""
+    is_company_admin = role_name == "admin" or (role_name == "super_admin" and bool(current_user.company_id))
+    if not is_company_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores de empresa pueden modificar inventario")
+
 @router.get("/public", response_model=List[schemas.Vehicle])
 def get_public_vehicles(
     skip: int = 0,
@@ -130,6 +136,10 @@ def create_vehicle(vehicle: schemas.VehicleCreate, db: Session = Depends(get_db)
     Create a new vehicle.
     Requires authentication.
     """
+    ensure_company_inventory_admin(current_user)
+    if not current_user.company_id:
+        raise HTTPException(status_code=400, detail="User has no company assigned")
+
     db_vehicle = models.Vehicle(**vehicle.dict())
     db_vehicle.company_id = current_user.company_id # Assign to user's company
     db.add(db_vehicle)
@@ -185,6 +195,7 @@ def upload_vehicles_excel(
     """
     Sube un archivo Excel y lanza el script de importación masiva.
     """
+    ensure_company_inventory_admin(current_user)
     if not current_user.company_id:
         raise HTTPException(status_code=400, detail="El usuario no tiene una compañía asociada")
 
@@ -237,6 +248,8 @@ def update_vehicle(vehicle_id: int, vehicle_update: schemas.VehicleUpdate, db: S
     """
     Update a vehicle.
     """
+    ensure_company_inventory_admin(current_user)
+
     db_vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == vehicle_id).first()
     if not db_vehicle:
         raise HTTPException(status_code=404, detail="Vehicle not found")
@@ -260,6 +273,8 @@ def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db), current_user:
     """
     Delete a vehicle.
     """
+    ensure_company_inventory_admin(current_user)
+
     db_vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == vehicle_id).first()
     if not db_vehicle:
         raise HTTPException(status_code=404, detail="Vehicle not found")
@@ -274,3 +289,4 @@ def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db), current_user:
     log_action_to_db(db, current_user.id, "DELETE", "Vehicle", vehicle_id, f"Vehículo eliminado: placa {vehicle_plate}")
     
     return {"message": "Vehicle deleted successfully"}
+
