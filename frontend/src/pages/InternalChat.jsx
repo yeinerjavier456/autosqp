@@ -17,6 +17,7 @@ const InternalChat = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedFile, setSelectedFile] = useState(null);
     const fileInputRef = useRef(null);
+    const [attachmentModal, setAttachmentModal] = useState(null);
 
     useEffect(() => {
         resetUnreadCount();
@@ -192,6 +193,12 @@ const InternalChat = () => {
 
     const isImageFile = (fileData) => (fileData?.file_type || '').toLowerCase().startsWith('image/');
     const isPdfFile = (fileData) => (fileData?.file_type || '').toLowerCase().includes('pdf');
+    const openAttachmentModal = (fileData) => {
+        setAttachmentModal({
+            ...fileData,
+            resolvedUrl: resolveFileUrl(fileData)
+        });
+    };
 
     return (
         <div className="flex h-[calc(100vh-64px)] bg-gray-100 overflow-hidden">
@@ -372,10 +379,9 @@ const InternalChat = () => {
                                                         {fileData?.text && (
                                                             <p className="whitespace-pre-wrap leading-relaxed">{fileData.text}</p>
                                                         )}
-                                                        <a
-                                                            href={resolveFileUrl(fileData)}
-                                                            target="_blank"
-                                                            rel="noreferrer"
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openAttachmentModal(fileData)}
                                                             className={`block rounded-lg p-3 border ${isMe ? 'border-blue-400 bg-blue-500/20 text-white' : 'border-slate-200 bg-slate-50 text-slate-800'} hover:opacity-90`}
                                                         >
                                                             <div className="font-semibold truncate">{fileData?.file_name || 'Archivo'}</div>
@@ -383,24 +389,26 @@ const InternalChat = () => {
                                                                 {fileData?.file_type || 'application/octet-stream'} • {formatFileSize(fileData?.file_size)}
                                                             </div>
                                                             <div className={`text-xs mt-2 underline ${isMe ? 'text-blue-100' : 'text-blue-600'}`}>
-                                                                Abrir / Descargar
+                                                                Ver adjunto
                                                             </div>
-                                                        </a>
+                                                        </button>
                                                         {isImageFile(fileData) && (
-                                                            <a href={resolveFileUrl(fileData)} target="_blank" rel="noreferrer" className="block">
+                                                            <button type="button" onClick={() => openAttachmentModal(fileData)} className="block w-full text-left">
                                                                 <img
                                                                     src={resolveFileUrl(fileData)}
                                                                     alt={fileData?.file_name || 'Imagen adjunta'}
                                                                     className="mt-2 max-h-64 w-full object-contain rounded-lg border border-slate-200 bg-white"
                                                                 />
-                                                            </a>
+                                                            </button>
                                                         )}
                                                         {isPdfFile(fileData) && (
-                                                            <iframe
-                                                                title={fileData?.file_name || 'PDF adjunto'}
-                                                                src={resolveFileUrl(fileData)}
-                                                                className="mt-2 w-full h-72 rounded-lg border border-slate-200 bg-white"
-                                                            />
+                                                            <button type="button" onClick={() => openAttachmentModal(fileData)} className="block w-full text-left">
+                                                                <iframe
+                                                                    title={fileData?.file_name || 'PDF adjunto'}
+                                                                    src={resolveFileUrl(fileData)}
+                                                                    className="mt-2 w-full h-72 rounded-lg border border-slate-200 bg-white pointer-events-none"
+                                                                />
+                                                            </button>
                                                         )}
                                                     </div>
                                                 );
@@ -466,6 +474,54 @@ const InternalChat = () => {
                 </div>
 
             </div>
+            {attachmentModal && (
+                <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-6xl h-[88vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+                        <div className="px-5 py-3 border-b flex items-center justify-between">
+                            <div className="min-w-0">
+                                <h3 className="font-bold text-slate-800 truncate">{attachmentModal.file_name || 'Adjunto'}</h3>
+                                <p className="text-xs text-slate-500">{attachmentModal.file_type || 'application/octet-stream'} • {formatFileSize(attachmentModal.file_size)}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <a
+                                    href={attachmentModal.resolvedUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    download={attachmentModal.file_name || 'adjunto'}
+                                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                                >
+                                    Descargar
+                                </a>
+                                <button type="button" onClick={() => setAttachmentModal(null)} className="p-2 text-slate-500 hover:text-slate-800">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex-1 bg-slate-100 p-3">
+                            {isImageFile(attachmentModal) ? (
+                                <img src={attachmentModal.resolvedUrl} alt={attachmentModal.file_name || 'Adjunto'} className="w-full h-full object-contain rounded-lg bg-white" />
+                            ) : isPdfFile(attachmentModal) ? (
+                                <iframe title={attachmentModal.file_name || 'PDF'} src={attachmentModal.resolvedUrl} className="w-full h-full rounded-lg bg-white" />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                    <div className="text-center">
+                                        <p className="text-slate-700 font-semibold mb-2">Vista previa no disponible para este tipo de archivo.</p>
+                                        <a
+                                            href={attachmentModal.resolvedUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            download={attachmentModal.file_name || 'adjunto'}
+                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                                        >
+                                            Descargar archivo
+                                        </a>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

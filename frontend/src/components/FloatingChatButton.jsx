@@ -15,6 +15,7 @@ const FloatingChatButton = () => {
     const [recipientId, setRecipientId] = useState('');
     const [newMessage, setNewMessage] = useState('');
     const [selectedFile, setSelectedFile] = useState(null);
+    const [attachmentModal, setAttachmentModal] = useState(null);
     const fileInputRef = useRef(null);
     const endRef = useRef(null);
 
@@ -101,6 +102,12 @@ const FloatingChatButton = () => {
 
     const isImageFile = (fileData) => (fileData?.file_type || '').toLowerCase().startsWith('image/');
     const isPdfFile = (fileData) => (fileData?.file_type || '').toLowerCase().includes('pdf');
+    const openAttachmentModal = (fileData) => {
+        setAttachmentModal({
+            ...fileData,
+            resolvedUrl: resolveFileUrl(fileData)
+        });
+    };
 
     const getUserName = (u) => {
         if (!u) return 'Usuario';
@@ -213,26 +220,28 @@ const FloatingChatButton = () => {
                                         {fileData ? (
                                             <div className="space-y-1">
                                                 {fileData.text && <p className="whitespace-pre-wrap">{fileData.text}</p>}
-                                                <a href={resolveFileUrl(fileData)} target="_blank" rel="noreferrer" className={`block p-2 rounded border text-xs ${isMe ? 'border-blue-300 text-blue-50' : 'border-slate-200 text-slate-700'}`}>
+                                                <button type="button" onClick={() => openAttachmentModal(fileData)} className={`block w-full text-left p-2 rounded border text-xs ${isMe ? 'border-blue-300 text-blue-50' : 'border-slate-200 text-slate-700'}`}>
                                                     <div className="font-semibold truncate">{fileData.file_name}</div>
                                                     <div>{fileData.file_type} - {formatFileSize(fileData.file_size)}</div>
-                                                    <div className="underline mt-1">Abrir / Descargar</div>
-                                                </a>
+                                                    <div className="underline mt-1">Ver adjunto</div>
+                                                </button>
                                                 {isImageFile(fileData) && (
-                                                    <a href={resolveFileUrl(fileData)} target="_blank" rel="noreferrer" className="block">
+                                                    <button type="button" onClick={() => openAttachmentModal(fileData)} className="block w-full text-left">
                                                         <img
                                                             src={resolveFileUrl(fileData)}
                                                             alt={fileData?.file_name || 'Imagen adjunta'}
                                                             className="mt-2 max-h-48 w-full object-contain rounded border border-slate-200 bg-white"
                                                         />
-                                                    </a>
+                                                    </button>
                                                 )}
                                                 {isPdfFile(fileData) && (
-                                                    <iframe
-                                                        title={fileData?.file_name || 'PDF adjunto'}
-                                                        src={resolveFileUrl(fileData)}
-                                                        className="mt-2 w-full h-48 rounded border border-slate-200 bg-white"
-                                                    />
+                                                    <button type="button" onClick={() => openAttachmentModal(fileData)} className="block w-full text-left">
+                                                        <iframe
+                                                            title={fileData?.file_name || 'PDF adjunto'}
+                                                            src={resolveFileUrl(fileData)}
+                                                            className="mt-2 w-full h-48 rounded border border-slate-200 bg-white pointer-events-none"
+                                                        />
+                                                    </button>
                                                 )}
                                             </div>
                                         ) : (
@@ -286,6 +295,54 @@ const FloatingChatButton = () => {
                     </span>
                 )}
             </button>
+            {attachmentModal && (
+                <div className="fixed inset-0 z-[90] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-6xl h-[88vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+                        <div className="px-5 py-3 border-b flex items-center justify-between">
+                            <div className="min-w-0">
+                                <h3 className="font-bold text-slate-800 truncate">{attachmentModal.file_name || 'Adjunto'}</h3>
+                                <p className="text-xs text-slate-500">{attachmentModal.file_type || 'application/octet-stream'} • {formatFileSize(attachmentModal.file_size)}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <a
+                                    href={attachmentModal.resolvedUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    download={attachmentModal.file_name || 'adjunto'}
+                                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                                >
+                                    Descargar
+                                </a>
+                                <button type="button" onClick={() => setAttachmentModal(null)} className="p-2 text-slate-500 hover:text-slate-800">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex-1 bg-slate-100 p-3">
+                            {isImageFile(attachmentModal) ? (
+                                <img src={attachmentModal.resolvedUrl} alt={attachmentModal.file_name || 'Adjunto'} className="w-full h-full object-contain rounded-lg bg-white" />
+                            ) : isPdfFile(attachmentModal) ? (
+                                <iframe title={attachmentModal.file_name || 'PDF'} src={attachmentModal.resolvedUrl} className="w-full h-full rounded-lg bg-white" />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                    <div className="text-center">
+                                        <p className="text-slate-700 font-semibold mb-2">Vista previa no disponible para este tipo de archivo.</p>
+                                        <a
+                                            href={attachmentModal.resolvedUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            download={attachmentModal.file_name || 'adjunto'}
+                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                                        >
+                                            Descargar archivo
+                                        </a>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 };
