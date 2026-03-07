@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+﻿from sqlalchemy.orm import Session
 from database import SessionLocal, engine
 import models
 from auth_utils import get_password_hash
@@ -9,11 +9,12 @@ def seed_super_admin():
     try:
         # 1. Seed Roles
         roles = [
-            {"name": "super_admin", "label": "Súper Admin Global"},
+            {"name": "super_admin", "label": "SÃºper Admin Global"},
             {"name": "admin", "label": "Administrador de Empresa"},
+            {"name": "inventario", "label": "Gestor de Inventario"},
             {"name": "asesor", "label": "Asesor / Vendedor"},
-            {"name": "user", "label": "Usuario Básico"},
-            {"name": "aliado", "label": "Aliado Estratégico"},
+            {"name": "user", "label": "Usuario BÃ¡sico"},
+            {"name": "aliado", "label": "Aliado EstratÃ©gico"},
             {"name": "compras", "label": "Gestor de Compras"}
         ]
         

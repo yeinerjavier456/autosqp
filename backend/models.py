@@ -7,6 +7,7 @@ import datetime
 class UserRole(str, enum.Enum):
     SUPER_ADMIN = "super_admin"
     ADMIN = "admin"
+    INVENTARIO = "inventario"
     ASESOR = "asesor"
     USER = "user"
     # Legacy support

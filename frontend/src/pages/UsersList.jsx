@@ -104,6 +104,7 @@ const UsersList = () => {
                                     const roleName = user.role?.name || (typeof user.role === 'string' ? user.role : '');
                                     const roleLabel = user.role?.label || (roleName === 'super_admin' ? 'Super Admin' :
                                         roleName === 'admin' ? 'Administrador' :
+                                            roleName === 'inventario' ? 'Inventario' :
                                             roleName === 'asesor' ? 'Asesor' :
                                                 roleName === 'aliado' ? 'Aliado' :
                                                     roleName === 'compras' ? 'Compras' :
@@ -124,6 +125,7 @@ const UsersList = () => {
                                                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
                                                     ${roleName === 'super_admin' ? 'bg-purple-100 text-purple-800' :
                                                         roleName === 'admin' ? 'bg-blue-100 text-blue-800' :
+                                                            roleName === 'inventario' ? 'bg-cyan-100 text-cyan-800' :
                                                             roleName === 'asesor' ? 'bg-orange-100 text-orange-800' :
                                                                 roleName === 'aliado' ? 'bg-yellow-100 text-yellow-800' :
                                                                     roleName === 'compras' ? 'bg-pink-100 text-pink-800' :

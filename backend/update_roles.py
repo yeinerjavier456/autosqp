@@ -22,6 +22,17 @@ db = SessionLocal()
 def update_roles():
     print("Checking roles...")
     
+    # Check Inventario
+    inventario = db.query(Role).filter(Role.name == "inventario").first()
+    if not inventario:
+        print("Creating 'inventario' role...")
+        new_role = Role(name="inventario", label="Gestor de Inventario")
+        db.add(new_role)
+        db.commit()
+        print("Role 'inventario' created.")
+    else:
+        print("Role 'inventario' already exists.")
+
     # Check Aliado
     aliado = db.query(Role).filter(Role.name == "aliado").first()
     if not aliado:

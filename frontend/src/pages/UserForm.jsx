@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -20,6 +20,18 @@ const UserForm = () => {
     const [roles, setRoles] = useState([]);
     const [isEditing, setIsEditing] = useState(false);
     const [status, setStatus] = useState({ type: '', message: '' });
+
+    const ROLE_LABELS = {
+        super_admin: 'Super Admin Global',
+        admin: 'Administrador de Empresa',
+        inventario: 'Gestor de Inventario (crear/editar vehÃ­culos)',
+        asesor: 'Asesor / Vendedor',
+        aliado: 'Aliado EstratÃ©gico',
+        compras: 'Gestor de Compras',
+        user: 'Usuario BÃ¡sico',
+    };
+    const selectedRole = roles.find(r => String(r.id) === String(user.role_id));
+    const isInventarioRoleSelected = selectedRole?.name === 'inventario';
 
     useEffect(() => {
         const fetchDependencies = async () => {
@@ -106,6 +118,14 @@ const UserForm = () => {
                 payload.role_id = parseInt(payload.role_id);
             }
 
+            // Inventory role must not persist payroll/commission fields
+            const selectedRoleForSave = roles.find(r => r.id === payload.role_id);
+            if (selectedRoleForSave?.name === 'inventario') {
+                payload.commission_percentage = 0;
+                payload.base_salary = null;
+                payload.payment_dates = null;
+            }
+
             if (isEditing) {
                 await axios.put(`https://autosqp.co/api/users/${id}`, payload, { headers });
                 setStatus({ type: 'success', message: 'Usuario actualizado exitosamente!' });
@@ -127,13 +147,13 @@ const UserForm = () => {
 
     const handleDelete = async () => {
         const result = await Swal.fire({
-            title: '¿Estás seguro?',
-            text: "Cuidado: Esto eliminará al usuario permanentemente y reasignará o dejará huérfanos sus leads/ventas.",
+            title: 'Â¿EstÃ¡s seguro?',
+            text: "Cuidado: Esto eliminarÃ¡ al usuario permanentemente y reasignarÃ¡ o dejarÃ¡ huÃ©rfanos sus leads/ventas.",
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#d33',
             cancelButtonColor: '#3085d6',
-            confirmButtonText: 'Sí, eliminar',
+            confirmButtonText: 'SÃ­, eliminar',
             cancelButtonText: 'Cancelar'
         });
 
@@ -144,7 +164,7 @@ const UserForm = () => {
                 await axios.delete(`https://autosqp.co/api/users/${id}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
-                Swal.fire('¡Eliminado!', 'El usuario ha sido eliminado.', 'success');
+                Swal.fire('Â¡Eliminado!', 'El usuario ha sido eliminado.', 'success');
                 navigate('/admin/users');
             } catch (error) {
                 console.error("Error deleting user", error);
@@ -181,7 +201,7 @@ const UserForm = () => {
                             name="full_name"
                             value={user.full_name || ''}
                             onChange={handleChange}
-                            placeholder="Ej: Juan Pérez"
+                            placeholder="Ej: Juan PÃ©rez"
                             className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-black bg-white"
                         />
                     </div>
@@ -199,7 +219,7 @@ const UserForm = () => {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-600 mb-1">Contraseña {isEditing && '(Dejar en blanco para mantener actual)'}</label>
+                        <label className="block text-sm font-medium text-slate-600 mb-1">ContraseÃ±a {isEditing && '(Dejar en blanco para mantener actual)'}</label>
                         <input
                             type="password"
                             name="password"
@@ -227,7 +247,7 @@ const UserForm = () => {
                                     return true;
                                 }).map(role => (
                                     <option key={role.id} value={role.id}>
-                                        {role.label || role.name}
+                                        {ROLE_LABELS[role.name] || role.label || role.name}
                                     </option>
                                 ))}
                             </select>
@@ -253,48 +273,52 @@ const UserForm = () => {
                             </div>
                         )}
 
-                        {/* Commission Field - Only for Admin/SuperAdmin to set on others */}
-                        <div>
-                            <label className="block text-sm font-medium text-slate-600 mb-1">Comisión (%)</label>
-                            <input
-                                type="number"
-                                name="commission_percentage"
-                                step="0.1"
-                                min="0"
-                                max="100"
-                                value={user.commission_percentage || 0}
-                                onChange={handleChange}
-                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
-                                placeholder="Ej: 5.0"
-                            />
-                            <p className="text-xs text-gray-400 mt-1">Porcentaje aplicado a las ventas de este usuario.</p>
-                        </div>
+                        {!isInventarioRoleSelected && (
+                            <>
+                                {/* Commission Field - Only for Admin/SuperAdmin to set on others */}
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">ComisiÃ³n (%)</label>
+                                    <input
+                                        type="number"
+                                        name="commission_percentage"
+                                        step="0.1"
+                                        min="0"
+                                        max="100"
+                                        value={user.commission_percentage || 0}
+                                        onChange={handleChange}
+                                        className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                        placeholder="Ej: 5.0"
+                                    />
+                                    <p className="text-xs text-gray-400 mt-1">Porcentaje aplicado a las ventas de este usuario.</p>
+                                </div>
 
-                        {/* Base Salary */}
-                        <div>
-                            <label className="block text-sm font-medium text-slate-600 mb-1">Sueldo Base</label>
-                            <input
-                                type="number"
-                                name="base_salary"
-                                value={user.base_salary || ''}
-                                onChange={handleChange}
-                                placeholder="0"
-                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
-                            />
-                        </div>
+                                {/* Base Salary */}
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Sueldo Base</label>
+                                    <input
+                                        type="number"
+                                        name="base_salary"
+                                        value={user.base_salary || ''}
+                                        onChange={handleChange}
+                                        placeholder="0"
+                                        className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                    />
+                                </div>
 
-                        {/* Payment Dates */}
-                        <div>
-                            <label className="block text-sm font-medium text-slate-600 mb-1">Fechas de Pago</label>
-                            <input
-                                type="text"
-                                name="payment_dates"
-                                value={user.payment_dates || ''}
-                                onChange={handleChange}
-                                placeholder="Ej: 15 y 30"
-                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
-                            />
-                        </div>
+                                {/* Payment Dates */}
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Fechas de Pago</label>
+                                    <input
+                                        type="text"
+                                        name="payment_dates"
+                                        value={user.payment_dates || ''}
+                                        onChange={handleChange}
+                                        placeholder="Ej: 15 y 30"
+                                        className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                    />
+                                </div>
+                            </>
+                        )}
                     </div>
 
                     <div className="pt-4 flex flex-col md:flex-row gap-4">
@@ -324,3 +348,4 @@ const UserForm = () => {
 };
 
 export default UserForm;
+

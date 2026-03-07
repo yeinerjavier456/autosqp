@@ -42,6 +42,9 @@ const PrivateRoute = ({ allowedRoles }) => {
   const roleName = user.role?.name || (typeof user.role === 'string' ? user.role : '');
   if (allowedRoles && !allowedRoles.includes(roleName)) {
     // User authorized but not for this specific route
+    if (roleName === 'inventario') {
+      return <Navigate to="/admin/inventory" replace />;
+    }
     return <Navigate to="/admin/dashboard" replace />;
   }
 
@@ -76,18 +79,22 @@ function App() {
                     <Route path="/admin/users/new" element={<UserForm />} />
                     <Route path="/admin/users/:id" element={<UserForm />} />
                     <Route path="/admin/users/:id" element={<UserForm />} />
-                    <Route path="/admin/inventory/new" element={<VehicleForm />} />
                     <Route path="/admin/integrations" element={<IntegrationsConfig />} />
                     <Route path="/admin/alerts" element={<AdminAlerts />} />
                     <Route path="/admin/logs" element={<SystemLogs />} />
                   </Route>
 
-                  {/* Shared Routes (Admin, Super Admin, Advisor) */}
-                  <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor', 'aliado']} />}>
-                    {/* Inventory Routes */}
+                  {/* Inventory Routes */}
+                  <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor', 'aliado', 'inventario']} />}>
                     <Route path="/admin/inventory" element={<InventoryList />} />
                     <Route path="/admin/inventory/:id" element={<VehicleForm />} />
+                  </Route>
+                  <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'inventario']} />}>
+                    <Route path="/admin/inventory/new" element={<VehicleForm />} />
+                  </Route>
 
+                  {/* Shared Routes (Admin, Super Admin, Advisor) */}
+                  <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor', 'aliado']} />}>
                     {/* Leads Routes */}
                     <Route path="/admin/leads" element={<LeadsBoard />} />
                     <Route path="/admin/sales" element={<SalesDashboard />} />

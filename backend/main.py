@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Query, Query
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import Optional, List
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, get_db
 import models, schemas, auth_utils
@@ -100,11 +101,42 @@ def log_action_to_db(db: Session, user_id: int, action: str, entity_type: str, e
         print(f"Failed to log action: {e}", flush=True)
         db.rollback()
 
-def ensure_company_inventory_admin(current_user: models.User):
+def is_inventory_editor(current_user: models.User) -> bool:
     role_name = current_user.role.name if current_user.role else ""
-    is_company_admin = role_name == "admin" or (role_name == "super_admin" and bool(current_user.company_id))
-    if not is_company_admin:
-        raise HTTPException(status_code=403, detail="Solo administradores de empresa pueden modificar inventario")
+    return role_name in ["admin", "inventario"] or (role_name == "super_admin" and bool(current_user.company_id))
+
+def is_company_admin_for_inventory(current_user: models.User) -> bool:
+    role_name = current_user.role.name if current_user.role else ""
+    return role_name == "admin" or (role_name == "super_admin" and bool(current_user.company_id))
+
+def ensure_inventory_editor(current_user: models.User):
+    if not is_inventory_editor(current_user):
+        raise HTTPException(status_code=403, detail="Solo usuarios de inventario o administradores pueden crear/editar vehículos")
+
+def ensure_inventory_admin_only(current_user: models.User):
+    if not is_company_admin_for_inventory(current_user):
+        raise HTTPException(status_code=403, detail="Solo administradores de empresa pueden eliminar vehículos")
+
+def enforce_ally_managed_status(
+    db: Session,
+    current_user: models.User,
+    base_status: Optional[str],
+    assigned_to_id: Optional[int] = None
+) -> str:
+    """
+    Business rule:
+    - If the actor is an 'aliado', the lead must be 'ally_managed'
+    - If the lead is assigned to an 'aliado', the lead must be 'ally_managed'
+    """
+    if current_user.role and current_user.role.name == "aliado":
+        return models.LeadStatus.ALLY_MANAGED.value
+
+    if assigned_to_id:
+        target_user = db.query(models.User).join(models.Role, isouter=True).filter(models.User.id == assigned_to_id).first()
+        if target_user and target_user.role and target_user.role.name == "aliado":
+            return models.LeadStatus.ALLY_MANAGED.value
+
+    return base_status or models.LeadStatus.NEW.value
 
 
 
@@ -466,7 +498,21 @@ def read_leads(
         query = query.filter(models.Lead.source == source)
     
     if status:
-        query = query.filter(models.Lead.status == status)
+        if status == models.LeadStatus.ALLY_MANAGED.value:
+            aliado_role = db.query(models.Role).filter(models.Role.name == "aliado").first()
+            if aliado_role:
+                aliado_user_ids = db.query(models.User.id).filter(models.User.role_id == aliado_role.id)
+                query = query.filter(
+                    or_(
+                        models.Lead.status == status,
+                        models.Lead.assigned_to_id.in_(aliado_user_ids),
+                        models.Lead.created_by_id.in_(aliado_user_ids)
+                    )
+                )
+            else:
+                query = query.filter(models.Lead.status == status)
+        else:
+            query = query.filter(models.Lead.status == status)
 
     if q:
         search = f"%{q}%"
@@ -478,6 +524,20 @@ def read_leads(
         
     total = query.count()
     leads = query.order_by(models.Lead.id.desc()).offset(skip).limit(limit).all()
+
+    # Ensure ally-managed leads are always represented with ally_managed status in board data
+    creator_ids = list({lead.created_by_id for lead in leads if lead.created_by_id})
+    creator_role_map = {}
+    if creator_ids:
+        creator_rows = db.query(models.User.id, models.Role.name).join(models.Role, isouter=True).filter(models.User.id.in_(creator_ids)).all()
+        creator_role_map = {user_id: role_name for user_id, role_name in creator_rows}
+
+    for lead in leads:
+        assigned_is_aliado = bool(lead.assigned_to and lead.assigned_to.role and lead.assigned_to.role.name == "aliado")
+        creator_is_aliado = creator_role_map.get(lead.created_by_id) == "aliado"
+        if assigned_is_aliado or creator_is_aliado:
+            lead.status = models.LeadStatus.ALLY_MANAGED.value
+
     return {"items": leads, "total": total}
 
 @app.put("/leads/bulk-assign", status_code=200)
@@ -544,6 +604,13 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
                 chosen_agent = random.choice(potential_agents)
                 assigned_user_id = chosen_agent.id
     
+    effective_status = enforce_ally_managed_status(
+        db=db,
+        current_user=current_user,
+        base_status=lead.status,
+        assigned_to_id=assigned_user_id
+    )
+
     new_lead = models.Lead(
         created_at=datetime.datetime.now(),
         source=lead.source,
@@ -551,7 +618,7 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
         email=lead.email,
         phone=lead.phone,
         message=lead.message,
-        status=lead.status,
+        status=effective_status,
         company_id=company_id,
         assigned_to_id=assigned_user_id,
         created_by_id=current_user.id
@@ -789,6 +856,13 @@ def create_lead(
         if not target_user or target_user.company_id != company_id:
              raise HTTPException(status_code=400, detail="Invalid assigned user (not in company)")
 
+    lead_data["status"] = enforce_ally_managed_status(
+        db=db,
+        current_user=current_user,
+        base_status=lead_data.get("status"),
+        assigned_to_id=assigned_to_id
+    )
+
     db_lead = models.Lead(
         **lead_data, 
         company_id=company_id, 
@@ -830,9 +904,20 @@ def update_lead(
     if current_user.company_id and lead.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Not authorized")
     
+    payload_update = lead_update.dict(exclude={'comment', 'process_detail'}, exclude_unset=True)
+    target_assigned_to_id = payload_update.get('assigned_to_id', lead.assigned_to_id)
+    effective_status = enforce_ally_managed_status(
+        db=db,
+        current_user=current_user,
+        base_status=payload_update.get('status', lead.status),
+        assigned_to_id=target_assigned_to_id
+    )
+    if payload_update.get('status') is not None or payload_update.get('assigned_to_id') is not None:
+        payload_update['status'] = effective_status
+
     # Check for status change OR comment to log history
     # If status changes, or if there's a comment (even without status change), we log it.
-    has_status_change = lead_update.status and lead_update.status != lead.status
+    has_status_change = effective_status != lead.status
     has_comment = lead_update.comment and len(lead_update.comment.strip()) > 0
     
     if has_status_change or has_comment:
@@ -843,14 +928,14 @@ def update_lead(
             lead_id=lead.id,
             user_id=current_user.id,
             previous_status=lead.status,
-            new_status=lead_update.status if lead_update.status else lead.status,
+            new_status=effective_status,
             comment=lead_update.comment
         )
         db.add(new_history)
         
     process_detail_data = lead_update.process_detail
     
-    for field, value in lead_update.dict(exclude={'comment', 'process_detail'}, exclude_unset=True).items():
+    for field, value in payload_update.items():
         setattr(lead, field, value)
         
     # Handle Process Detail Upsert
@@ -1082,9 +1167,7 @@ def read_vehicles(
             (models.Vehicle.plate.ilike(search))
         )
 
-    role_name = current_user.role.name if current_user.role else ""
-    is_company_admin = role_name == "admin" or (role_name == "super_admin" and bool(current_user.company_id))
-    effective_status = status if is_company_admin else "available"
+    effective_status = status if is_inventory_editor(current_user) else "available"
     if effective_status:
         query = query.filter(models.Vehicle.status == effective_status)
         
@@ -1098,7 +1181,7 @@ def create_vehicle(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    ensure_company_inventory_admin(current_user)
+    ensure_inventory_editor(current_user)
 
     if current_user.company_id and vehicle.company_id and vehicle.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Cannot create vehicle for another company")
@@ -1120,7 +1203,7 @@ def update_vehicle(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    ensure_company_inventory_admin(current_user)
+    ensure_inventory_editor(current_user)
 
     vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == vehicle_id).first()
     if not vehicle:
@@ -1162,7 +1245,7 @@ def delete_vehicle(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    ensure_company_inventory_admin(current_user)
+    ensure_inventory_admin_only(current_user)
 
     vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == vehicle_id).first()
     if not vehicle:

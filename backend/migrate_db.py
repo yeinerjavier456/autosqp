@@ -16,6 +16,7 @@ def migrate():
         roles = [
             {"name": "super_admin", "label": "Super Admin Global"},
             {"name": "admin", "label": "Administrador"},
+            {"name": "inventario", "label": "Gestor de Inventario"},
             {"name": "asesor", "label": "Asesor"},
             {"name": "user", "label": "Usuario"},
         ]

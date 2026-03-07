@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import Swal from 'sweetalert2';
@@ -8,6 +8,7 @@ const InventoryList = () => {
     const { user } = useAuth();
     const roleName = user?.role?.name || (typeof user?.role === 'string' ? user?.role : '');
     const isCompanyAdmin = roleName === 'admin' || (roleName === 'super_admin' && !!user?.company_id);
+    const canEditInventory = isCompanyAdmin || roleName === 'inventario';
 
     const [vehicles, setVehicles] = useState([]);
     const [total, setTotal] = useState(0);
@@ -22,7 +23,7 @@ const InventoryList = () => {
         try {
             const token = localStorage.getItem('token');
             const skip = (page - 1) * limit;
-            const effectiveStatus = isCompanyAdmin ? activeTab : 'available';
+            const effectiveStatus = canEditInventory ? activeTab : 'available';
             const params = { skip, limit, status: effectiveStatus }; // Filter by status
             if (search) params.q = search;
 
@@ -49,7 +50,7 @@ const InventoryList = () => {
     };
 
     const handleTabChange = (tab) => {
-        if (!isCompanyAdmin) return;
+        if (!canEditInventory) return;
         setActiveTab(tab);
         setPage(1);
     };
@@ -86,8 +87,8 @@ const InventoryList = () => {
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
                 Swal.fire({
-                    title: '¡Actualizado!',
-                    text: 'El estado del vehículo ha sido cambiado.',
+                    title: 'Â¡Actualizado!',
+                    text: 'El estado del vehÃ­culo ha sido cambiado.',
                     icon: 'success',
                     timer: 2000,
                     showConfirmButton: false
@@ -102,11 +103,11 @@ const InventoryList = () => {
 
     const handleDeleteVehicle = async (vehicleId) => {
         const result = await Swal.fire({
-            title: '¿Eliminar Vehículo?',
-            text: "Esta acción no se puede deshacer.",
+            title: 'Â¿Eliminar VehÃ­culo?',
+            text: "Esta acciÃ³n no se puede deshacer.",
             icon: 'error',
             showCancelButton: true,
-            confirmButtonText: 'Sí, eliminar',
+            confirmButtonText: 'SÃ­, eliminar',
             cancelButtonText: 'Cancelar',
             customClass: {
                 confirmButton: 'bg-red-600 text-white px-4 py-2 rounded-lg ml-2',
@@ -120,11 +121,11 @@ const InventoryList = () => {
                 await axios.delete(`https://autosqp.co/api/vehicles/${vehicleId}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
-                Swal.fire('¡Eliminado!', 'El vehículo ha sido borrado.', 'success');
+                Swal.fire('Â¡Eliminado!', 'El vehÃ­culo ha sido borrado.', 'success');
                 fetchVehicles();
             } catch (error) {
-                console.error("Error al eliminar vehículo", error);
-                Swal.fire('Error', 'No se pudo eliminar el vehículo.', 'error');
+                console.error("Error al eliminar vehÃ­culo", error);
+                Swal.fire('Error', 'No se pudo eliminar el vehÃ­culo.', 'error');
             }
         }
     };
@@ -139,41 +140,43 @@ const InventoryList = () => {
         <div className="bg-gray-50 min-h-full">
             <header className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between">
                 <div>
-                    <h1 className="text-3xl font-extrabold text-slate-800">Inventario de Vehículos</h1>
+                    <h1 className="text-3xl font-extrabold text-slate-800">Inventario de VehÃ­culos</h1>
                     <p className="text-slate-500 mt-2">Gestiona el inventario de tu concesionario.</p>
                 </div>
-                {isCompanyAdmin && <div className="mt-4 md:mt-0 flex gap-2">
-                    <button
-                        onClick={async () => {
-                            const brands = ['Renault', 'Chevrolet', 'Mazda', 'Toyota', 'Kia', 'Ford'];
-                            const models = ['Logan', 'Spark', 'Mazda 3', 'Hilux', 'Picanto', 'Fiesta'];
-                            const rand = Math.floor(Math.random() * brands.length);
-                            const demoVehicle = {
-                                make: brands[rand],
-                                model: models[rand],
-                                year: 2018 + Math.floor(Math.random() * 7),
-                                price: (20 + Math.floor(Math.random() * 80)) * 1000000,
-                                plate: "DEM-" + Math.floor(100 + Math.random() * 900),
-                                mileage: Math.floor(Math.random() * 50000),
-                                color: "Gris",
-                                status: "available",
-                                description: "Vehículo de prueba generado automáticamente"
-                            };
-                            try {
-                                const token = localStorage.getItem('token');
-                                await axios.post('https://autosqp.co/api/vehicles/', demoVehicle, {
-                                    headers: { Authorization: `Bearer ${token}` }
-                                });
-                                fetchVehicles();
-                                Swal.fire('Simulación', 'Vehículo de prueba creado', 'success');
-                            } catch (error) {
-                                Swal.fire('Error', "Error simulando vehículo: " + error.message, 'error');
-                            }
-                        }}
-                        className="px-4 py-2 bg-purple-600 text-white font-bold rounded-lg shadow hover:bg-purple-700 transition text-sm"
-                    >
-                        + Simular Vehículo
-                    </button>
+                {canEditInventory && <div className="mt-4 md:mt-0 flex gap-2">
+                    {isCompanyAdmin && (
+                        <button
+                            onClick={async () => {
+                                const brands = ['Renault', 'Chevrolet', 'Mazda', 'Toyota', 'Kia', 'Ford'];
+                                const models = ['Logan', 'Spark', 'Mazda 3', 'Hilux', 'Picanto', 'Fiesta'];
+                                const rand = Math.floor(Math.random() * brands.length);
+                                const demoVehicle = {
+                                    make: brands[rand],
+                                    model: models[rand],
+                                    year: 2018 + Math.floor(Math.random() * 7),
+                                    price: (20 + Math.floor(Math.random() * 80)) * 1000000,
+                                    plate: "DEM-" + Math.floor(100 + Math.random() * 900),
+                                    mileage: Math.floor(Math.random() * 50000),
+                                    color: "Gris",
+                                    status: "available",
+                                    description: "Vehículo de prueba generado automáticamente"
+                                };
+                                try {
+                                    const token = localStorage.getItem('token');
+                                    await axios.post('https://autosqp.co/api/vehicles/', demoVehicle, {
+                                        headers: { Authorization: `Bearer ${token}` }
+                                    });
+                                    fetchVehicles();
+                                    Swal.fire('Simulación', 'Vehículo de prueba creado', 'success');
+                                } catch (error) {
+                                    Swal.fire('Error', "Error simulando vehículo: " + error.message, 'error');
+                                }
+                            }}
+                            className="px-4 py-2 bg-purple-600 text-white font-bold rounded-lg shadow hover:bg-purple-700 transition text-sm"
+                        >
+                            + Simular Vehículo
+                        </button>
+                    )}
                     <Link to="/admin/inventory/new" className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg shadow hover:bg-blue-700 transition">
                         + Nuevo Vehículo
                     </Link>
@@ -191,7 +194,7 @@ const InventoryList = () => {
                 >
                     Disponibles
                 </button>
-                {isCompanyAdmin && (
+                {canEditInventory && (
                     <>
                         <button
                             onClick={() => handleTabChange('sold')}
@@ -247,8 +250,8 @@ const InventoryList = () => {
                         <thead className="bg-gray-50">
                             <tr>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Foto</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehículo</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Año</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VehÃ­culo</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AÃ±o</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Placa</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
@@ -262,7 +265,7 @@ const InventoryList = () => {
                                 </tr>
                             ) : vehicles.length === 0 ? (
                                 <tr>
-                                    <td colSpan="7" className="px-6 py-10 text-center text-gray-500">No se encontraron vehículos.</td>
+                                    <td colSpan="7" className="px-6 py-10 text-center text-gray-500">No se encontraron vehÃ­culos.</td>
                                 </tr>
                             ) : (
                                 vehicles.map((vehicle) => (
@@ -306,7 +309,7 @@ const InventoryList = () => {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
-                                            {!isCompanyAdmin ? (
+                                            {!canEditInventory ? (
                                                 <Link to={`/admin/inventory/${vehicle.id}`} className="text-gray-600 hover:text-blue-600 hover:underline">
                                                     Ver Detalles
                                                 </Link>
@@ -334,7 +337,7 @@ const InventoryList = () => {
                                                         <button
                                                             onClick={() => handleDeleteVehicle(vehicle.id)}
                                                             className="p-1.5 text-red-600 hover:bg-red-50 focus:ring-2 focus:ring-red-500 rounded-lg transition-colors"
-                                                            title="Eliminar Vehículo"
+                                                            title="Eliminar VehÃ­culo"
                                                         >
                                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                                         </button>
@@ -368,7 +371,7 @@ const InventoryList = () => {
                                 </button>
 
                                 <span className="relative inline-flex items-center px-4 py-2 border-t border-b border-gray-300 bg-white text-sm font-medium text-gray-700">
-                                    Página {page} de {totalPages || 1}
+                                    PÃ¡gina {page} de {totalPages || 1}
                                 </span>
 
                                 <button
@@ -388,3 +391,6 @@ const InventoryList = () => {
 };
 
 export default InventoryList;
+
+
+

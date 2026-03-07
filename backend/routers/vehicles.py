@@ -32,11 +32,21 @@ router = APIRouter(
     tags=["vehicles"]
 )
 
-def ensure_company_inventory_admin(current_user: models.User):
+def is_inventory_editor(current_user: models.User) -> bool:
     role_name = current_user.role.name if current_user.role else ""
-    is_company_admin = role_name == "admin" or (role_name == "super_admin" and bool(current_user.company_id))
-    if not is_company_admin:
-        raise HTTPException(status_code=403, detail="Solo administradores de empresa pueden modificar inventario")
+    return role_name in ["admin", "inventario"] or (role_name == "super_admin" and bool(current_user.company_id))
+
+def is_inventory_admin(current_user: models.User) -> bool:
+    role_name = current_user.role.name if current_user.role else ""
+    return role_name == "admin" or (role_name == "super_admin" and bool(current_user.company_id))
+
+def ensure_inventory_editor(current_user: models.User):
+    if not is_inventory_editor(current_user):
+        raise HTTPException(status_code=403, detail="Solo usuarios de inventario o administradores pueden crear/editar vehículos")
+
+def ensure_inventory_admin(current_user: models.User):
+    if not is_inventory_admin(current_user):
+        raise HTTPException(status_code=403, detail="Solo administradores de empresa pueden eliminar vehículos")
 
 @router.get("/public", response_model=List[schemas.Vehicle])
 def get_public_vehicles(
@@ -136,7 +146,7 @@ def create_vehicle(vehicle: schemas.VehicleCreate, db: Session = Depends(get_db)
     Create a new vehicle.
     Requires authentication.
     """
-    ensure_company_inventory_admin(current_user)
+    ensure_inventory_editor(current_user)
     if not current_user.company_id:
         raise HTTPException(status_code=400, detail="User has no company assigned")
 
@@ -178,9 +188,7 @@ def read_vehicles(
             )
         )
 
-    role_name = current_user.role.name if current_user.role else ""
-    is_company_admin = role_name == "admin" or (role_name == "super_admin" and bool(current_user.company_id))
-    effective_status = status if is_company_admin else "available"
+    effective_status = status if is_inventory_editor(current_user) else "available"
     if effective_status:
         query = query.filter(models.Vehicle.status == effective_status)
 
@@ -198,7 +206,7 @@ def upload_vehicles_excel(
     """
     Sube un archivo Excel y lanza el script de importación masiva.
     """
-    ensure_company_inventory_admin(current_user)
+    ensure_inventory_editor(current_user)
     if not current_user.company_id:
         raise HTTPException(status_code=400, detail="El usuario no tiene una compañía asociada")
 
@@ -251,7 +259,7 @@ def update_vehicle(vehicle_id: int, vehicle_update: schemas.VehicleUpdate, db: S
     """
     Update a vehicle.
     """
-    ensure_company_inventory_admin(current_user)
+    ensure_inventory_editor(current_user)
 
     db_vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == vehicle_id).first()
     if not db_vehicle:
@@ -276,7 +284,7 @@ def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db), current_user:
     """
     Delete a vehicle.
     """
-    ensure_company_inventory_admin(current_user)
+    ensure_inventory_admin(current_user)
 
     db_vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == vehicle_id).first()
     if not db_vehicle:

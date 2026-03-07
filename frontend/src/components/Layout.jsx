@@ -19,7 +19,7 @@ const Layout = () => {
     }
 
     // Role Map Fallback
-    const ROLE_MAP = { 1: 'super_admin', 2: 'admin', 3: 'asesor', 4: 'user' };
+    const ROLE_MAP = { 1: 'super_admin', 2: 'admin', 3: 'asesor', 4: 'user', 5: 'inventario' };
 
     // Role Checks
     // Handle role being an object (new), string (legacy), or fallback to ID
@@ -33,6 +33,7 @@ const Layout = () => {
     const isAdvisor = roleName === 'asesor';
     const isCustomer = roleName === 'user';
     const isAliado = roleName === 'aliado';
+    const isInventario = roleName === 'inventario';
 
     // Dynamic Styling
     const primaryColor = user?.company?.primary_color || '#0f172a'; // Default slate-900
@@ -156,7 +157,7 @@ const Layout = () => {
                                 {user?.email?.split('@')[0].replace('.', ' ') || 'Usuario'}
                             </span>
                             <span className="text-xs text-blue-200 truncate font-normal opacity-80">
-                                {isAdvisor ? 'Asesor Comercial' : (isAliado ? 'Aliado' : (user?.company?.name || 'AutosQP'))}
+                                {isAdvisor ? 'Asesor Comercial' : (isAliado ? 'Aliado' : (isInventario ? 'Gestor de Inventario' : (user?.company?.name || 'AutosQP')))}
                             </span>
                         </div>
                     </div>
@@ -202,7 +203,7 @@ const Layout = () => {
                         </>
                     ) : (
                         <>
-                            {!isAdvisor && !isCustomer && (
+                            {!isAdvisor && !isCustomer && !isInventario && (
                                 <NavItem
                                     to="/admin/dashboard"
                                     label="Dashboard"
@@ -229,7 +230,7 @@ const Layout = () => {
                     )}
 
                     {/* Company Admin & Advisor & Aliado Links */}
-                    {(isCompanyAdmin || isAdvisor || isAliado) && (
+                    {(isCompanyAdmin || isAdvisor || isAliado || isInventario) && (
                         <>
                             <NavItem
                                 to="/admin/inventory"

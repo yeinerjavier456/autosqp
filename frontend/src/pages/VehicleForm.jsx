@@ -9,7 +9,8 @@ const VehicleForm = () => {
     const { user } = useAuth();
     const roleName = user?.role?.name || (typeof user?.role === 'string' ? user?.role : '');
     const isCompanyAdmin = roleName === 'admin' || (roleName === 'super_admin' && !!user?.company_id);
-    const isReadOnly = !isCompanyAdmin;
+    const canEditInventory = isCompanyAdmin || roleName === 'inventario';
+    const isReadOnly = !canEditInventory;
     const { id } = useParams();
     const navigate = useNavigate();
     const isEditMode = !!id;
