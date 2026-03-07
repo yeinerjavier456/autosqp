@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import Swal from 'sweetalert2';
 import NotificationBell from './NotificationBell';
+import FloatingChatButton from './FloatingChatButton';
 
 const Layout = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -407,6 +408,7 @@ const Layout = () => {
                     <Outlet />
                 </div>
             </main>
+            <FloatingChatButton />
         </div>
     );
 };

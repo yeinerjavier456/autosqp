@@ -5,8 +5,8 @@ const ChatContext = createContext();
 export const ChatProvider = ({ children }) => {
     const [unreadCount, setUnreadCount] = useState(0);
 
-    const incrementUnreadCount = () => {
-        setUnreadCount(prev => prev + 1);
+    const incrementUnreadCount = (count = 1) => {
+        setUnreadCount(prev => prev + Math.max(1, count));
     };
 
     const resetUnreadCount = () => {

@@ -13,6 +13,27 @@ const GlobalNotifications = () => {
     const [messages, setMessages] = useState([]);
     const [usersList, setUsersList] = useState([]);
 
+    const playNotificationSound = () => {
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx) return;
+            const ctx = new AudioCtx();
+            const oscillator = ctx.createOscillator();
+            const gain = ctx.createGain();
+            oscillator.type = 'sine';
+            oscillator.frequency.value = 880;
+            gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
+            oscillator.connect(gain);
+            gain.connect(ctx.destination);
+            oscillator.start();
+            oscillator.stop(ctx.currentTime + 0.26);
+        } catch (error) {
+            // Silent fallback if browser blocks audio.
+        }
+    };
+
     // Poll interval (should match InternalChat or be slightly confusing if different, 
     // but independent polling is fine for this requirement)
     // Using 5 seconds
@@ -44,10 +65,12 @@ const GlobalNotifications = () => {
             // If it's 0, it means we just loaded the app. 
 
             if (lastMessageCount > 0 && messages.length > lastMessageCount) {
-                const lastMsg = messages[messages.length - 1];
+                const newMessages = messages.slice(lastMessageCount);
+                const incomingMessages = newMessages.filter(m => m.sender_id !== user?.id);
+                const lastMsg = incomingMessages[incomingMessages.length - 1];
 
                 // Only notify if NOT from me
-                if (lastMsg && lastMsg.sender_id !== user?.id) {
+                if (lastMsg) {
                     // Check if it's a DM for me or a Broadcast
                     // Backend creates message with recipient_id.
                     // Logic: If I received it (it's in the list), and sender != me.
@@ -57,9 +80,10 @@ const GlobalNotifications = () => {
                     // By default today. So we are good.
 
                     const senderName = getSenderName(lastMsg);
+                    const previewText = getPreviewText(lastMsg);
                     Swal.fire({
                         title: `Nuevo mensaje de ${senderName}`,
-                        text: lastMsg.content.length > 50 ? lastMsg.content.substring(0, 50) + '...' : lastMsg.content,
+                        text: previewText.length > 50 ? previewText.substring(0, 50) + '...' : previewText,
                         toast: true,
                         position: 'top-end',
                         showConfirmButton: false,
@@ -71,10 +95,11 @@ const GlobalNotifications = () => {
                             toast.addEventListener('mouseleave', Swal.resumeTimer)
                         }
                     });
+                    playNotificationSound();
 
                     // Increment unread count if NOT on chat page
                     if (location.pathname !== '/internal-chat') {
-                        incrementUnreadCount();
+                        incrementUnreadCount(incomingMessages.length);
                     }
                 }
             }
@@ -115,6 +140,12 @@ const GlobalNotifications = () => {
         if (msg.sender && msg.sender.email) return msg.sender.email.split('@')[0];
         const senderObj = usersList.find(u => u.id === msg.sender_id);
         return senderObj ? senderObj.email.split('@')[0] : `Usuario ${msg.sender_id}`;
+    };
+
+    const getPreviewText = (msg) => {
+        if (!msg?.content) return '';
+        if (msg.content.startsWith('__FILE__')) return 'Archivo adjunto';
+        return msg.content;
     };
 
     return null; // This component renders nothing, just handles side effects

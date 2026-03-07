@@ -15,6 +15,8 @@ const InternalChat = () => {
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const messagesEndRef = useRef(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedFile, setSelectedFile] = useState(null);
+    const fileInputRef = useRef(null);
 
     useEffect(() => {
         resetUnreadCount();
@@ -63,18 +65,45 @@ const InternalChat = () => {
 
     const handleSendMessage = async (e) => {
         e.preventDefault();
-        if (!newMessage.trim()) return;
+        if (!newMessage.trim() && !selectedFile) return;
 
         try {
             const token = localStorage.getItem('token');
-            await axios.post('https://autosqp.co/api/internal-messages',
-                {
-                    content: newMessage,
-                    recipient_id: recipientId ? parseInt(recipientId) : null
-                },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
+
+            if (selectedFile) {
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                if (recipientId) {
+                    formData.append('recipient_id', recipientId);
+                }
+                if (newMessage.trim()) {
+                    formData.append('content', newMessage.trim());
+                }
+
+                await axios.post(
+                    'https://autosqp.co/api/internal-messages/upload',
+                    formData,
+                    {
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            'Content-Type': 'multipart/form-data'
+                        }
+                    }
+                );
+            } else {
+                await axios.post('https://autosqp.co/api/internal-messages',
+                    {
+                        content: newMessage,
+                        recipient_id: recipientId ? parseInt(recipientId) : null
+                    },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+            }
             setNewMessage('');
+            setSelectedFile(null);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
             fetchMessages();
         } catch (error) {
             console.error("Error sending message", error);
@@ -121,6 +150,22 @@ const InternalChat = () => {
     );
 
     const activeUser = usersList.find(u => u.id === parseInt(recipientId));
+
+    const parseFileMessage = (content) => {
+        if (!content || !content.startsWith('__FILE__')) return null;
+        try {
+            return JSON.parse(content.replace('__FILE__', ''));
+        } catch (error) {
+            return null;
+        }
+    };
+
+    const formatFileSize = (size) => {
+        const value = Number(size || 0);
+        if (value < 1024) return `${value} B`;
+        if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+        return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+    };
 
     return (
         <div className="flex h-[calc(100vh-64px)] bg-gray-100 overflow-hidden">
@@ -293,7 +338,34 @@ const InternalChat = () => {
                                             </p>
                                         )}
 
-                                        <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                                        {parseFileMessage(msg.content) ? (
+                                            (() => {
+                                                const fileData = parseFileMessage(msg.content);
+                                                return (
+                                                    <div className="space-y-2">
+                                                        {fileData?.text && (
+                                                            <p className="whitespace-pre-wrap leading-relaxed">{fileData.text}</p>
+                                                        )}
+                                                        <a
+                                                            href={fileData?.file_url}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className={`block rounded-lg p-3 border ${isMe ? 'border-blue-400 bg-blue-500/20 text-white' : 'border-slate-200 bg-slate-50 text-slate-800'} hover:opacity-90`}
+                                                        >
+                                                            <div className="font-semibold truncate">{fileData?.file_name || 'Archivo'}</div>
+                                                            <div className={`text-xs mt-1 ${isMe ? 'text-blue-100' : 'text-slate-500'}`}>
+                                                                {fileData?.file_type || 'application/octet-stream'} • {formatFileSize(fileData?.file_size)}
+                                                            </div>
+                                                            <div className={`text-xs mt-2 underline ${isMe ? 'text-blue-100' : 'text-blue-600'}`}>
+                                                                Abrir / Descargar
+                                                            </div>
+                                                        </a>
+                                                    </div>
+                                                );
+                                            })()
+                                        ) : (
+                                            <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                                        )}
 
                                         <div className={`text-[10px] mt-1 flex justify-end gap-1
                                              ${isMe ? 'text-blue-100' : 'text-gray-400'}`}>
@@ -314,6 +386,22 @@ const InternalChat = () => {
                 <div className="p-4 bg-white border-t border-gray-200 z-10">
                     <form onSubmit={handleSendMessage} className="flex gap-3 max-w-5xl mx-auto">
                         <input
+                            ref={fileInputRef}
+                            type="file"
+                            className="hidden"
+                            onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="bg-gray-200 text-gray-700 w-12 h-12 rounded-full flex items-center justify-center hover:bg-gray-300 transition"
+                            title="Adjuntar archivo"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l7.07-7.07a4 4 0 10-5.656-5.657L5.757 10.757a6 6 0 108.486 8.486L20.314 13" />
+                            </svg>
+                        </button>
+                        <input
                             type="text"
                             value={newMessage}
                             onChange={(e) => setNewMessage(e.target.value)}
@@ -328,6 +416,11 @@ const InternalChat = () => {
                             <svg className="w-5 h-5 translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
                         </button>
                     </form>
+                    {selectedFile && (
+                        <div className="max-w-5xl mx-auto mt-2 text-xs text-slate-600">
+                            Archivo seleccionado: <span className="font-semibold">{selectedFile.name}</span>
+                        </div>
+                    )}
                 </div>
 
             </div>

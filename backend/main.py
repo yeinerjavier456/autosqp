@@ -15,6 +15,7 @@ import traceback
 import requests
 import time
 import re
+import json
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
@@ -697,7 +698,7 @@ def get_reports_stats(db: Session = Depends(get_db), current_user: models.User =
 
 # --- STATIC FILES & UPLOAD ---
 from fastapi.staticfiles import StaticFiles
-from fastapi import UploadFile, File
+from fastapi import UploadFile, File, Form
 import shutil
 import os
 import uuid
@@ -707,7 +708,7 @@ os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.post("/upload/")
-async def upload_image(file: UploadFile = File(...)):
+async def upload_image(request: Request, file: UploadFile = File(...)):
     # Generate unique filename
     file_extension = file.filename.split(".")[-1]
     unique_filename = f"{uuid.uuid4()}.{file_extension}"
@@ -718,7 +719,7 @@ async def upload_image(file: UploadFile = File(...)):
         
     # Return URL (assuming localhost for now, hardcoded base likely needed for prod)
     # In a real scenario you might return full URL or relative path
-    return {"url": f"http://localhost:8000/static/{unique_filename}"}
+    return {"url": f"{str(request.base_url).rstrip('/')}/static/{unique_filename}"}
 
 # --- BRANDS & MODELS ENDPOINTS ---
 
@@ -1758,6 +1759,53 @@ def create_internal_message(
 
     db_message = models.InternalMessage(
         content=message.content,
+        company_id=current_user.company_id,
+        sender_id=current_user.id,
+        recipient_id=recipient_id
+    )
+    db.add(db_message)
+    db.commit()
+    db.refresh(db_message)
+    return db_message
+
+@app.post("/internal-messages/upload", response_model=schemas.InternalMessage)
+async def upload_internal_message_file(
+    request: Request,
+    file: UploadFile = File(...),
+    recipient_id: Optional[int] = Form(None),
+    content: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if recipient_id:
+        recipient = db.query(models.User).filter(models.User.id == recipient_id).first()
+        if not recipient:
+            raise HTTPException(status_code=404, detail="Recipient not found")
+        if recipient.company_id != current_user.company_id:
+            raise HTTPException(status_code=403, detail="Cannot message users from other companies")
+
+    os.makedirs("static/internal_chat", exist_ok=True)
+
+    safe_name = os.path.basename(file.filename or "archivo")
+    ext = safe_name.split(".")[-1] if "." in safe_name else "bin"
+    unique_name = f"{uuid.uuid4()}.{ext}"
+    rel_path = f"static/internal_chat/{unique_name}"
+
+    with open(rel_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    file_url = f"{str(request.base_url).rstrip('/')}/{rel_path}"
+    payload = {
+        "type": "file",
+        "file_name": safe_name,
+        "file_url": file_url,
+        "file_type": file.content_type or "application/octet-stream",
+        "file_size": os.path.getsize(rel_path),
+        "text": content.strip() if content else ""
+    }
+
+    db_message = models.InternalMessage(
+        content=f"__FILE__{json.dumps(payload, ensure_ascii=False)}",
         company_id=current_user.company_id,
         sender_id=current_user.id,
         recipient_id=recipient_id
