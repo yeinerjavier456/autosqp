@@ -66,7 +66,7 @@ const VehicleForm = () => {
             setBrands(brandsData);
 
             if (brandsData.length === 0) {
-                await axios.post('https://autosqp.co/api/seed/brands/external?max_makes=100&max_models_per_make=120&include_models=true');
+                await axios.post('https://autosqp.co/api/seed/brands/external?max_makes=100&max_models_per_make=120&include_models=true&only_common=true');
                 await axios.post('https://autosqp.co/api/seed/brands/from-vehicles');
                 const syncedResponse = await axios.get('https://autosqp.co/api/brands/');
                 setBrands(syncedResponse.data || []);
@@ -145,7 +145,7 @@ const VehicleForm = () => {
     const handleSeedBrands = async () => {
         try {
             setLoading(true);
-            const externalResponse = await axios.post('https://autosqp.co/api/seed/brands/external?max_makes=100&max_models_per_make=120&include_models=true');
+            const externalResponse = await axios.post('https://autosqp.co/api/seed/brands/external?max_makes=100&max_models_per_make=120&include_models=true&only_common=true');
             const localResponse = await axios.post('https://autosqp.co/api/seed/brands/from-vehicles');
 
             Swal.fire(

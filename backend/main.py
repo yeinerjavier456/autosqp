@@ -14,6 +14,7 @@ import os
 import traceback
 import requests
 import time
+import re
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
@@ -734,6 +735,10 @@ def normalize_catalog_value(value: Optional[str]) -> Optional[str]:
     cleaned = " ".join(str(value).strip().split())
     return cleaned if cleaned else None
 
+def catalog_key(value: Optional[str]) -> str:
+    normalized = normalize_catalog_value(value) or ""
+    return re.sub(r"[^a-z0-9]", "", normalized.lower())
+
 def upsert_brand_model(db: Session, make: Optional[str], model: Optional[str]):
     make_name = normalize_catalog_value(make)
     model_name = normalize_catalog_value(model)
@@ -902,6 +907,7 @@ def seed_brands_external(
     max_makes: int = Query(80, ge=1, le=250),
     max_models_per_make: int = Query(120, ge=1, le=500),
     include_models: bool = Query(True),
+    only_common: bool = Query(True),
     db: Session = Depends(get_db)
 ):
     """
@@ -919,12 +925,50 @@ def seed_brands_external(
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"No se pudo consultar catalogo externo: {str(exc)}")
 
+    common_brands_colombia = {
+        catalog_key("Chevrolet"),
+        catalog_key("Renault"),
+        catalog_key("Mazda"),
+        catalog_key("Kia"),
+        catalog_key("Toyota"),
+        catalog_key("Nissan"),
+        catalog_key("Ford"),
+        catalog_key("Volkswagen"),
+        catalog_key("Hyundai"),
+        catalog_key("Suzuki"),
+        catalog_key("Honda"),
+        catalog_key("BMW"),
+        catalog_key("Mercedes-Benz"),
+        catalog_key("Audi"),
+        catalog_key("Jeep"),
+        catalog_key("Peugeot"),
+        catalog_key("Citroen"),
+        catalog_key("Seat"),
+        catalog_key("Volvo"),
+        catalog_key("Subaru"),
+        catalog_key("Mitsubishi"),
+        catalog_key("Fiat"),
+        catalog_key("Chery"),
+        catalog_key("Great Wall"),
+        catalog_key("JAC"),
+        catalog_key("BYD"),
+        catalog_key("MG"),
+        catalog_key("DFSK"),
+    }
+
+    if only_common:
+        makes_data = [
+            item for item in makes_data
+            if catalog_key(item.get("Make_Name")) in common_brands_colombia
+        ]
+
     if not makes_data:
         return {
             "message": "La fuente externa no devolvio marcas.",
             "brands_created": 0,
             "models_created": 0,
-            "makes_processed": 0
+            "makes_processed": 0,
+            "filter": "common_colombia" if only_common else "all"
         }
 
     # Marcas existentes por nombre normalizado
@@ -995,7 +1039,8 @@ def seed_brands_external(
         "message": "Catalogo externo sincronizado correctamente",
         "brands_created": brands_created,
         "models_created": models_created,
-        "makes_processed": makes_processed
+        "makes_processed": makes_processed,
+        "filter": "common_colombia" if only_common else "all"
     }
 
 
