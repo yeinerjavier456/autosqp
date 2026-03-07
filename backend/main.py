@@ -18,6 +18,7 @@ import re
 import json
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
@@ -720,6 +721,19 @@ async def upload_image(request: Request, file: UploadFile = File(...)):
     # Return URL (assuming localhost for now, hardcoded base likely needed for prod)
     # In a real scenario you might return full URL or relative path
     return {"url": f"{str(request.base_url).rstrip('/')}/static/{unique_filename}"}
+
+@app.get("/internal-files/{storage_name}")
+def get_internal_file(storage_name: str):
+    safe_name = os.path.basename(storage_name)
+    base_dir = os.path.abspath("static/internal_chat")
+    file_path = os.path.abspath(os.path.join(base_dir, safe_name))
+
+    if not file_path.startswith(base_dir):
+        raise HTTPException(status_code=400, detail="Invalid file path")
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(path=file_path, filename=safe_name)
 
 # --- BRANDS & MODELS ENDPOINTS ---
 
@@ -1800,6 +1814,7 @@ async def upload_internal_message_file(
     payload = {
         "type": "file",
         "file_name": safe_name,
+        "storage_name": unique_name,
         "file_url": file_url,
         "file_url_relative": relative_url,
         "file_path": rel_path_web,

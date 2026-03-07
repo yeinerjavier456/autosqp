@@ -80,6 +80,10 @@ const FloatingChatButton = () => {
 
     const resolveFileUrl = (fileData) => {
         if (!fileData) return '#';
+        const storageName = fileData.storage_name || (fileData.file_path ? fileData.file_path.split('/').pop() : '');
+        if (storageName) {
+            return `${window.location.origin}/api/internal-files/${encodeURIComponent(storageName)}`;
+        }
         if (fileData.file_url_relative) {
             return `${window.location.origin}${fileData.file_url_relative}`;
         }
