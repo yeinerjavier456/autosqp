@@ -283,7 +283,7 @@ const VehicleForm = () => {
                             </span>
                         </div>
                         <div className="space-y-1">
-                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Precio de Venta</h3>
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Precio (COP) *</h3>
                             <p className="text-2xl font-bold text-emerald-600">
                                 {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(formData.price || 0)}
                             </p>
