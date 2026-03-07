@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import { useAuth } from '../context/AuthContext';
 
 const FloatingChatButton = () => {
+    const navigate = useNavigate();
     const location = useLocation();
     const { user } = useAuth();
-    const { unreadCount, resetUnreadCount } = useChat();
+    const { unreadCount, unreadByConversation, resetUnreadCount } = useChat();
     const [open, setOpen] = useState(false);
     const [messages, setMessages] = useState([]);
     const [usersList, setUsersList] = useState([]);
@@ -140,9 +141,19 @@ const FloatingChatButton = () => {
                             <h3 className="font-bold">Chat Interno</h3>
                             <p className="text-xs text-slate-300">Sin salir de la vista actual</p>
                         </div>
-                        <button type="button" onClick={() => setOpen(false)} className="text-slate-300 hover:text-white">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => navigate('/internal-chat')}
+                                className="text-xs bg-white/20 hover:bg-white/30 px-2 py-1 rounded"
+                                title="Abrir chat completo"
+                            >
+                                Expandir
+                            </button>
+                            <button type="button" onClick={() => setOpen(false)} className="text-slate-300 hover:text-white">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
                     </div>
 
                     <div className="px-3 py-2 border-b bg-slate-50">
@@ -151,10 +162,12 @@ const FloatingChatButton = () => {
                             onChange={(e) => setRecipientId(e.target.value)}
                             className="w-full border rounded-lg px-3 py-2 text-sm"
                         >
-                            <option value="">Canal General</option>
+                            <option value="">
+                                {`Canal General${unreadByConversation.general ? ` (${unreadByConversation.general})` : ''}`}
+                            </option>
                             {usersList.filter(u => u.id !== user?.id).map(u => (
                                 <option key={u.id} value={u.id}>
-                                    {getUserName(u)}
+                                    {`${getUserName(u)}${unreadByConversation[`dm_${u.id}`] ? ` (${unreadByConversation[`dm_${u.id}`]})` : ''}`}
                                 </option>
                             ))}
                         </select>

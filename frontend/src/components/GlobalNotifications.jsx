@@ -13,7 +13,7 @@ const GlobalNotifications = () => {
     const [messages, setMessages] = useState([]);
     const [usersList, setUsersList] = useState([]);
 
-    const playNotificationSound = () => {
+    const playNotificationSound = (kind = 'general') => {
         try {
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
             if (!AudioCtx) return;
@@ -21,7 +21,7 @@ const GlobalNotifications = () => {
             const oscillator = ctx.createOscillator();
             const gain = ctx.createGain();
             oscillator.type = 'sine';
-            oscillator.frequency.value = 880;
+            oscillator.frequency.value = kind === 'private' ? 1046 : 880;
             gain.gain.setValueAtTime(0.0001, ctx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02);
             gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
@@ -95,11 +95,12 @@ const GlobalNotifications = () => {
                             toast.addEventListener('mouseleave', Swal.resumeTimer)
                         }
                     });
-                    playNotificationSound();
+                    const soundType = lastMsg?.recipient_id === user?.id ? 'private' : 'general';
+                    playNotificationSound(soundType);
 
                     // Increment unread count if NOT on chat page
                     if (location.pathname !== '/internal-chat') {
-                        incrementUnreadCount(incomingMessages.length);
+                        incrementUnreadCount(incomingMessages.length, incomingMessages);
                     }
                 }
             }
