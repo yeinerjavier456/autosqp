@@ -1082,14 +1082,11 @@ def read_vehicles(
             (models.Vehicle.plate.ilike(search))
         )
 
-    if status:
-        query = query.filter(models.Vehicle.status == status)
-        
-        # RESTRICTION: Advisor can only see SOLD vehicles if THEY sold them
-        # We assume 'sold' status implies a Sale record exists (handled in update_vehicle)
-        if status == 'sold' and current_user.role and current_user.role.name in ['asesor', 'vendedor']:
-            query = query.join(models.Sale, models.Sale.vehicle_id == models.Vehicle.id)\
-                         .filter(models.Sale.seller_id == current_user.id)
+    role_name = current_user.role.name if current_user.role else ""
+    is_company_admin = role_name == "admin" or (role_name == "super_admin" and bool(current_user.company_id))
+    effective_status = status if is_company_admin else "available"
+    if effective_status:
+        query = query.filter(models.Vehicle.status == effective_status)
         
     total = query.count()
     vehicles = query.order_by(models.Vehicle.id.desc()).offset(skip).limit(limit).all()

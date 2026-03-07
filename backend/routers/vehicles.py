@@ -178,8 +178,11 @@ def read_vehicles(
             )
         )
 
-    if status:
-        query = query.filter(models.Vehicle.status == status)
+    role_name = current_user.role.name if current_user.role else ""
+    is_company_admin = role_name == "admin" or (role_name == "super_admin" and bool(current_user.company_id))
+    effective_status = status if is_company_admin else "available"
+    if effective_status:
+        query = query.filter(models.Vehicle.status == effective_status)
 
     total = query.count()
     items = query.order_by(models.Vehicle.id.desc()).offset(skip).limit(limit).all()

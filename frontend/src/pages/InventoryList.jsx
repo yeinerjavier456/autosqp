@@ -22,7 +22,8 @@ const InventoryList = () => {
         try {
             const token = localStorage.getItem('token');
             const skip = (page - 1) * limit;
-            const params = { skip, limit, status: activeTab }; // Filter by status
+            const effectiveStatus = isCompanyAdmin ? activeTab : 'available';
+            const params = { skip, limit, status: effectiveStatus }; // Filter by status
             if (search) params.q = search;
 
             const response = await axios.get('https://autosqp.co/api/vehicles/', {
@@ -48,6 +49,7 @@ const InventoryList = () => {
     };
 
     const handleTabChange = (tab) => {
+        if (!isCompanyAdmin) return;
         setActiveTab(tab);
         setPage(1);
     };
@@ -189,33 +191,37 @@ const InventoryList = () => {
                 >
                     Disponibles
                 </button>
-                <button
-                    onClick={() => handleTabChange('sold')}
-                    className={`px-4 py-2 font-medium text-sm rounded-t-lg transition-colors ${activeTab === 'sold'
-                        ? 'bg-white text-blue-600 border-t border-l border-r border-gray-200'
-                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                        }`}
-                >
-                    Vendidos
-                </button>
-                <button
-                    onClick={() => handleTabChange('alistamiento')}
-                    className={`px-4 py-2 font-medium text-sm rounded-t-lg transition-colors ${activeTab === 'alistamiento'
-                        ? 'bg-white text-blue-600 border-t border-l border-r border-gray-200'
-                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                        }`}
-                >
-                    Alistamiento
-                </button>
-                <button
-                    onClick={() => handleTabChange('desembolso')}
-                    className={`px-4 py-2 font-medium text-sm rounded-t-lg transition-colors ${activeTab === 'desembolso'
-                        ? 'bg-white text-blue-600 border-t border-l border-r border-gray-200'
-                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                        }`}
-                >
-                    Desembolso
-                </button>
+                {isCompanyAdmin && (
+                    <>
+                        <button
+                            onClick={() => handleTabChange('sold')}
+                            className={`px-4 py-2 font-medium text-sm rounded-t-lg transition-colors ${activeTab === 'sold'
+                                ? 'bg-white text-blue-600 border-t border-l border-r border-gray-200'
+                                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                                }`}
+                        >
+                            Vendidos
+                        </button>
+                        <button
+                            onClick={() => handleTabChange('alistamiento')}
+                            className={`px-4 py-2 font-medium text-sm rounded-t-lg transition-colors ${activeTab === 'alistamiento'
+                                ? 'bg-white text-blue-600 border-t border-l border-r border-gray-200'
+                                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                                }`}
+                        >
+                            Alistamiento
+                        </button>
+                        <button
+                            onClick={() => handleTabChange('desembolso')}
+                            className={`px-4 py-2 font-medium text-sm rounded-t-lg transition-colors ${activeTab === 'desembolso'
+                                ? 'bg-white text-blue-600 border-t border-l border-r border-gray-200'
+                                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                                }`}
+                        >
+                            Desembolso
+                        </button>
+                    </>
+                )}
             </div>
 
             <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100 rounded-tl-none">
