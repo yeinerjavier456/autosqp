@@ -186,6 +186,9 @@ const InternalChat = () => {
         return raw || '#';
     };
 
+    const isImageFile = (fileData) => (fileData?.file_type || '').toLowerCase().startsWith('image/');
+    const isPdfFile = (fileData) => (fileData?.file_type || '').toLowerCase().includes('pdf');
+
     return (
         <div className="flex h-[calc(100vh-64px)] bg-gray-100 overflow-hidden">
 
@@ -379,6 +382,22 @@ const InternalChat = () => {
                                                                 Abrir / Descargar
                                                             </div>
                                                         </a>
+                                                        {isImageFile(fileData) && (
+                                                            <a href={resolveFileUrl(fileData)} target="_blank" rel="noreferrer" className="block">
+                                                                <img
+                                                                    src={resolveFileUrl(fileData)}
+                                                                    alt={fileData?.file_name || 'Imagen adjunta'}
+                                                                    className="mt-2 max-h-64 w-full object-contain rounded-lg border border-slate-200 bg-white"
+                                                                />
+                                                            </a>
+                                                        )}
+                                                        {isPdfFile(fileData) && (
+                                                            <iframe
+                                                                title={fileData?.file_name || 'PDF adjunto'}
+                                                                src={resolveFileUrl(fileData)}
+                                                                className="mt-2 w-full h-72 rounded-lg border border-slate-200 bg-white"
+                                                            />
+                                                        )}
                                                     </div>
                                                 );
                                             })()

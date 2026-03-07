@@ -95,6 +95,9 @@ const FloatingChatButton = () => {
         return raw || '#';
     };
 
+    const isImageFile = (fileData) => (fileData?.file_type || '').toLowerCase().startsWith('image/');
+    const isPdfFile = (fileData) => (fileData?.file_type || '').toLowerCase().includes('pdf');
+
     const getUserName = (u) => {
         if (!u) return 'Usuario';
         if (u.full_name) return u.full_name;
@@ -211,6 +214,22 @@ const FloatingChatButton = () => {
                                                     <div>{fileData.file_type} - {formatFileSize(fileData.file_size)}</div>
                                                     <div className="underline mt-1">Abrir / Descargar</div>
                                                 </a>
+                                                {isImageFile(fileData) && (
+                                                    <a href={resolveFileUrl(fileData)} target="_blank" rel="noreferrer" className="block">
+                                                        <img
+                                                            src={resolveFileUrl(fileData)}
+                                                            alt={fileData?.file_name || 'Imagen adjunta'}
+                                                            className="mt-2 max-h-48 w-full object-contain rounded border border-slate-200 bg-white"
+                                                        />
+                                                    </a>
+                                                )}
+                                                {isPdfFile(fileData) && (
+                                                    <iframe
+                                                        title={fileData?.file_name || 'PDF adjunto'}
+                                                        src={resolveFileUrl(fileData)}
+                                                        className="mt-2 w-full h-48 rounded border border-slate-200 bg-white"
+                                                    />
+                                                )}
                                             </div>
                                         ) : (
                                             <p className="whitespace-pre-wrap">{msg.content}</p>
