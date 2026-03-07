@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import Webcam from 'react-webcam';
 import Swal from 'sweetalert2';
 import { useAuth } from '../context/AuthContext';
+import { normalizeMediaUrl } from '../utils/media';
 
 const VehicleForm = () => {
     const { user } = useAuth();
@@ -122,7 +123,7 @@ const VehicleForm = () => {
                 location: data.location || '',
                 description: data.description || '',
                 status: data.status || 'available',
-                photos: data.photos || []
+                photos: (data.photos || []).map(normalizeMediaUrl)
             });
         } catch (error) {
             console.error("Error fetching vehicle", error);
@@ -196,7 +197,7 @@ const VehicleForm = () => {
                         Authorization: `Bearer ${token}`
                     }
                 });
-                uploadedUrls.push(response.data.url);
+                uploadedUrls.push(normalizeMediaUrl(response.data.url));
             } catch (error) {
                 console.error("Error uploading file", error);
                 Swal.fire('Error', "Error al subir imagen", 'error');

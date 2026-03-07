@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import PublicSalesChatbot from '../components/PublicSalesChatbot';
+import { normalizeMediaUrl } from '../utils/media';
 
 const VehicleDetail = () => {
     const { id } = useParams();
@@ -15,9 +16,11 @@ const VehicleDetail = () => {
         const fetchVehicle = async () => {
             try {
                 const res = await axios.get(`https://autosqp.co/api/vehicles/public/${id}`);
-                setVehicle(res.data);
-                if (res.data.photos && res.data.photos.length > 0) {
-                    setSelectedImage(res.data.photos[0]);
+                const normalizedPhotos = (res.data.photos || []).map(normalizeMediaUrl);
+                const normalizedVehicle = { ...res.data, photos: normalizedPhotos };
+                setVehicle(normalizedVehicle);
+                if (normalizedPhotos.length > 0) {
+                    setSelectedImage(normalizedPhotos[0]);
                 }
             } catch (error) {
                 console.error("Error fetching vehicle details", error);

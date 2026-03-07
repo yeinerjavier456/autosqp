@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import PublicSalesChatbot from '../components/PublicSalesChatbot';
+import { normalizeMediaUrl } from '../utils/media';
 
 const PublicInventory = () => {
     const [vehicles, setVehicles] = useState([]);
@@ -323,7 +324,7 @@ const PublicInventory = () => {
                                         <Link to={`/autos/${vehicle.id}`} className="block relative aspect-[4/3] overflow-hidden">
                                             {vehicle.photos && vehicle.photos.length > 0 ? (
                                                 <img
-                                                    src={vehicle.photos[0]}
+                                                    src={normalizeMediaUrl(vehicle.photos[0])}
                                                     alt={`${vehicle.make} ${vehicle.model}`}
                                                     className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 ${vehicle.status === 'sold' ? 'grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100' : ''}`}
                                                 />

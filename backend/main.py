@@ -721,7 +721,11 @@ async def upload_image(request: Request, file: UploadFile = File(...)):
         
     # Return URL (assuming localhost for now, hardcoded base likely needed for prod)
     # In a real scenario you might return full URL or relative path
-    return {"url": f"{str(request.base_url).rstrip('/')}/static/{unique_filename}"}
+    relative_url = f"/api/static/{unique_filename}"
+    return {
+        "url": f"{str(request.base_url).rstrip('/')}{relative_url}",
+        "url_relative": relative_url
+    }
 
 @app.get("/internal-files/{storage_name}")
 def get_internal_file(storage_name: str):
