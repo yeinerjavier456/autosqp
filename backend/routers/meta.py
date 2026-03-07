@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 from database import get_db
 import models, schemas_whatsapp
@@ -12,7 +13,38 @@ router = APIRouter(
     tags=["meta"]
 )
 
-VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN", "autosqp_meta_secret")
+def get_verify_token() -> str:
+    return os.getenv("META_VERIFY_TOKEN", "autosqp_meta_secret")
+
+def resolve_company_id(db: Session, sender_id: str, recipient_id: str, source: str) -> int:
+    # 1) Reuse company from existing lead for this sender/source.
+    existing_lead = db.query(models.Lead).filter(
+        models.Lead.phone == sender_id,
+        models.Lead.source == source
+    ).first()
+    if existing_lead and existing_lead.company_id:
+        return existing_lead.company_id
+
+    # 2) If recipient id matches a configured integration value, use that company.
+    if recipient_id:
+        by_pixel = db.query(models.IntegrationSettings).filter(
+            models.IntegrationSettings.facebook_pixel_id == recipient_id
+        ).first()
+        if by_pixel and by_pixel.company_id:
+            return by_pixel.company_id
+
+    # 3) If only one company has Meta token configured, use it.
+    token_integrations = db.query(models.IntegrationSettings).filter(
+        models.IntegrationSettings.facebook_access_token.isnot(None)
+    ).all()
+    if len(token_integrations) == 1:
+        return token_integrations[0].company_id
+
+    # 4) Fallback to first company instead of hardcoded 1.
+    company = db.query(models.Company).order_by(models.Company.id.asc()).first()
+    if not company:
+        raise HTTPException(status_code=400, detail="No hay compañias registradas para asignar leads de Meta")
+    return company.id
 
 @router.get("/webhook")
 async def verify_webhook(request: Request):
@@ -23,11 +55,12 @@ async def verify_webhook(request: Request):
     mode = params.get("hub.mode")
     token = params.get("hub.verify_token")
     challenge = params.get("hub.challenge")
+    verify_token = get_verify_token()
     
     if mode and token:
-        if mode == "subscribe" and token == VERIFY_TOKEN:
+        if mode == "subscribe" and token == verify_token:
             print("META_WEBHOOK_VERIFIED")
-            return int(challenge)
+            return PlainTextResponse(content=challenge or "", status_code=200)
         else:
             raise HTTPException(status_code=403, detail="Verification failed")
     
@@ -55,45 +88,59 @@ async def receive_meta_message(request: Request, db: Session = Depends(get_db)):
             
         for ent in entry:
             messaging_events = ent.get("messaging", [])
+            # Instagram can also send changes payloads depending on subscription.
+            changes = ent.get("changes", [])
+            for change in changes:
+                value = change.get("value", {})
+                for msg in value.get("messages", []):
+                    messaging_events.append({
+                        "sender": {"id": msg.get("from")},
+                        "recipient": {"id": value.get("id")},
+                        "message": {
+                            "mid": msg.get("id"),
+                            "text": msg.get("text", {}).get("body", "") if isinstance(msg.get("text"), dict) else msg.get("text", ""),
+                            "attachments": msg.get("attachments", []),
+                            "is_echo": False
+                        }
+                    })
+
             for event in messaging_events:
-                # We only care about user messages
                 if "message" not in event:
                     continue
-                    
-                sender_id = event.get("sender", {}).get("id") # PSID or IGSID
-                recipient_id = event.get("recipient", {}).get("id") # Page ID or IG Acc ID
-                
+
+                sender_id = event.get("sender", {}).get("id")
+                recipient_id = event.get("recipient", {}).get("id")
+                if not sender_id:
+                    continue
+
                 message_data = event.get("message", {})
                 if message_data.get("is_echo"):
-                    continue # Ignore messages sent by the page itself
-                    
+                    continue
+
                 content = message_data.get("text", "")
                 msg_id = message_data.get("mid")
-                
-                # Check for attachments (images/videos)
+                if not msg_id:
+                    continue
+
                 media_url = None
                 attachments = message_data.get("attachments", [])
                 msg_type = "text"
                 if attachments:
                     att = attachments[0]
-                    msg_type = att.get("type", "image") # image, video, audio
+                    msg_type = att.get("type", "image")
                     media_url = att.get("payload", {}).get("url")
-                    
-                # Determine source
+
                 lead_source = "facebook" if object_type == "page" else "instagram"
-                
-                # 1. FIND OR CREATE LEAD
-                # Using 'phone' field to temporarily store PSID/IGSID since it's the unique sender identifier used by Meta
+                company_id = resolve_company_id(db, sender_id, recipient_id, lead_source)
+
                 lead = db.query(models.Lead).filter(
-                    models.Lead.phone == sender_id, 
-                    models.Lead.source == lead_source
+                    models.Lead.phone == sender_id,
+                    models.Lead.source == lead_source,
+                    models.Lead.company_id == company_id
                 ).first()
-                
-                company_id = 1 # Default company (could be mapped by Page ID in the future)
-                
+
                 if not lead:
                     import random
-                    # Try to auto-assign
                     assigned_user_id = None
                     potential_agents = db.query(models.User).join(models.Role).filter(
                         models.User.company_id == company_id,
@@ -105,8 +152,8 @@ async def receive_meta_message(request: Request, db: Session = Depends(get_db)):
 
                     lead = models.Lead(
                         name=f"Usuario de {lead_source.capitalize()}",
-                        phone=sender_id, # PSID
-                        email=f"{sender_id}@{lead_source}.com", # Placeholder
+                        phone=sender_id,
+                        email=f"{sender_id}@{lead_source}.com",
                         source=lead_source,
                         status="new",
                         company_id=company_id,
@@ -116,8 +163,7 @@ async def receive_meta_message(request: Request, db: Session = Depends(get_db)):
                     db.commit()
                     db.refresh(lead)
                     print(f"Nuevo Lead creado desde {lead_source}: {lead.id}")
-                    
-                # 2. FIND OR CREATE CONVERSATION
+
                 conversation = db.query(models.Conversation).filter(models.Conversation.lead_id == lead.id).first()
                 if not conversation:
                     conversation = models.Conversation(
@@ -128,9 +174,7 @@ async def receive_meta_message(request: Request, db: Session = Depends(get_db)):
                     db.add(conversation)
                     db.commit()
                     db.refresh(conversation)
-                    
-                # 3. SAVE MESSAGE
-                # Check if message already exists (Meta sometimes retries)
+
                 existing_msg = db.query(models.Message).filter(models.Message.whatsapp_message_id == msg_id).first()
                 if not existing_msg:
                     new_msg = models.Message(
@@ -139,11 +183,10 @@ async def receive_meta_message(request: Request, db: Session = Depends(get_db)):
                         content=content,
                         media_url=media_url,
                         message_type=msg_type,
-                        whatsapp_message_id=msg_id, # reusing this field for MID
+                        whatsapp_message_id=msg_id,
                         status="delivered"
                     )
                     db.add(new_msg)
-                    
                     conversation.last_message_at = datetime.datetime.utcnow()
                     db.commit()
 
