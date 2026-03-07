@@ -505,6 +505,36 @@ class InternalMessage(InternalMessageBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+class PublicChatSessionCreate(BaseModel):
+    source_page: Optional[str] = "/autos"
+    company_id: Optional[int] = None
+
+class PublicChatSession(BaseModel):
+    session_token: str
+    company_id: Optional[int] = None
+    lead_id: Optional[int] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class PublicChatMessageCreate(BaseModel):
+    session_token: str
+    message: str
+    vehicle_id: Optional[int] = None
+    source_page: Optional[str] = None
+
+class PublicChatMessageItem(BaseModel):
+    role: str
+    content: str
+    created_at: Optional[datetime] = None
+
+class PublicChatMessageResponse(BaseModel):
+    session_token: str
+    reply: str
+    lead_created: bool = False
+    lead_id: Optional[int] = None
+    messages: List[PublicChatMessageItem] = []
+
 class SystemLogBase(BaseModel):
     user_id: Optional[int] = None
     action: str

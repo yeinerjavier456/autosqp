@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
+import PublicSalesChatbot from '../components/PublicSalesChatbot';
 
 const VehicleDetail = () => {
     const { id } = useParams();
@@ -312,6 +313,7 @@ const VehicleDetail = () => {
                     )}
                 </div>
             )}
+            <PublicSalesChatbot vehicleId={Number(id)} />
         </div>
     );
 };

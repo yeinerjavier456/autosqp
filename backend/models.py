@@ -424,6 +424,33 @@ class InternalMessage(Base):
     sender = relationship("User", foreign_keys=[sender_id])
     recipient = relationship("User", foreign_keys=[recipient_id])
 
+class PublicChatSession(Base):
+    __tablename__ = "public_chat_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_token = Column(String(120), unique=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+    source_page = Column(String(200), nullable=True)  # e.g. "/autos", "/autos/12"
+    status = Column(String(30), default="active")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    company = relationship("Company")
+    lead = relationship("Lead")
+    messages = relationship("PublicChatMessage", back_populates="session", cascade="all, delete-orphan")
+
+class PublicChatMessage(Base):
+    __tablename__ = "public_chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("public_chat_sessions.id"))
+    role = Column(String(20))  # system, user, assistant
+    content = Column(Text)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    session = relationship("PublicChatSession", back_populates="messages")
+
 class SystemLog(Base):
     __tablename__ = "system_logs"
 

@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Query, Query
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, func
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +16,7 @@ import requests
 import time
 import re
 import json
+import random
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi.responses import FileResponse
@@ -1059,6 +1060,242 @@ def seed_brands_external(
         "filter": "common_colombia" if only_common else "all"
     }
 
+
+# --- PUBLIC SALES CHATBOT ENDPOINTS ---
+
+def get_public_company_id(db: Session, explicit_company_id: Optional[int] = None) -> Optional[int]:
+    if explicit_company_id:
+        company = db.query(models.Company).filter(models.Company.id == explicit_company_id).first()
+        if company:
+            return company.id
+    env_company_id = os.getenv("PUBLIC_CHAT_COMPANY_ID")
+    if env_company_id and env_company_id.isdigit():
+        company = db.query(models.Company).filter(models.Company.id == int(env_company_id)).first()
+        if company:
+            return company.id
+    first_company = db.query(models.Company).order_by(models.Company.id.asc()).first()
+    return first_company.id if first_company else None
+
+def get_company_ai_settings(db: Session, company_id: Optional[int]) -> tuple[Optional[str], str]:
+    model_name = "gpt-4o-mini"
+    api_key = os.getenv("OPENAI_API_KEY")
+    if company_id:
+        settings = db.query(models.IntegrationSettings).filter(models.IntegrationSettings.company_id == company_id).first()
+        if settings:
+            if settings.openai_api_key:
+                api_key = settings.openai_api_key
+            if settings.gw_model:
+                model_name = settings.gw_model
+    return api_key, model_name
+
+def call_openai_chat(api_key: str, model_name: str, messages: List[Dict[str, str]]) -> str:
+    url = "https://api.openai.com/v1/chat/completions"
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "temperature": 0.5
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    response = requests.post(url, headers=headers, json=payload, timeout=45)
+    response.raise_for_status()
+    data = response.json()
+    return data["choices"][0]["message"]["content"].strip()
+
+def extract_prospect_data_with_ai(api_key: str, model_name: str, full_conversation: str) -> Dict[str, Any]:
+    extraction_messages = [
+        {
+            "role": "system",
+            "content": (
+                "Extrae datos de prospecto de conversación de compra de autos. "
+                "Responde SOLO JSON con estas claves exactas: "
+                "name, phone, email, interested_vehicle, is_ready_to_create_lead. "
+                "Si falta un dato usa null. is_ready_to_create_lead=true solo si hay name, phone e interested_vehicle."
+            )
+        },
+        {
+            "role": "user",
+            "content": full_conversation
+        }
+    ]
+    url = "https://api.openai.com/v1/chat/completions"
+    payload = {
+        "model": model_name,
+        "messages": extraction_messages,
+        "temperature": 0,
+        "response_format": {"type": "json_object"}
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    response = requests.post(url, headers=headers, json=payload, timeout=45)
+    response.raise_for_status()
+    data = response.json()
+    content = data["choices"][0]["message"]["content"]
+    return json.loads(content)
+
+def normalize_phone(phone: Optional[str]) -> Optional[str]:
+    if not phone:
+        return None
+    digits = re.sub(r"[^\d+]", "", phone)
+    return digits or None
+
+def maybe_create_public_chat_lead(
+    db: Session,
+    session: models.PublicChatSession,
+    extracted_data: Dict[str, Any]
+) -> Optional[int]:
+    if session.lead_id:
+        return session.lead_id
+
+    name = (extracted_data.get("name") or "").strip()
+    phone = normalize_phone(extracted_data.get("phone"))
+    email = (extracted_data.get("email") or "").strip() or None
+    interested_vehicle = (extracted_data.get("interested_vehicle") or "").strip()
+    is_ready = bool(extracted_data.get("is_ready_to_create_lead"))
+
+    if not (is_ready and name and phone and interested_vehicle):
+        return None
+
+    existing_lead = db.query(models.Lead).filter(
+        models.Lead.company_id == session.company_id,
+        models.Lead.phone == phone
+    ).first()
+    if existing_lead:
+        session.lead_id = existing_lead.id
+        db.commit()
+        return existing_lead.id
+
+    assigned_user_id = None
+    if session.company_id:
+        advisors = db.query(models.User).join(models.Role).filter(
+            models.User.company_id == session.company_id,
+            models.Role.name.in_(["asesor", "vendedor"])
+        ).all()
+        if advisors:
+            assigned_user_id = random.choice(advisors).id
+
+    lead_message = f"Interés detectado por chatbot web: {interested_vehicle}"
+    new_lead = models.Lead(
+        source=models.LeadSource.WEB.value,
+        name=name,
+        phone=phone,
+        email=email,
+        message=lead_message,
+        status=models.LeadStatus.NEW.value,
+        company_id=session.company_id,
+        assigned_to_id=assigned_user_id
+    )
+    db.add(new_lead)
+    db.commit()
+    db.refresh(new_lead)
+
+    session.lead_id = new_lead.id
+    db.commit()
+    return new_lead.id
+
+@app.post("/public-chat/session", response_model=schemas.PublicChatSession)
+def create_public_chat_session(payload: schemas.PublicChatSessionCreate, db: Session = Depends(get_db)):
+    company_id = get_public_company_id(db, payload.company_id)
+    session_token = str(uuid.uuid4())
+    session = models.PublicChatSession(
+        session_token=session_token,
+        company_id=company_id,
+        source_page=payload.source_page or "/autos",
+        status="active"
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return session
+
+@app.get("/public-chat/{session_token}/messages", response_model=List[schemas.PublicChatMessageItem])
+def get_public_chat_messages(session_token: str, db: Session = Depends(get_db)):
+    session = db.query(models.PublicChatSession).filter(models.PublicChatSession.session_token == session_token).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    messages = db.query(models.PublicChatMessage).filter(
+        models.PublicChatMessage.session_id == session.id
+    ).order_by(models.PublicChatMessage.created_at.asc()).all()
+    return [{"role": m.role, "content": m.content, "created_at": m.created_at} for m in messages]
+
+@app.post("/public-chat/message", response_model=schemas.PublicChatMessageResponse)
+def public_chat_message(payload: schemas.PublicChatMessageCreate, db: Session = Depends(get_db)):
+    user_message = (payload.message or "").strip()
+    if not user_message:
+        raise HTTPException(status_code=400, detail="Message is required")
+
+    session = db.query(models.PublicChatSession).filter(
+        models.PublicChatSession.session_token == payload.session_token
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if payload.source_page:
+        session.source_page = payload.source_page
+
+    api_key, model_name = get_company_ai_settings(db, session.company_id)
+    if not api_key:
+        raise HTTPException(status_code=400, detail="OpenAI API key no configurada")
+
+    db.add(models.PublicChatMessage(session_id=session.id, role="user", content=user_message))
+    db.commit()
+
+    history = db.query(models.PublicChatMessage).filter(
+        models.PublicChatMessage.session_id == session.id
+    ).order_by(models.PublicChatMessage.created_at.asc()).all()
+
+    vehicle_hint = ""
+    if payload.vehicle_id:
+        vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == payload.vehicle_id).first()
+        if vehicle:
+            vehicle_hint = (
+                f"Vehículo que está viendo el cliente: {vehicle.make} {vehicle.model} {vehicle.year}, "
+                f"precio {vehicle.price} COP."
+            )
+
+    system_prompt = (
+        "Eres un asesor de ventas de autos de AutosQP en Colombia. "
+        "Habla natural, amable y breve. Tu objetivo es: 1) entender qué carro busca el cliente, "
+        "2) recoger nombre completo y teléfono de contacto (email opcional), 3) confirmar interés. "
+        "No inventes datos. Si faltan datos, pídelos con preguntas claras y una por turno. "
+        f"{vehicle_hint}"
+    )
+
+    chat_messages = [{"role": "system", "content": system_prompt}]
+    for msg in history[-20:]:
+        if msg.role in ["user", "assistant"]:
+            chat_messages.append({"role": msg.role, "content": msg.content})
+
+    assistant_reply = call_openai_chat(api_key, model_name, chat_messages)
+    db.add(models.PublicChatMessage(session_id=session.id, role="assistant", content=assistant_reply))
+    db.commit()
+
+    full_text = "\n".join([f"{m.role}: {m.content}" for m in history[-30:]] + [f"assistant: {assistant_reply}"])
+    lead_created = False
+    lead_id = session.lead_id
+    try:
+        extracted = extract_prospect_data_with_ai(api_key, model_name, full_text)
+        lead_id = maybe_create_public_chat_lead(db, session, extracted)
+        lead_created = bool(lead_id and not session.lead_id is None)
+    except Exception:
+        # Extraction failure should not break chat response.
+        lead_created = False
+
+    latest_messages = db.query(models.PublicChatMessage).filter(
+        models.PublicChatMessage.session_id == session.id
+    ).order_by(models.PublicChatMessage.created_at.asc()).all()
+
+    return {
+        "session_token": session.session_token,
+        "reply": assistant_reply,
+        "lead_created": bool(session.lead_id),
+        "lead_id": session.lead_id,
+        "messages": [{"role": m.role, "content": m.content, "created_at": m.created_at} for m in latest_messages]
+    }
 
 
 # --- LEADS ENDPOINTS ---

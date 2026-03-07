@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
+import PublicSalesChatbot from '../components/PublicSalesChatbot';
 
 const PublicInventory = () => {
     const [vehicles, setVehicles] = useState([]);
@@ -418,6 +419,7 @@ const PublicInventory = () => {
                     )}
                 </div>
             </main>
+            <PublicSalesChatbot />
         </div>
     );
 };
