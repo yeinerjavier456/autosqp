@@ -1794,11 +1794,15 @@ async def upload_internal_message_file(
     with open(rel_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    file_url = f"{str(request.base_url).rstrip('/')}/{rel_path}"
+    rel_path_web = rel_path.replace("\\", "/")
+    relative_url = f"/api/{rel_path_web}"
+    file_url = f"{str(request.base_url).rstrip('/')}{relative_url}"
     payload = {
         "type": "file",
         "file_name": safe_name,
         "file_url": file_url,
+        "file_url_relative": relative_url,
+        "file_path": rel_path_web,
         "file_type": file.content_type or "application/octet-stream",
         "file_size": os.path.getsize(rel_path),
         "text": content.strip() if content else ""

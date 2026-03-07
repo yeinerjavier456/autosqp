@@ -78,6 +78,23 @@ const FloatingChatButton = () => {
         return `${(value / (1024 * 1024)).toFixed(1)} MB`;
     };
 
+    const resolveFileUrl = (fileData) => {
+        if (!fileData) return '#';
+        if (fileData.file_url_relative) {
+            return `${window.location.origin}${fileData.file_url_relative}`;
+        }
+        if (fileData.file_path) {
+            return `${window.location.origin}/api/${fileData.file_path}`;
+        }
+        const raw = fileData.file_url || '';
+        if (raw.startsWith('http://localhost') || raw.startsWith('http://127.0.0.1')) {
+            if (fileData.file_path) return `${window.location.origin}/api/${fileData.file_path}`;
+            return raw.replace(/^https?:\/\/[^/]+/, window.location.origin);
+        }
+        if (raw.startsWith('/')) return `${window.location.origin}${raw}`;
+        return raw || '#';
+    };
+
     const getUserName = (u) => {
         if (!u) return 'Usuario';
         if (u.full_name) return u.full_name;
@@ -189,7 +206,7 @@ const FloatingChatButton = () => {
                                         {fileData ? (
                                             <div className="space-y-1">
                                                 {fileData.text && <p className="whitespace-pre-wrap">{fileData.text}</p>}
-                                                <a href={fileData.file_url} target="_blank" rel="noreferrer" className={`block p-2 rounded border text-xs ${isMe ? 'border-blue-300 text-blue-50' : 'border-slate-200 text-slate-700'}`}>
+                                                <a href={resolveFileUrl(fileData)} target="_blank" rel="noreferrer" className={`block p-2 rounded border text-xs ${isMe ? 'border-blue-300 text-blue-50' : 'border-slate-200 text-slate-700'}`}>
                                                     <div className="font-semibold truncate">{fileData.file_name}</div>
                                                     <div>{fileData.file_type} - {formatFileSize(fileData.file_size)}</div>
                                                     <div className="underline mt-1">Abrir / Descargar</div>

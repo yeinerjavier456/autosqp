@@ -167,6 +167,25 @@ const InternalChat = () => {
         return `${(value / (1024 * 1024)).toFixed(1)} MB`;
     };
 
+    const resolveFileUrl = (fileData) => {
+        if (!fileData) return '#';
+        if (fileData.file_url_relative) {
+            return `${window.location.origin}${fileData.file_url_relative}`;
+        }
+        if (fileData.file_path) {
+            return `${window.location.origin}/api/${fileData.file_path}`;
+        }
+        const raw = fileData.file_url || '';
+        if (raw.startsWith('http://localhost') || raw.startsWith('http://127.0.0.1')) {
+            if (fileData.file_path) {
+                return `${window.location.origin}/api/${fileData.file_path}`;
+            }
+            return raw.replace(/^https?:\/\/[^/]+/, window.location.origin);
+        }
+        if (raw.startsWith('/')) return `${window.location.origin}${raw}`;
+        return raw || '#';
+    };
+
     return (
         <div className="flex h-[calc(100vh-64px)] bg-gray-100 overflow-hidden">
 
@@ -347,7 +366,7 @@ const InternalChat = () => {
                                                             <p className="whitespace-pre-wrap leading-relaxed">{fileData.text}</p>
                                                         )}
                                                         <a
-                                                            href={fileData?.file_url}
+                                                            href={resolveFileUrl(fileData)}
                                                             target="_blank"
                                                             rel="noreferrer"
                                                             className={`block rounded-lg p-3 border ${isMe ? 'border-blue-400 bg-blue-500/20 text-white' : 'border-slate-200 bg-slate-50 text-slate-800'} hover:opacity-90`}

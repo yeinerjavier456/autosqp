@@ -9,7 +9,7 @@ const GlobalNotifications = () => {
     const { user } = useAuth();
     const { incrementUnreadCount } = useChat();
     const location = useLocation();
-    const [lastMessageCount, setLastMessageCount] = useState(0);
+    const [lastMessageId, setLastMessageId] = useState(0);
     const [messages, setMessages] = useState([]);
     const [usersList, setUsersList] = useState([]);
 
@@ -54,61 +54,46 @@ const GlobalNotifications = () => {
 
     useEffect(() => {
         if (messages.length > 0) {
-            // Initial load shouldn't notify, but we don't have previous count on mount.
-            // We can check if lastMessageCount is 0 (initial) and skip? 
-            // Or just rely on the fact that if (messages.length > lastMessageCount) triggers.
-            // Problem: On page refresh, lastMessageCount is 0, messages.length is N. 
-            // We don't want to blast notifications on every refresh.
+            const newestId = Math.max(...messages.map(m => Number(m.id || 0)));
+            if (lastMessageId === 0) {
+                // Initial load: only sync cursor, no alerts.
+                setLastMessageId(newestId);
+                return;
+            }
 
-            // Fix: Initialize setLastMessageCount with current length on FIRST fetch?
-            // Actually, we can just check if lastMessageCount > 0.
-            // If it's 0, it means we just loaded the app. 
+            const incomingMessages = messages.filter(
+                m => Number(m.id || 0) > lastMessageId && m.sender_id !== user?.id
+            );
+            const lastMsg = incomingMessages[incomingMessages.length - 1];
 
-            if (lastMessageCount > 0 && messages.length > lastMessageCount) {
-                const newMessages = messages.slice(lastMessageCount);
-                const incomingMessages = newMessages.filter(m => m.sender_id !== user?.id);
-                const lastMsg = incomingMessages[incomingMessages.length - 1];
-
-                // Only notify if NOT from me
-                if (lastMsg) {
-                    // Check if it's a DM for me or a Broadcast
-                    // Backend creates message with recipient_id.
-                    // Logic: If I received it (it's in the list), and sender != me.
-
-                    // Optimization: Check if it's "too old"? 
-                    // The endpoint returns messages for a specific DATE. 
-                    // By default today. So we are good.
-
-                    const senderName = getSenderName(lastMsg);
-                    const previewText = getPreviewText(lastMsg);
-                    Swal.fire({
-                        title: `Nuevo mensaje de ${senderName}`,
-                        text: previewText.length > 50 ? previewText.substring(0, 50) + '...' : previewText,
-                        toast: true,
-                        position: 'top-end',
-                        showConfirmButton: false,
-                        timer: 10000, // Increased timer as requested
-                        timerProgressBar: true,
-                        icon: 'info',
-                        didOpen: (toast) => {
-                            toast.addEventListener('mouseenter', Swal.stopTimer)
-                            toast.addEventListener('mouseleave', Swal.resumeTimer)
-                        }
-                    });
-                    const soundType = lastMsg?.recipient_id === user?.id ? 'private' : 'general';
-                    playNotificationSound(soundType);
-
-                    // Increment unread count if NOT on chat page
-                    if (location.pathname !== '/internal-chat') {
-                        incrementUnreadCount(incomingMessages.length, incomingMessages);
+            if (lastMsg) {
+                const senderName = getSenderName(lastMsg);
+                const previewText = getPreviewText(lastMsg);
+                Swal.fire({
+                    title: `Nuevo mensaje de ${senderName}`,
+                    text: previewText.length > 50 ? previewText.substring(0, 50) + '...' : previewText,
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 10000,
+                    timerProgressBar: true,
+                    icon: 'info',
+                    didOpen: (toast) => {
+                        toast.addEventListener('mouseenter', Swal.stopTimer)
+                        toast.addEventListener('mouseleave', Swal.resumeTimer)
                     }
+                });
+                const soundType = lastMsg?.recipient_id === user?.id ? 'private' : 'general';
+                playNotificationSound(soundType);
+
+                if (location.pathname !== '/internal-chat') {
+                    incrementUnreadCount(incomingMessages.length, incomingMessages);
                 }
             }
 
-            // Always update count
-            setLastMessageCount(messages.length);
+            setLastMessageId(newestId);
         }
-    }, [messages, location.pathname, incrementUnreadCount]); // Add location.pathname dependency
+    }, [messages, location.pathname, incrementUnreadCount, lastMessageId, user?.id]);
 
     const fetchUsers = async () => {
         try {
