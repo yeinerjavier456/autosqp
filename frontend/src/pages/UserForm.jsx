@@ -24,11 +24,11 @@ const UserForm = () => {
     const ROLE_LABELS = {
         super_admin: 'Super Admin Global',
         admin: 'Administrador de Empresa',
-        inventario: 'Gestor de Inventario (crear/editar vehÃ­culos)',
+        inventario: 'Gestor de Inventario (crear/editar vehículos)',
         asesor: 'Asesor / Vendedor',
-        aliado: 'Aliado EstratÃ©gico',
+        aliado: 'Aliado Estratégico',
         compras: 'Gestor de Compras',
-        user: 'Usuario BÃ¡sico',
+        user: 'Usuario Básico',
     };
     const selectedRole = roles.find(r => String(r.id) === String(user.role_id));
     const isInventarioRoleSelected = selectedRole?.name === 'inventario';
@@ -147,13 +147,13 @@ const UserForm = () => {
 
     const handleDelete = async () => {
         const result = await Swal.fire({
-            title: 'Â¿EstÃ¡s seguro?',
-            text: "Cuidado: Esto eliminarÃ¡ al usuario permanentemente y reasignarÃ¡ o dejarÃ¡ huÃ©rfanos sus leads/ventas.",
+            title: '¿Estás seguro?',
+            text: "Cuidado: Esto eliminará al usuario permanentemente y reasignará o dejará huérfanos sus leads/ventas.",
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#d33',
             cancelButtonColor: '#3085d6',
-            confirmButtonText: 'SÃ­, eliminar',
+            confirmButtonText: 'Sí, eliminar',
             cancelButtonText: 'Cancelar'
         });
 
@@ -164,7 +164,7 @@ const UserForm = () => {
                 await axios.delete(`https://autosqp.co/api/users/${id}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
-                Swal.fire('Â¡Eliminado!', 'El usuario ha sido eliminado.', 'success');
+                Swal.fire('¡Eliminado!', 'El usuario ha sido eliminado.', 'success');
                 navigate('/admin/users');
             } catch (error) {
                 console.error("Error deleting user", error);
@@ -201,7 +201,7 @@ const UserForm = () => {
                             name="full_name"
                             value={user.full_name || ''}
                             onChange={handleChange}
-                            placeholder="Ej: Juan PÃ©rez"
+                            placeholder="Ej: Juan Pérez"
                             className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-black bg-white"
                         />
                     </div>
@@ -219,7 +219,7 @@ const UserForm = () => {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-600 mb-1">ContraseÃ±a {isEditing && '(Dejar en blanco para mantener actual)'}</label>
+                        <label className="block text-sm font-medium text-slate-600 mb-1">Contraseña {isEditing && '(Dejar en blanco para mantener actual)'}</label>
                         <input
                             type="password"
                             name="password"
@@ -277,7 +277,7 @@ const UserForm = () => {
                             <>
                                 {/* Commission Field - Only for Admin/SuperAdmin to set on others */}
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-600 mb-1">ComisiÃ³n (%)</label>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Comisión (%)</label>
                                     <input
                                         type="number"
                                         name="commission_percentage"
