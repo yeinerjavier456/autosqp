@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Request
+﻿from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Optional
@@ -42,11 +42,11 @@ def is_inventory_admin(current_user: models.User) -> bool:
 
 def ensure_inventory_editor(current_user: models.User):
     if not is_inventory_editor(current_user):
-        raise HTTPException(status_code=403, detail="Solo usuarios de inventario o administradores pueden crear/editar vehículos")
+        raise HTTPException(status_code=403, detail="Solo usuarios de inventario o administradores pueden crear/editar vehÃ­culos")
 
 def ensure_inventory_admin(current_user: models.User):
-    if not is_inventory_admin(current_user):
-        raise HTTPException(status_code=403, detail="Solo administradores de empresa pueden eliminar vehículos")
+    if not is_inventory_editor(current_user):
+        raise HTTPException(status_code=403, detail="Solo usuarios de inventario o administradores pueden desactivar vehículos")
 
 @router.get("/public", response_model=List[schemas.Vehicle])
 def get_public_vehicles(
@@ -157,7 +157,7 @@ def create_vehicle(vehicle: schemas.VehicleCreate, db: Session = Depends(get_db)
     db.refresh(db_vehicle)
     
     # Log Action
-    log_action_to_db(db, current_user.id, "CREATE", "Vehicle", db_vehicle.id, f"Vehículo creado: {db_vehicle.make} {db_vehicle.model} ({db_vehicle.plate})")
+    log_action_to_db(db, current_user.id, "CREATE", "Vehicle", db_vehicle.id, f"VehÃ­culo creado: {db_vehicle.make} {db_vehicle.model} ({db_vehicle.plate})")
     
     return db_vehicle
 
@@ -177,6 +177,7 @@ def read_vehicles(
     query = db.query(models.Vehicle)
     if current_user.company_id:
         query = query.filter(models.Vehicle.company_id == current_user.company_id)
+    query = query.filter(models.Vehicle.status != "inactive")
     
     if q:
         search = f"%{q}%"
@@ -204,11 +205,11 @@ def upload_vehicles_excel(
     current_user: models.User = Depends(get_current_user)
 ):
     """
-    Sube un archivo Excel y lanza el script de importación masiva.
+    Sube un archivo Excel y lanza el script de importaciÃ³n masiva.
     """
     ensure_inventory_editor(current_user)
     if not current_user.company_id:
-        raise HTTPException(status_code=400, detail="El usuario no tiene una compañía asociada")
+        raise HTTPException(status_code=400, detail="El usuario no tiene una compaÃ±Ã­a asociada")
 
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="El archivo debe ser un Excel (.xlsx o .xls)")
@@ -229,7 +230,7 @@ def upload_vehicles_excel(
             
         return results
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error interno durante la importación: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno durante la importaciÃ³n: {str(e)}")
     finally:
         # Clean up temp file
         if os.path.exists(temp_file_path):
@@ -244,7 +245,7 @@ def read_vehicle(vehicle_id: int, db: Session = Depends(get_db), current_user: m
     Get a specific vehicle by ID.
     """
     vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == vehicle_id).first()
-    if not vehicle:
+    if not vehicle or vehicle.status == "inactive":
         raise HTTPException(status_code=404, detail="Vehicle not found")
     
     # Check permission (optional, depending on requirements)
@@ -262,7 +263,7 @@ def update_vehicle(vehicle_id: int, vehicle_update: schemas.VehicleUpdate, db: S
     ensure_inventory_editor(current_user)
 
     db_vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == vehicle_id).first()
-    if not db_vehicle:
+    if not db_vehicle or db_vehicle.status == "inactive":
         raise HTTPException(status_code=404, detail="Vehicle not found")
         
     if current_user.company_id and db_vehicle.company_id != current_user.company_id:
@@ -275,7 +276,7 @@ def update_vehicle(vehicle_id: int, vehicle_update: schemas.VehicleUpdate, db: S
     db.commit()
     db.refresh(db_vehicle)
     
-    log_action_to_db(db, current_user.id, "UPDATE", "Vehicle", db_vehicle.id, f"Vehículo modificado: {db_vehicle.make} {db_vehicle.model}")
+    log_action_to_db(db, current_user.id, "UPDATE", "Vehicle", db_vehicle.id, f"VehÃ­culo modificado: {db_vehicle.make} {db_vehicle.model}")
     
     return db_vehicle
 
@@ -291,13 +292,14 @@ def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db), current_user:
         raise HTTPException(status_code=404, detail="Vehicle not found")
     
     if current_user.company_id and db_vehicle.company_id != current_user.company_id:
-         raise HTTPException(status_code=403, detail="Not authorized to delete this vehicle")
+         raise HTTPException(status_code=403, detail="Not authorized to deactivate this vehicle")
 
     vehicle_plate = db_vehicle.plate
-    db.delete(db_vehicle)
+    db_vehicle.status = "inactive"
     db.commit()
     
-    log_action_to_db(db, current_user.id, "DELETE", "Vehicle", vehicle_id, f"Vehículo eliminado: placa {vehicle_plate}")
+    log_action_to_db(db, current_user.id, "DEACTIVATE", "Vehicle", vehicle_id, f"Vehículo desactivado: placa {vehicle_plate}")
     
-    return {"message": "Vehicle deleted successfully"}
+    return {"message": "Vehicle deactivated successfully"}
+
 

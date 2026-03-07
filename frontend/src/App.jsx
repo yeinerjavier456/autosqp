@@ -71,7 +71,9 @@ function App() {
               {/* Protected Routes */}
               <Route element={<PrivateRoute />}>
                 <Route element={<Layout />}>
-                  <Route path="/admin/dashboard" element={<Dashboard />} />
+                  <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor', 'aliado']} />}>
+                    <Route path="/admin/dashboard" element={<Dashboard />} />
+                  </Route>
 
                   {/* Super Admin & Company Admin Routes */}
                   <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin']} />}>

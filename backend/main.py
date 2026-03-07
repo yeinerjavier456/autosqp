@@ -114,8 +114,8 @@ def ensure_inventory_editor(current_user: models.User):
         raise HTTPException(status_code=403, detail="Solo usuarios de inventario o administradores pueden crear/editar vehículos")
 
 def ensure_inventory_admin_only(current_user: models.User):
-    if not is_company_admin_for_inventory(current_user):
-        raise HTTPException(status_code=403, detail="Solo administradores de empresa pueden eliminar vehículos")
+    if not is_inventory_editor(current_user):
+        raise HTTPException(status_code=403, detail="Solo usuarios de inventario o administradores pueden desactivar vehículos")
 
 def enforce_ally_managed_status(
     db: Session,
@@ -1158,6 +1158,7 @@ def read_vehicles(
     # Filter by Company
     if current_user.company_id:
         query = query.filter(models.Vehicle.company_id == current_user.company_id)
+    query = query.filter(models.Vehicle.status != "inactive")
         
     if q:
         search = f"%{q}%"
@@ -1206,7 +1207,7 @@ def update_vehicle(
     ensure_inventory_editor(current_user)
 
     vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == vehicle_id).first()
-    if not vehicle:
+    if not vehicle or vehicle.status == "inactive":
         raise HTTPException(status_code=404, detail="Vehicle not found")
         
     if current_user.company_id and vehicle.company_id != current_user.company_id:
@@ -1248,15 +1249,15 @@ def delete_vehicle(
     ensure_inventory_admin_only(current_user)
 
     vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == vehicle_id).first()
-    if not vehicle:
+    if not vehicle or vehicle.status == "inactive":
         raise HTTPException(status_code=404, detail="Vehicle not found")
         
     if current_user.company_id and vehicle.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Not authorized")
-        
-    db.delete(vehicle)
+
+    vehicle.status = "inactive"
     db.commit()
-    return {"status": "success", "message": "Vehicle deleted"}
+    return {"status": "success", "message": "Vehicle deactivated"}
 
 # --- SALES & COMMISSION ENDPOINTS ---
 

@@ -30,7 +30,9 @@ const LoginPage = () => {
 
             const roleName = loggedUser?.role?.name || (typeof loggedUser?.role === 'string' ? loggedUser?.role : '');
 
-            if (roleName === 'asesor' || roleName === 'aliado') {
+            if (roleName === 'inventario') {
+                navigate('/admin/inventory');
+            } else if (roleName === 'asesor' || roleName === 'aliado') {
                 navigate('/admin/leads');
             } else {
                 navigate('/admin/dashboard');
