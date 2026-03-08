@@ -80,7 +80,7 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
                     <div className="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
                         <div>
                             <h3 className="font-bold">Autos QP</h3>
-                            <p className="text-xs text-slate-300">Jennifer Quimbayo - Asesora comercial</p>
+                            <p className="text-xs text-slate-300">Atención comercial en línea</p>
                         </div>
                         <button onClick={() => setOpen(false)} className="text-slate-300 hover:text-white">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
