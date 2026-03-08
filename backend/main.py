@@ -1203,6 +1203,49 @@ def upsert_lead_process_detail(db: Session, lead_id: int, interested_vehicle: st
             desired_vehicle=interested_vehicle
         ))
 
+def sync_public_chat_to_lead_conversation(db: Session, session: models.PublicChatSession):
+    if not session.lead_id:
+        return
+
+    lead = db.query(models.Lead).filter(models.Lead.id == session.lead_id).first()
+    if not lead:
+        return
+
+    conversation = db.query(models.Conversation).filter(models.Conversation.lead_id == lead.id).first()
+    if not conversation:
+        conversation = models.Conversation(
+            lead_id=lead.id,
+            company_id=lead.company_id,
+            last_message_at=datetime.datetime.utcnow()
+        )
+        db.add(conversation)
+        db.commit()
+        db.refresh(conversation)
+
+    public_messages = db.query(models.PublicChatMessage).filter(
+        models.PublicChatMessage.session_id == session.id
+    ).order_by(models.PublicChatMessage.created_at.asc()).all()
+
+    for pm in public_messages:
+        marker = f"publicchat:{session.session_token}:{pm.id}"
+        exists = db.query(models.Message).filter(models.Message.whatsapp_message_id == marker).first()
+        if exists:
+            continue
+
+        sender_type = "lead" if pm.role == "user" else "user"
+        db.add(models.Message(
+            conversation_id=conversation.id,
+            sender_type=sender_type,
+            content=pm.content,
+            message_type="text",
+            status="delivered",
+            whatsapp_message_id=marker,
+            created_at=pm.created_at
+        ))
+        conversation.last_message_at = pm.created_at or datetime.datetime.utcnow()
+
+    db.commit()
+
 def maybe_create_public_chat_lead(
     db: Session,
     session: models.PublicChatSession,
@@ -1272,6 +1315,7 @@ def maybe_create_public_chat_lead(
         upsert_lead_process_detail(db, existing_lead.id, interested_vehicle)
         session.lead_id = existing_lead.id
         db.commit()
+        sync_public_chat_to_lead_conversation(db, session)
         return existing_lead.id
 
     assigned_user_id = None
@@ -1300,6 +1344,7 @@ def maybe_create_public_chat_lead(
     upsert_lead_process_detail(db, new_lead.id, interested_vehicle)
     session.lead_id = new_lead.id
     db.commit()
+    sync_public_chat_to_lead_conversation(db, session)
     return new_lead.id
 
 @app.post("/public-chat/session", response_model=schemas.PublicChatSession)
@@ -1406,6 +1451,10 @@ def public_chat_message(payload: schemas.PublicChatMessageCreate, db: Session = 
     except Exception:
         # Extraction failure should not break chat response.
         lead_created = False
+
+    # Keep lead conversation in sync after each turn once lead exists.
+    if session.lead_id:
+        sync_public_chat_to_lead_conversation(db, session)
 
     latest_messages = db.query(models.PublicChatMessage).filter(
         models.PublicChatMessage.session_id == session.id
