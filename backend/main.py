@@ -1164,8 +1164,40 @@ def extract_prospect_data_with_ai(api_key: str, model_name: str, full_conversati
 def normalize_phone(phone: Optional[str]) -> Optional[str]:
     if not phone:
         return None
-    digits = re.sub(r"[^\d+]", "", phone)
-    return digits or None
+    digits = re.sub(r"\D", "", phone)
+    if not digits:
+        return None
+    if len(digits) == 10:
+        return f"+57{digits}"
+    if len(digits) == 12 and digits.startswith("57"):
+        return f"+{digits}"
+    if len(digits) > 10:
+        return f"+57{digits[-10:]}"
+    return None
+
+def phone_variants_for_lookup(phone: Optional[str]) -> List[str]:
+    normalized = normalize_phone(phone)
+    if not normalized:
+        return []
+    digits = re.sub(r"\D", "", normalized)
+    variants = {normalized, digits}
+    if digits.startswith("57") and len(digits) == 12:
+        variants.add(digits[2:])
+        variants.add(f"+{digits[2:]}")
+    return list(variants)
+
+def upsert_lead_process_detail(db: Session, lead_id: int, interested_vehicle: str):
+    detail = db.query(models.LeadProcessDetail).filter(models.LeadProcessDetail.lead_id == lead_id).first()
+    if detail:
+        if interested_vehicle and detail.desired_vehicle != interested_vehicle:
+            detail.has_vehicle = False
+            detail.desired_vehicle = interested_vehicle
+    else:
+        db.add(models.LeadProcessDetail(
+            lead_id=lead_id,
+            has_vehicle=False,
+            desired_vehicle=interested_vehicle
+        ))
 
 def maybe_create_public_chat_lead(
     db: Session,
@@ -1184,11 +1216,21 @@ def maybe_create_public_chat_lead(
     if not (is_ready and name and phone and interested_vehicle):
         return None
 
-    existing_lead = db.query(models.Lead).filter(
-        models.Lead.company_id == session.company_id,
-        models.Lead.phone == phone
-    ).first()
+    lookup_phones = phone_variants_for_lookup(phone)
+    duplicate_window_days = int(os.getenv("PUBLIC_CHAT_DUPLICATE_WINDOW_DAYS", "30") or "30")
+    recent_threshold = datetime.datetime.utcnow() - datetime.timedelta(days=duplicate_window_days)
+
+    existing_lead = None
+    if lookup_phones:
+        existing_lead = db.query(models.Lead).filter(
+            models.Lead.company_id == session.company_id,
+            models.Lead.phone.in_(lookup_phones),
+            models.Lead.created_at >= recent_threshold
+        ).order_by(models.Lead.created_at.desc()).first()
+
     if existing_lead:
+        existing_lead.message = f"Interes detectado por chatbot web: {interested_vehicle}"
+        upsert_lead_process_detail(db, existing_lead.id, interested_vehicle)
         session.lead_id = existing_lead.id
         db.commit()
         return existing_lead.id
@@ -1202,7 +1244,7 @@ def maybe_create_public_chat_lead(
         if advisors:
             assigned_user_id = random.choice(advisors).id
 
-    lead_message = f"Interés detectado por chatbot web: {interested_vehicle}"
+    lead_message = f"Interes detectado por chatbot web: {interested_vehicle}"
     new_lead = models.Lead(
         source=models.LeadSource.WEB.value,
         name=name,
@@ -1217,6 +1259,7 @@ def maybe_create_public_chat_lead(
     db.commit()
     db.refresh(new_lead)
 
+    upsert_lead_process_detail(db, new_lead.id, interested_vehicle)
     session.lead_id = new_lead.id
     db.commit()
     return new_lead.id
@@ -2104,3 +2147,4 @@ async def upload_internal_message_file(
     db.commit()
     db.refresh(db_message)
     return db_message
+
