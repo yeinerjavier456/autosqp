@@ -6,10 +6,14 @@ const SESSION_STORAGE_KEY = 'autosqp_public_chat_session';
 const PublicSalesChatbot = ({ vehicleId = null }) => {
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [isTyping, setIsTyping] = useState(false);
+    const [typingPreview, setTypingPreview] = useState('');
     const [sessionToken, setSessionToken] = useState('');
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const endRef = useRef(null);
+
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
     const ensureSession = async () => {
         let token = localStorage.getItem(SESSION_STORAGE_KEY) || '';
@@ -46,7 +50,26 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
         if (open) {
             endRef.current?.scrollIntoView({ behavior: 'smooth' });
         }
-    }, [messages, open]);
+    }, [messages, open, loading, isTyping, typingPreview]);
+
+    const simulateTypingReply = async (replyText) => {
+        const safeReply = replyText || '';
+        const preDelay = Math.min(5200, Math.max(1400, 1000 + safeReply.length * 14));
+
+        setIsTyping(true);
+        setTypingPreview('');
+        await sleep(preDelay);
+
+        const chunkSize = safeReply.length > 220 ? 4 : safeReply.length > 120 ? 3 : 2;
+        for (let i = 0; i < safeReply.length; i += chunkSize) {
+            setTypingPreview(safeReply.slice(0, i + chunkSize));
+            await sleep(18 + Math.floor(Math.random() * 22));
+        }
+
+        setMessages(prev => [...prev, { role: 'assistant', content: safeReply }]);
+        setTypingPreview('');
+        setIsTyping(false);
+    };
 
     const sendMessage = async (e) => {
         e.preventDefault();
@@ -57,6 +80,7 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
         setInput('');
         setMessages(prev => [...prev, { role: 'user', content: text }]);
 
+        let assistantReply = 'Perdón, tuve un problema técnico. ¿Me repites tu mensaje?';
         try {
             const token = sessionToken || await ensureSession();
             const res = await axios.post('https://autosqp.co/api/public-chat/message', {
@@ -65,11 +89,12 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
                 vehicle_id: vehicleId || undefined,
                 source_page: window.location.pathname
             });
-            setMessages(prev => [...prev, { role: 'assistant', content: res.data.reply }]);
+            assistantReply = res.data.reply || assistantReply;
         } catch (error) {
-            setMessages(prev => [...prev, { role: 'assistant', content: 'Perdón, tuve un problema técnico. ¿Me repites tu mensaje?' }]);
+            // Keep fallback reply
         } finally {
             setLoading(false);
+            await simulateTypingReply(assistantReply);
         }
     };
 
@@ -101,7 +126,19 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
                         {loading && (
                             <div className="flex justify-start">
                                 <div className="max-w-[85%] rounded-2xl px-3 py-2 text-sm bg-white border border-slate-200 text-slate-500 rounded-bl-none">
-                                    Escribiendo...
+                                    Jennifer está escribiendo
+                                    <span className="inline-flex ml-1 gap-1 align-middle">
+                                        <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                                        <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                        <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+                        {!loading && isTyping && (
+                            <div className="flex justify-start">
+                                <div className="max-w-[85%] rounded-2xl px-3 py-2 text-sm bg-white border border-slate-200 text-slate-700 rounded-bl-none whitespace-pre-wrap">
+                                    {typingPreview}
                                 </div>
                             </div>
                         )}
@@ -118,7 +155,7 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
                         />
                         <button
                             type="submit"
-                            disabled={loading || !input.trim()}
+                            disabled={loading || isTyping || !input.trim()}
                             className="w-10 h-10 rounded-full bg-blue-600 text-white disabled:opacity-50"
                         >
                             <svg className="w-5 h-5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
