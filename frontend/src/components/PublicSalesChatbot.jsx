@@ -7,7 +7,6 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
-    const [typingPreview, setTypingPreview] = useState('');
     const [sessionToken, setSessionToken] = useState('');
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
@@ -50,41 +49,15 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
         if (open) {
             endRef.current?.scrollIntoView({ behavior: 'smooth' });
         }
-    }, [messages, open, loading, isTyping, typingPreview]);
+    }, [messages, open, loading, isTyping]);
 
     const simulateTypingReply = async (replyText) => {
         const safeReply = replyText || '';
-        const preDelay = Math.min(14000, Math.max(4200, 3200 + safeReply.length * 48));
+        const preDelay = Math.min(18000, Math.max(7000, 5500 + safeReply.length * 35));
 
         setIsTyping(true);
-        setTypingPreview('');
         await sleep(preDelay);
-
-        // Human-like typing: mostly character-by-character with variable pauses.
-        for (let i = 0; i < safeReply.length; i += 1) {
-            const partial = safeReply.slice(0, i + 1);
-            setTypingPreview(partial);
-
-            const char = safeReply[i];
-            const nextChar = safeReply[i + 1] || '';
-            let delay = 120 + Math.floor(Math.random() * 220); // base 120-340ms
-
-            // Natural longer pauses at punctuation / phrase boundaries.
-            if (char === ',' || char === ';') delay += 380 + Math.floor(Math.random() * 320);
-            if (char === '.' || char === '!' || char === '?') delay += 700 + Math.floor(Math.random() * 700);
-            if (char === ':' || char === '\n') delay += 520 + Math.floor(Math.random() * 420);
-
-            // Occasional micro-pause to feel less robotic.
-            if (Math.random() < 0.12) delay += 320 + Math.floor(Math.random() * 420);
-
-            // Slightly faster on spaces.
-            if (char === ' ' && nextChar) delay = Math.max(80, delay - 40);
-
-            await sleep(delay);
-        }
-
         setMessages(prev => [...prev, { role: 'assistant', content: safeReply }]);
-        setTypingPreview('');
         setIsTyping(false);
     };
 
@@ -154,8 +127,13 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
                         )}
                         {!loading && isTyping && (
                             <div className="flex justify-start">
-                                <div className="max-w-[85%] rounded-2xl px-3 py-2 text-sm bg-white border border-slate-200 text-slate-700 rounded-bl-none whitespace-pre-wrap">
-                                    {typingPreview}
+                                <div className="max-w-[85%] rounded-2xl px-3 py-2 text-sm bg-white border border-slate-200 text-slate-500 rounded-bl-none">
+                                    Jennifer está escribiendo
+                                    <span className="inline-flex ml-1 gap-1 align-middle">
+                                        <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                                        <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                        <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
+                                    </span>
                                 </div>
                             </div>
                         )}
