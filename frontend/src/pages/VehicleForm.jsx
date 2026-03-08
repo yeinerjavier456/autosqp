@@ -217,6 +217,19 @@ const VehicleForm = () => {
         }));
     };
 
+    const setPrimaryPhoto = (index) => {
+        setFormData(prev => {
+            if (index <= 0 || index >= prev.photos.length) return prev;
+            const nextPhotos = [...prev.photos];
+            const [selectedPhoto] = nextPhotos.splice(index, 1);
+            nextPhotos.unshift(selectedPhoto);
+            return {
+                ...prev,
+                photos: nextPhotos
+            };
+        });
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
@@ -595,14 +608,30 @@ const VehicleForm = () => {
                         {formData.photos.map((url, index) => (
                             <div key={index} className="relative group">
                                 <img src={url} alt={`Foto ${index}`} className="w-full h-32 object-cover rounded-lg shadow-sm" />
+                                {index === 0 && (
+                                    <span className="absolute top-2 left-2 bg-emerald-600 text-white text-[10px] font-bold px-2 py-1 rounded-full">
+                                        Principal
+                                    </span>
+                                )}
                                 {!isReadOnly && (
-                                    <button
-                                        type="button"
-                                        onClick={() => removePhoto(index)}
-                                        className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                                    </button>
+                                    <>
+                                        {index > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setPrimaryPhoto(index)}
+                                                className="absolute bottom-2 left-2 bg-slate-900/85 text-white text-[10px] font-semibold px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                Foto principal
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => removePhoto(index)}
+                                            className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                        </button>
+                                    </>
                                 )}
                             </div>
                         ))}
