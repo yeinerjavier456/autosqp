@@ -145,6 +145,76 @@ def enforce_ally_managed_status(
 
     return base_status or models.LeadStatus.NEW.value
 
+def upsert_purchase_request_from_lead(db: Session, lead: models.Lead):
+    """
+    Create/update a credit application for purchase managers when a lead is in
+    interested status and is marked as "no vehicle in inventory" with a desired vehicle.
+    """
+    if not lead or lead.status != models.LeadStatus.INTERESTED.value:
+        return
+
+    detail = db.query(models.LeadProcessDetail).filter(models.LeadProcessDetail.lead_id == lead.id).first()
+    if not detail:
+        return
+    if detail.has_vehicle:
+        return
+
+    desired_vehicle = (detail.desired_vehicle or "").strip()
+    if not desired_vehicle:
+        return
+
+    safe_phone = (lead.phone or "").strip() or f"lead-{lead.id}"
+    existing_credit = db.query(models.CreditApplication).filter(
+        models.CreditApplication.company_id == lead.company_id,
+        models.CreditApplication.phone == safe_phone,
+        models.CreditApplication.desired_vehicle == desired_vehicle,
+        models.CreditApplication.status.in_([
+            models.CreditStatus.PENDING.value,
+            models.CreditStatus.IN_REVIEW.value,
+            models.CreditStatus.APPROVED.value
+        ])
+    ).order_by(models.CreditApplication.created_at.desc()).first()
+
+    auto_note = f"Generado automáticamente desde lead #{lead.id} en estado En proceso."
+    if existing_credit:
+        existing_credit.client_name = lead.name or existing_credit.client_name
+        existing_credit.email = lead.email or existing_credit.email
+        if not existing_credit.notes:
+            existing_credit.notes = auto_note
+        return
+
+    compras_users = db.query(models.User).join(models.Role).filter(
+        models.User.company_id == lead.company_id,
+        models.Role.name == "compras"
+    ).all()
+    assigned_compras_id = compras_users[0].id if compras_users else None
+
+    new_credit = models.CreditApplication(
+        client_name=lead.name or f"Lead {lead.id}",
+        phone=safe_phone,
+        email=lead.email,
+        desired_vehicle=desired_vehicle,
+        monthly_income=0,
+        other_income=0,
+        occupation="employee",
+        application_mode="individual",
+        down_payment=0,
+        status=models.CreditStatus.PENDING.value,
+        notes=auto_note,
+        company_id=lead.company_id,
+        assigned_to_id=assigned_compras_id
+    )
+    db.add(new_credit)
+
+    for compras_user in compras_users:
+        db.add(models.Notification(
+            user_id=compras_user.id,
+            title="Nuevo vehículo por buscar",
+            message=f"{lead.name or 'Lead'} busca: {desired_vehicle}",
+            type="warning",
+            link="/admin/credits"
+        ))
+
 
 
 # --- USER ENDPOINTS ---
@@ -1645,6 +1715,9 @@ def update_lead(
                 **process_detail_data.dict()
             )
             db.add(new_detail)
+
+    # Auto-create/update purchase request queue for role "compras"
+    upsert_purchase_request_from_lead(db, lead)
         
     db.commit()
     db.refresh(lead)

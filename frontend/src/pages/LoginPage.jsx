@@ -32,6 +32,8 @@ const LoginPage = () => {
 
             if (roleName === 'inventario') {
                 navigate('/admin/inventory');
+            } else if (roleName === 'compras') {
+                navigate('/admin/credits');
             } else if (roleName === 'asesor' || roleName === 'aliado') {
                 navigate('/admin/leads');
             } else {

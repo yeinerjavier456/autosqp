@@ -45,6 +45,9 @@ const PrivateRoute = ({ allowedRoles }) => {
     if (roleName === 'inventario') {
       return <Navigate to="/admin/inventory" replace />;
     }
+    if (roleName === 'compras') {
+      return <Navigate to="/admin/credits" replace />;
+    }
     return <Navigate to="/admin/dashboard" replace />;
   }
 
@@ -110,7 +113,10 @@ function App() {
                     {/* Messaging */}
                     <Route path="/admin/whatsapp" element={<WhatsAppDashboard />} />
 
-                    {/* Credits & Requests */}
+                  </Route>
+
+                  {/* Credits & Requests */}
+                  <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor', 'aliado', 'compras']} />}>
                     <Route path="/admin/credits" element={<CreditBoard />} />
                   </Route>
 
