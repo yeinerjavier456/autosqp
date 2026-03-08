@@ -1246,6 +1246,41 @@ def sync_public_chat_to_lead_conversation(db: Session, session: models.PublicCha
 
     db.commit()
 
+def is_inventory_request(message: str) -> bool:
+    text = (message or "").strip().lower()
+    triggers = [
+        "que carros tenemos",
+        "qué carros tenemos",
+        "que autos tienen",
+        "qué autos tienen",
+        "que vehiculos tienen",
+        "qué vehículos tienen",
+        "carros disponibles",
+        "autos disponibles",
+        "vehiculos disponibles",
+        "inventario"
+    ]
+    return any(t in text for t in triggers)
+
+def build_inventory_response(db: Session, company_id: Optional[int]) -> str:
+    query = db.query(models.Vehicle).filter(models.Vehicle.status == "available")
+    if company_id:
+        query = query.filter(models.Vehicle.company_id == company_id)
+    vehicles = query.order_by(models.Vehicle.id.desc()).limit(5).all()
+
+    if not vehicles:
+        return (
+            "En este momento no tengo vehículos disponibles para mostrarte en el chat. "
+            "Puedes revisar el inventario completo aquí: https://autosqp.co/autos"
+        )
+
+    lines = ["Claro. Estos son 5 carros disponibles en este momento:"]
+    for idx, v in enumerate(vehicles, start=1):
+        price = f"{v.price:,}".replace(",", ".") if v.price is not None else "N/A"
+        lines.append(f"{idx}. {v.make} {v.model or ''} {v.year} - COP {price}")
+    lines.append("Puedes ver más opciones aquí: https://autosqp.co/autos")
+    return "\n".join(lines)
+
 def maybe_create_public_chat_lead(
     db: Session,
     session: models.PublicChatSession,
@@ -1425,18 +1460,21 @@ def public_chat_message(payload: schemas.PublicChatMessageCreate, db: Session = 
         f"{vehicle_hint}"
     )
 
-    chat_messages = [{"role": "system", "content": system_prompt}]
-    for msg in history[-20:]:
-        if msg.role in ["user", "assistant"]:
-            chat_messages.append({"role": msg.role, "content": msg.content})
+    if is_inventory_request(user_message):
+        assistant_reply = build_inventory_response(db, session.company_id)
+    else:
+        chat_messages = [{"role": "system", "content": system_prompt}]
+        for msg in history[-20:]:
+            if msg.role in ["user", "assistant"]:
+                chat_messages.append({"role": msg.role, "content": msg.content})
 
-    try:
-        assistant_reply = call_openai_chat_with_fallback(api_key, model_name, chat_messages, env_fallback_key)
-    except requests.HTTPError as exc:
-        status_code = exc.response.status_code if exc.response is not None else 500
-        if status_code == 401:
-            raise HTTPException(status_code=400, detail="OpenAI API key inválida o expirada para el chatbot público")
-        raise HTTPException(status_code=500, detail=f"Error consultando OpenAI: {str(exc)}")
+        try:
+            assistant_reply = call_openai_chat_with_fallback(api_key, model_name, chat_messages, env_fallback_key)
+        except requests.HTTPError as exc:
+            status_code = exc.response.status_code if exc.response is not None else 500
+            if status_code == 401:
+                raise HTTPException(status_code=400, detail="OpenAI API key inválida o expirada para el chatbot público")
+            raise HTTPException(status_code=500, detail=f"Error consultando OpenAI: {str(exc)}")
     db.add(models.PublicChatMessage(session_id=session.id, role="assistant", content=assistant_reply))
     db.commit()
 
