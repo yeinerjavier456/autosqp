@@ -1,4 +1,4 @@
-
+﻿
 import React, { useState, useRef, useEffect } from 'react';
 import { useNotifications } from '../context/NotificationsContext';
 import { useNavigate } from 'react-router-dom';
@@ -68,7 +68,7 @@ const NotificationBell = () => {
 
             {/* Dropdown */}
             {isOpen && (
-                <div className="absolute right-0 mt-3 w-80 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-50 transform origin-top-right transition-all animate-in fade-in zoom-in-95 duration-200">
+                <div className="absolute left-0 mt-3 w-[min(20rem,calc(100vw-1rem))] bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-[80] transform origin-top-left transition-all animate-in fade-in zoom-in-95 duration-200">
                     <div className="p-3 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                         <h3 className="text-sm font-bold text-gray-700">Notificaciones</h3>
                         {unreadCount > 0 && (
@@ -128,3 +128,4 @@ const NotificationBell = () => {
 };
 
 export default NotificationBell;
+
