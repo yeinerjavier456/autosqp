@@ -54,7 +54,7 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
 
     const simulateTypingReply = async (replyText) => {
         const safeReply = replyText || '';
-        const preDelay = Math.min(7800, Math.max(1900, 1500 + safeReply.length * 24));
+        const preDelay = Math.min(14000, Math.max(4200, 3200 + safeReply.length * 48));
 
         setIsTyping(true);
         setTypingPreview('');
@@ -67,18 +67,18 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
 
             const char = safeReply[i];
             const nextChar = safeReply[i + 1] || '';
-            let delay = 35 + Math.floor(Math.random() * 85); // base 35-120ms
+            let delay = 120 + Math.floor(Math.random() * 220); // base 120-340ms
 
             // Natural longer pauses at punctuation / phrase boundaries.
-            if (char === ',' || char === ';') delay += 120 + Math.floor(Math.random() * 120);
-            if (char === '.' || char === '!' || char === '?') delay += 260 + Math.floor(Math.random() * 260);
-            if (char === ':' || char === '\n') delay += 200 + Math.floor(Math.random() * 180);
+            if (char === ',' || char === ';') delay += 380 + Math.floor(Math.random() * 320);
+            if (char === '.' || char === '!' || char === '?') delay += 700 + Math.floor(Math.random() * 700);
+            if (char === ':' || char === '\n') delay += 520 + Math.floor(Math.random() * 420);
 
             // Occasional micro-pause to feel less robotic.
-            if (Math.random() < 0.06) delay += 120 + Math.floor(Math.random() * 180);
+            if (Math.random() < 0.12) delay += 320 + Math.floor(Math.random() * 420);
 
             // Slightly faster on spaces.
-            if (char === ' ' && nextChar) delay = Math.max(25, delay - 25);
+            if (char === ' ' && nextChar) delay = Math.max(80, delay - 40);
 
             await sleep(delay);
         }
