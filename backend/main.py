@@ -1135,8 +1135,12 @@ def extract_prospect_data_with_ai(api_key: str, model_name: str, full_conversati
             "content": (
                 "Extrae datos de prospecto de conversación de compra de autos. "
                 "Responde SOLO JSON con estas claves exactas: "
-                "name, phone, email, interested_vehicle, is_ready_to_create_lead. "
-                "Si falta un dato usa null. is_ready_to_create_lead=true solo si hay name, phone e interested_vehicle."
+                "name, phone, email, interested_vehicle, payment_type, down_payment_amount, has_credit_report, "
+                "report_entity, has_payment_agreement, occupation_type, residence_city, monthly_income, is_ready_to_create_lead. "
+                "Si falta un dato usa null. "
+                "is_ready_to_create_lead=true solo si hay name, phone, email, interested_vehicle, payment_type, down_payment_amount, "
+                "occupation_type, residence_city y monthly_income. "
+                "Si has_credit_report=true tambien deben venir report_entity y has_payment_agreement."
             )
         },
         {
@@ -1208,12 +1212,37 @@ def maybe_create_public_chat_lead(
         return session.lead_id
 
     name = (extracted_data.get("name") or "").strip()
+    first_name = name.split(" ")[0] if name else ""
     phone = normalize_phone(extracted_data.get("phone"))
     email = (extracted_data.get("email") or "").strip() or None
     interested_vehicle = (extracted_data.get("interested_vehicle") or "").strip()
+    payment_type = (extracted_data.get("payment_type") or "").strip().lower()
+    down_payment_amount = extracted_data.get("down_payment_amount")
+    has_credit_report = extracted_data.get("has_credit_report")
+    report_entity = (extracted_data.get("report_entity") or "").strip()
+    has_payment_agreement = extracted_data.get("has_payment_agreement")
+    occupation_type = (extracted_data.get("occupation_type") or "").strip()
+    residence_city = (extracted_data.get("residence_city") or "").strip()
+    monthly_income = extracted_data.get("monthly_income")
     is_ready = bool(extracted_data.get("is_ready_to_create_lead"))
 
-    if not (is_ready and name and phone and interested_vehicle):
+    required_core = all([
+        is_ready,
+        name,
+        first_name,
+        phone,
+        email,
+        interested_vehicle,
+        payment_type,
+        down_payment_amount is not None,
+        occupation_type,
+        residence_city,
+        monthly_income is not None
+    ])
+    if not required_core:
+        return None
+
+    if has_credit_report is True and not (report_entity and has_payment_agreement is not None):
         return None
 
     lookup_phones = phone_variants_for_lookup(phone)
@@ -1228,8 +1257,18 @@ def maybe_create_public_chat_lead(
             models.Lead.created_at >= recent_threshold
         ).order_by(models.Lead.created_at.desc()).first()
 
+    lead_message = (
+        f"Interes detectado por chatbot web: {interested_vehicle} | "
+        f"Pago: {payment_type} | Cuota inicial: {down_payment_amount} | "
+        f"Ingresos: {monthly_income} | Ocupacion: {occupation_type} | "
+        f"Residencia: {residence_city} | Reportado: {has_credit_report} | "
+        f"Entidad reporte: {report_entity or 'N/A'} | Acuerdo/Paz y salvo: {has_payment_agreement}"
+    )
+
     if existing_lead:
-        existing_lead.message = f"Interes detectado por chatbot web: {interested_vehicle}"
+        existing_lead.name = first_name or existing_lead.name
+        existing_lead.email = email or existing_lead.email
+        existing_lead.message = lead_message
         upsert_lead_process_detail(db, existing_lead.id, interested_vehicle)
         session.lead_id = existing_lead.id
         db.commit()
@@ -1244,10 +1283,9 @@ def maybe_create_public_chat_lead(
         if advisors:
             assigned_user_id = random.choice(advisors).id
 
-    lead_message = f"Interes detectado por chatbot web: {interested_vehicle}"
     new_lead = models.Lead(
         source=models.LeadSource.WEB.value,
-        name=name,
+        name=first_name,
         phone=phone,
         email=email,
         message=lead_message,
@@ -1326,10 +1364,17 @@ def public_chat_message(payload: schemas.PublicChatMessageCreate, db: Session = 
             )
 
     system_prompt = (
-        "Eres un asesor de ventas de autos de AutosQP en Colombia. "
-        "Habla natural, amable y breve. Tu objetivo es: 1) entender qué carro busca el cliente, "
-        "2) recoger nombre completo y teléfono de contacto (email opcional), 3) confirmar interés. "
-        "No inventes datos. Si faltan datos, pídelos con preguntas claras y una por turno. "
+        "Eres un asesor comercial de AutosQP en Colombia. "
+        "Habla en tono amigable, cercano y comercial. "
+        "Si el cliente da nombre completo, dirigete solo por su primer nombre. "
+        "Debes perfilar al cliente con preguntas claras, una por turno, en este orden: "
+        "1) vehiculo de interes, 2) nombre, 3) telefono, 4) correo (OBLIGATORIO), "
+        "5) pago de contado o con credito, 6) cuota inicial y monto, "
+        "7) si tiene reportes en centrales de riesgo, "
+        "8) si esta reportado: entidad y si tiene acuerdo de pago o paz y salvo, "
+        "9) ocupacion (empleado, independiente u otro), "
+        "10) lugar de residencia, 11) ingresos mensuales. "
+        "No inventes informacion ni cierres perfilado hasta tener todo lo obligatorio. "
         f"{vehicle_hint}"
     )
 
@@ -2147,4 +2192,5 @@ async def upload_internal_message_file(
     db.commit()
     db.refresh(db_message)
     return db_message
+
 
