@@ -1077,17 +1077,23 @@ def get_public_company_id(db: Session, explicit_company_id: Optional[int] = None
         company = db.query(models.Company).filter(models.Company.id == int(env_company_id)).first()
         if company:
             return company.id
+    company_with_ai = db.query(models.IntegrationSettings).filter(
+        models.IntegrationSettings.openai_api_key.isnot(None)
+    ).order_by(models.IntegrationSettings.company_id.asc()).first()
+    if company_with_ai and company_with_ai.company_id:
+        return company_with_ai.company_id
+
     first_company = db.query(models.Company).order_by(models.Company.id.asc()).first()
     return first_company.id if first_company else None
 
 def get_company_ai_settings(db: Session, company_id: Optional[int]) -> tuple[Optional[str], str]:
     model_name = "gpt-4o-mini"
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = (os.getenv("OPENAI_API_KEY") or "").strip() or None
     if company_id:
         settings = db.query(models.IntegrationSettings).filter(models.IntegrationSettings.company_id == company_id).first()
         if settings:
-            if settings.openai_api_key:
-                api_key = settings.openai_api_key
+            if settings.openai_api_key and settings.openai_api_key.strip():
+                api_key = settings.openai_api_key.strip()
             if settings.gw_model:
                 model_name = settings.gw_model
     return api_key, model_name
@@ -1107,6 +1113,20 @@ def call_openai_chat(api_key: str, model_name: str, messages: List[Dict[str, str
     response.raise_for_status()
     data = response.json()
     return data["choices"][0]["message"]["content"].strip()
+
+def call_openai_chat_with_fallback(
+    primary_key: str,
+    model_name: str,
+    messages: List[Dict[str, str]],
+    fallback_key: Optional[str]
+) -> str:
+    try:
+        return call_openai_chat(primary_key, model_name, messages)
+    except requests.HTTPError as exc:
+        status_code = exc.response.status_code if exc.response is not None else None
+        if status_code == 401 and fallback_key and fallback_key.strip() and fallback_key.strip() != primary_key.strip():
+            return call_openai_chat(fallback_key.strip(), model_name, messages)
+        raise
 
 def extract_prospect_data_with_ai(api_key: str, model_name: str, full_conversation: str) -> Dict[str, Any]:
     extraction_messages = [
@@ -1244,6 +1264,7 @@ def public_chat_message(payload: schemas.PublicChatMessageCreate, db: Session = 
     api_key, model_name = get_company_ai_settings(db, session.company_id)
     if not api_key:
         raise HTTPException(status_code=400, detail="OpenAI API key no configurada")
+    env_fallback_key = (os.getenv("OPENAI_API_KEY") or "").strip() or None
 
     db.add(models.PublicChatMessage(session_id=session.id, role="user", content=user_message))
     db.commit()
@@ -1274,7 +1295,13 @@ def public_chat_message(payload: schemas.PublicChatMessageCreate, db: Session = 
         if msg.role in ["user", "assistant"]:
             chat_messages.append({"role": msg.role, "content": msg.content})
 
-    assistant_reply = call_openai_chat(api_key, model_name, chat_messages)
+    try:
+        assistant_reply = call_openai_chat_with_fallback(api_key, model_name, chat_messages, env_fallback_key)
+    except requests.HTTPError as exc:
+        status_code = exc.response.status_code if exc.response is not None else 500
+        if status_code == 401:
+            raise HTTPException(status_code=400, detail="OpenAI API key inválida o expirada para el chatbot público")
+        raise HTTPException(status_code=500, detail=f"Error consultando OpenAI: {str(exc)}")
     db.add(models.PublicChatMessage(session_id=session.id, role="assistant", content=assistant_reply))
     db.commit()
 
@@ -1282,7 +1309,10 @@ def public_chat_message(payload: schemas.PublicChatMessageCreate, db: Session = 
     lead_created = False
     lead_id = session.lead_id
     try:
-        extracted = extract_prospect_data_with_ai(api_key, model_name, full_text)
+        extraction_key = api_key
+        if env_fallback_key and env_fallback_key.strip():
+            extraction_key = env_fallback_key if api_key != env_fallback_key else api_key
+        extracted = extract_prospect_data_with_ai(extraction_key, model_name, full_text)
         lead_id = maybe_create_public_chat_lead(db, session, extracted)
         lead_created = bool(lead_id and not session.lead_id is None)
     except Exception:
