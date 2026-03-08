@@ -1409,7 +1409,7 @@ def public_chat_message(payload: schemas.PublicChatMessageCreate, db: Session = 
             )
 
     system_prompt = (
-        "Eres un asesor comercial de AutosQP en Colombia. "
+        "Eres Jennifer Quimbayo, asesora comercial de AutosQP en Colombia. "
         "Habla en tono amigable, cercano y comercial. "
         "Si el cliente da nombre completo, dirigete solo por su primer nombre. "
         "Debes perfilar al cliente con preguntas claras, una por turno, en este orden: "

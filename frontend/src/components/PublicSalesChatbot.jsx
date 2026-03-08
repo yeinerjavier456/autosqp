@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 
 const SESSION_STORAGE_KEY = 'autosqp_public_chat_session';
@@ -10,11 +10,6 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const endRef = useRef(null);
-
-    const welcomeMessage = useMemo(() => ({
-        role: 'assistant',
-        content: 'Hola, soy tu asesor de AutosQP. Te ayudo a encontrar tu carro ideal. ¿Qué tipo de vehículo estás buscando?'
-    }), []);
 
     const ensureSession = async () => {
         let token = localStorage.getItem(SESSION_STORAGE_KEY) || '';
@@ -33,9 +28,9 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
         try {
             const res = await axios.get(`https://autosqp.co/api/public-chat/${token}/messages`);
             const apiMessages = (res.data || []).map(m => ({ role: m.role, content: m.content }));
-            setMessages(apiMessages.length > 0 ? apiMessages : [welcomeMessage]);
+            setMessages(apiMessages);
         } catch (error) {
-            setMessages([welcomeMessage]);
+            setMessages([]);
         }
     };
 
@@ -84,8 +79,8 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
                 <div className="fixed bottom-24 right-4 md:right-6 z-50 w-[360px] max-w-[calc(100vw-2rem)] h-[560px] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
                     <div className="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
                         <div>
-                            <h3 className="font-bold">Asesor de AutosQP</h3>
-                            <p className="text-xs text-slate-300">Atención comercial en línea</p>
+                            <h3 className="font-bold">Jennifer Quimbayo</h3>
+                            <p className="text-xs text-slate-300">Asesora comercial de AutosQP</p>
                         </div>
                         <button onClick={() => setOpen(false)} className="text-slate-300 hover:text-white">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -93,6 +88,9 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50">
+                        <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-3 py-2 text-xs">
+                            Para iniciar la conversación con una asesora, escribe tu mensaje.
+                        </div>
                         {messages.map((m, idx) => (
                             <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${m.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none'}`}>
