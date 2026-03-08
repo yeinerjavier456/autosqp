@@ -509,6 +509,9 @@ class PublicChatSessionCreate(BaseModel):
     source_page: Optional[str] = "/autos"
     company_id: Optional[int] = None
 
+class PublicChatInactiveCheck(BaseModel):
+    session_token: str
+
 class PublicChatSession(BaseModel):
     session_token: str
     company_id: Optional[int] = None

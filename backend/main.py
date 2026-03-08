@@ -1477,6 +1477,57 @@ def get_public_chat_messages(session_token: str, db: Session = Depends(get_db)):
     ).order_by(models.PublicChatMessage.created_at.asc()).all()
     return [{"role": m.role, "content": m.content, "created_at": m.created_at} for m in messages]
 
+@app.post("/public-chat/check-inactive")
+def public_chat_check_inactive(payload: schemas.PublicChatInactiveCheck, db: Session = Depends(get_db)):
+    """
+    If assistant asked a question and user has not replied for 5+ minutes,
+    send a follow-up check-in message once.
+    """
+    token = (payload.session_token or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Session token is required")
+
+    session = db.query(models.PublicChatSession).filter(models.PublicChatSession.session_token == token).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    last_message = db.query(models.PublicChatMessage).filter(
+        models.PublicChatMessage.session_id == session.id
+    ).order_by(models.PublicChatMessage.created_at.desc()).first()
+
+    if not last_message or last_message.role != "assistant":
+        return {"nudged": False}
+
+    assistant_text = (last_message.content or "").strip()
+    asked_question = ("?" in assistant_text) or ("¿" in assistant_text)
+    if not asked_question:
+        return {"nudged": False}
+
+    now_utc = datetime.datetime.utcnow()
+    if (now_utc - last_message.created_at).total_seconds() < 300:
+        return {"nudged": False}
+
+    has_user_reply = db.query(models.PublicChatMessage).filter(
+        models.PublicChatMessage.session_id == session.id,
+        models.PublicChatMessage.role == "user",
+        models.PublicChatMessage.created_at > last_message.created_at
+    ).first()
+    if has_user_reply:
+        return {"nudged": False}
+
+    existing_checkin = db.query(models.PublicChatMessage).filter(
+        models.PublicChatMessage.session_id == session.id,
+        models.PublicChatMessage.role == "assistant",
+        models.PublicChatMessage.content == "¿Sigues en línea? Si quieres, te ayudo a continuar."
+    ).order_by(models.PublicChatMessage.created_at.desc()).first()
+    if existing_checkin and existing_checkin.created_at > last_message.created_at:
+        return {"nudged": False}
+
+    nudge_text = "¿Sigues en línea? Si quieres, te ayudo a continuar."
+    db.add(models.PublicChatMessage(session_id=session.id, role="assistant", content=nudge_text))
+    db.commit()
+    return {"nudged": True, "message": nudge_text}
+
 @app.post("/public-chat/message", response_model=schemas.PublicChatMessageResponse)
 def public_chat_message(payload: schemas.PublicChatMessageCreate, db: Session = Depends(get_db)):
     user_message = (payload.message or "").strip()

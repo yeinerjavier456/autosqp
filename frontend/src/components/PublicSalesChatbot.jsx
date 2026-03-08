@@ -46,6 +46,24 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
     }, [open]);
 
     useEffect(() => {
+        if (!open || !sessionToken) return;
+        const intervalId = setInterval(async () => {
+            try {
+                const res = await axios.post('https://autosqp.co/api/public-chat/check-inactive', {
+                    session_token: sessionToken
+                });
+                if (res.data?.nudged) {
+                    await loadHistory(sessionToken);
+                }
+            } catch (error) {
+                // silent: background check should not break chat UX
+            }
+        }, 30000);
+
+        return () => clearInterval(intervalId);
+    }, [open, sessionToken]);
+
+    useEffect(() => {
         if (open) {
             endRef.current?.scrollIntoView({ behavior: 'smooth' });
         }
