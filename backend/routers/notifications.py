@@ -5,11 +5,30 @@ from typing import List, Optional
 import models, schemas, database
 from dependencies import get_current_user, get_db
 import datetime
+import os
+from zoneinfo import ZoneInfo
+from routers.rules import check_and_trigger_rules
 
 router = APIRouter(
     prefix="/notifications",
     tags=["notifications"]
 )
+
+BOGOTA_TZ = ZoneInfo("America/Bogota")
+RULES_CHECK_INTERVAL_SECONDS = int(os.getenv("RULES_CHECK_INTERVAL_SECONDS", "45"))
+LAST_RULES_CHECK_BY_COMPANY: dict[int, datetime.datetime] = {}
+
+def maybe_run_automation_rules(db: Session, company_id: Optional[int]):
+    if not company_id:
+        return
+
+    now_local = datetime.datetime.now(BOGOTA_TZ)
+    last_run = LAST_RULES_CHECK_BY_COMPANY.get(company_id)
+    if last_run and (now_local - last_run).total_seconds() < RULES_CHECK_INTERVAL_SECONDS:
+        return
+
+    check_and_trigger_rules(db)
+    LAST_RULES_CHECK_BY_COMPANY[company_id] = now_local
 
 @router.get("/", response_model=List[schemas.Notification])
 def get_notifications(
@@ -18,6 +37,8 @@ def get_notifications(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    maybe_run_automation_rules(db, current_user.company_id)
+
     # Lazy check for reminders
     check_due_reminders(db, current_user.id)
 

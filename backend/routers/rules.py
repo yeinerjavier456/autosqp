@@ -4,12 +4,19 @@ from sqlalchemy import func
 from typing import List
 import models, schemas
 from datetime import timedelta, datetime
+from zoneinfo import ZoneInfo
 from dependencies import get_current_user, get_db
 
 router = APIRouter(
     prefix="/rules",
     tags=["Automation Rules"]
 )
+
+BOGOTA_TZ = ZoneInfo("America/Bogota")
+
+def now_utc_naive_from_bogota() -> datetime:
+    # Business timezone is always Bogota; DB stores naive UTC timestamps.
+    return datetime.now(BOGOTA_TZ).astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
 
 # --- CRUD Operations ---
 
@@ -101,7 +108,7 @@ def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
     Finds leads that have been in `rule.condition_value` status for longer than `rule.time_value`.
     """
     # Calculate threshold time
-    now = datetime.utcnow()
+    now = now_utc_naive_from_bogota()
     delta = timedelta(minutes=0)
     if rule.time_unit == 'minutes':
         delta = timedelta(minutes=rule.time_value)
@@ -134,7 +141,7 @@ def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
             if not rule.is_repeating:
                 continue
             # If repeating, check interval
-            time_since_last = datetime.utcnow() - last_sent.sent_at
+            time_since_last = now_utc_naive_from_bogota() - last_sent.sent_at
             if time_since_last < timedelta(minutes=rule.repeat_interval):
                 continue
             
@@ -150,7 +157,7 @@ def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
         if rule.recipient_type == 'all_admins':
             admins = db.query(models.User).join(models.Role).filter(
                 models.User.company_id == rule.company_id,
-                models.Role.name.in_(['admin']) # Company admin, not super_admin strictly
+                models.Role.name.in_(['admin', 'super_admin'])
             ).all()
             recipients = [u.id for u in admins]
         elif recipient_id:
