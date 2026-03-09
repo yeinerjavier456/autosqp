@@ -823,11 +823,13 @@ async def upload_image(request: Request, file: UploadFile = File(...)):
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         
-    # Return URL (assuming localhost for now, hardcoded base likely needed for prod)
-    # In a real scenario you might return full URL or relative path
     relative_url = f"/api/static/{unique_filename}"
+    base_url = str(request.base_url).rstrip("/")
+    # Behind reverse proxies, base_url can already include /api.
+    if base_url.endswith("/api"):
+        base_url = base_url[:-4]
     return {
-        "url": f"{str(request.base_url).rstrip('/')}{relative_url}",
+        "url": f"{base_url}{relative_url}",
         "url_relative": relative_url
     }
 

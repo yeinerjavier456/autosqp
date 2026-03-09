@@ -8,6 +8,9 @@ export const normalizeMediaUrl = (url) => {
 
     // Already normalized absolute URL
     if (/^https?:\/\/.+\/api\/static\//i.test(raw)) return raw;
+    if (/^https?:\/\/.+\/api\/api\/static\//i.test(raw)) {
+        return raw.replace(/\/api\/api\/static\//i, '/api/static/');
+    }
 
     // Absolute URL pointing to /static -> rewrite once to /api/static
     if (/^https?:\/\/.+\/static\//i.test(raw)) {
