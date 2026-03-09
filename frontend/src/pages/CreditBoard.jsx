@@ -42,10 +42,14 @@ const CreditBoard = () => {
             const response = await axios.get('https://autosqp.co/api/credits', {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setCredits(response.data.items);
+            const items = Array.isArray(response.data?.items)
+                ? response.data.items
+                : (Array.isArray(response.data) ? response.data : []);
+            setCredits(items);
         } catch (error) {
             console.error(error);
             Swal.fire('Error', 'No se pudieron cargar las solicitudes', 'error');
+            setCredits([]);
         } finally {
             setLoading(false);
         }
@@ -124,6 +128,7 @@ const CreditBoard = () => {
 
     // Filter credits by column
     const getCreditsByStatus = (status) => {
+        if (!Array.isArray(credits)) return [];
         return credits.filter(c => (c.status || 'pending') === status);
     };
 
