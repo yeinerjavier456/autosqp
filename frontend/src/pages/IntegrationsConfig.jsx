@@ -35,7 +35,10 @@ const IntegrationsConfig = () => {
         whatsapp_api_key: '',
         whatsapp_phone_number_id: '',
         openai_api_key: '',
-        gw_model: 'gpt-4o'
+        gw_model: 'gpt-4o',
+        chatbot_bot_name: 'Jennifer Quimbayo',
+        chatbot_typing_min_ms: 7000,
+        chatbot_typing_max_ms: 18000
     });
 
     useEffect(() => {
@@ -172,6 +175,12 @@ const IntegrationsConfig = () => {
                         icon={<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M22.28 9.06a8.55 8.55 0 0 0-1.28-4.47 8.76 8.76 0 0 0-3.32-3.15 8.61 8.61 0 0 0-6.91-.4 8.67 8.67 0 0 0-4.48 2.5 8.62 8.62 0 0 0-2.52 4.48A8.61 8.61 0 0 0 4.15 15a8.59 8.59 0 0 0 1.28 4.47 8.76 8.76 0 0 0 3.32 3.15 8.68 8.68 0 0 0 3.84.88 8.62 8.62 0 0 0 3.06-.57 8.68 8.68 0 0 0 4.48-2.5 8.57 8.57 0 0 0 2.5-4.48 8.68 8.68 0 0 0-.4-6.91ZM10.74 3a6.83 6.83 0 0 1 3.86 1.36 1.21 1.21 0 0 1 .4 1.57l-.05.07-.12.18-.76 1.32-.47.81a6.6 6.6 0 0 0-4.07.6c-.19.09-.4.15-.61.16-.42.06-.85-.09-1.16-.38l-1.3-1.34a1.22 1.22 0 0 1 .15-1.84A6.73 6.73 0 0 1 10.74 3Zm-6.52 7a6.69 6.69 0 0 1 .84-3.52 1.22 1.22 0 0 1 1.62-.31l.07.05.18.11 1.35.77.8.46a6.56 6.56 0 0 0 2.22 3.49c.14.15.26.33.34.52.17.4.11.86-.15 1.21l-1.32 1.32a1.22 1.22 0 0 1-1.84-.13A6.74 6.74 0 0 1 4.22 10Zm2.94 8.73a6.79 6.79 0 0 1-2.9-2.92 1.22 1.22 0 0 1 .32-1.63l.06-.05.18-.11 1.35-.77.8-.46a6.61 6.61 0 0 0 4.12.22c.2-.06.4-.16.57-.31.33-.29.5-.72.45-1.15l-.26-1.85a1.22 1.22 0 0 1 .91-1.36 6.79 6.79 0 0 1 6.13.91 1.22 1.22 0 0 1 .32 1.63l-.06.05-.18.12-1.34.76-.8.46a6.57 6.57 0 0 0-2.23-3.48 1.58 1.58 0 0 1-.35-.53 1.22 1.22 0 0 1 .16-1.2l1.32-1.33a1.22 1.22 0 0 1 1.84.13 6.77 6.77 0 0 1 1.09 3.86 6.83 6.83 0 0 1-3.86 3.09 1.21 1.21 0 0 1-1.57-.4l-.06-.06-.11-.18-.77-1.33-.46-.8a6.59 6.59 0 0 0-4.06-.6 1.45 1.45 0 0 1-1.78.22l-1.34-1.34a1.22 1.22 0 0 1-.15-1.84Zm-6.52 7a6.69 6.69 0 0 1 .84-3.52 1.22 1.22 0 0 1 1.62-.31l.07.05.18.11 1.35.77.8.46a6.56 6.56 0 0 0 2.22 3.49c.14.15.26.33.34.52.17.4.11.86-.15 1.21l-1.32 1.32a1.22 1.22 0 0 1-1.84-.13A6.74 6.74 0 0 1 4.22 10Zm2.94 8.73a6.79 6.79 0 0 1-2.9-2.92 1.22 1.22 0 0 1 .32-1.63l.06-.05.18-.11 1.35-.77.8-.46a6.61 6.61 0 0 0 4.12.22c.2-.06.4-.16.57-.31.33-.29.5-.72.45-1.15l-.26-1.85a1.22 1.22 0 0 1 .91-1.36 6.79 6.79 0 0 1 6.13.91 1.22 1.22 0 0 1 .32 1.63l-.06.05-.18.12-1.34.76-.8.46a6.57 6.57 0 0 0-2.23-3.48 1.58 1.58 0 0 1-.35-.53 1.22 1.22 0 0 1 .16-1.2l1.32-1.33a1.22 1.22 0 0 1 1.84.13 6.77 6.77 0 0 1 1.09 3.86 6.83 6.83 0 0 1-3.86 3.09 1.21 1.21 0 0 1-1.57-.4l-.06-.06-.11-.18-.77-1.33-.46-.8a6.59 6.59 0 0 0-4.06-.6 1.45 1.45 0 0 1-1.78.22l-1.34-1.34a1.22 1.22 0 0 1-.15-1.84Z" /></svg>}
                     />
                     <IntegrationTab
+                        active={activeTab === 'chatbot'}
+                        label="Chatbot Web"
+                        onClick={() => setActiveTab('chatbot')}
+                        icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>}
+                    />
+                    <IntegrationTab
                         active={activeTab === 'import'}
                         label="Importar Inventario"
                         onClick={() => setActiveTab('import')}
@@ -298,6 +307,51 @@ const IntegrationsConfig = () => {
                                     <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
                                 </select>
                             </div>
+                        </div>
+                    )}
+
+                    {/* Chatbot Web Tab */}
+                    {activeTab === 'chatbot' && (
+                        <div className="space-y-6 fade-in">
+                            <h2 className="text-xl font-bold text-slate-800 border-b pb-2">Chatbot Web (público)</h2>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-600 mb-1">Nombre del Bot / Asesora</label>
+                                <input
+                                    type="text"
+                                    name="chatbot_bot_name"
+                                    value={settings.chatbot_bot_name || ''}
+                                    onChange={handleChange}
+                                    placeholder="Jennifer Quimbayo"
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Tiempo mínimo de respuesta (ms)</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        name="chatbot_typing_min_ms"
+                                        value={settings.chatbot_typing_min_ms ?? 7000}
+                                        onChange={handleChange}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Tiempo máximo de respuesta (ms)</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        name="chatbot_typing_max_ms"
+                                        value={settings.chatbot_typing_max_ms ?? 18000}
+                                        onChange={handleChange}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    />
+                                </div>
+                            </div>
+                            <p className="text-xs text-slate-400">
+                                Ejemplo: 7000 = 7 segundos. El chatbot espera entre mínimo y máximo antes de mostrar la respuesta completa.
+                            </p>
                         </div>
                     )}
 

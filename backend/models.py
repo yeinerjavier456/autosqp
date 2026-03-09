@@ -300,6 +300,9 @@ class IntegrationSettings(Base):
     # ChatGPT
     openai_api_key = Column(Text, nullable=True)
     gw_model = Column(String(50), default="gpt-4o")
+    chatbot_bot_name = Column(String(120), default="Jennifer Quimbayo")
+    chatbot_typing_min_ms = Column(Integer, default=7000)
+    chatbot_typing_max_ms = Column(Integer, default=18000)
 
     company = relationship("Company", back_populates="integration_settings")
 

@@ -10,6 +10,11 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
     const [sessionToken, setSessionToken] = useState('');
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
+    const [chatbotConfig, setChatbotConfig] = useState({
+        bot_name: 'Jennifer Quimbayo',
+        typing_min_ms: 7000,
+        typing_max_ms: 18000
+    });
     const endRef = useRef(null);
 
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -37,10 +42,28 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
         }
     };
 
+    const loadChatbotConfig = async (token) => {
+        try {
+            const res = await axios.post('https://autosqp.co/api/public-chat/config', {
+                session_token: token
+            });
+            if (res.data) {
+                setChatbotConfig({
+                    bot_name: res.data.bot_name || 'Jennifer Quimbayo',
+                    typing_min_ms: Number(res.data.typing_min_ms) || 7000,
+                    typing_max_ms: Number(res.data.typing_max_ms) || 18000
+                });
+            }
+        } catch (error) {
+            // Keep defaults if config cannot be loaded
+        }
+    };
+
     useEffect(() => {
         if (!open) return;
         (async () => {
             const token = await ensureSession();
+            await loadChatbotConfig(token);
             await loadHistory(token);
         })();
     }, [open]);
@@ -71,7 +94,9 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
 
     const simulateTypingReply = async (replyText) => {
         const safeReply = replyText || '';
-        const preDelay = Math.min(18000, Math.max(7000, 5500 + safeReply.length * 35));
+        const typingMin = Math.max(0, Number(chatbotConfig.typing_min_ms) || 7000);
+        const typingMax = Math.max(typingMin, Number(chatbotConfig.typing_max_ms) || 18000);
+        const preDelay = Math.min(typingMax, Math.max(typingMin, 5500 + safeReply.length * 35));
 
         setIsTyping(true);
         await sleep(preDelay);
@@ -134,7 +159,7 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
                         {loading && (
                             <div className="flex justify-start">
                                 <div className="max-w-[85%] rounded-2xl px-3 py-2 text-sm bg-white border border-slate-200 text-slate-500 rounded-bl-none">
-                                    Jennifer está escribiendo
+                                    {chatbotConfig.bot_name} está escribiendo
                                     <span className="inline-flex ml-1 gap-1 align-middle">
                                         <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
                                         <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
@@ -146,7 +171,7 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
                         {!loading && isTyping && (
                             <div className="flex justify-start">
                                 <div className="max-w-[85%] rounded-2xl px-3 py-2 text-sm bg-white border border-slate-200 text-slate-500 rounded-bl-none">
-                                    Jennifer está escribiendo
+                                    {chatbotConfig.bot_name} está escribiendo
                                     <span className="inline-flex ml-1 gap-1 align-middle">
                                         <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
                                         <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>

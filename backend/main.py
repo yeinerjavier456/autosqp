@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Query, Query
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, func
+from sqlalchemy import or_, func, text
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, get_db
 import models, schemas, auth_utils
@@ -23,6 +23,31 @@ from fastapi.responses import FileResponse
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
+
+def ensure_chatbot_settings_columns():
+    """
+    Backward-compatible bootstrap for legacy DBs where integration_settings
+    still lacks chatbot config columns.
+    """
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(
+                "ALTER TABLE integration_settings "
+                "ADD COLUMN IF NOT EXISTS chatbot_bot_name VARCHAR(120) NULL DEFAULT 'Jennifer Quimbayo'"
+            ))
+            conn.execute(text(
+                "ALTER TABLE integration_settings "
+                "ADD COLUMN IF NOT EXISTS chatbot_typing_min_ms INT NULL DEFAULT 7000"
+            ))
+            conn.execute(text(
+                "ALTER TABLE integration_settings "
+                "ADD COLUMN IF NOT EXISTS chatbot_typing_max_ms INT NULL DEFAULT 18000"
+            ))
+            conn.commit()
+    except Exception as exc:
+        print(f"Warning: could not ensure chatbot settings columns: {exc}", flush=True)
+
+ensure_chatbot_settings_columns()
 
 app = FastAPI(title="AutosQP API", description="API para gestión de compra venta de carros")
 
@@ -1168,6 +1193,25 @@ def get_company_ai_settings(db: Session, company_id: Optional[int]) -> tuple[Opt
                 model_name = settings.gw_model
     return api_key, model_name
 
+def get_company_chatbot_settings(db: Session, company_id: Optional[int]) -> tuple[str, int, int]:
+    bot_name = "Jennifer Quimbayo"
+    typing_min_ms = 7000
+    typing_max_ms = 18000
+
+    if company_id:
+        settings = db.query(models.IntegrationSettings).filter(models.IntegrationSettings.company_id == company_id).first()
+        if settings:
+            if settings.chatbot_bot_name and settings.chatbot_bot_name.strip():
+                bot_name = settings.chatbot_bot_name.strip()
+            if settings.chatbot_typing_min_ms is not None:
+                typing_min_ms = int(settings.chatbot_typing_min_ms)
+            if settings.chatbot_typing_max_ms is not None:
+                typing_max_ms = int(settings.chatbot_typing_max_ms)
+
+    typing_min_ms = max(0, typing_min_ms)
+    typing_max_ms = max(typing_min_ms, typing_max_ms)
+    return bot_name, typing_min_ms, typing_max_ms
+
 def call_openai_chat(api_key: str, model_name: str, messages: List[Dict[str, str]]) -> str:
     url = "https://api.openai.com/v1/chat/completions"
     payload = {
@@ -1467,6 +1511,21 @@ def create_public_chat_session(payload: schemas.PublicChatSessionCreate, db: Ses
     db.refresh(session)
     return session
 
+@app.post("/public-chat/config")
+def get_public_chat_config(payload: schemas.PublicChatInactiveCheck, db: Session = Depends(get_db)):
+    session = db.query(models.PublicChatSession).filter(
+        models.PublicChatSession.session_token == payload.session_token
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    bot_name, typing_min_ms, typing_max_ms = get_company_chatbot_settings(db, session.company_id)
+    return {
+        "bot_name": bot_name,
+        "typing_min_ms": typing_min_ms,
+        "typing_max_ms": typing_max_ms
+    }
+
 @app.get("/public-chat/{session_token}/messages", response_model=List[schemas.PublicChatMessageItem])
 def get_public_chat_messages(session_token: str, db: Session = Depends(get_db)):
     session = db.query(models.PublicChatSession).filter(models.PublicChatSession.session_token == session_token).first()
@@ -1564,11 +1623,12 @@ def public_chat_message(payload: schemas.PublicChatMessageCreate, db: Session = 
                 f"precio {vehicle.price} COP."
             )
 
+    bot_name, _, _ = get_company_chatbot_settings(db, session.company_id)
     system_prompt = (
-        "Eres Jennifer Quimbayo, asesora comercial de AutosQP en Colombia. "
+        f"Eres {bot_name}, asesora comercial de AutosQP en Colombia. "
         "Habla en tono amigable, cercano y comercial. "
         "En tu primera respuesta de cada sesion debes presentarte explicitamente como: "
-        "\"Hola, soy Jennifer Quimbayo, asesora comercial de Autos QP\" y luego continuar con la asesoria. "
+        f"\"Hola, soy {bot_name}, asesora comercial de Autos QP\" y luego continuar con la asesoria. "
         "Si el cliente da nombre completo, dirigete solo por su primer nombre. "
         "Debes perfilar al cliente con preguntas claras, una por turno, en este orden: "
         "1) vehiculo de interes, 2) nombre, 3) telefono, 4) correo (OBLIGATORIO), "

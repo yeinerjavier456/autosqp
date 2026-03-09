@@ -171,6 +171,9 @@ class IntegrationSettingsBase(BaseModel):
     whatsapp_phone_number_id: Optional[str] = None
     openai_api_key: Optional[str] = None
     gw_model: Optional[str] = "gpt-4o"
+    chatbot_bot_name: Optional[str] = "Jennifer Quimbayo"
+    chatbot_typing_min_ms: Optional[int] = 7000
+    chatbot_typing_max_ms: Optional[int] = 18000
 
 class IntegrationSettingsUpdate(IntegrationSettingsBase):
     pass

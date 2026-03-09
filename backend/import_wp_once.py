@@ -91,10 +91,6 @@ def map_wp_listing(item: Dict[str, Any]) -> Dict[str, Any]:
         source_note = f"Importado desde WP: {source_link}"
         description = f"{description}\n\n{source_note}".strip() if description else source_note
 
-    fallback_plate = f"WP{wp_id}" if wp_id is not None else "WP000000"
-    if len(fallback_plate) > 20:
-        fallback_plate = fallback_plate[:20]
-
     return {
         "wp_id": wp_id,
         "internal_code": f"WP-{wp_id}",
@@ -107,7 +103,7 @@ def map_wp_listing(item: Dict[str, Any]) -> Dict[str, Any]:
         "fuel_type": (fuel_type or "")[:50] or None,
         "transmission": (transmission or "")[:50] or None,
         "engine": None,
-        "plate": fallback_plate,
+        "plate": None,
         "location": (location or "")[:100] or None,
         "description": description[:500] if description else None,
         "status": "available",
@@ -174,7 +170,6 @@ def upsert_vehicles(
             "model",
             "year",
             "price",
-            "plate",
             "mileage",
             "color",
             "fuel_type",
