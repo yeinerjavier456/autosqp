@@ -25,12 +25,21 @@ export const normalizeMediaUrl = (url) => {
     if (raw.startsWith('/api/')) {
         return `${origin}${raw.replace(/(?:\/api)+\/static\//, '/api/static/')}`;
     }
+    if (raw.startsWith('api/')) {
+        const normalized = `/${raw}`.replace(/(?:\/api)+\/static\//, '/api/static/');
+        return `${origin}${normalized}`;
+    }
 
     if (raw.startsWith('/static/')) return `${origin}/api${raw}`;
     if (raw.startsWith('static/')) return `${origin}/api/${raw}`;
 
     if (raw.includes('/api/static/')) {
         return raw.replace(/(?:\/api)+\/static\//, '/api/static/');
+    }
+    if (raw.includes('api/static/')) {
+        const suffix = raw.substring(raw.indexOf('api/static/'));
+        const normalized = `/${suffix}`.replace(/(?:\/api)+\/static\//, '/api/static/');
+        return `${origin}${normalized}`;
     }
 
     if (raw.includes('/static/')) {
