@@ -31,18 +31,27 @@ def ensure_chatbot_settings_columns():
     """
     try:
         with engine.connect() as conn:
-            conn.execute(text(
-                "ALTER TABLE integration_settings "
-                "ADD COLUMN IF NOT EXISTS chatbot_bot_name VARCHAR(120) NULL DEFAULT 'Jennifer Quimbayo'"
+            existing_cols_result = conn.execute(text(
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'integration_settings'"
             ))
-            conn.execute(text(
-                "ALTER TABLE integration_settings "
-                "ADD COLUMN IF NOT EXISTS chatbot_typing_min_ms INT NULL DEFAULT 7000"
-            ))
-            conn.execute(text(
-                "ALTER TABLE integration_settings "
-                "ADD COLUMN IF NOT EXISTS chatbot_typing_max_ms INT NULL DEFAULT 18000"
-            ))
+            existing_cols = {row[0] for row in existing_cols_result.fetchall()}
+
+            if "chatbot_bot_name" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE integration_settings "
+                    "ADD COLUMN chatbot_bot_name VARCHAR(120) NULL DEFAULT 'Jennifer Quimbayo'"
+                ))
+            if "chatbot_typing_min_ms" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE integration_settings "
+                    "ADD COLUMN chatbot_typing_min_ms INT NULL DEFAULT 7000"
+                ))
+            if "chatbot_typing_max_ms" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE integration_settings "
+                    "ADD COLUMN chatbot_typing_max_ms INT NULL DEFAULT 18000"
+                ))
             conn.commit()
     except Exception as exc:
         print(f"Warning: could not ensure chatbot settings columns: {exc}", flush=True)
