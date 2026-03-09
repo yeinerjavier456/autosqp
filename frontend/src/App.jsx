@@ -1,8 +1,8 @@
-
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ChatProvider } from './context/ChatContext';
+import { NotificationsProvider } from './context/NotificationsContext';
 import AdminCompanySettings from './pages/AdminCompanySettings';
 import AdminAlerts from './pages/AdminAlerts'; // Import AdminAlerts
 import PublicInventory from './pages/PublicInventory';
@@ -35,7 +35,7 @@ import SystemLogs from './pages/SystemLogs';
 const PrivateRoute = ({ allowedRoles }) => {
   const { user, loading } = useAuth();
 
-  if (loading) return <div className="p-10 text-center">Cargando sesión...</div>;
+  if (loading) return <div className="p-10 text-center">Cargando sesion...</div>;
 
   if (!user) return <Navigate to="/login" replace />;
 
@@ -54,97 +54,98 @@ const PrivateRoute = ({ allowedRoles }) => {
   return <Outlet />;
 };
 
-import { NotificationsProvider } from './context/NotificationsContext';
+const AuthenticatedAppShell = () => (
+  <ChatProvider>
+    <NotificationsProvider>
+      <GlobalNotifications />
+      <Layout />
+    </NotificationsProvider>
+  </ChatProvider>
+);
 
 function App() {
   return (
     <AuthProvider>
-      <ChatProvider>
-        <NotificationsProvider>
-          <Router>
-            <GlobalNotifications />
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/autos" element={<PublicInventory />} />
-              <Route path="/autos/:id" element={<VehicleDetail />} /> {/* New Route */}
+      <Router>
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/autos" element={<PublicInventory />} />
+          <Route path="/autos/:id" element={<VehicleDetail />} /> {/* New Route */}
 
-              <Route path="/" element={<Navigate to="/autos" replace />} />
-              <Route path="/login" element={<LoginPage />} />
+          <Route path="/" element={<Navigate to="/autos" replace />} />
+          <Route path="/login" element={<LoginPage />} />
 
-              {/* Protected Routes */}
-              <Route element={<PrivateRoute />}>
-                <Route element={<Layout />}>
-                  <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor', 'aliado']} />}>
-                    <Route path="/admin/dashboard" element={<Dashboard />} />
-                  </Route>
-
-                  {/* Super Admin & Company Admin Routes */}
-                  <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin']} />}>
-                    <Route path="/admin/users" element={<UsersList />} />
-                    <Route path="/admin/users/new" element={<UserForm />} />
-                    <Route path="/admin/users/:id" element={<UserForm />} />
-                    <Route path="/admin/users/:id" element={<UserForm />} />
-                    <Route path="/admin/integrations" element={<IntegrationsConfig />} />
-                    <Route path="/admin/alerts" element={<AdminAlerts />} />
-                    <Route path="/admin/logs" element={<SystemLogs />} />
-                  </Route>
-
-                  {/* Inventory Routes */}
-                  <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor', 'aliado', 'inventario']} />}>
-                    <Route path="/admin/inventory" element={<InventoryList />} />
-                    <Route path="/admin/inventory/:id" element={<VehicleForm />} />
-                  </Route>
-                  <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'inventario']} />}>
-                    <Route path="/admin/inventory/new" element={<VehicleForm />} />
-                  </Route>
-
-                  {/* Shared Routes (Admin, Super Admin, Advisor) */}
-                  <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor', 'aliado']} />}>
-                    {/* Leads Routes */}
-                    <Route path="/admin/leads" element={<LeadsBoard />} />
-                    <Route path="/admin/sales" element={<SalesDashboard />} />
-                    <Route path="/admin/my-sales" element={<MySales />} />
-
-                    <Route path="/admin/leads/facebook" element={<FacebookLeads />} />
-                    <Route path="/admin/leads/tiktok" element={<TikTokLeads />} />
-                    <Route path="/admin/leads/whatsapp" element={<WhatsAppLeads />} />
-                    <Route path="/admin/leads/instagram" element={<InstagramLeads />} />
-
-                    {/* Messaging */}
-                    <Route path="/admin/whatsapp" element={<WhatsAppDashboard />} />
-
-                  </Route>
-
-                  {/* Credits & Requests */}
-                  <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor', 'aliado', 'compras']} />}>
-                    <Route path="/admin/credits" element={<CreditBoard />} />
-                  </Route>
-
-                  {/* Aliado Routes */}
-                  <Route element={<PrivateRoute allowedRoles={['aliado']} />}>
-                    <Route path="/aliado/dashboard" element={<AliadoDashboard />} />
-                  </Route>
-
-                  {/* Internal Chat - Access for all authenticated users in company */}
-                  <Route path="/internal-chat" element={<InternalChat />} />
-
-                  {/* Global Super Admin Only Routes */}
-                  <Route element={<PrivateRoute allowedRoles={['super_admin']} />}>
-                    <Route path="/admin/companies" element={<AdminCompanySettings />} />
-                    <Route path="/admin/companies/:id" element={<AdminCompanySettings />} />
-                    <Route path="/admin/companies-list" element={<CompaniesList />} />
-                  </Route>
-
-                  {/* NOTE: I removed the duplicate Route path="/" here because it intercepts the global "/" public route */}
-                </Route>
+          {/* Protected Routes */}
+          <Route element={<PrivateRoute />}>
+            <Route element={<AuthenticatedAppShell />}>
+              <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor', 'aliado']} />}>
+                <Route path="/admin/dashboard" element={<Dashboard />} />
               </Route>
 
-              {/* Fallback */}
-              <Route path="*" element={<Navigate to="/autos" replace />} />
-            </Routes>
-          </Router>
-        </NotificationsProvider>
-      </ChatProvider>
+              {/* Super Admin & Company Admin Routes */}
+              <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin']} />}>
+                <Route path="/admin/users" element={<UsersList />} />
+                <Route path="/admin/users/new" element={<UserForm />} />
+                <Route path="/admin/users/:id" element={<UserForm />} />
+                <Route path="/admin/users/:id" element={<UserForm />} />
+                <Route path="/admin/integrations" element={<IntegrationsConfig />} />
+                <Route path="/admin/alerts" element={<AdminAlerts />} />
+                <Route path="/admin/logs" element={<SystemLogs />} />
+              </Route>
+
+              {/* Inventory Routes */}
+              <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor', 'aliado', 'inventario']} />}>
+                <Route path="/admin/inventory" element={<InventoryList />} />
+                <Route path="/admin/inventory/:id" element={<VehicleForm />} />
+              </Route>
+              <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'inventario']} />}>
+                <Route path="/admin/inventory/new" element={<VehicleForm />} />
+              </Route>
+
+              {/* Shared Routes (Admin, Super Admin, Advisor) */}
+              <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor', 'aliado']} />}>
+                {/* Leads Routes */}
+                <Route path="/admin/leads" element={<LeadsBoard />} />
+                <Route path="/admin/sales" element={<SalesDashboard />} />
+                <Route path="/admin/my-sales" element={<MySales />} />
+
+                <Route path="/admin/leads/facebook" element={<FacebookLeads />} />
+                <Route path="/admin/leads/tiktok" element={<TikTokLeads />} />
+                <Route path="/admin/leads/whatsapp" element={<WhatsAppLeads />} />
+                <Route path="/admin/leads/instagram" element={<InstagramLeads />} />
+
+                {/* Messaging */}
+                <Route path="/admin/whatsapp" element={<WhatsAppDashboard />} />
+              </Route>
+
+              {/* Credits & Requests */}
+              <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor', 'aliado', 'compras']} />}>
+                <Route path="/admin/credits" element={<CreditBoard />} />
+              </Route>
+
+              {/* Aliado Routes */}
+              <Route element={<PrivateRoute allowedRoles={['aliado']} />}>
+                <Route path="/aliado/dashboard" element={<AliadoDashboard />} />
+              </Route>
+
+              {/* Internal Chat - Access for all authenticated users in company */}
+              <Route path="/internal-chat" element={<InternalChat />} />
+
+              {/* Global Super Admin Only Routes */}
+              <Route element={<PrivateRoute allowedRoles={['super_admin']} />}>
+                <Route path="/admin/companies" element={<AdminCompanySettings />} />
+                <Route path="/admin/companies/:id" element={<AdminCompanySettings />} />
+                <Route path="/admin/companies-list" element={<CompaniesList />} />
+              </Route>
+
+              {/* NOTE: I removed the duplicate Route path="/" here because it intercepts the global "/" public route */}
+            </Route>
+          </Route>
+
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/autos" replace />} />
+        </Routes>
+      </Router>
     </AuthProvider>
   );
 }
