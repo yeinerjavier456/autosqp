@@ -17,6 +17,7 @@ class LeadStatus(str, enum.Enum):
     NEW = "new"
     CONTACTED = "contacted"
     INTERESTED = "interested"
+    CREDIT_APPLICATION = "credit_application"
     QUALIFIED = "qualified"
     LOST = "lost"
     SOLD = "sold"
@@ -463,8 +464,10 @@ class CreditApplicationBase(BaseModel):
 class CreditApplicationCreate(CreditApplicationBase):
     company_id: Optional[int] = None
     assigned_to_id: Optional[int] = None
+    lead_id: Optional[int] = None
 
 class CreditApplicationUpdate(BaseModel):
+    lead_id: Optional[int] = None
     client_name: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
@@ -480,6 +483,7 @@ class CreditApplicationUpdate(BaseModel):
 
 class CreditApplication(CreditApplicationBase):
     id: int
+    lead_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
     company_id: int

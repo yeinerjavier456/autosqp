@@ -27,6 +27,7 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory }) => {
                     status === 'new' ? '#3b82f6' :
                         status === 'contacted' ? '#eab308' :
                             status === 'interested' ? '#f97316' :
+                                status === 'credit_application' ? '#0f766e' :
                                 status === 'sold' ? '#22c55e' :
                                     status === 'ally_managed' ? '#8b5cf6' : '#9ca3af',
                 borderLeftWidth: '6px'
@@ -416,6 +417,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                                         <option value="new">Nuevo</option>
                                         <option value="contacted">Contactado</option>
                                         <option value="interested">En proceso</option>
+                                        <option value="credit_application">Solicitud de crédito</option>
                                         <option value="sold">Vendido</option>
                                         <option value="ally_managed">Gestionado por Aliado</option>
                                         <option value="lost">Perdido</option>
@@ -643,9 +645,14 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                                                         <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                                                         <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded text-white 
                                                                 ${record.new_status === 'sold' ? 'bg-green-500' :
+                                                                    record.new_status === 'credit_application' ? 'bg-teal-500' :
                                                                 record.new_status === 'ally_managed' ? 'bg-purple-500' :
                                                                     record.new_status === 'lost' ? 'bg-gray-500' : 'bg-blue-500'}`}>
-                                                            {record.new_status === 'ally_managed' ? 'gestionado por aliado' : record.new_status}
+                                                            {record.new_status === 'ally_managed'
+                                                                ? 'gestionado por aliado'
+                                                                : record.new_status === 'credit_application'
+                                                                    ? 'solicitud de crédito'
+                                                                    : record.new_status}
                                                         </span>
                                                     </div>
                                                     <span className="text-[10px] text-gray-400 font-mono">
@@ -1120,6 +1127,7 @@ const LeadsBoard = () => {
                                     <option value="new">Nuevos</option>
                                     <option value="contacted">Contactados</option>
                                     <option value="interested">En proceso</option>
+                                    <option value="credit_application">Solicitud de crédito</option>
                                     <option value="sold">Vendidos</option>
                                     <option value="ally_managed">Gestionados por Aliado</option>
                                     <option value="lost">Perdidos</option>
@@ -1232,6 +1240,16 @@ const LeadsBoard = () => {
                     onViewHistory={handleViewHistory}
                 />
                 <KanbanColumn
+                    title="Solicitud de crédito"
+                    status="credit_application"
+                    color="text-teal-600"
+                    leads={filterByStatus('credit_application')}
+                    onDragStart={handleDragStart}
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                    onViewHistory={handleViewHistory}
+                />
+                <KanbanColumn
                     title="Vendidos"
                     status="sold"
                     color="text-green-600"
@@ -1273,6 +1291,7 @@ const LeadsBoard = () => {
                                 {pendingStatusChange?.newStatus === 'new' ? 'NUEVO' :
                                     pendingStatusChange?.newStatus === 'contacted' ? 'CONTACTADO' :
                                         pendingStatusChange?.newStatus === 'interested' ? 'INTERESADO' :
+                                            pendingStatusChange?.newStatus === 'credit_application' ? 'SOLICITUD DE CRÉDITO' :
                                             pendingStatusChange?.newStatus === 'lost' ? 'PERDIDO' :
                                                 pendingStatusChange?.newStatus === 'sold' ? 'VENDIDO' :
                                                     pendingStatusChange?.newStatus === 'ally_managed' ? 'GESTIONADO POR ALIADO' : pendingStatusChange?.newStatus}

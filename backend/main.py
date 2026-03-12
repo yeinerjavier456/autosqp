@@ -88,6 +88,35 @@ def ensure_lead_reply_columns():
 
 ensure_lead_reply_columns()
 
+
+def ensure_credit_application_link_column():
+    """
+    Backward-compatible bootstrap so credit applications can be tied to a lead.
+    """
+    try:
+        with engine.connect() as conn:
+            existing_cols_result = conn.execute(text(
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_applications'"
+            ))
+            existing_cols = {row[0] for row in existing_cols_result.fetchall()}
+
+            if "lead_id" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE credit_applications "
+                    "ADD COLUMN lead_id INT NULL"
+                ))
+                conn.execute(text(
+                    "ALTER TABLE credit_applications "
+                    "ADD INDEX ix_credit_applications_lead_id (lead_id)"
+                ))
+            conn.commit()
+    except Exception as exc:
+        print(f"Warning: could not ensure credit application lead link column: {exc}", flush=True)
+
+
+ensure_credit_application_link_column()
+
 app = FastAPI(title="AutosQP API", description="API para gestión de compra venta de carros")
 
 @app.exception_handler(Exception)
@@ -278,6 +307,75 @@ def upsert_purchase_request_from_lead(db: Session, lead: models.Lead):
             type="warning",
             link="/admin/credits"
         ))
+
+
+def upsert_credit_application_from_lead(
+    db: Session,
+    lead: models.Lead,
+    comment: Optional[str] = None
+):
+    """
+    Create/update a credit application when the lead enters credit request stage.
+    This keeps the same lead visible in /creditos without creating duplicates.
+    """
+    if not lead or lead.status != models.LeadStatus.CREDIT_APPLICATION.value:
+        return
+
+    detail = db.query(models.LeadProcessDetail).filter(
+        models.LeadProcessDetail.lead_id == lead.id
+    ).first()
+
+    desired_vehicle = ""
+    if detail:
+        if detail.vehicle_id:
+            vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == detail.vehicle_id).first()
+            if vehicle:
+                desired_vehicle = " ".join(
+                    part for part in [vehicle.make, vehicle.model, str(vehicle.year or "")] if part
+                ).strip()
+        if not desired_vehicle:
+            desired_vehicle = (detail.desired_vehicle or "").strip()
+
+    if not desired_vehicle:
+        desired_vehicle = (lead.message or "").strip() or "Por definir"
+
+    note_parts = [f"Generado autom?ticamente desde lead #{lead.id}."]
+    if comment and comment.strip():
+        note_parts.append(f"Seguimiento: {comment.strip()}")
+    auto_note = " ".join(note_parts)
+
+    existing_credit = db.query(models.CreditApplication).filter(
+        models.CreditApplication.company_id == lead.company_id,
+        models.CreditApplication.lead_id == lead.id
+    ).order_by(models.CreditApplication.created_at.desc()).first()
+
+    if existing_credit:
+        existing_credit.client_name = lead.name or existing_credit.client_name
+        existing_credit.phone = (lead.phone or "").strip() or existing_credit.phone
+        existing_credit.email = lead.email or existing_credit.email
+        existing_credit.desired_vehicle = desired_vehicle or existing_credit.desired_vehicle
+        existing_credit.assigned_to_id = lead.assigned_to_id or existing_credit.assigned_to_id
+        existing_credit.notes = auto_note
+        if not existing_credit.status:
+            existing_credit.status = models.CreditStatus.PENDING.value
+        return
+
+    db.add(models.CreditApplication(
+        lead_id=lead.id,
+        client_name=lead.name or f"Lead {lead.id}",
+        phone=(lead.phone or "").strip() or f"lead-{lead.id}",
+        email=lead.email,
+        desired_vehicle=desired_vehicle,
+        monthly_income=0,
+        other_income=0,
+        occupation="employee",
+        application_mode="individual",
+        down_payment=0,
+        status=models.CreditStatus.PENDING.value,
+        notes=auto_note,
+        company_id=lead.company_id,
+        assigned_to_id=lead.assigned_to_id
+    ))
 
 
 
@@ -1867,6 +1965,9 @@ def update_lead(
                 **process_detail_data.dict()
             )
             db.add(new_detail)
+
+    # Auto-create/update credit request queue when lead enters credit stage
+    upsert_credit_application_from_lead(db, lead, lead_update.comment)
 
     # Auto-create/update purchase request queue for role "compras"
     upsert_purchase_request_from_lead(db, lead)

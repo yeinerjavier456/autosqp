@@ -69,6 +69,7 @@ class LeadStatus(str, enum.Enum):
     NEW = "new"
     CONTACTED = "contacted"
     INTERESTED = "interested"
+    CREDIT_APPLICATION = "credit_application"
     QUALIFIED = "qualified"
     LOST = "lost"
     SOLD = "sold"
@@ -391,6 +392,7 @@ class CreditApplication(Base):
     __tablename__ = "credit_applications"
 
     id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True, index=True)
     client_name = Column(String(100))
     phone = Column(String(50))
     email = Column(String(100), nullable=True)
@@ -412,6 +414,7 @@ class CreditApplication(Base):
     company_id = Column(Integer, ForeignKey("companies.id"))
     assigned_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     
+    lead = relationship("Lead")
     company = relationship("Company")
     assigned_to = relationship("User")
 
