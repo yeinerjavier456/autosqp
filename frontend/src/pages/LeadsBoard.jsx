@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationsContext';
 import Swal from 'sweetalert2';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 // Draggable Lead Card Component
 const LeadCard = ({ lead, status, onDragStart, onViewHistory }) => {
@@ -660,6 +661,8 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
 
 const LeadsBoard = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const [leads, setLeads] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -704,6 +707,18 @@ const LeadsBoard = () => {
         fetchAdvisors();
         fetchAvailableVehicles();
     }, []);
+
+    useEffect(() => {
+        const leadIdFromQuery = parseInt(searchParams.get('leadId') || '', 10);
+        if (!leadIdFromQuery || leads.length === 0 || showHistoryModal) return;
+
+        const targetLead = leads.find(lead => lead.id === leadIdFromQuery);
+        if (!targetLead) return;
+
+        setSelectedLeadForHistory(targetLead);
+        setShowHistoryModal(true);
+        navigate('/admin/leads', { replace: true });
+    }, [searchParams, leads, showHistoryModal, navigate]);
 
     const handleCreateLead = async (e) => {
         e.preventDefault();

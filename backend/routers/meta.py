@@ -124,6 +124,37 @@ def send_meta_text_reply(
     return resp_data.get("message_id"), "sent"
 
 
+def notify_company_about_lead_reply(
+    db: Session,
+    lead: models.Lead,
+    source: str,
+    preview: str
+):
+    if not lead or not lead.company_id:
+        return
+
+    users = db.query(models.User).filter(
+        models.User.company_id == lead.company_id
+    ).all()
+    if not users:
+        return
+
+    lead_name = (lead.name or "Lead").strip()
+    source_label = "Instagram" if source == "instagram" else "Facebook"
+    trimmed_preview = (preview or "").strip() or "El cliente respondió desde la conversación."
+    if len(trimmed_preview) > 160:
+        trimmed_preview = trimmed_preview[:157] + "..."
+
+    for user in users:
+        db.add(models.Notification(
+            user_id=user.id,
+            title=f"Respuesta nueva en {source_label}",
+            message=f"{lead_name} respondió: {trimmed_preview}",
+            type="info",
+            link=f"/admin/leads?leadId={lead.id}"
+        ))
+
+
 @router.get("/webhook")
 async def verify_webhook(request: Request):
     """
@@ -224,6 +255,19 @@ async def receive_meta_message(request: Request, db: Session = Depends(get_db)):
 
                 if result.get("duplicate") or not result.get("assistant_reply"):
                     continue
+
+                if result.get("lead_id"):
+                    prior_user_message = db.query(models.Message).filter(
+                        models.Message.conversation_id == result["conversation"].id,
+                        models.Message.sender_type == "user"
+                    ).first()
+                    if prior_user_message:
+                        lead = db.query(models.Lead).filter(
+                            models.Lead.id == result["lead_id"]
+                        ).first()
+                        if lead:
+                            notify_company_about_lead_reply(db, lead, lead_source, content)
+                            db.commit()
 
                 outbound_status = "failed"
                 outbound_id = None
@@ -518,6 +562,12 @@ def sync_historical_messages(
 
                     msg_from_id = msg.get("from", {}).get("id")
                     sender_type = "lead" if str(msg_from_id) == str(sender_id) else "user"
+                    had_prior_user_message = False
+                    if sender_type == "lead":
+                        had_prior_user_message = db.query(models.Message).filter(
+                            models.Message.conversation_id == conversation.id,
+                            models.Message.sender_type == "user"
+                        ).first() is not None
 
                     new_msg = models.Message(
                         conversation_id=conversation.id,
@@ -530,6 +580,9 @@ def sync_historical_messages(
                     )
                     db.add(new_msg)
                     synced_count += 1
+
+                    if sender_type == "lead" and had_prior_user_message:
+                        notify_company_about_lead_reply(db, lead, source, content)
 
                 updated_time_str = conv.get("updated_time")
                 if updated_time_str:
