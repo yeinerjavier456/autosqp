@@ -58,6 +58,36 @@ def ensure_chatbot_settings_columns():
 
 ensure_chatbot_settings_columns()
 
+
+def ensure_lead_reply_columns():
+    """
+    Backward-compatible bootstrap for unread-reply markers on leads.
+    """
+    try:
+        with engine.connect() as conn:
+            existing_cols_result = conn.execute(text(
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'leads'"
+            ))
+            existing_cols = {row[0] for row in existing_cols_result.fetchall()}
+
+            if "has_unread_reply" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE leads "
+                    "ADD COLUMN has_unread_reply INT NULL DEFAULT 0"
+                ))
+            if "last_reply_at" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE leads "
+                    "ADD COLUMN last_reply_at DATETIME NULL"
+                ))
+            conn.commit()
+    except Exception as exc:
+        print(f"Warning: could not ensure lead reply columns: {exc}", flush=True)
+
+
+ensure_lead_reply_columns()
+
 app = FastAPI(title="AutosQP API", description="API para gestión de compra venta de carros")
 
 @app.exception_handler(Exception)
@@ -1931,6 +1961,10 @@ def get_lead_messages(
         
     if current_user.company_id and lead.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Not authorized")
+
+    if lead.has_unread_reply:
+        lead.has_unread_reply = 0
+        db.commit()
         
     # Get the conversation for this lead
     conversation = db.query(models.Conversation).filter(models.Conversation.lead_id == lead_id).first()

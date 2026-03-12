@@ -86,6 +86,8 @@ class Lead(Base):
     status_updated_at = Column(DateTime, default=datetime.datetime.utcnow) # Track when status changed
     message = Column(String(1000), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    has_unread_reply = Column(Integer, default=0)
+    last_reply_at = Column(DateTime, nullable=True)
     
     company_id = Column(Integer, ForeignKey("companies.id"))
     company = relationship("Company", back_populates="leads")

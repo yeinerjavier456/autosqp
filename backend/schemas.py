@@ -286,6 +286,8 @@ class LeadBase(BaseModel):
     message: Optional[str] = None
     company_id: Optional[int] = None
     assigned_to_id: Optional[int] = None
+    has_unread_reply: Optional[int] = 0
+    last_reply_at: Optional[datetime] = None
 
 class LeadCreate(LeadBase):
     pass

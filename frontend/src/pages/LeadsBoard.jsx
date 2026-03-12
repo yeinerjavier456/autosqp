@@ -36,9 +36,20 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory }) => {
                 <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md ${getSourceColor(lead.source)}`}>
                     {lead.source || 'WEB'}
                 </span>
-                <span className="text-xs text-slate-400 font-medium">
-                    {new Date(lead.created_at).toLocaleDateString()}
-                </span>
+                <div className="flex items-center gap-2">
+                    {Number(lead.has_unread_reply || 0) > 0 && (
+                        <span
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wide border border-amber-200"
+                            title="Este lead respondió y está pendiente por revisar"
+                        >
+                            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                            Respondió
+                        </span>
+                    )}
+                    <span className="text-xs text-slate-400 font-medium">
+                        {new Date(lead.created_at).toLocaleDateString()}
+                    </span>
+                </div>
             </div>
 
             <h4 className="font-bold text-slate-800 text-lg mb-1 leading-tight">{lead.name}</h4>
@@ -715,7 +726,8 @@ const LeadsBoard = () => {
         const targetLead = leads.find(lead => lead.id === leadIdFromQuery);
         if (!targetLead) return;
 
-        setSelectedLeadForHistory(targetLead);
+        setLeads(prev => prev.map(item => item.id === leadIdFromQuery ? { ...item, has_unread_reply: 0 } : item));
+        setSelectedLeadForHistory({ ...targetLead, has_unread_reply: 0 });
         setShowHistoryModal(true);
         navigate('/admin/leads', { replace: true });
     }, [searchParams, leads, showHistoryModal, navigate]);
@@ -794,7 +806,9 @@ const LeadsBoard = () => {
     };
 
     const handleViewHistory = (lead) => {
-        setSelectedLeadForHistory(lead);
+        const updatedLead = { ...lead, has_unread_reply: 0 };
+        setLeads(prev => prev.map(item => item.id === lead.id ? { ...item, has_unread_reply: 0 } : item));
+        setSelectedLeadForHistory(updatedLead);
         setShowHistoryModal(true);
     };
 

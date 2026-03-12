@@ -154,6 +154,9 @@ def notify_company_about_lead_reply(
             link=f"/admin/leads?leadId={lead.id}"
         ))
 
+    lead.has_unread_reply = 1
+    lead.last_reply_at = datetime.datetime.utcnow()
+
 
 @router.get("/webhook")
 async def verify_webhook(request: Request):
