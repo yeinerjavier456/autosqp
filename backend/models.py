@@ -454,6 +454,25 @@ class PublicChatMessage(Base):
 
     session = relationship("PublicChatSession", back_populates="messages")
 
+
+class ChannelChatSession(Base):
+    __tablename__ = "channel_chat_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    source = Column(String(50), nullable=False, index=True)
+    external_user_id = Column(String(120), nullable=False, index=True)
+    recipient_id = Column(String(120), nullable=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    last_message_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    company = relationship("Company")
+    lead = relationship("Lead")
+    conversation = relationship("Conversation")
+
 class SystemLog(Base):
     __tablename__ = "system_logs"
 

@@ -7,11 +7,88 @@ from typing import List, Optional
 import os
 import json
 import datetime
+import requests
+from bot_integration import process_channel_bot_message, store_conversation_message
 
 router = APIRouter(
     prefix="/whatsapp",
     tags=["whatsapp"]
 )
+
+
+def get_verify_token() -> str:
+    return os.getenv("WHATSAPP_VERIFY_TOKEN", "autosqp_webhook_secret")
+
+
+def resolve_company_id(db: Session, phone_number_id: Optional[str], from_number: str) -> int:
+    existing_session = db.query(models.ChannelChatSession).filter(
+        models.ChannelChatSession.source == "whatsapp",
+        models.ChannelChatSession.external_user_id == from_number
+    ).first()
+    if existing_session and existing_session.company_id:
+        return existing_session.company_id
+
+    existing_lead = db.query(models.Lead).filter(
+        models.Lead.source == "whatsapp",
+        models.Lead.phone.in_([from_number, f"+{from_number}", f"+57{from_number[-10:]}"])
+    ).order_by(models.Lead.created_at.desc()).first()
+    if existing_lead and existing_lead.company_id:
+        return existing_lead.company_id
+
+    if phone_number_id:
+        settings = db.query(models.IntegrationSettings).filter(
+            models.IntegrationSettings.whatsapp_phone_number_id == phone_number_id
+        ).first()
+        if settings and settings.company_id:
+            return settings.company_id
+
+    configured = db.query(models.IntegrationSettings).filter(
+        models.IntegrationSettings.whatsapp_api_key.isnot(None)
+    ).all()
+    if len(configured) == 1:
+        return configured[0].company_id
+
+    company = db.query(models.Company).order_by(models.Company.id.asc()).first()
+    if not company:
+        raise HTTPException(status_code=400, detail="No hay compañias registradas para asignar mensajes de WhatsApp")
+    return company.id
+
+
+def send_whatsapp_text_reply(
+    db: Session,
+    company_id: int,
+    to_number: str,
+    content: str
+) -> tuple[Optional[str], str]:
+    settings = db.query(models.IntegrationSettings).filter(
+        models.IntegrationSettings.company_id == company_id
+    ).first()
+
+    token = settings.whatsapp_api_key if settings and settings.whatsapp_api_key else os.getenv("WHATSAPP")
+    phone_number_id = settings.whatsapp_phone_number_id if settings and settings.whatsapp_phone_number_id else os.getenv("WHATSAPP_PHONE_ID")
+
+    if not token or not phone_number_id:
+        raise HTTPException(status_code=400, detail="WhatsApp no está configurado completamente")
+
+    response = requests.post(
+        f"https://graph.facebook.com/v17.0/{phone_number_id}/messages",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "messaging_product": "whatsapp",
+            "to": to_number,
+            "type": "text",
+            "text": {"body": content}
+        },
+        timeout=45
+    )
+    resp_data = response.json()
+    if response.status_code not in [200, 201]:
+        raise HTTPException(status_code=400, detail=resp_data.get("error", {}).get("message", "WhatsApp API Error"))
+
+    return resp_data.get("messages", [{}])[0].get("id"), "sent"
 
 # --- WEBHOOK VERIFICATION (GET) ---
 @router.get("/webhook")
@@ -37,7 +114,7 @@ async def verify_webhook_raw(request: Request):
     token = params.get("hub.verify_token")
     challenge = params.get("hub.challenge")
     
-    VERIFY_TOKEN = "autosqp_webhook_secret" # In prod, load from DB/Env
+    VERIFY_TOKEN = get_verify_token()
     
     if mode and token:
         if mode == "subscribe" and token == VERIFY_TOKEN:
@@ -54,114 +131,91 @@ async def receive_whatsapp_message(request: Request, db: Session = Depends(get_d
     try:
         data = await request.json()
         print("WA_WEBHOOK_PAYLOAD:", json.dumps(data, indent=2))
-        
-        entry = data.get("entry", [])
-        if not entry:
-            return {"status": "no entry"}
-            
-        changes = entry[0].get("changes", [])
-        if not changes:
-            return {"status": "no changes"}
-            
-        value = changes[0].get("value", {})
-        messages = value.get("messages", [])
-        contacts = value.get("contacts", [])
-        
-        if not messages:
-             return {"status": "no messages"}
-             
-        # Process first message for now
-        msg_data = messages[0]
-        from_number = msg_data.get("from") # e.g. "573001234567"
-        msg_type = msg_data.get("type")
-        msg_id = msg_data.get("id")
-        timestamp = msg_data.get("timestamp")
-        
-        # Get Content
-        content = ""
-        media_url = None
-        
-        if msg_type == "text":
-            content = msg_data.get("text", {}).get("body", "")
-        elif msg_type == "image":
-            content = msg_data.get("image", {}).get("caption", "")
-            # media_id = msg_data.get("image", {}).get("id")
-            # In real app, fetch media URL using media_id + Access Token
-            media_url = "https://via.placeholder.com/150" # Placeholder for now
-            
-        # 1. FIND OR CREATE LEAD
-        # Find lead by phone (fuzzy match needed in real world, strict here)
-        lead = db.query(models.Lead).filter(models.Lead.phone == from_number).first()
-        
-        company_id = 1 # Default company for now, or derive from waba_id if multi-tenant
-        
-        if not lead:
-            # Create new Lead
-            contact_name = from_number
-            if contacts:
-                contact_name = contacts[0].get("profile", {}).get("name", from_number)
-                
-            # Auto-Assign Logic (copied from main.py)
-            import random
-            
-            assigned_user_id = None
-            asesor_role = db.query(models.Role).filter(models.Role.name.in_(["asesor", "vendedor"])).first()
-            # Note: This finds *any* role matching. Ideally we find the specific ID. 
-            # Better: JOIN User and Role to find candidates directly.
-            
-            potential_agents = db.query(models.User).join(models.Role).filter(
-                models.User.company_id == company_id,
-                models.Role.name.in_(["asesor", "vendedor"])
-            ).all()
 
-            if potential_agents:
-                chosen_agent = random.choice(potential_agents)
-                assigned_user_id = chosen_agent.id
-                print(f"WhatsApp Lead automatically assigned to: {chosen_agent.email}")
+        processed = 0
+        for entry in data.get("entry", []):
+            for change in entry.get("changes", []):
+                value = change.get("value", {})
+                contacts = value.get("contacts", [])
+                metadata = value.get("metadata", {})
+                phone_number_id = metadata.get("phone_number_id")
+                messages = value.get("messages", [])
 
-            lead = models.Lead(
-                name=contact_name,
-                phone=from_number,
-                source="whatsapp",
-                status="new",
-                company_id=company_id,
-                assigned_to_id=assigned_user_id
-            )
-            db.add(lead)
-            db.commit()
-            db.refresh(lead)
-            print(f"New Lead created from WhatsApp: {lead.id}")
-            
-        # 2. FIND OR CREATE CONVERSATION
-        conversation = db.query(models.Conversation).filter(models.Conversation.lead_id == lead.id).first()
-        if not conversation:
-            conversation = models.Conversation(
-                lead_id=lead.id,
-                company_id=lead.company_id,
-                last_message_at=datetime.datetime.utcnow()
-            )
-            db.add(conversation)
-            db.commit()
-            db.refresh(conversation)
-            
-        # 3. SAVE MESSAGE
-        new_msg = models.Message(
-            conversation_id=conversation.id,
-            sender_type="lead",
-            content=content,
-            media_url=media_url,
-            message_type=msg_type,
-            whatsapp_message_id=msg_id,
-            status="delivered"
-        )
-        db.add(new_msg)
-        
-        # Update conversation timestamp
-        conversation.last_message_at = datetime.datetime.utcnow()
-        
-        db.commit()
-        
-        return {"status": "processed"}
+                for msg_data in messages:
+                    from_number = msg_data.get("from")
+                    msg_type = msg_data.get("type")
+                    msg_id = msg_data.get("id")
+                    if not from_number or not msg_id:
+                        continue
+
+                    timestamp = msg_data.get("timestamp")
+                    created_at = None
+                    if timestamp:
+                        try:
+                            created_at = datetime.datetime.utcfromtimestamp(int(timestamp))
+                        except Exception:
+                            created_at = None
+
+                    content = ""
+                    media_url = None
+                    if msg_type == "text":
+                        content = msg_data.get("text", {}).get("body", "")
+                    elif msg_type == "image":
+                        content = msg_data.get("image", {}).get("caption", "")
+                        media_url = msg_data.get("image", {}).get("id")
+                    elif msg_type == "document":
+                        content = msg_data.get("document", {}).get("caption", "")
+                        media_url = msg_data.get("document", {}).get("id")
+                    elif msg_type == "audio":
+                        media_url = msg_data.get("audio", {}).get("id")
+                    elif msg_type == "video":
+                        content = msg_data.get("video", {}).get("caption", "")
+                        media_url = msg_data.get("video", {}).get("id")
+
+                    if not content:
+                        content = f"El cliente envió un archivo de tipo {msg_type}."
+
+                    company_id = resolve_company_id(db, phone_number_id, from_number)
+                    result = process_channel_bot_message(
+                        db=db,
+                        company_id=company_id,
+                        source="whatsapp",
+                        external_user_id=from_number,
+                        recipient_id=phone_number_id,
+                        user_message=content,
+                        external_message_id=msg_id,
+                        message_type=msg_type or "text",
+                        media_url=media_url,
+                        created_at=created_at,
+                    )
+
+                    if result.get("duplicate") or not result.get("assistant_reply"):
+                        continue
+
+                    outbound_status = "failed"
+                    outbound_id = None
+                    try:
+                        outbound_id, outbound_status = send_whatsapp_text_reply(
+                            db=db,
+                            company_id=company_id,
+                            to_number=from_number,
+                            content=result["assistant_reply"],
+                        )
+                    except Exception as send_exc:
+                        print(f"Error sending WhatsApp bot reply: {send_exc}")
+
+                    store_conversation_message(
+                        db=db,
+                        conversation=result["conversation"],
+                        sender_type="user",
+                        content=result["assistant_reply"],
+                        message_type="text",
+                        external_message_id=outbound_id,
+                        status=outbound_status,
+                    )
+                    processed += 1
+
+        return {"status": "processed", "messages": processed}
         
     except Exception as e:
         print(f"Error processing webhook: {e}")
@@ -172,7 +226,9 @@ async def receive_whatsapp_message(request: Request, db: Session = Depends(get_d
 @router.get("/conversations", response_model=List[schemas_whatsapp.Conversation])
 def get_conversations(db: Session = Depends(get_db)):
     # In real app, verify user company
-    return db.query(models.Conversation).order_by(models.Conversation.last_message_at.desc()).all()
+    return db.query(models.Conversation).filter(
+        models.Conversation.lead_id.isnot(None)
+    ).order_by(models.Conversation.last_message_at.desc()).all()
 
 @router.get("/conversations/{conversation_id}/messages", response_model=List[schemas_whatsapp.Message])
 def get_messages(conversation_id: int, db: Session = Depends(get_db)):

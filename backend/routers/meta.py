@@ -8,6 +8,8 @@ import datetime
 import json
 import os
 from typing import List, Optional
+import requests
+from bot_integration import process_channel_bot_message, store_conversation_message
 
 router = APIRouter(
     prefix="/meta",
@@ -41,6 +43,13 @@ def get_target_company_id(db: Session, current_user: models.User, company_id: Op
 
 
 def resolve_company_id(db: Session, sender_id: str, recipient_id: str, source: str) -> int:
+    existing_session = db.query(models.ChannelChatSession).filter(
+        models.ChannelChatSession.external_user_id == sender_id,
+        models.ChannelChatSession.source == source
+    ).first()
+    if existing_session and existing_session.company_id:
+        return existing_session.company_id
+
     # 1) Reuse company from existing lead for this sender/source.
     existing_lead = db.query(models.Lead).filter(
         models.Lead.phone == sender_id,
@@ -70,6 +79,49 @@ def resolve_company_id(db: Session, sender_id: str, recipient_id: str, source: s
     if not company:
         raise HTTPException(status_code=400, detail="No hay companias registradas para asignar leads de Meta")
     return company.id
+
+
+def send_meta_text_reply(
+    db: Session,
+    company_id: int,
+    lead_source: str,
+    recipient_psid: str,
+    content: str
+) -> tuple[str, str]:
+    settings = db.query(models.IntegrationSettings).filter(
+        models.IntegrationSettings.company_id == company_id
+    ).first()
+
+    token = None
+    if settings:
+        if lead_source == "instagram":
+            token = settings.instagram_access_token
+        else:
+            token = settings.facebook_access_token
+
+    if not token:
+        token = os.getenv("META_ACCESS_TOKEN")
+
+    if not token:
+        raise HTTPException(status_code=400, detail="Meta Access Token no configurado en Integraciones.")
+
+    response = requests.post(
+        "https://graph.facebook.com/v18.0/me/messages",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "recipient": {"id": recipient_psid},
+            "message": {"text": content}
+        },
+        timeout=45
+    )
+    resp_data = response.json()
+    if response.status_code not in [200, 201]:
+        raise HTTPException(status_code=400, detail=resp_data.get("error", {}).get("message", "Meta API Error"))
+
+    return resp_data.get("message_id"), "sent"
 
 
 @router.get("/webhook")
@@ -153,67 +205,48 @@ async def receive_meta_message(request: Request, db: Session = Depends(get_db)):
                     att = attachments[0]
                     msg_type = att.get("type", "image")
                     media_url = att.get("payload", {}).get("url")
+                    if not content:
+                        content = f"El cliente envió un archivo de tipo {msg_type}."
 
                 lead_source = "facebook" if object_type == "page" else "instagram"
                 company_id = resolve_company_id(db, sender_id, recipient_id, lead_source)
+                result = process_channel_bot_message(
+                    db=db,
+                    company_id=company_id,
+                    source=lead_source,
+                    external_user_id=sender_id,
+                    recipient_id=recipient_id,
+                    user_message=content,
+                    external_message_id=msg_id,
+                    message_type=msg_type,
+                    media_url=media_url,
+                )
 
-                lead = db.query(models.Lead).filter(
-                    models.Lead.phone == sender_id,
-                    models.Lead.source == lead_source,
-                    models.Lead.company_id == company_id
-                ).first()
+                if result.get("duplicate") or not result.get("assistant_reply"):
+                    continue
 
-                if not lead:
-                    import random
-                    assigned_user_id = None
-                    potential_agents = db.query(models.User).join(models.Role).filter(
-                        models.User.company_id == company_id,
-                        models.Role.name.in_(["asesor", "vendedor"])
-                    ).all()
-
-                    if potential_agents:
-                        assigned_user_id = random.choice(potential_agents).id
-
-                    lead = models.Lead(
-                        name=f"Usuario de {lead_source.capitalize()}",
-                        phone=sender_id,
-                        email=f"{sender_id}@{lead_source}.com",
-                        source=lead_source,
-                        status="new",
+                outbound_status = "failed"
+                outbound_id = None
+                try:
+                    outbound_id, outbound_status = send_meta_text_reply(
+                        db=db,
                         company_id=company_id,
-                        assigned_to_id=assigned_user_id,
-                        message=content or None
+                        lead_source=lead_source,
+                        recipient_psid=sender_id,
+                        content=result["assistant_reply"],
                     )
-                    db.add(lead)
-                    db.commit()
-                    db.refresh(lead)
-                    print(f"Nuevo Lead creado desde {lead_source}: {lead.id}")
+                except Exception as send_exc:
+                    print(f"Error sending Meta bot reply: {send_exc}")
 
-                conversation = db.query(models.Conversation).filter(models.Conversation.lead_id == lead.id).first()
-                if not conversation:
-                    conversation = models.Conversation(
-                        lead_id=lead.id,
-                        company_id=lead.company_id,
-                        last_message_at=datetime.datetime.utcnow()
-                    )
-                    db.add(conversation)
-                    db.commit()
-                    db.refresh(conversation)
-
-                existing_msg = db.query(models.Message).filter(models.Message.whatsapp_message_id == msg_id).first()
-                if not existing_msg:
-                    new_msg = models.Message(
-                        conversation_id=conversation.id,
-                        sender_type="lead",
-                        content=content,
-                        media_url=media_url,
-                        message_type=msg_type,
-                        whatsapp_message_id=msg_id,
-                        status="delivered"
-                    )
-                    db.add(new_msg)
-                    conversation.last_message_at = datetime.datetime.utcnow()
-                    db.commit()
+                store_conversation_message(
+                    db=db,
+                    conversation=result["conversation"],
+                    sender_type="user",
+                    content=result["assistant_reply"],
+                    message_type="text",
+                    external_message_id=outbound_id,
+                    status=outbound_status,
+                )
 
         return {"status": "processed"}
 
