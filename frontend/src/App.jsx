@@ -28,7 +28,6 @@ import InstagramLeads from './pages/leads/InstagramLeads';
 import Reports from './pages/Reports';
 import WhatsAppDashboard from './pages/WhatsAppDashboard';
 import CreditBoard from './pages/CreditBoard';
-import AliadoDashboard from './pages/AliadoDashboard';
 import InternalChat from './pages/InternalChat';
 import SystemLogs from './pages/SystemLogs';
 
@@ -103,9 +102,9 @@ function App() {
               </Route>
 
               {/* Shared Routes (Admin, Super Admin, Advisor) */}
-              <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor', 'aliado']} />}>
+              <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor']} />}>
                 {/* Leads Routes */}
-                <Route path="/admin/leads" element={<LeadsBoard />} />
+                <Route path="/admin/leads" element={<LeadsBoard boardMode="general" />} />
                 <Route path="/admin/sales" element={<SalesDashboard />} />
                 <Route path="/admin/my-sales" element={<MySales />} />
 
@@ -124,8 +123,8 @@ function App() {
               </Route>
 
               {/* Aliado Routes */}
-              <Route element={<PrivateRoute allowedRoles={['aliado']} />}>
-                <Route path="/aliado/dashboard" element={<AliadoDashboard />} />
+              <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'aliado']} />}>
+                <Route path="/aliado/dashboard" element={<LeadsBoard boardMode="ally" />} />
               </Route>
 
               {/* Internal Chat - Access for all authenticated users in company */}

@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Query, Query
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, func, text
+from sqlalchemy import or_, func, text, false
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, get_db
 import models, schemas, auth_utils
@@ -227,7 +227,23 @@ def enforce_ally_managed_status(
 
 
 def can_manually_assign_to_any_role(current_user: models.User) -> bool:
-    return bool(current_user.role and current_user.role.name in {"admin", "super_admin"})
+    return bool(current_user.role and current_user.role.name in {"admin", "super_admin", "aliado"})
+
+
+def get_user_role_name(user: Optional[models.User]) -> Optional[str]:
+    if not user or not user.role:
+        return None
+    return user.role.name
+
+
+def should_reset_status_for_board_transfer(previous_role_name: Optional[str], target_role_name: Optional[str]) -> bool:
+    return (previous_role_name == "aliado") != (target_role_name == "aliado")
+
+
+def build_lead_board_link(target_user: Optional[models.User], lead_id: int) -> str:
+    target_role_name = get_user_role_name(target_user)
+    base_path = "/aliado/dashboard" if target_role_name == "aliado" else "/admin/leads"
+    return f"{base_path}?leadId={lead_id}"
 
 def upsert_purchase_request_from_lead(db: Session, lead: models.Lead):
     """
@@ -692,6 +708,7 @@ def update_integration_settings(company_id: int, settings_update: schemas.Integr
 def read_leads(
     source: str = None, 
     status: str = None,
+    board_scope: str = None,
     q: str = None,
     skip: int = 0, 
     limit: int = 1000, 
@@ -710,39 +727,39 @@ def read_leads(
     if current_user.company_id:
         query = query.filter(models.Lead.company_id == current_user.company_id)
     
+    aliado_role = db.query(models.Role).filter(models.Role.name == "aliado").first()
+    aliado_user_ids = []
+    if aliado_role:
+        aliado_user_ids = [row[0] for row in db.query(models.User.id).filter(models.User.role_id == aliado_role.id).all()]
+
+    if board_scope == "ally":
+        if current_user.role and current_user.role.name == "aliado":
+            query = query.filter(models.Lead.assigned_to_id == current_user.id)
+        elif aliado_user_ids:
+            query = query.filter(models.Lead.assigned_to_id.in_(aliado_user_ids))
+        else:
+            query = query.filter(false())
+    elif aliado_user_ids:
+        query = query.filter(
+            or_(
+                models.Lead.assigned_to_id.is_(None),
+                ~models.Lead.assigned_to_id.in_(aliado_user_ids)
+            )
+        )
+
     # Filter by Advisor (Asesor) - Only see assigned leads
     if current_user.role and current_user.role.name in ['asesor', 'vendedor']:
         query = query.filter(models.Lead.assigned_to_id == current_user.id)
     
-    # Filter by Aliado - Only see leads created by them OR assigned to them
+    # Filter by Aliado - Only see their own queue
     if current_user.role and current_user.role.name == 'aliado':
-        from sqlalchemy import or_
-        query = query.filter(
-            or_(
-                models.Lead.created_by_id == current_user.id,
-                models.Lead.assigned_to_id == current_user.id
-            )
-        )
+        query = query.filter(models.Lead.assigned_to_id == current_user.id)
 
     if source:
         query = query.filter(models.Lead.source == source)
     
     if status:
-        if status == models.LeadStatus.ALLY_MANAGED.value:
-            aliado_role = db.query(models.Role).filter(models.Role.name == "aliado").first()
-            if aliado_role:
-                aliado_user_ids = db.query(models.User.id).filter(models.User.role_id == aliado_role.id)
-                query = query.filter(
-                    or_(
-                        models.Lead.status == status,
-                        models.Lead.assigned_to_id.in_(aliado_user_ids),
-                        models.Lead.created_by_id.in_(aliado_user_ids)
-                    )
-                )
-            else:
-                query = query.filter(models.Lead.status == status)
-        else:
-            query = query.filter(models.Lead.status == status)
+        query = query.filter(models.Lead.status == status)
 
     if q:
         search = f"%{q}%"
@@ -754,19 +771,6 @@ def read_leads(
         
     total = query.count()
     leads = query.order_by(models.Lead.id.desc()).offset(skip).limit(limit).all()
-
-    # Ensure ally-managed leads are always represented with ally_managed status in board data
-    creator_ids = list({lead.created_by_id for lead in leads if lead.created_by_id})
-    creator_role_map = {}
-    if creator_ids:
-        creator_rows = db.query(models.User.id, models.Role.name).join(models.Role, isouter=True).filter(models.User.id.in_(creator_ids)).all()
-        creator_role_map = {user_id: role_name for user_id, role_name in creator_rows}
-
-    for lead in leads:
-        assigned_is_aliado = bool(lead.assigned_to and lead.assigned_to.role and lead.assigned_to.role.name == "aliado")
-        creator_is_aliado = creator_role_map.get(lead.created_by_id) == "aliado"
-        if assigned_is_aliado or creator_is_aliado:
-            lead.status = models.LeadStatus.ALLY_MANAGED.value
 
     return {"items": leads, "total": total}
 
@@ -822,10 +826,13 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
     
     # Automatic Assignment if not provided
     if not assigned_user_id:
+        if current_user.role and current_user.role.name == "aliado":
+            assigned_user_id = current_user.id
+
         # Find 'asesor' role id
         asesor_role = db.query(models.Role).filter(models.Role.name == "asesor").first()
-        
-        if asesor_role:
+
+        if not assigned_user_id and asesor_role:
             # Find users in this company with 'asesor' role
             potential_agents = db.query(models.User).filter(
                 models.User.company_id == company_id,
@@ -1876,13 +1883,16 @@ def create_lead(
     
     # Automatic Assignment Logic (Fallback if not manually assigned)
     if not assigned_to_id:
+        if current_user.role and current_user.role.name == "aliado":
+            assigned_to_id = current_user.id
+
         import random
         available_advisors = db.query(models.User).join(models.Role).filter(
             models.User.company_id == company_id,
             models.Role.name == 'asesor'
         ).all()
         
-        if available_advisors:
+        if not assigned_to_id and available_advisors:
             selected_advisor = random.choice(available_advisors)
             assigned_to_id = selected_advisor.id
     
@@ -1927,12 +1937,13 @@ def create_lead(
     
     # Create Notification for assigned user
     if db_lead.assigned_to_id:
+        target_user = db.query(models.User).join(models.Role, isouter=True).filter(models.User.id == db_lead.assigned_to_id).first()
         notification = models.Notification(
             user_id=db_lead.assigned_to_id,
             title="Nuevo Lead Asignado",
             message=f"Se te ha asignado un nuevo lead: {db_lead.name}",
             type="info",
-            link=f"/admin/leads?leadId={db_lead.id}"
+            link=build_lead_board_link(target_user, db_lead.id)
         )
         db.add(notification)
         db.commit()
@@ -1953,6 +1964,10 @@ def update_lead(
     if current_user.company_id and lead.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
+    previous_assigned_user = lead.assigned_to
+    previous_role_name = get_user_role_name(previous_assigned_user)
+    target_assigned_user = previous_assigned_user
+
     if lead_update.assigned_to_id is not None:
         if lead_update.assigned_to_id:
             target_user = db.query(models.User).join(models.Role, isouter=True).filter(
@@ -1962,22 +1977,37 @@ def update_lead(
                 raise HTTPException(status_code=400, detail="Invalid assigned user (not in company)")
             if not can_manually_assign_to_any_role(current_user) and (not target_user.role or target_user.role.name != "asesor"):
                 raise HTTPException(status_code=400, detail="Solo se pueden asignar leads a usuarios con rol asesor")
+            target_assigned_user = target_user
+        else:
+            target_assigned_user = None
     
     payload_update = lead_update.dict(exclude={'comment', 'process_detail'}, exclude_unset=True)
     target_assigned_to_id = payload_update.get('assigned_to_id', lead.assigned_to_id)
+    target_role_name = get_user_role_name(target_assigned_user)
+    board_transfer = should_reset_status_for_board_transfer(previous_role_name, target_role_name)
     effective_status = enforce_ally_managed_status(
         db=db,
         current_user=current_user,
         base_status=payload_update.get('status', lead.status),
         assigned_to_id=target_assigned_to_id
     )
+    if board_transfer:
+        effective_status = models.LeadStatus.NEW.value
     if payload_update.get('status') is not None or payload_update.get('assigned_to_id') is not None:
         payload_update['status'] = effective_status
 
     # Check for status change OR comment to log history
     # If status changes, or if there's a comment (even without status change), we log it.
     has_status_change = effective_status != lead.status
-    has_comment = lead_update.comment and len(lead_update.comment.strip()) > 0
+    auto_transfer_comment = None
+    if board_transfer:
+        auto_transfer_comment = (
+            "Lead enviado al tablero de aliados"
+            if target_role_name == "aliado"
+            else "Lead devuelto al tablero general"
+        )
+    history_comment = lead_update.comment.strip() if lead_update.comment and lead_update.comment.strip() else auto_transfer_comment
+    has_comment = bool(history_comment)
     
     if has_status_change or has_comment:
         if has_status_change:
@@ -1988,7 +2018,7 @@ def update_lead(
             user_id=current_user.id,
             previous_status=lead.status,
             new_status=effective_status,
-            comment=lead_update.comment
+            comment=history_comment
         )
         db.add(new_history)
         
@@ -2018,6 +2048,18 @@ def update_lead(
         
     db.commit()
     db.refresh(lead)
+
+    if lead_update.assigned_to_id and lead_update.assigned_to_id != getattr(previous_assigned_user, "id", None):
+        notification = models.Notification(
+            user_id=lead_update.assigned_to_id,
+            title="Lead Reasignado",
+            message=f"Se te ha asignado el lead: {lead.name}",
+            type="info",
+            link=build_lead_board_link(target_assigned_user, lead.id)
+        )
+        db.add(notification)
+        db.commit()
+        db.refresh(lead)
     
     log_action_to_db(db, current_user.id, "UPDATE", "Lead", lead.id, f"Lead modificado: {lead.name} a estado {lead.status}")
     

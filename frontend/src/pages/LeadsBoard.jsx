@@ -6,7 +6,7 @@ import Swal from 'sweetalert2';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 // Draggable Lead Card Component
-const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = false }) => {
+const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = false, boardMode = 'general' }) => {
     const getSourceColor = (source) => {
         switch (source?.toLowerCase()) {
             case 'facebook': return 'bg-blue-100 text-blue-700';
@@ -21,9 +21,9 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
             id={`lead-card-${lead.id}`}
             draggable="true"
             onDragStart={(e) => onDragStart(e, lead.id)}
-            className="bg-white p-4 rounded-xl shadow-sm border-2 hover:shadow-lg transition-all transform hover:-translate-y-1 cursor-grab active:cursor-grabbing group relative animate-fade-in"
+            className={`p-4 rounded-xl shadow-sm border-2 hover:shadow-lg transition-all transform hover:-translate-y-1 cursor-grab active:cursor-grabbing group relative animate-fade-in ${boardMode === 'ally' ? 'bg-amber-50/90' : 'bg-white'}`}
             style={{
-                borderColor: isHighlighted ? '#2563eb' : '#e5e7eb',
+                borderColor: isHighlighted ? '#2563eb' : (boardMode === 'ally' ? '#f59e0b' : '#e5e7eb'),
                 borderLeftColor:
                     status === 'new' ? '#3b82f6' :
                         status === 'contacted' ? '#eab308' :
@@ -97,10 +97,10 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
 };
 
 // Kanban Column
-const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragStart, onViewHistory, highlightedLeadId }) => {
+const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragStart, onViewHistory, highlightedLeadId, boardMode = 'general' }) => {
     return (
         <div
-            className="flex-1 min-w-[320px] bg-slate-50/80 rounded-2xl p-4 border border-slate-200 flex flex-col h-full backdrop-blur-sm"
+            className={`flex-1 min-w-[320px] rounded-2xl p-4 border flex flex-col h-full backdrop-blur-sm ${boardMode === 'ally' ? 'bg-amber-50/70 border-amber-200' : 'bg-slate-50/80 border-slate-200'}`}
             onDragOver={onDragOver}
             onDrop={(e) => onDrop(e, status)}
         >
@@ -123,6 +123,7 @@ const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragS
                         onDragStart={onDragStart}
                         onViewHistory={onViewHistory}
                         isHighlighted={lead.id === highlightedLeadId}
+                        boardMode={boardMode}
                     />
                 ))}
             </div>
@@ -131,7 +132,7 @@ const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragS
 };
 
 // History Modal Component
-const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVehicles, currentUserRole }) => {
+const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVehicles, currentUserRole, boardMode = 'general' }) => {
     const [assignedAdvisor, setAssignedAdvisor] = useState(lead?.assigned_to?.id || '');
     const { createReminder } = useNotifications();
     const [newComment, setNewComment] = useState('');
@@ -325,10 +326,13 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
         ...(Array.isArray(lead.history) ? lead.history : [])
     ];
 
-    const canAssignToAnyRole = currentUserRole === 'admin' || currentUserRole === 'super_admin';
+    const canAssignToAnyRole = currentUserRole === 'admin' || currentUserRole === 'super_admin' || currentUserRole === 'aliado';
     const assignableUsers = Array.isArray(advisors)
         ? advisors.filter((adv) => {
             const roleName = adv.role?.name || (typeof adv.role === 'string' ? adv.role : '');
+            if (canAssignToAnyRole && boardMode === 'ally') {
+                return roleName !== 'user';
+            }
             return canAssignToAnyRole || roleName === 'asesor';
         })
         : [];
@@ -504,7 +508,6 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                                         <option value="interested">En proceso</option>
                                         <option value="credit_application">Solicitud de crédito</option>
                                         <option value="sold">Vendido</option>
-                                        <option value="ally_managed">Gestionado por Aliado</option>
                                         <option value="lost">Perdido</option>
                                     </select>
                                 </div>
@@ -767,7 +770,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
     );
 };
 
-const LeadsBoard = () => {
+const LeadsBoard = ({ boardMode = 'general' }) => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -806,9 +809,22 @@ const LeadsBoard = () => {
         name: '',
         email: '',
         phone: '',
-        source: 'web',
+        source: boardMode === 'ally' ? 'referral' : 'web',
         message: '',
-        status: 'new'
+        status: 'new',
+        assigned_to_id: ''
+    });
+
+    const isAllyBoard = boardMode === 'ally';
+    const currentRoleName = user?.role?.name || user?.role;
+    const boardTitle = isAllyBoard ? 'Tablero de Aliados' : 'Tablero de Leads';
+    const boardDescription = isAllyBoard
+        ? 'Gestiona los leads que estan en manos de aliados y transfiere al tablero general cuando corresponda.'
+        : 'Arrastra y suelta para gestionar el ciclo de vida de tus clientes.';
+    const createButtonLabel = isAllyBoard ? 'Nuevo Lead para Aliado' : 'Nuevo Lead Manual';
+    const allyUsers = advisors.filter((adv) => {
+        const roleName = adv.role?.name || (typeof adv.role === 'string' ? adv.role : '');
+        return roleName === 'aliado';
     });
 
     useEffect(() => {
@@ -836,8 +852,8 @@ const LeadsBoard = () => {
         setSelectedLeadForHistory({ ...targetLead, has_unread_reply: 0 });
         setHighlightedLeadId(leadIdFromQuery);
         setShowHistoryModal(true);
-        navigate('/admin/leads', { replace: true });
-    }, [searchParams, leads, showHistoryModal, navigate]);
+        navigate(isAllyBoard ? '/aliado/dashboard' : '/admin/leads', { replace: true });
+    }, [searchParams, leads, showHistoryModal, navigate, isAllyBoard]);
 
     useEffect(() => {
         if (!highlightedLeadId) return;
@@ -856,16 +872,29 @@ const LeadsBoard = () => {
         e.preventDefault();
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.post('https://autosqp.co/api/leads', {
+            if (isAllyBoard && currentRoleName !== 'aliado' && !newLeadForm.assigned_to_id) {
+                Swal.fire('Error', 'Debes seleccionar el aliado responsable de este lead.', 'warning');
+                return;
+            }
+
+            const payload = {
                 ...newLeadForm,
                 company_id: user?.company_id || 1
-            }, {
+            };
+
+            if (newLeadForm.assigned_to_id) {
+                payload.assigned_to_id = parseInt(newLeadForm.assigned_to_id, 10);
+            } else {
+                delete payload.assigned_to_id;
+            }
+
+            const response = await axios.post('https://autosqp.co/api/leads', payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
             setLeads(prev => [response.data, ...prev]);
             setShowAddLeadModal(false);
-            setNewLeadForm({ name: '', email: '', phone: '', source: 'web', message: '', status: 'new' });
+            setNewLeadForm({ name: '', email: '', phone: '', source: isAllyBoard ? 'referral' : 'web', message: '', status: 'new', assigned_to_id: '' });
 
             Swal.fire({
                 icon: 'success',
@@ -890,9 +919,15 @@ const LeadsBoard = () => {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.get('https://autosqp.co/api/leads', {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
+                params: { board_scope: boardMode }
             });
-            setLeads(Array.isArray(response.data.items) ? response.data.items : []);
+            const items = Array.isArray(response.data.items) ? response.data.items : [];
+            setLeads(items.map((item) => (
+                isAllyBoard && item.status === 'ally_managed'
+                    ? { ...item, status: 'new' }
+                    : item
+            )));
         } catch (error) {
             console.error("Error fetching leads", error);
         } finally {
@@ -1193,15 +1228,15 @@ const LeadsBoard = () => {
         <div className="h-[calc(100vh-100px)] flex flex-col relative bg-gray-50/50 -m-4 p-4 md:p-8">
             <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
                 <div>
-                    <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Tablero de Leads</h1>
-                    <p className="text-slate-500 mt-1 font-medium">Arrastra y suelta para gestionar el ciclo de vida de tus clientes.</p>
+                    <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">{boardTitle}</h1>
+                    <p className="text-slate-500 mt-1 font-medium">{boardDescription}</p>
                 </div>
                 <button
                     onClick={() => setShowAddLeadModal(true)}
-                    className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-5 py-2.5 rounded-xl hover:shadow-lg hover:scale-105 transition-all font-bold text-sm"
+                    className={`flex items-center gap-2 text-white px-5 py-2.5 rounded-xl hover:shadow-lg hover:scale-105 transition-all font-bold text-sm ${isAllyBoard ? 'bg-gradient-to-r from-amber-500 to-orange-500' : 'bg-gradient-to-r from-blue-600 to-indigo-600'}`}
                 >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
-                    Nuevo Lead Manual
+                    {createButtonLabel}
                 </button>
             </div>
 
@@ -1260,7 +1295,6 @@ const LeadsBoard = () => {
                                     <option value="interested">En proceso</option>
                                     <option value="credit_application">Solicitud de crédito</option>
                                     <option value="sold">Vendidos</option>
-                                    <option value="ally_managed">Gestionados por Aliado</option>
                                     <option value="lost">Perdidos</option>
                                 </select>
                             </div>
@@ -1350,6 +1384,7 @@ const LeadsBoard = () => {
                     onDrop={handleDrop}
                     onViewHistory={handleViewHistory}
                     highlightedLeadId={highlightedLeadId}
+                    boardMode={boardMode}
                 />
                 <KanbanColumn
                     title="Contactados"
@@ -1361,6 +1396,7 @@ const LeadsBoard = () => {
                     onDrop={handleDrop}
                     onViewHistory={handleViewHistory}
                     highlightedLeadId={highlightedLeadId}
+                    boardMode={boardMode}
                 />
                 <KanbanColumn
                     title="En proceso"
@@ -1372,6 +1408,7 @@ const LeadsBoard = () => {
                     onDrop={handleDrop}
                     onViewHistory={handleViewHistory}
                     highlightedLeadId={highlightedLeadId}
+                    boardMode={boardMode}
                 />
                 <KanbanColumn
                     title="Solicitud de crédito"
@@ -1383,6 +1420,7 @@ const LeadsBoard = () => {
                     onDrop={handleDrop}
                     onViewHistory={handleViewHistory}
                     highlightedLeadId={highlightedLeadId}
+                    boardMode={boardMode}
                 />
                 <KanbanColumn
                     title="Vendidos"
@@ -1394,17 +1432,7 @@ const LeadsBoard = () => {
                     onDrop={handleDrop}
                     onViewHistory={handleViewHistory}
                     highlightedLeadId={highlightedLeadId}
-                />
-                <KanbanColumn
-                    title="Gestionado por Aliado"
-                    status="ally_managed"
-                    color="text-purple-600"
-                    leads={filterByStatus('ally_managed')}
-                    onDragStart={handleDragStart}
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                    onViewHistory={handleViewHistory}
-                    highlightedLeadId={highlightedLeadId}
+                    boardMode={boardMode}
                 />
                 <KanbanColumn
                     title="Perdidos"
@@ -1416,6 +1444,7 @@ const LeadsBoard = () => {
                     onDrop={handleDrop}
                     onViewHistory={handleViewHistory}
                     highlightedLeadId={highlightedLeadId}
+                    boardMode={boardMode}
                 />
             </div>
 
@@ -1564,6 +1593,7 @@ const LeadsBoard = () => {
                     onAssign={handleAssignLead}
                     availableVehicles={availableVehicles}
                     currentUserRole={user?.role?.name || user?.role}
+                    boardMode={boardMode}
                 />
             )}
 
@@ -1572,7 +1602,7 @@ const LeadsBoard = () => {
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-2xl p-8 w-full max-w-lg shadow-2xl animate-fade-in-up border border-gray-100 max-h-[90vh] overflow-y-auto">
                         <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-bold text-gray-800">Nuevo Lead</h2>
+                            <h2 className="text-2xl font-bold text-gray-800">{isAllyBoard ? 'Nuevo Lead para Cola de Aliados' : 'Nuevo Lead'}</h2>
                             <button onClick={() => setShowAddLeadModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
                         </div>
 
@@ -1600,17 +1630,35 @@ const LeadsBoard = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-1">Email (Opcional)</label>
-                                    <input
-                                        type="email"
-                                        className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
-                                        value={newLeadForm.email}
-                                        onChange={e => setNewLeadForm({ ...newLeadForm, email: e.target.value })}
-                                    />
-                                </div>
+                                <input
+                                    type="email"
+                                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    value={newLeadForm.email}
+                                    onChange={e => setNewLeadForm({ ...newLeadForm, email: e.target.value })}
+                                />
                             </div>
+                        </div>
 
+                        {isAllyBoard && currentRoleName !== 'aliado' && (
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Fuente</label>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Asignar a aliado</label>
+                                <select
+                                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-amber-500 outline-none bg-white"
+                                    value={newLeadForm.assigned_to_id}
+                                    onChange={e => setNewLeadForm({ ...newLeadForm, assigned_to_id: e.target.value })}
+                                >
+                                    <option value="">Selecciona un aliado</option>
+                                    {allyUsers.map((ally) => (
+                                        <option key={ally.id} value={ally.id}>
+                                            {ally.full_name || ally.email}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Fuente</label>
                                 <select
                                     className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
                                     value={newLeadForm.source}
@@ -1647,9 +1695,9 @@ const LeadsBoard = () => {
                                 </button>
                                 <button
                                     type="submit"
-                                    className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-bold shadow-lg"
+                                    className={`flex-1 px-4 py-3 text-white rounded-xl transition font-bold shadow-lg ${isAllyBoard ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'}`}
                                 >
-                                    Crear Lead
+                                    {isAllyBoard ? 'Crear y dejar en aliados' : 'Crear Lead'}
                                 </button>
                             </div>
                         </form>
