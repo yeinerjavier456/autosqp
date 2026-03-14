@@ -29,16 +29,27 @@ const NotificationBell = () => {
         const rawLink = (notification?.link || '').trim();
         if (!rawLink) return null;
 
-        if (rawLink.startsWith('/admin/leads')) {
-            return rawLink;
+        let normalizedLink = rawLink;
+
+        try {
+            if (/^https?:\/\//i.test(rawLink)) {
+                const parsed = new URL(rawLink);
+                normalizedLink = `${parsed.pathname}${parsed.search || ''}`;
+            }
+        } catch (error) {
+            normalizedLink = rawLink;
         }
 
-        const legacyLeadMatch = rawLink.match(/^\/leads\/(\d+)$/);
+        if (normalizedLink.startsWith('/admin/leads')) {
+            return normalizedLink;
+        }
+
+        const legacyLeadMatch = normalizedLink.match(/\/leads\/(\d+)(?:\?.*)?$/);
         if (legacyLeadMatch) {
             return `/admin/leads?leadId=${legacyLeadMatch[1]}`;
         }
 
-        return rawLink;
+        return normalizedLink;
     };
 
     const handleNotificationClick = (notification) => {
