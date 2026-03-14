@@ -419,7 +419,7 @@ def maybe_create_channel_lead(
     assigned_user_id = None
     advisors = db.query(models.User).join(models.Role).filter(
         models.User.company_id == chat_session.company_id,
-        models.Role.name.in_(["asesor", "vendedor"]),
+        models.Role.name == "asesor",
     ).all()
     if advisors:
         assigned_user_id = random.choice(advisors).id

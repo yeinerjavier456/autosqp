@@ -786,12 +786,14 @@ def bulk_assign_leads(
     current_user: models.User = Depends(get_current_user)
 ):
     # Verify assigned_to user exists and is in same company
-    target_user = db.query(models.User).filter(models.User.id == payload.assigned_to_id).first()
+    target_user = db.query(models.User).join(models.Role, isouter=True).filter(models.User.id == payload.assigned_to_id).first()
     if not target_user:
         raise HTTPException(status_code=404, detail="Target user not found")
         
     if current_user.company_id and target_user.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Target user is in a different company")
+    if not target_user.role or target_user.role.name != "asesor":
+        raise HTTPException(status_code=400, detail="Solo se pueden asignar leads a usuarios con rol asesor")
 
     # Update leads
     # Verify these leads belong to the company
@@ -842,6 +844,12 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
             if potential_agents:
                 chosen_agent = random.choice(potential_agents)
                 assigned_user_id = chosen_agent.id
+    else:
+        target_user = db.query(models.User).join(models.Role, isouter=True).filter(models.User.id == assigned_user_id).first()
+        if not target_user or target_user.company_id != company_id:
+            raise HTTPException(status_code=400, detail="Invalid assigned user (not in company)")
+        if not target_user.role or target_user.role.name != "asesor":
+            raise HTTPException(status_code=400, detail="Solo se pueden asignar leads a usuarios con rol asesor")
     
     effective_status = enforce_ally_managed_status(
         db=db,
@@ -1621,7 +1629,7 @@ def maybe_create_public_chat_lead(
     if session.company_id:
         advisors = db.query(models.User).join(models.Role).filter(
             models.User.company_id == session.company_id,
-            models.Role.name.in_(["asesor", "vendedor"])
+            models.Role.name == "asesor"
         ).all()
         if advisors:
             assigned_user_id = random.choice(advisors).id
@@ -1869,7 +1877,7 @@ def create_lead(
         import random
         available_advisors = db.query(models.User).join(models.Role).filter(
             models.User.company_id == company_id,
-            models.Role.name.in_(['asesor', 'vendedor'])
+            models.Role.name == 'asesor'
         ).all()
         
         if available_advisors:
@@ -1878,9 +1886,11 @@ def create_lead(
     
     # Verify the manually assigned user belongs to the company
     elif assigned_to_id:
-        target_user = db.query(models.User).filter(models.User.id == assigned_to_id).first()
+        target_user = db.query(models.User).join(models.Role, isouter=True).filter(models.User.id == assigned_to_id).first()
         if not target_user or target_user.company_id != company_id:
              raise HTTPException(status_code=400, detail="Invalid assigned user (not in company)")
+        if not target_user.role or target_user.role.name != "asesor":
+             raise HTTPException(status_code=400, detail="Solo se pueden asignar leads a usuarios con rol asesor")
 
     lead_data["status"] = enforce_ally_managed_status(
         db=db,
@@ -1929,6 +1939,16 @@ def update_lead(
         
     if current_user.company_id and lead.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Not authorized")
+
+    if lead_update.assigned_to_id is not None:
+        if lead_update.assigned_to_id:
+            target_user = db.query(models.User).join(models.Role, isouter=True).filter(
+                models.User.id == lead_update.assigned_to_id
+            ).first()
+            if not target_user or target_user.company_id != lead.company_id:
+                raise HTTPException(status_code=400, detail="Invalid assigned user (not in company)")
+            if not target_user.role or target_user.role.name != "asesor":
+                raise HTTPException(status_code=400, detail="Solo se pueden asignar leads a usuarios con rol asesor")
     
     payload_update = lead_update.dict(exclude={'comment', 'process_detail'}, exclude_unset=True)
     target_assigned_to_id = payload_update.get('assigned_to_id', lead.assigned_to_id)

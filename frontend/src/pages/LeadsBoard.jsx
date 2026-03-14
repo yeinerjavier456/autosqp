@@ -131,7 +131,7 @@ const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragS
 };
 
 // History Modal Component
-const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVehicles }) => {
+const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVehicles, currentUserRole }) => {
     const [assignedAdvisor, setAssignedAdvisor] = useState(lead?.assigned_to?.id || '');
     const { createReminder } = useNotifications();
     const [newComment, setNewComment] = useState('');
@@ -299,7 +299,8 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
         e.preventDefault();
 
         // Si no es status 'interested', comprobamos el comment
-        if (!newComment.trim() && newStatus !== 'interested' && newStatus === lead?.status) {
+        const adminCanSaveWithoutNote = currentUserRole === 'admin' || currentUserRole === 'super_admin';
+        if (!adminCanSaveWithoutNote && !newComment.trim() && newStatus !== 'interested' && newStatus === lead?.status) {
             Swal.fire('Error', 'Debes escribir una nota o comentario', 'warning');
             return;
         }
@@ -361,7 +362,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                                 }}
                             >
                                 <option value="">Sin asignar</option>
-                                {advisors && advisors.map(adv => (
+                                {advisors && advisors.filter(adv => adv.role?.name === 'asesor').map(adv => (
                                     <option key={adv.id} value={adv.id}>
                                         {adv.full_name || adv.email} - {adv.role?.name || (typeof adv.role === 'string' ? adv.role : 'Usuario')}
                                     </option>
@@ -1485,6 +1486,7 @@ const LeadsBoard = () => {
                     advisors={advisors}
                     onAssign={handleAssignLead}
                     availableVehicles={availableVehicles}
+                    currentUserRole={user?.role?.name || user?.role}
                 />
             )}
 
