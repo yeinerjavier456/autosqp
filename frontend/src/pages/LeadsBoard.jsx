@@ -295,6 +295,36 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
 
     if (!lead) return null;
 
+    const formatLeadDate = (value) => {
+        if (!value) return '';
+        return new Date(value).toLocaleString('es-CO', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
+    const hasManualCreationEntry = Array.isArray(lead.history) && lead.history.some((record) => {
+        if (!record) return false;
+        const normalizedComment = (record.comment || '').trim();
+        const normalizedMessage = (lead.message || '').trim();
+        return normalizedComment && normalizedMessage && normalizedComment === normalizedMessage && !record.previous_status;
+    });
+
+    const historyEntries = [
+        ...(!hasManualCreationEntry && lead.message ? [{
+            id: `initial-${lead.id}`,
+            previous_status: null,
+            new_status: lead.status || 'new',
+            comment: lead.message,
+            created_at: lead.created_at,
+            isInitialDescription: true
+        }] : []),
+        ...(Array.isArray(lead.history) ? lead.history : [])
+    ];
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -352,6 +382,40 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                     <div>
                         <h2 className="text-xl font-bold text-gray-800">Detalles del Lead</h2>
                         <p className="text-sm text-gray-500">Cliente: <span className="font-semibold text-blue-600">{lead.name}</span></p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            {lead.phone && (
+                                <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                                    <svg className="h-3.5 w-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.129a11.042 11.042 0 005.516 5.516l1.129-2.257a1 1 0 011.21-.502l4.493 1.498A1 1 0 0121 15.72V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                                    {lead.phone}
+                                </span>
+                            )}
+                            {lead.email && (
+                                <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                                    <svg className="h-3.5 w-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8m-18 8h18a2 2 0 002-2V8a2 2 0 00-2-2H3a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+                                    {lead.email}
+                                </span>
+                            )}
+                            {lead.source && (
+                                <span className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-700">
+                                    {lead.source}
+                                </span>
+                            )}
+                        </div>
+                        {(lead.message || lead.created_at) && (
+                            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Resumen del lead</p>
+                                    {lead.created_at && (
+                                        <span className="text-[11px] font-medium text-slate-400">
+                                            Creado: {formatLeadDate(lead.created_at)}
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="mt-2 text-sm text-slate-700 whitespace-pre-wrap">
+                                    {lead.message || 'Sin descripcion inicial registrada.'}
+                                </p>
+                            </div>
+                        )}
                         <div className="text-sm text-gray-500 mt-2 flex items-center gap-2">Asignado a:
                             <select
                                 className="border border-gray-300 rounded px-2 py-1 text-sm bg-gray-50 focus:ring-blue-500 outline-none font-semibold text-indigo-600"
@@ -641,8 +705,8 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                             </h3>
                         </div>
                         <div className="space-y-4">
-                            {lead.history && lead.history.length > 0 ? (
-                                [...lead.history].reverse().map((record) => (
+                            {historyEntries.length > 0 ? (
+                                [...historyEntries].reverse().map((record) => (
                                     <div key={record.id} className="flex gap-4 group">
                                         <div className="flex flex-col items-center">
                                             <div className="w-2 h-2 rounded-full bg-blue-400 mt-2 ring-4 ring-white"></div>
@@ -652,16 +716,21 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                                             <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 group-hover:border-blue-100 transition shadow-sm">
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div className="flex items-center gap-2">
-                                                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded text-white bg-gray-400`}>
-                                                            {record.previous_status || 'N/A'}
+                                                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded text-white ${record.isInitialDescription ? 'bg-slate-500' : 'bg-gray-400'}`}>
+                                                            {record.isInitialDescription ? 'creacion' : (record.previous_status || 'N/A')}
                                                         </span>
-                                                        <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                                                        {!record.isInitialDescription && (
+                                                            <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                                                        )}
                                                         <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded text-white 
-                                                                ${record.new_status === 'sold' ? 'bg-green-500' :
+                                                                ${record.isInitialDescription ? 'bg-indigo-500' :
+                                                                    record.new_status === 'sold' ? 'bg-green-500' :
                                                                     record.new_status === 'credit_application' ? 'bg-teal-500' :
                                                                 record.new_status === 'ally_managed' ? 'bg-purple-500' :
                                                                     record.new_status === 'lost' ? 'bg-gray-500' : 'bg-blue-500'}`}>
-                                                            {record.new_status === 'ally_managed'
+                                                            {record.isInitialDescription
+                                                                ? 'lead creado'
+                                                                : record.new_status === 'ally_managed'
                                                                 ? 'gestionado por aliado'
                                                                 : record.new_status === 'credit_application'
                                                                     ? 'solicitud de crédito'

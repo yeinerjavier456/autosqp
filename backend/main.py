@@ -873,6 +873,17 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
     db.add(new_lead)
     db.commit()
     db.refresh(new_lead)
+
+    initial_history = models.LeadHistory(
+        lead_id=new_lead.id,
+        user_id=current_user.id,
+        previous_status=None,
+        new_status=new_lead.status,
+        comment=(new_lead.message or "Lead creado manualmente")
+    )
+    db.add(initial_history)
+    db.commit()
+    db.refresh(new_lead)
     return new_lead
 
 @app.get("/reports/stats", response_model=schemas.ReportsStats)
@@ -1906,6 +1917,17 @@ def create_lead(
         created_by_id=current_user.id # Track who created it
     )
     db.add(db_lead)
+    db.commit()
+    db.refresh(db_lead)
+
+    initial_history = models.LeadHistory(
+        lead_id=db_lead.id,
+        user_id=current_user.id,
+        previous_status=None,
+        new_status=db_lead.status,
+        comment=(db_lead.message or "Lead creado manualmente")
+    )
+    db.add(initial_history)
     db.commit()
     db.refresh(db_lead)
     
