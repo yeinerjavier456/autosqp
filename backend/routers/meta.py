@@ -59,7 +59,8 @@ def resolve_company_id(db: Session, sender_id: str, recipient_id: str, source: s
         return existing_lead.company_id
 
     # 2) If recipient id matches a configured integration value, use that company.
-    # NOTE: This reuses facebook_pixel_id as recipient-id mapping fallback.
+    # NOTE: `facebook_pixel_id` is currently reused to store the Meta Page ID /
+    # recipient id so the first inbound Messenger message can be routed correctly.
     if recipient_id:
         by_pixel = db.query(models.IntegrationSettings).filter(
             models.IntegrationSettings.facebook_pixel_id == recipient_id
@@ -95,9 +96,9 @@ def send_meta_text_reply(
     token = None
     if settings:
         if lead_source == "instagram":
-            token = settings.instagram_access_token
+            token = settings.instagram_access_token or settings.facebook_access_token
         else:
-            token = settings.facebook_access_token
+            token = settings.facebook_access_token or settings.instagram_access_token
 
     if not token:
         token = os.getenv("META_ACCESS_TOKEN")

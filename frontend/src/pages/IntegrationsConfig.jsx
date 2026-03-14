@@ -194,9 +194,13 @@ const IntegrationsConfig = () => {
                     {/* Facebook Tab */}
                     {activeTab === 'facebook' && (
                         <div className="space-y-6 fade-in">
+                            <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                                Para que Messenger responda con el bot, esta empresa debe tener un token de Meta vigente,
+                                el OpenAI API Key en la pestana AI, y el Page ID correcto en el campo de abajo.
+                            </div>
                             <h2 className="text-xl font-bold text-slate-800 border-b pb-2">Configuración de Meta (FB e IG)</h2>
                             <div>
-                                <label className="block text-sm font-medium text-slate-600 mb-1">Access Token (Facebook Developer App)</label>
+                                <label className="block text-sm font-medium text-slate-600 mb-1">Page Access Token / Meta Access Token</label>
                                 <input
                                     type="text"
                                     name="facebook_access_token"
@@ -208,15 +212,28 @@ const IntegrationsConfig = () => {
                                 <p className="text-xs text-slate-400 mt-1">Token de acceso Graph API para leer y recibir mensajes de tus Páginas de FB e IG vinculadas.</p>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-slate-600 mb-1">Pixel ID</label>
+                                <label className="block text-sm font-medium text-slate-600 mb-1">Page ID / Recipient ID de Facebook</label>
                                 <input
                                     type="text"
                                     name="facebook_pixel_id"
                                     value={settings.facebook_pixel_id || ''}
                                     onChange={handleChange}
-                                    placeholder="1234567890"
+                                    placeholder="ID de la pagina conectada en Meta"
                                     className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
+                                <p className="text-xs text-slate-400 mt-1">Este valor se usa para identificar a que empresa pertenece el primer mensaje que entra por Messenger.</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-600 mb-1">Instagram Access Token (opcional)</label>
+                                <input
+                                    type="text"
+                                    name="instagram_access_token"
+                                    value={settings.instagram_access_token || ''}
+                                    onChange={handleChange}
+                                    placeholder="EAAB..."
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                                <p className="text-xs text-slate-400 mt-1">Si lo dejas vacio, el sistema intentara usar el token principal de Meta como respaldo.</p>
                             </div>
                         </div>
                     )}

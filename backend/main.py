@@ -867,8 +867,6 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
     db.refresh(new_lead)
     return new_lead
 
-import random
-
 @app.get("/reports/stats", response_model=schemas.ReportsStats)
 def get_reports_stats(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     try:
@@ -885,13 +883,23 @@ def get_reports_stats(db: Session = Depends(get_db), current_user: models.User =
         leads_by_source = {}
         leads_by_advisor = {}
         converted_count = 0
+        active_pipeline_count = 0
+        unread_replies_count = 0
+        unread_replies_by_source = {}
+        assignment_split = {"assigned": 0, "unassigned": 0}
+
+        today = datetime.datetime.utcnow().date()
+        recent_dates = [today - datetime.timedelta(days=offset) for offset in range(6, -1, -1)]
+        recent_leads_by_day = {day.strftime("%d/%m"): 0 for day in recent_dates}
         
         for lead in leads:
             # Status
             status = lead.status or "unknown"
             leads_by_status[status] = leads_by_status.get(status, 0) + 1
-            if status == "sold": # Changed from 'converted' to matches enum
+            if status == "sold":
                 converted_count += 1
+            if status not in ["sold", "lost"]:
+                active_pipeline_count += 1
                 
             # Source
             source = lead.source or "manual"
@@ -900,30 +908,33 @@ def get_reports_stats(db: Session = Depends(get_db), current_user: models.User =
             # Advisor
             advisor_name = "Sin Asignar"
             if lead.assigned_to:
-                advisor_name = lead.assigned_to.email # Or name if available
+                advisor_name = lead.assigned_to.email
+                assignment_split["assigned"] += 1
+            else:
+                assignment_split["unassigned"] += 1
             leads_by_advisor[advisor_name] = leads_by_advisor.get(advisor_name, 0) + 1
 
+            if lead.has_unread_reply:
+                unread_replies_count += 1
+                unread_replies_by_source[source] = unread_replies_by_source.get(source, 0) + 1
+
+            created_at = lead.created_at.date() if lead.created_at else None
+            if created_at in recent_dates:
+                recent_leads_by_day[created_at.strftime("%d/%m")] += 1
+
         conversion_rate = (converted_count / total_leads * 100) if total_leads > 0 else 0.0
-        
-        # Mock Data for requested charts
-        brands = ["Toyota", "Chevrolet", "Mazda", "Renault", "Kia", "Ford"]
-        fake_leads_by_brand = {b: random.randint(5, 50) for b in brands}
-        
-        models_list = ["Corolla", "Spark", "Mazda 3", "Duster", "Picanto", "Fiesta"]
-        fake_leads_by_model = {m: random.randint(3, 30) for m in models_list}
-        
-        # Mock Response Time
-        fake_avg_response_time = [random.randint(15, 60) for _ in range(7)]
 
         return {
             "total_leads": total_leads,
             "conversion_rate": round(conversion_rate, 2),
+            "active_pipeline_count": active_pipeline_count,
+            "unread_replies_count": unread_replies_count,
             "leads_by_status": leads_by_status,
             "leads_by_source": leads_by_source,
             "leads_by_advisor": leads_by_advisor,
-            "leads_by_brand": fake_leads_by_brand,
-            "leads_by_model": fake_leads_by_model,
-            "avg_response_time": fake_avg_response_time
+            "recent_leads_by_day": recent_leads_by_day,
+            "unread_replies_by_source": unread_replies_by_source,
+            "assignment_split": assignment_split,
         }
     except Exception as e:
         import traceback
@@ -1898,7 +1909,7 @@ def create_lead(
             title="Nuevo Lead Asignado",
             message=f"Se te ha asignado un nuevo lead: {db_lead.name}",
             type="info",
-            link=f"/leads/{db_lead.id}"
+            link=f"/admin/leads?leadId={db_lead.id}"
         )
         db.add(notification)
         db.commit()

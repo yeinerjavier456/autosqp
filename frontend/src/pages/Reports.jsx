@@ -12,7 +12,7 @@ import {
     Legend,
     ArcElement
 } from 'chart.js';
-import { Bar, Doughnut, Line, Pie } from 'react-chartjs-2';
+import { Bar, Doughnut, Line } from 'react-chartjs-2';
 
 ChartJS.register(
     CategoryScale,
@@ -25,6 +25,41 @@ ChartJS.register(
     Legend,
     ArcElement
 );
+
+const STATUS_LABELS = {
+    new: 'Nuevos',
+    contacted: 'Contactados',
+    interested: 'Interesados',
+    credit_application: 'Solicitud de credito',
+    qualified: 'Calificados',
+    sold: 'Vendidos',
+    lost: 'Perdidos',
+    ally_managed: 'Aliado'
+};
+
+const SOURCE_LABELS = {
+    web: 'Web',
+    whatsapp: 'WhatsApp',
+    facebook: 'Facebook',
+    instagram: 'Instagram',
+    tiktok: 'TikTok',
+    other: 'Otros',
+    manual: 'Manual'
+};
+
+const formatLabel = (value, map) => map[value] || value || 'Sin dato';
+
+const buildSingleDataset = (label, values, color) => ({
+    labels: values.map(([key]) => key),
+    datasets: [
+        {
+            label,
+            data: values.map(([, count]) => count),
+            backgroundColor: color,
+            borderRadius: 10,
+        },
+    ],
+});
 
 const Reports = () => {
     const [stats, setStats] = useState(null);
@@ -39,7 +74,7 @@ const Reports = () => {
                 });
                 setStats(response.data);
             } catch (error) {
-                console.error("Error fetching reports", error);
+                console.error('Error fetching reports', error);
             } finally {
                 setLoading(false);
             }
@@ -51,192 +86,228 @@ const Reports = () => {
     if (loading) return <div className="p-10 text-center text-gray-500">Cargando reportes...</div>;
     if (!stats) return <div className="p-10 text-center text-gray-500">No hay datos disponibles.</div>;
 
-    // Helper for Translation
-    const translateStatus = (status) => {
-        const map = {
-            'new': 'Nuevo',
-            'contacted': 'Contactado',
-            'converted': 'Convertido',
-            'closed': 'Cerrado'
-        };
-        return map[status] || status;
-    };
+    const statusEntries = Object.entries(stats.leads_by_status || {})
+        .map(([key, value]) => [formatLabel(key, STATUS_LABELS), value])
+        .sort((a, b) => b[1] - a[1]);
 
-    // Data for Graphs
-    const statusLabels = Object.keys(stats.leads_by_status).map(translateStatus);
+    const sourceEntries = Object.entries(stats.leads_by_source || {})
+        .map(([key, value]) => [formatLabel(key, SOURCE_LABELS), value])
+        .sort((a, b) => b[1] - a[1]);
+
+    const advisorEntries = Object.entries(stats.leads_by_advisor || {})
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8);
+
+    const recentDailyEntries = Object.entries(stats.recent_leads_by_day || {});
+    const unreadBySourceEntries = Object.entries(stats.unread_replies_by_source || {})
+        .map(([key, value]) => [formatLabel(key, SOURCE_LABELS), value])
+        .sort((a, b) => b[1] - a[1]);
+
+    const assignmentEntries = Object.entries(stats.assignment_split || {})
+        .map(([key, value]) => [key === 'assigned' ? 'Asignados' : 'Sin asignar', value]);
+
     const statusData = {
-        labels: statusLabels,
+        labels: statusEntries.map(([label]) => label),
         datasets: [
             {
-                label: '# de Leads',
-                data: Object.values(stats.leads_by_status),
+                label: 'Leads',
+                data: statusEntries.map(([, value]) => value),
                 backgroundColor: [
-                    'rgba(54, 162, 235, 0.6)',
-                    'rgba(255, 206, 86, 0.6)',
-                    'rgba(75, 192, 192, 0.6)',
-                    'rgba(255, 99, 132, 0.6)',
-                    'rgba(153, 102, 255, 0.6)',
+                    '#1d4ed8',
+                    '#0f766e',
+                    '#f59e0b',
+                    '#7c3aed',
+                    '#2563eb',
+                    '#16a34a',
+                    '#dc2626',
+                    '#64748b',
                 ],
-                borderWidth: 1,
+                borderWidth: 0,
             },
         ],
     };
 
-    const sourceData = {
-        labels: Object.keys(stats.leads_by_source),
+    const sourceData = buildSingleDataset('Leads por fuente', sourceEntries, '#2563eb');
+    const advisorData = buildSingleDataset('Leads asignados', advisorEntries, '#0f766e');
+    const unreadBySourceData = buildSingleDataset('Respuestas pendientes', unreadBySourceEntries, '#f97316');
+
+    const assignmentData = {
+        labels: assignmentEntries.map(([label]) => label),
         datasets: [
             {
-                label: 'Leads por Fuente',
-                data: Object.values(stats.leads_by_source),
-                backgroundColor: 'rgba(53, 102, 255, 0.5)',
+                label: 'Cobertura',
+                data: assignmentEntries.map(([, value]) => value),
+                backgroundColor: ['#14b8a6', '#f59e0b'],
+                borderWidth: 0,
             },
         ],
     };
 
-    const advisorData = {
-        labels: Object.keys(stats.leads_by_advisor),
+    const trendData = {
+        labels: recentDailyEntries.map(([label]) => label),
         datasets: [
             {
-                label: 'Leads Asignados',
-                data: Object.values(stats.leads_by_advisor),
-                backgroundColor: 'rgba(75, 192, 192, 0.5)',
-            },
-        ],
-    };
-
-    // New Mocked Charts Data
-    const brandData = {
-        labels: Object.keys(stats.leads_by_brand || {}),
-        datasets: [
-            {
-                label: 'Interés por Marca',
-                data: Object.values(stats.leads_by_brand || {}),
-                backgroundColor: [
-                    'rgba(255, 99, 132, 0.5)',
-                    'rgba(54, 162, 235, 0.5)',
-                    'rgba(255, 206, 86, 0.5)',
-                    'rgba(75, 192, 192, 0.5)',
-                    'rgba(153, 102, 255, 0.5)',
-                    'rgba(255, 159, 64, 0.5)'
-                ],
-            },
-        ],
-    };
-
-    const modelData = {
-        labels: Object.keys(stats.leads_by_model || {}),
-        datasets: [
-            {
-                label: 'Interés por Modelo',
-                data: Object.values(stats.leads_by_model || {}),
-                backgroundColor: 'rgba(255, 159, 64, 0.5)',
-            },
-        ],
-    };
-
-    const timeData = {
-        labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'], // Mock last 7 days
-        datasets: [
-            {
-                label: 'Tiempo Promedio de Respuesta (min)',
-                data: stats.avg_response_time || [],
-                borderColor: 'rgb(255, 99, 132)',
-                backgroundColor: 'rgba(255, 99, 132, 0.5)',
-                tension: 0.3,
+                label: 'Leads creados',
+                data: recentDailyEntries.map(([, value]) => value),
+                borderColor: '#1d4ed8',
+                backgroundColor: 'rgba(29, 78, 216, 0.16)',
                 fill: true,
+                tension: 0.35,
             },
         ],
     };
+
+    const soldCount = stats.leads_by_status?.sold || 0;
+    const newCount = stats.leads_by_status?.new || 0;
 
     return (
         <div className="space-y-6">
-            <h1 className="text-3xl font-bold text-slate-800">Reportes y Analítica</h1>
+            <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-blue-950 to-cyan-900 px-6 py-7 text-white shadow-xl">
+                <h1 className="text-3xl font-bold">Reportes y Analitica</h1>
+                <p className="mt-2 max-w-3xl text-sm text-slate-200">
+                    Vista real del embudo comercial: captacion reciente, distribucion del pipeline,
+                    origen de leads, carga por asesor y conversaciones pendientes de seguimiento.
+                </p>
+            </div>
 
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <p className="text-sm text-gray-500 font-medium">Total Leads</p>
-                    <p className="text-3xl font-bold text-slate-800 mt-2">{stats.total_leads}</p>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <p className="text-sm font-medium text-slate-500">Total leads</p>
+                    <p className="mt-2 text-3xl font-bold text-slate-900">{stats.total_leads}</p>
+                    <p className="mt-2 text-xs text-slate-500">Base activa e historica registrada en el CRM.</p>
                 </div>
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <p className="text-sm text-gray-500 font-medium">Tasa de Conversión</p>
-                    <p className="text-3xl font-bold text-green-600 mt-2">{stats.conversion_rate}%</p>
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+                    <p className="text-sm font-medium text-emerald-700">Tasa de conversion</p>
+                    <p className="mt-2 text-3xl font-bold text-emerald-800">{stats.conversion_rate}%</p>
+                    <p className="mt-2 text-xs text-emerald-700">{soldCount} leads en estado vendido.</p>
                 </div>
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <p className="text-sm text-gray-500 font-medium">Leads Nuevos</p>
-                    <p className="text-3xl font-bold text-blue-600 mt-2">{stats.leads_by_status['new'] || 0}</p>
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+                    <p className="text-sm font-medium text-amber-700">Pipeline activo</p>
+                    <p className="mt-2 text-3xl font-bold text-amber-800">{stats.active_pipeline_count}</p>
+                    <p className="mt-2 text-xs text-amber-700">{newCount} siguen en estado nuevo.</p>
                 </div>
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <p className="text-sm text-gray-500 font-medium">Tiempo Respuesta (Prom)</p>
-                    <p className="text-3xl font-bold text-orange-500 mt-2">
-                        {Math.round((stats.avg_response_time?.reduce((a, b) => a + b, 0) / stats.avg_response_time?.length) || 0)} min
-                    </p>
+                <div className="rounded-2xl border border-orange-200 bg-orange-50 p-5 shadow-sm">
+                    <p className="text-sm font-medium text-orange-700">Respuestas pendientes</p>
+                    <p className="mt-2 text-3xl font-bold text-orange-800">{stats.unread_replies_count}</p>
+                    <p className="mt-2 text-xs text-orange-700">Clientes con mensaje nuevo sin revisar.</p>
                 </div>
             </div>
 
-            {/* Charts Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Status Chart */}
-                <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-                    <h3 className="text-lg font-bold text-gray-700 mb-4">Leads por Estado</h3>
-                    <div className="h-64 flex justify-center">
-                        <Doughnut data={statusData} options={{ maintainAspectRatio: false }} />
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
+                    <div className="mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">Captacion de leads en los ultimos 7 dias</h3>
+                        <p className="text-sm text-slate-500">Muestra el ritmo real de ingreso reciente al CRM.</p>
+                    </div>
+                    <div className="h-80">
+                        <Line
+                            data={trendData}
+                            options={{
+                                maintainAspectRatio: false,
+                                responsive: true,
+                                plugins: { legend: { display: false } },
+                                scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+                            }}
+                        />
                     </div>
                 </div>
 
-                {/* Source Chart */}
-                <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-                    <h3 className="text-lg font-bold text-gray-700 mb-4">Leads por Fuente</h3>
-                    <div className="h-64">
-                        <Bar data={sourceData} options={{ maintainAspectRatio: false, responsive: true }} />
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">Embudo por estado</h3>
+                        <p className="text-sm text-slate-500">Distribucion actual de todos los leads.</p>
                     </div>
-                </div>
-
-                {/* Brand Chart */}
-                <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-                    <h3 className="text-lg font-bold text-gray-700 mb-4">Interés por Marca</h3>
-                    <div className="h-64 flex justify-center">
-                        <Pie data={brandData} options={{ maintainAspectRatio: false }} />
+                    <div className="h-80">
+                        <Doughnut
+                            data={statusData}
+                            options={{
+                                maintainAspectRatio: false,
+                                plugins: { legend: { position: 'bottom' } },
+                            }}
+                        />
                     </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Advisor Chart */}
-                <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-                    <h3 className="text-lg font-bold text-gray-700 mb-4">Desempeño por Asesor</h3>
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">Leads por fuente</h3>
+                        <p className="text-sm text-slate-500">Canales que realmente estan trayendo contactos.</p>
+                    </div>
+                    <div className="h-80">
+                        <Bar
+                            data={sourceData}
+                            options={{
+                                indexAxis: 'y',
+                                maintainAspectRatio: false,
+                                responsive: true,
+                                plugins: { legend: { display: false } },
+                                scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+                            }}
+                        />
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">Carga por asesor</h3>
+                        <p className="text-sm text-slate-500">Top de usuarios con mas leads asignados.</p>
+                    </div>
                     <div className="h-80">
                         <Bar
                             data={advisorData}
                             options={{
                                 indexAxis: 'y',
                                 maintainAspectRatio: false,
-                                responsive: true
-                            }}
-                        />
-                    </div>
-                </div>
-
-                {/* Model Chart */}
-                <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-                    <h3 className="text-lg font-bold text-gray-700 mb-4">Interés por Modelo (Top)</h3>
-                    <div className="h-80">
-                        <Bar
-                            data={modelData}
-                            options={{
-                                maintainAspectRatio: false,
-                                responsive: true
+                                responsive: true,
+                                plugins: { legend: { display: false } },
+                                scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
                             }}
                         />
                     </div>
                 </div>
             </div>
 
-            {/* Response Time Chart */}
-            <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-                <h3 className="text-lg font-bold text-gray-700 mb-4">Tiempo de Respuesta (Últimos 7 días)</h3>
-                <div className="h-72">
-                    <Line data={timeData} options={{ maintainAspectRatio: false, responsive: true }} />
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">Cobertura de asignacion</h3>
+                        <p className="text-sm text-slate-500">Que porcentaje del pipeline ya tiene responsable.</p>
+                    </div>
+                    <div className="h-72">
+                        <Doughnut
+                            data={assignmentData}
+                            options={{
+                                maintainAspectRatio: false,
+                                plugins: { legend: { position: 'bottom' } },
+                            }}
+                        />
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">Respuestas pendientes por canal</h3>
+                        <p className="text-sm text-slate-500">Donde se esta acumulando atencion sin responder.</p>
+                    </div>
+                    <div className="h-72">
+                        {unreadBySourceEntries.length > 0 ? (
+                            <Bar
+                                data={unreadBySourceData}
+                                options={{
+                                    maintainAspectRatio: false,
+                                    responsive: true,
+                                    plugins: { legend: { display: false } },
+                                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+                                }}
+                            />
+                        ) : (
+                            <div className="flex h-full items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
+                                No hay respuestas pendientes registradas por ahora.
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

@@ -439,12 +439,14 @@ class DashboardStats(BaseModel):
 class ReportsStats(BaseModel):
     total_leads: int
     conversion_rate: float
+    active_pipeline_count: int
+    unread_replies_count: int
     leads_by_status: Dict[str, int]
     leads_by_source: Dict[str, int]
     leads_by_advisor: Dict[str, int]
-    leads_by_brand: Dict[str, int]
-    leads_by_model: Dict[str, int]
-    avg_response_time: List[int]
+    recent_leads_by_day: Dict[str, int]
+    unread_replies_by_source: Dict[str, int]
+    assignment_split: Dict[str, int]
 
 # --- CREDITS ---
 

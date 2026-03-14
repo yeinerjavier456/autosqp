@@ -25,12 +25,29 @@ const NotificationBell = () => {
         };
     }, [isOpen]);
 
+    const normalizeNotificationLink = (notification) => {
+        const rawLink = (notification?.link || '').trim();
+        if (!rawLink) return null;
+
+        if (rawLink.startsWith('/admin/leads')) {
+            return rawLink;
+        }
+
+        const legacyLeadMatch = rawLink.match(/^\/leads\/(\d+)$/);
+        if (legacyLeadMatch) {
+            return `/admin/leads?leadId=${legacyLeadMatch[1]}`;
+        }
+
+        return rawLink;
+    };
+
     const handleNotificationClick = (notification) => {
         if (notification.is_read === 0) {
             markAsRead(notification.id);
         }
-        if (notification.link) {
-            navigate(notification.link);
+        const targetLink = normalizeNotificationLink(notification);
+        if (targetLink) {
+            navigate(targetLink);
             setIsOpen(false);
         }
     };

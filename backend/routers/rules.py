@@ -170,7 +170,7 @@ def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
                 title=f"Alerta: {rule.name}",
                 message=f"El lead {lead.name} ha estado en '{lead.status}' por más de {rule.time_value} {rule.time_unit}.",
                 type="warning",
-                link=f"/admin/leads" # Redirect to board
+                link=f"/admin/leads?leadId={lead.id}"
             )
             db.add(notification)
         

@@ -136,7 +136,7 @@ def check_due_reminders(db: Session, user_id: int):
             title="Recordatorio de Lead",
             message=f"Recordatorio para {lead_name}: {reminder.note}",
             type="warning",
-            link=f"/leads/{reminder.lead_id}" # Assuming we can link to helper
+            link=f"/admin/leads?leadId={reminder.lead_id}"
         )
         db.add(notification)
         
