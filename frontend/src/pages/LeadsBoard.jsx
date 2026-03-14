@@ -6,7 +6,7 @@ import Swal from 'sweetalert2';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 // Draggable Lead Card Component
-const LeadCard = ({ lead, status, onDragStart, onViewHistory }) => {
+const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = false }) => {
     const getSourceColor = (source) => {
         switch (source?.toLowerCase()) {
             case 'facebook': return 'bg-blue-100 text-blue-700';
@@ -18,11 +18,12 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory }) => {
 
     return (
         <div
+            id={`lead-card-${lead.id}`}
             draggable="true"
             onDragStart={(e) => onDragStart(e, lead.id)}
             className="bg-white p-4 rounded-xl shadow-sm border-2 hover:shadow-lg transition-all transform hover:-translate-y-1 cursor-grab active:cursor-grabbing group relative animate-fade-in"
             style={{
-                borderColor: '#e5e7eb',
+                borderColor: isHighlighted ? '#2563eb' : '#e5e7eb',
                 borderLeftColor:
                     status === 'new' ? '#3b82f6' :
                         status === 'contacted' ? '#eab308' :
@@ -30,7 +31,8 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory }) => {
                                 status === 'credit_application' ? '#0f766e' :
                                 status === 'sold' ? '#22c55e' :
                                     status === 'ally_managed' ? '#8b5cf6' : '#9ca3af',
-                borderLeftWidth: '6px'
+                borderLeftWidth: '6px',
+                boxShadow: isHighlighted ? '0 0 0 3px rgba(37, 99, 235, 0.18)' : undefined
             }}
         >
             <div className="flex justify-between items-start mb-3">
@@ -38,6 +40,11 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory }) => {
                     {lead.source || 'WEB'}
                 </span>
                 <div className="flex items-center gap-2">
+                    {isHighlighted && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wide border border-blue-200">
+                            Desde alerta
+                        </span>
+                    )}
                     {Number(lead.has_unread_reply || 0) > 0 && (
                         <span
                             className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wide border border-amber-200"
@@ -90,7 +97,7 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory }) => {
 };
 
 // Kanban Column
-const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragStart, onViewHistory }) => {
+const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragStart, onViewHistory, highlightedLeadId }) => {
     return (
         <div
             className="flex-1 min-w-[320px] bg-slate-50/80 rounded-2xl p-4 border border-slate-200 flex flex-col h-full backdrop-blur-sm"
@@ -115,6 +122,7 @@ const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragS
                         status={status}
                         onDragStart={onDragStart}
                         onViewHistory={onViewHistory}
+                        isHighlighted={lead.id === highlightedLeadId}
                     />
                 ))}
             </div>
@@ -708,6 +716,7 @@ const LeadsBoard = () => {
     // Modal State - History View
     const [selectedLeadForHistory, setSelectedLeadForHistory] = useState(null);
     const [showHistoryModal, setShowHistoryModal] = useState(false);
+    const [highlightedLeadId, setHighlightedLeadId] = useState(null);
 
     // Modal State - New Lead
     const [showAddLeadModal, setShowAddLeadModal] = useState(false);
@@ -727,6 +736,14 @@ const LeadsBoard = () => {
     }, []);
 
     useEffect(() => {
+        const intervalId = setInterval(() => {
+            fetchLeads();
+        }, 15000);
+
+        return () => clearInterval(intervalId);
+    }, []);
+
+    useEffect(() => {
         const leadIdFromQuery = parseInt(searchParams.get('leadId') || '', 10);
         if (!leadIdFromQuery || leads.length === 0 || showHistoryModal) return;
 
@@ -735,9 +752,23 @@ const LeadsBoard = () => {
 
         setLeads(prev => prev.map(item => item.id === leadIdFromQuery ? { ...item, has_unread_reply: 0 } : item));
         setSelectedLeadForHistory({ ...targetLead, has_unread_reply: 0 });
+        setHighlightedLeadId(leadIdFromQuery);
         setShowHistoryModal(true);
         navigate('/admin/leads', { replace: true });
     }, [searchParams, leads, showHistoryModal, navigate]);
+
+    useEffect(() => {
+        if (!highlightedLeadId) return;
+
+        const timer = setTimeout(() => {
+            const card = document.getElementById(`lead-card-${highlightedLeadId}`);
+            if (card) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+            }
+        }, 150);
+
+        return () => clearTimeout(timer);
+    }, [highlightedLeadId, leads]);
 
     const handleCreateLead = async (e) => {
         e.preventDefault();
@@ -816,6 +847,7 @@ const LeadsBoard = () => {
         const updatedLead = { ...lead, has_unread_reply: 0 };
         setLeads(prev => prev.map(item => item.id === lead.id ? { ...item, has_unread_reply: 0 } : item));
         setSelectedLeadForHistory(updatedLead);
+        setHighlightedLeadId(lead.id);
         setShowHistoryModal(true);
     };
 
@@ -1218,6 +1250,7 @@ const LeadsBoard = () => {
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     onViewHistory={handleViewHistory}
+                    highlightedLeadId={highlightedLeadId}
                 />
                 <KanbanColumn
                     title="Contactados"
@@ -1228,6 +1261,7 @@ const LeadsBoard = () => {
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     onViewHistory={handleViewHistory}
+                    highlightedLeadId={highlightedLeadId}
                 />
                 <KanbanColumn
                     title="En proceso"
@@ -1238,6 +1272,7 @@ const LeadsBoard = () => {
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     onViewHistory={handleViewHistory}
+                    highlightedLeadId={highlightedLeadId}
                 />
                 <KanbanColumn
                     title="Solicitud de crédito"
@@ -1248,6 +1283,7 @@ const LeadsBoard = () => {
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     onViewHistory={handleViewHistory}
+                    highlightedLeadId={highlightedLeadId}
                 />
                 <KanbanColumn
                     title="Vendidos"
@@ -1258,6 +1294,7 @@ const LeadsBoard = () => {
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     onViewHistory={handleViewHistory}
+                    highlightedLeadId={highlightedLeadId}
                 />
                 <KanbanColumn
                     title="Gestionado por Aliado"
@@ -1268,6 +1305,7 @@ const LeadsBoard = () => {
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     onViewHistory={handleViewHistory}
+                    highlightedLeadId={highlightedLeadId}
                 />
                 <KanbanColumn
                     title="Perdidos"
@@ -1278,6 +1316,7 @@ const LeadsBoard = () => {
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     onViewHistory={handleViewHistory}
+                    highlightedLeadId={highlightedLeadId}
                 />
             </div>
 
