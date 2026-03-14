@@ -164,6 +164,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
     const [leadFiles, setLeadFiles] = useState([]);
 
     useEffect(() => {
+        setAssignedAdvisor(lead?.assigned_to?.id || '');
+    }, [lead?.id, lead?.assigned_to?.id]);
+
+    useEffect(() => {
         if (lead && lead.id) {
             fetchMessages();
             setLeadNotes(lead.notes || []);
@@ -1006,7 +1010,24 @@ const LeadsBoard = () => {
                 showConfirmButton: false,
                 confirmButtonColor: '#2563eb'
             });
-            fetchLeads(); // Refresh board to show new assignee initial
+            const parsedAdvisorId = advisorId ? parseInt(advisorId) : null;
+            const advisorData = parsedAdvisorId
+                ? advisors.find(adv => adv.id === parsedAdvisorId) || null
+                : null;
+
+            setLeads(prev => prev.map(l => (
+                l.id === leadId
+                    ? { ...l, assigned_to: advisorData, assigned_to_id: parsedAdvisorId }
+                    : l
+            )));
+
+            setSelectedLeadForHistory(prev => (
+                prev && prev.id === leadId
+                    ? { ...prev, assigned_to: advisorData, assigned_to_id: parsedAdvisorId }
+                    : prev
+            ));
+
+            fetchLeads(); // Refresh board to show final backend state
         } catch (error) {
             console.error("Error assigning lead", error);
             Swal.fire('Error', 'No se pudo asignar el lead', 'error');
