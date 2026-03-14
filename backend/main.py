@@ -223,20 +223,11 @@ def enforce_ally_managed_status(
     base_status: Optional[str],
     assigned_to_id: Optional[int] = None
 ) -> str:
-    """
-    Business rule:
-    - If the actor is an 'aliado', the lead must be 'ally_managed'
-    - If the lead is assigned to an 'aliado', the lead must be 'ally_managed'
-    """
-    if current_user.role and current_user.role.name == "aliado":
-        return models.LeadStatus.ALLY_MANAGED.value
-
-    if assigned_to_id:
-        target_user = db.query(models.User).join(models.Role, isouter=True).filter(models.User.id == assigned_to_id).first()
-        if target_user and target_user.role and target_user.role.name == "aliado":
-            return models.LeadStatus.ALLY_MANAGED.value
-
     return base_status or models.LeadStatus.NEW.value
+
+
+def can_manually_assign_to_any_role(current_user: models.User) -> bool:
+    return bool(current_user.role and current_user.role.name in {"admin", "super_admin"})
 
 def upsert_purchase_request_from_lead(db: Session, lead: models.Lead):
     """
@@ -848,7 +839,7 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
         target_user = db.query(models.User).join(models.Role, isouter=True).filter(models.User.id == assigned_user_id).first()
         if not target_user or target_user.company_id != company_id:
             raise HTTPException(status_code=400, detail="Invalid assigned user (not in company)")
-        if not target_user.role or target_user.role.name != "asesor":
+        if not can_manually_assign_to_any_role(current_user) and (not target_user.role or target_user.role.name != "asesor"):
             raise HTTPException(status_code=400, detail="Solo se pueden asignar leads a usuarios con rol asesor")
     
     effective_status = enforce_ally_managed_status(
@@ -1900,7 +1891,7 @@ def create_lead(
         target_user = db.query(models.User).join(models.Role, isouter=True).filter(models.User.id == assigned_to_id).first()
         if not target_user or target_user.company_id != company_id:
              raise HTTPException(status_code=400, detail="Invalid assigned user (not in company)")
-        if not target_user.role or target_user.role.name != "asesor":
+        if not can_manually_assign_to_any_role(current_user) and (not target_user.role or target_user.role.name != "asesor"):
              raise HTTPException(status_code=400, detail="Solo se pueden asignar leads a usuarios con rol asesor")
 
     lead_data["status"] = enforce_ally_managed_status(
@@ -1969,7 +1960,7 @@ def update_lead(
             ).first()
             if not target_user or target_user.company_id != lead.company_id:
                 raise HTTPException(status_code=400, detail="Invalid assigned user (not in company)")
-            if not target_user.role or target_user.role.name != "asesor":
+            if not can_manually_assign_to_any_role(current_user) and (not target_user.role or target_user.role.name != "asesor"):
                 raise HTTPException(status_code=400, detail="Solo se pueden asignar leads a usuarios con rol asesor")
     
     payload_update = lead_update.dict(exclude={'comment', 'process_detail'}, exclude_unset=True)

@@ -325,6 +325,14 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
         ...(Array.isArray(lead.history) ? lead.history : [])
     ];
 
+    const canAssignToAnyRole = currentUserRole === 'admin' || currentUserRole === 'super_admin';
+    const assignableUsers = Array.isArray(advisors)
+        ? advisors.filter((adv) => {
+            const roleName = adv.role?.name || (typeof adv.role === 'string' ? adv.role : '');
+            return canAssignToAnyRole || roleName === 'asesor';
+        })
+        : [];
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -426,7 +434,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                                 }}
                             >
                                 <option value="">Sin asignar</option>
-                                {advisors && advisors.filter(adv => adv.role?.name === 'asesor').map(adv => (
+                                {assignableUsers.map(adv => (
                                     <option key={adv.id} value={adv.id}>
                                         {adv.full_name || adv.email} - {adv.role?.name || (typeof adv.role === 'string' ? adv.role : 'Usuario')}
                                     </option>
