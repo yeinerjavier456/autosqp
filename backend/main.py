@@ -33,6 +33,7 @@ def ensure_role_configuration_columns():
             "menu_order_json": "ALTER TABLE roles ADD COLUMN menu_order_json TEXT NULL",
             "is_system": "ALTER TABLE roles ADD COLUMN is_system BOOLEAN NOT NULL DEFAULT 0",
             "base_role_name": "ALTER TABLE roles ADD COLUMN base_role_name VARCHAR(50) NULL",
+            "auto_assign_leads": "ALTER TABLE roles ADD COLUMN auto_assign_leads BOOLEAN NOT NULL DEFAULT 0",
         }
 
         for column_name, ddl in role_columns.items():
@@ -353,6 +354,44 @@ def choose_credit_coordinator(db: Session, company_id: Optional[int]) -> Optiona
     return random.choice(coordinators)
 
 
+def get_auto_assign_candidate_users(db: Session, company_id: Optional[int]) -> List[models.User]:
+    if not company_id:
+        return []
+
+    candidates = db.query(models.User).join(models.Role, isouter=True).filter(
+        models.User.company_id == company_id
+    ).all()
+
+    eligible_users = []
+    for user in candidates:
+        role = getattr(user, "role", None)
+        if not role:
+            continue
+        if bool(getattr(role, "auto_assign_leads", False)):
+            eligible_users.append(user)
+
+    if eligible_users:
+        return eligible_users
+
+    # Backward-compatible fallback for companies that still rely on the default advisor role.
+    fallback_users = []
+    for user in candidates:
+        if get_user_role_name(user) == "asesor":
+            fallback_users.append(user)
+
+    if fallback_users:
+        return fallback_users
+
+    return eligible_users
+
+
+def choose_auto_assign_user(db: Session, company_id: Optional[int]) -> Optional[models.User]:
+    candidates = get_auto_assign_candidate_users(db, company_id)
+    if not candidates:
+        return None
+    return random.choice(candidates)
+
+
 def normalize_supervisor_ids(supervisor_ids: Optional[List[int]]) -> List[int]:
     normalized = []
     for raw_id in supervisor_ids or []:
@@ -488,6 +527,7 @@ def serialize_role(role: models.Role) -> schemas.Role:
     default_permissions = DEFAULT_ROLE_VIEW_ACCESS.get(role.name, [])
     permissions = sanitize_view_ids(parse_json_list(getattr(role, "permissions_json", None), default_permissions), getattr(role, "company_id", None))
     menu_order = sanitize_view_ids(parse_json_list(getattr(role, "menu_order_json", None), DEFAULT_ROLE_MENU_ORDER.get(role.name, permissions)), getattr(role, "company_id", None))
+    effective_role_name = getattr(role, "base_role_name", None) or role.name
 
     for view_id in permissions:
         if view_id not in menu_order:
@@ -499,6 +539,7 @@ def serialize_role(role: models.Role) -> schemas.Role:
         label=role.label,
         permissions=permissions,
         menu_order=menu_order,
+        auto_assign_leads=bool(getattr(role, "auto_assign_leads", False) or effective_role_name == "asesor"),
         company_id=getattr(role, "company_id", None),
         is_system=bool(getattr(role, "is_system", False)),
         base_role_name=getattr(role, "base_role_name", None)
@@ -1026,6 +1067,7 @@ def create_role(
         company_id=current_user.company_id,
         permissions_json=json.dumps(sanitized_permissions),
         menu_order_json=json.dumps(sanitized_menu_order),
+        auto_assign_leads=bool(role.auto_assign_leads),
         is_system=False,
         base_role_name=None
     )
@@ -1064,6 +1106,7 @@ def update_role(
                 company_id=current_user.company_id,
                 permissions_json=json.dumps(sanitized_permissions),
                 menu_order_json=json.dumps(sanitize_view_ids(sanitized_menu_order, current_user.company_id)),
+                auto_assign_leads=bool(role_update.auto_assign_leads if role_update.auto_assign_leads is not None else getattr(db_role, "auto_assign_leads", False)),
                 is_system=False,
                 base_role_name=db_role.name
             )
@@ -1075,6 +1118,8 @@ def update_role(
                 override_role.label = role_update.label.strip()
             override_role.permissions_json = json.dumps(sanitized_permissions)
             override_role.menu_order_json = json.dumps(sanitize_view_ids(sanitized_menu_order, current_user.company_id))
+            if role_update.auto_assign_leads is not None:
+                override_role.auto_assign_leads = bool(role_update.auto_assign_leads)
             db.commit()
             db.refresh(override_role)
 
@@ -1091,6 +1136,8 @@ def update_role(
 
     if role_update.label is not None:
         db_role.label = role_update.label.strip()
+    if role_update.auto_assign_leads is not None:
+        db_role.auto_assign_leads = bool(role_update.auto_assign_leads)
     if role_update.permissions is not None:
         sanitized_permissions = sanitize_view_ids(role_update.permissions, current_user.company_id or db_role.company_id)
         db_role.permissions_json = json.dumps(sanitized_permissions)
@@ -1360,19 +1407,10 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
         if current_user.role and current_user.role.name == "aliado":
             assigned_user_id = current_user.id
 
-        # Find 'asesor' role id
-        asesor_role = db.query(models.Role).filter(models.Role.name == "asesor").first()
-
-        if not assigned_user_id and asesor_role:
-            # Find users in this company with 'asesor' role
-            potential_agents = db.query(models.User).filter(
-                models.User.company_id == company_id,
-                models.User.role_id == asesor_role.id
-            ).all()
-            
-            if potential_agents:
-                chosen_agent = random.choice(potential_agents)
-                assigned_user_id = chosen_agent.id
+        if not assigned_user_id:
+            auto_assigned_user = choose_auto_assign_user(db, company_id)
+            if auto_assigned_user:
+                assigned_user_id = auto_assigned_user.id
     else:
         target_user = db.query(models.User).join(models.Role, isouter=True).filter(models.User.id == assigned_user_id).first()
         if not target_user or target_user.company_id != company_id:
@@ -2182,12 +2220,9 @@ def maybe_create_public_chat_lead(
 
     assigned_user_id = None
     if session.company_id:
-        advisors = db.query(models.User).join(models.Role).filter(
-            models.User.company_id == session.company_id,
-            models.Role.name == "asesor"
-        ).all()
-        if advisors:
-            assigned_user_id = random.choice(advisors).id
+        auto_assigned_user = choose_auto_assign_user(db, session.company_id)
+        if auto_assigned_user:
+            assigned_user_id = auto_assigned_user.id
 
     new_lead = models.Lead(
         source=models.LeadSource.WEB.value,
@@ -2432,15 +2467,10 @@ def create_lead(
         if current_user.role and current_user.role.name == "aliado":
             assigned_to_id = current_user.id
 
-        import random
-        available_advisors = db.query(models.User).join(models.Role).filter(
-            models.User.company_id == company_id,
-            models.Role.name == 'asesor'
-        ).all()
-        
-        if not assigned_to_id and available_advisors:
-            selected_advisor = random.choice(available_advisors)
-            assigned_to_id = selected_advisor.id
+        if not assigned_to_id:
+            auto_assigned_user = choose_auto_assign_user(db, company_id)
+            if auto_assigned_user:
+                assigned_to_id = auto_assigned_user.id
     
     # Verify the manually assigned user belongs to the company
     elif assigned_to_id:

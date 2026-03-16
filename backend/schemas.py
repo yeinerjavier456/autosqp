@@ -52,6 +52,7 @@ class RoleBase(BaseModel):
     name: Optional[str] = None
     permissions: List[str] = []
     menu_order: List[str] = []
+    auto_assign_leads: Optional[bool] = False
     company_id: Optional[int] = None
     is_system: Optional[bool] = False
     base_role_name: Optional[str] = None
@@ -60,11 +61,13 @@ class RoleCreate(BaseModel):
     label: str
     permissions: List[str] = []
     menu_order: List[str] = []
+    auto_assign_leads: Optional[bool] = False
 
 class RoleUpdate(BaseModel):
     label: Optional[str] = None
     permissions: Optional[List[str]] = None
     menu_order: Optional[List[str]] = None
+    auto_assign_leads: Optional[bool] = None
 
 class Role(RoleBase):
     id: int
