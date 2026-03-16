@@ -13,9 +13,16 @@ const CreditBoard = () => {
     const effectiveRoleName = user?.role?.base_role_name || user?.role?.name || user?.role;
     const leadBoardPath = effectiveRoleName === 'aliado' ? '/aliado/dashboard' : '/admin/leads';
     const [credits, setCredits] = useState([]);
+    const [creditUsers, setCreditUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);
     const [selectedCredit, setSelectedCredit] = useState(null); // For details modal
+    const [searchTerm, setSearchTerm] = useState('');
+    const [dateFilter, setDateFilter] = useState('');
+    const [assignedFilter, setAssignedFilter] = useState('');
+    const [userFilter, setUserFilter] = useState('');
+    const [globalStatusFilter, setGlobalStatusFilter] = useState('');
+    const [showMyCreditsOnly, setShowMyCreditsOnly] = useState(false);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -40,13 +47,15 @@ const CreditBoard = () => {
 
     useEffect(() => {
         fetchCredits();
+        fetchCreditUsers();
     }, []);
 
     const fetchCredits = async () => {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.get('https://autosqp.co/api/credits', {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
+                params: { limit: 500 }
             });
             const items = Array.isArray(response.data?.items)
                 ? response.data.items
@@ -61,6 +70,20 @@ const CreditBoard = () => {
             setCredits([]);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchCreditUsers = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.get('https://autosqp.co/api/users/', {
+                headers: { Authorization: `Bearer ${token}` },
+                params: { limit: 500 }
+            });
+            setCreditUsers(Array.isArray(response.data?.items) ? response.data.items : []);
+        } catch (error) {
+            console.error("Error fetching credit users", error);
+            setCreditUsers([]);
         }
     };
 
@@ -136,9 +159,30 @@ const CreditBoard = () => {
     };
 
     // Filter credits by column
+    const filteredCredits = credits.filter((credit) => {
+        const normalizedSearch = searchTerm.trim().toLowerCase();
+        const matchesSearch = !normalizedSearch || [
+            credit.client_name,
+            credit.phone,
+            credit.email,
+            credit.desired_vehicle
+        ].some((value) => String(value || '').toLowerCase().includes(normalizedSearch));
+
+        const createdDate = credit.created_at ? String(credit.created_at).slice(0, 10) : '';
+        const matchesDate = !dateFilter || createdDate === dateFilter;
+        const matchesMyCredits = !showMyCreditsOnly || credit.assigned_to_id === user?.id;
+        const parsedUserFilter = userFilter ? parseInt(userFilter, 10) : null;
+        const matchesUser = !parsedUserFilter || credit.assigned_to_id === parsedUserFilter;
+        const isAssigned = !!credit.assigned_to_id;
+        const matchesAssigned = !assignedFilter || (assignedFilter === 'assigned' ? isAssigned : !isAssigned);
+        const matchesGlobalStatus = !globalStatusFilter || (credit.status || 'pending') === globalStatusFilter;
+
+        return matchesSearch && matchesDate && matchesMyCredits && matchesUser && matchesAssigned && matchesGlobalStatus;
+    });
+
     const getCreditsByStatus = (status) => {
-        if (!Array.isArray(credits)) return [];
-        return credits.filter(c => (c.status || 'pending') === status);
+        if (!Array.isArray(filteredCredits)) return [];
+        return filteredCredits.filter(c => (c.status || 'pending') === status);
     };
 
     // Format Currency
@@ -171,6 +215,84 @@ const CreditBoard = () => {
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
                     Nueva Solicitud
                 </button>
+            </div>
+
+            <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
+                    <input
+                        type="text"
+                        placeholder="Buscar por cliente, telefono, email o vehiculo..."
+                        className="xl:col-span-2 w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                    <input
+                        type="date"
+                        className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                        value={dateFilter}
+                        onChange={(e) => setDateFilter(e.target.value)}
+                    />
+                    <select
+                        className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500 bg-white"
+                        value={assignedFilter}
+                        onChange={(e) => setAssignedFilter(e.target.value)}
+                    >
+                        <option value="">Asignacion</option>
+                        <option value="assigned">Asignadas</option>
+                        <option value="unassigned">Sin asignar</option>
+                    </select>
+                    <select
+                        className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500 bg-white"
+                        value={userFilter}
+                        onChange={(e) => setUserFilter(e.target.value)}
+                    >
+                        <option value="">Responsable</option>
+                        {creditUsers.map((person) => (
+                            <option key={person.id} value={person.id}>
+                                {person.full_name || person.email}
+                            </option>
+                        ))}
+                    </select>
+                    <select
+                        className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500 bg-white"
+                        value={globalStatusFilter}
+                        onChange={(e) => setGlobalStatusFilter(e.target.value)}
+                    >
+                        <option value="">Estado global</option>
+                        {Object.values(columns).map((column) => (
+                            <option key={column.id} value={column.id}>{column.title}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-600">
+                        <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            checked={showMyCreditsOnly}
+                            onChange={(e) => setShowMyCreditsOnly(e.target.checked)}
+                        />
+                        Mis solicitudes
+                    </label>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setSearchTerm('');
+                            setDateFilter('');
+                            setAssignedFilter('');
+                            setUserFilter('');
+                            setGlobalStatusFilter('');
+                            setShowMyCreditsOnly(false);
+                        }}
+                        className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+                    >
+                        Limpiar filtros
+                    </button>
+                    <span className="text-xs font-medium text-slate-400">
+                        {filteredCredits.length} solicitud(es) visibles
+                    </span>
+                </div>
             </div>
 
             {/* Kanban Board */}

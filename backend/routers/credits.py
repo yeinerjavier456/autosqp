@@ -124,7 +124,8 @@ def read_credits(
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(get_current_user)
 ):
-    if current_user.company_id:
+    effective_role_name = getattr(getattr(current_user, "role", None), "base_role_name", None) or getattr(getattr(current_user, "role", None), "name", None)
+    if current_user.company_id and effective_role_name != 'super_admin':
         sync_credit_applications_for_company(db, current_user.company_id)
 
     query = db.query(models.CreditApplication).options(
@@ -132,7 +133,7 @@ def read_credits(
     )
     
     # Filter by user company
-    if current_user.company_id:
+    if current_user.company_id and effective_role_name != 'super_admin':
         query = query.filter(
             or_(
                 models.CreditApplication.company_id == current_user.company_id,
@@ -140,9 +141,7 @@ def read_credits(
             )
         )
     
-    # Filter by Advisor (Asesor) - Only see assigned leads/credits? 
-    # Usually credits are handled by admins or specialized agents, but sticking to same logic as leads for now
-    effective_role_name = getattr(getattr(current_user, "role", None), "base_role_name", None) or getattr(getattr(current_user, "role", None), "name", None)
+    # Filter by Advisor (Asesor) - Only see assigned leads/credits?
     if effective_role_name in ['asesor', 'vendedor', 'aliado', 'coordinador']:
         query = query.filter(
             or_(
