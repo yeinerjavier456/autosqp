@@ -116,6 +116,30 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
     );
 };
 
+const getDisplayRoleName = (role) => {
+    if (!role) return 'Usuario';
+    if (typeof role === 'string') return role;
+    if (role.label) return role.label;
+
+    const effectiveName = role.base_role_name || role.name || '';
+    switch (effectiveName) {
+        case 'super_admin': return 'Super Admin';
+        case 'admin': return 'Administrador';
+        case 'asesor': return 'Asesor';
+        case 'aliado': return 'Aliado';
+        case 'inventario': return 'Inventario';
+        case 'compras': return 'Compras';
+        case 'user': return 'Usuario';
+        default: return effectiveName || 'Usuario';
+    }
+};
+
+const getEffectiveRoleName = (role) => {
+    if (!role) return '';
+    if (typeof role === 'string') return role;
+    return role.base_role_name || role.name || '';
+};
+
 // Kanban Column
 const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragStart, onViewHistory, highlightedLeadId, boardMode = 'general' }) => {
     return (
@@ -360,7 +384,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
     const canAssignToAnyRole = currentUserRole === 'admin' || currentUserRole === 'super_admin' || currentUserRole === 'aliado';
     const assignableUsers = Array.isArray(advisors)
         ? advisors.filter((adv) => {
-            const roleName = adv.role?.name || (typeof adv.role === 'string' ? adv.role : '');
+            const roleName = getEffectiveRoleName(adv.role);
             if (canAssignToAnyRole && boardMode === 'ally') {
                 return roleName !== 'user';
             }
@@ -486,7 +510,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                                 <option value="">Sin asignar</option>
                                 {assignableUsers.map(adv => (
                                     <option key={adv.id} value={adv.id}>
-                                        {adv.full_name || adv.email} - {adv.role?.name || (typeof adv.role === 'string' ? adv.role : 'Usuario')}
+                                        {adv.full_name || adv.email} - {getDisplayRoleName(adv.role)}
                                     </option>
                                 ))}
                             </select>
@@ -869,7 +893,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         : 'Arrastra y suelta para gestionar el ciclo de vida de tus clientes.';
     const createButtonLabel = isAllyBoard ? 'Nuevo Lead para Aliado' : 'Nuevo Lead Manual';
     const allyUsers = advisors.filter((adv) => {
-        const roleName = adv.role?.name || (typeof adv.role === 'string' ? adv.role : '');
+        const roleName = getEffectiveRoleName(adv.role);
         return roleName === 'aliado';
     });
 
@@ -1050,7 +1074,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         setSaleForm({ vehicle_id: '', sale_price: '', seller_id: defaultSellerId });
         setShowSaleModal(true);
         fetchAvailableVehicles();
-        if (user?.role?.name === 'admin' || user?.role?.name === 'super_admin') {
+        if (currentRoleName === 'admin' || currentRoleName === 'super_admin') {
             fetchAdvisors();
         }
     };
@@ -1559,7 +1583,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                         </div>
 
                         <form onSubmit={handleConfirmSale} className="space-y-5">
-                            {(user?.role?.name === 'admin' || user?.role?.name === 'super_admin') && (
+                            {(currentRoleName === 'admin' || currentRoleName === 'super_admin') && (
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2">Asignar Venta A:</label>
                                     <select
@@ -1570,7 +1594,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                                         <option value="">(Yo mismo) - {user.email}</option>
                                         {advisors.map(adv => (
                                             <option key={adv.id} value={adv.id}>
-                                                {adv.full_name || adv.email} - {adv.role?.name || (typeof adv.role === 'string' ? adv.role : 'Usuario')} {adv.id === selectedLeadForSale?.assigned_to?.id ? '(Asignado)' : ''}
+                                                {adv.full_name || adv.email} - {getDisplayRoleName(adv.role)} {adv.id === selectedLeadForSale?.assigned_to?.id ? '(Asignado)' : ''}
                                             </option>
                                         ))}
                                     </select>
@@ -1638,7 +1662,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     advisors={advisors}
                     onAssign={handleAssignLead}
                     availableVehicles={availableVehicles}
-                    currentUserRole={user?.role?.name || user?.role}
+                    currentUserRole={currentRoleName}
                     boardMode={boardMode}
                 />
             )}

@@ -14,6 +14,9 @@ const ROLE_LABELS = {
     user: 'Equipo',
 };
 
+const getEffectiveRoleName = (role) => role?.base_role_name || role?.name || 'user';
+const getRoleLabel = (role) => role?.label || ROLE_LABELS[getEffectiveRoleName(role)] || 'Usuario';
+
 const InternalChat = () => {
     const { user } = useAuth();
     const { resetUnreadCount } = useChat();
@@ -161,7 +164,7 @@ const InternalChat = () => {
         (searchTerm === '' || u.email.toLowerCase().includes(searchTerm.toLowerCase()) || (u.full_name && u.full_name.toLowerCase().includes(searchTerm.toLowerCase())))
     );
     const groupedSidebarUsers = sidebarUsers.reduce((acc, currentUser) => {
-        const roleName = currentUser?.role?.name || 'user';
+        const roleName = getEffectiveRoleName(currentUser?.role);
         const groupId = ROLE_LABELS[roleName] ? roleName : 'user';
         if (!acc[groupId]) {
             acc[groupId] = {
@@ -296,7 +299,7 @@ const InternalChat = () => {
                                             <h3 className="font-semibold text-sm truncate">{getUserName(u)}</h3>
                                             {u.is_online && <span className="text-[10px] text-green-500 font-bold">ON</span>}
                                         </div>
-                                        <p className="text-xs text-slate-500 truncate">{u.role?.label || ROLE_LABELS[u.role?.name] || 'Usuario'}</p>
+                                        <p className="text-xs text-slate-500 truncate">{getRoleLabel(u.role)}</p>
                                     </div>
                                 </div>
                             ))}
@@ -347,7 +350,7 @@ const InternalChat = () => {
                                 {recipientId ? getUserName(activeUser) : 'Canal General'}
                             </h2>
                             <p className="text-xs text-gray-500">
-                                {recipientId ? (activeUser?.role?.name || 'Usuario') : 'Mensajes visibles para toda la empresa'}
+                                {recipientId ? getRoleLabel(activeUser?.role) : 'Mensajes visibles para toda la empresa'}
                             </p>
                         </div>
                     </div>
