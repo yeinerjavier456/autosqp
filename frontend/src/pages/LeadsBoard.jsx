@@ -214,13 +214,14 @@ const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragS
 };
 
 // History Modal Component
-const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVehicles, currentUserRole, boardMode = 'general' }) => {
+const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, onAssign, availableVehicles, currentUserRole, boardMode = 'general' }) => {
     const [assignedAdvisor, setAssignedAdvisor] = useState(lead?.assigned_to?.id || '');
     const [selectedSupervisors, setSelectedSupervisors] = useState(getLeadSupervisorIds(lead));
     const { createReminder } = useNotifications();
     const [newComment, setNewComment] = useState('');
     const [newStatus, setNewStatus] = useState(lead?.status || 'new');
     const [loading, setLoading] = useState(false);
+    const [savingSupervisors, setSavingSupervisors] = useState(false);
 
     // Process Detail States
     const [hasVehicle, setHasVehicle] = useState(lead?.process_detail?.has_vehicle ?? true);
@@ -486,6 +487,18 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
         setReminderNote('');
     };
 
+    const handleSaveSupervisorSelection = async () => {
+        if (!onSaveSupervisors) return;
+        setSavingSupervisors(true);
+        try {
+            await onSaveSupervisors(lead.id, selectedSupervisors);
+        } catch (error) {
+            console.error("Error saving supervisors", error);
+        } finally {
+            setSavingSupervisors(false);
+        }
+    };
+
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
             <div className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl animate-fade-in-up border border-gray-100 max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
@@ -584,6 +597,16 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                             <p className="mt-2 text-xs text-slate-500">
                                 Usa Ctrl o Cmd para elegir varias personas que deben seguir este lead.
                             </p>
+                            <div className="mt-3 flex justify-end">
+                                <button
+                                    type="button"
+                                    onClick={handleSaveSupervisorSelection}
+                                    disabled={savingSupervisors}
+                                    className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                                >
+                                    {savingSupervisors ? 'Guardando...' : 'Guardar supervision'}
+                                </button>
+                            </div>
                             {selectedSupervisorUsers.length > 0 && (
                                 <div className="mt-2 flex flex-wrap gap-2">
                                     {selectedSupervisorUsers.map((person) => (
@@ -1268,6 +1291,50 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         }
     };
 
+    const handleSaveSupervisors = async (leadId, supervisorIds) => {
+        try {
+            const token = localStorage.getItem('token');
+            await axios.put(`https://autosqp.co/api/leads/${leadId}`,
+                {
+                    supervisor_ids: supervisorIds,
+                    comment: 'Supervision actualizada'
+                },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            const supervisorUsers = advisors.filter((adv) => supervisorIds.includes(adv.id));
+            setLeads(prev => prev.map((lead) => (
+                lead.id === leadId
+                    ? { ...lead, supervisor_ids: supervisorIds, supervisors: supervisorUsers }
+                    : lead
+            )));
+            setSelectedLeadForHistory(prev => (
+                prev && prev.id === leadId
+                    ? { ...prev, supervisor_ids: supervisorIds, supervisors: supervisorUsers }
+                    : prev
+            ));
+
+            fetchLeads();
+            Swal.fire({
+                icon: 'success',
+                title: 'Supervision actualizada',
+                text: 'La supervision del lead se guardo correctamente.',
+                timer: 1400,
+                showConfirmButton: false,
+                confirmButtonColor: '#2563eb'
+            });
+        } catch (error) {
+            console.error("Error saving supervisors", error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'No se pudo guardar la supervision: ' + (error.response?.data?.error || error.message),
+                confirmButtonColor: '#2563eb'
+            });
+            throw error;
+        }
+    };
+
     const handleAssignLead = async (leadId, advisorId, supervisorIds = null) => {
         try {
             const token = localStorage.getItem('token');
@@ -1800,6 +1867,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     lead={selectedLeadForHistory}
                     onClose={() => setShowHistoryModal(false)}
                     onUpdate={handleUpdateHistory}
+                    onSaveSupervisors={handleSaveSupervisors}
                     advisors={advisors}
                     onAssign={handleAssignLead}
                     availableVehicles={availableVehicles}
