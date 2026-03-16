@@ -501,9 +501,9 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
-            <div className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl animate-fade-in-up border border-gray-100 max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-4">
-                    <div>
+            <div className="bg-white rounded-2xl p-6 w-full max-w-6xl shadow-2xl animate-fade-in-up border border-gray-100 max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-start mb-4 border-b border-gray-100 pb-4 gap-4">
+                    <div className="flex-1 min-w-0">
                         <h2 className="text-xl font-bold text-gray-800">Detalles del Lead</h2>
                         <p className="text-sm text-gray-500">Cliente: <span className="font-semibold text-blue-600">{lead.name}</span></p>
                         <div className="mt-3 flex flex-wrap gap-2">
@@ -555,67 +555,70 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                 </div>
                             </div>
                         )}
-                        <div className="text-sm text-gray-500 mt-2 flex items-center gap-2">Asignado a:
-                            <select
-                                className="border border-gray-300 rounded px-2 py-1 text-sm bg-gray-50 focus:ring-blue-500 outline-none font-semibold text-indigo-600"
-                                value={assignedAdvisor}
-                                onChange={(e) => {
-                                    setAssignedAdvisor(e.target.value);
-                                    if (onAssign) onAssign(lead.id, e.target.value, selectedSupervisors);
-                                }}
-                            >
-                                <option value="">Sin asignar</option>
-                                {assignableUsers.map(adv => (
-                                    <option key={adv.id} value={adv.id}>
-                                        {adv.full_name || adv.email} - {getDisplayRoleName(adv.role)}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
-                            <div className="flex items-center justify-between gap-2">
-                                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Supervision del lead</p>
-                                <span className="text-[11px] text-slate-400">{selectedSupervisors.length} persona(s)</span>
-                            </div>
-                            <select
-                                multiple
-                                value={selectedSupervisors.map(String)}
-                                onChange={(e) => {
-                                    const values = Array.from(e.target.selectedOptions)
-                                        .map((option) => parseInt(option.value, 10))
-                                        .filter((id) => Number.isInteger(id));
-                                    setSelectedSupervisors(values);
-                                }}
-                                className="mt-2 h-32 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                                {supervisorOptions.map((person) => (
-                                    <option key={person.id} value={person.id}>
-                                        {person.full_name || person.email} - {getDisplayRoleName(person.role)}
-                                    </option>
-                                ))}
-                            </select>
-                            <p className="mt-2 text-xs text-slate-500">
-                                Usa Ctrl o Cmd para elegir varias personas que deben seguir este lead.
-                            </p>
-                            <div className="mt-3 flex justify-end">
-                                <button
-                                    type="button"
-                                    onClick={handleSaveSupervisorSelection}
-                                    disabled={savingSupervisors}
-                                    className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                        <div className="mt-4 grid grid-cols-1 xl:grid-cols-[320px,1fr] gap-4">
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-2">Asignado a</label>
+                                <select
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-white focus:ring-blue-500 outline-none font-semibold text-indigo-600"
+                                    value={assignedAdvisor}
+                                    onChange={(e) => {
+                                        setAssignedAdvisor(e.target.value);
+                                        if (onAssign) onAssign(lead.id, e.target.value, selectedSupervisors);
+                                    }}
                                 >
-                                    {savingSupervisors ? 'Guardando...' : 'Guardar supervision'}
-                                </button>
-                            </div>
-                            {selectedSupervisorUsers.length > 0 && (
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                    {selectedSupervisorUsers.map((person) => (
-                                        <span key={person.id} className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 border border-blue-200">
-                                            {person.full_name || person.email}
-                                        </span>
+                                    <option value="">Sin asignar</option>
+                                    {assignableUsers.map(adv => (
+                                        <option key={adv.id} value={adv.id}>
+                                            {adv.full_name || adv.email} - {getDisplayRoleName(adv.role)}
+                                        </option>
                                     ))}
+                                </select>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white p-4">
+                                <div className="flex items-center justify-between gap-2">
+                                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Supervision del lead</p>
+                                    <span className="text-[11px] text-slate-400">{selectedSupervisors.length} persona(s)</span>
                                 </div>
-                            )}
+                                <select
+                                    multiple
+                                    value={selectedSupervisors.map(String)}
+                                    onChange={(e) => {
+                                        const values = Array.from(e.target.selectedOptions)
+                                            .map((option) => parseInt(option.value, 10))
+                                            .filter((id) => Number.isInteger(id));
+                                        setSelectedSupervisors(values);
+                                    }}
+                                    className="mt-2 h-40 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    {supervisorOptions.map((person) => (
+                                        <option key={person.id} value={person.id}>
+                                            {person.full_name || person.email} - {getDisplayRoleName(person.role)}
+                                        </option>
+                                    ))}
+                                </select>
+                                <div className="mt-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                                    <p className="text-xs text-slate-500">
+                                        Usa Ctrl o Cmd para elegir varias personas que deben seguir este lead.
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveSupervisorSelection}
+                                        disabled={savingSupervisors}
+                                        className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                                    >
+                                        {savingSupervisors ? 'Guardando...' : 'Guardar supervision'}
+                                    </button>
+                                </div>
+                                {selectedSupervisorUsers.length > 0 && (
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                        {selectedSupervisorUsers.map((person) => (
+                                            <span key={person.id} className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 border border-blue-200">
+                                                {person.full_name || person.email}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition">
