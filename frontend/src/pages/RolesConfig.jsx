@@ -4,6 +4,14 @@ import Swal from 'sweetalert2';
 import { useAuth } from '../context/AuthContext';
 import { SYSTEM_VIEWS, getVisibleSystemViews } from '../config/views';
 
+const SECTION_META = {
+    general: { title: 'General', description: 'Pantallas principales del panel.' },
+    admin: { title: 'Administracion', description: 'Usuarios, roles, configuraciones y auditoria.' },
+    crm: { title: 'CRM', description: 'Leads, aliados, ventas, inventario y solicitudes de credito.' },
+    channels: { title: 'Canales', description: 'Mensajeria, chat interno y entradas por canal.' },
+    global: { title: 'Global', description: 'Opciones exclusivas del administrador global.' }
+};
+
 const RolesConfig = () => {
     const { user } = useAuth();
     const [roles, setRoles] = useState([]);
@@ -21,6 +29,21 @@ const RolesConfig = () => {
         [roles, selectedRoleId]
     );
     const availableViews = useMemo(() => getVisibleSystemViews(user), [user]);
+    const groupedViews = useMemo(() => {
+        const groups = {};
+        availableViews.forEach((view) => {
+            const sectionId = view.section || 'general';
+            if (!groups[sectionId]) groups[sectionId] = [];
+            groups[sectionId].push(view);
+        });
+
+        return Object.entries(groups).map(([sectionId, views]) => ({
+            id: sectionId,
+            title: SECTION_META[sectionId]?.title || sectionId,
+            description: SECTION_META[sectionId]?.description || '',
+            views
+        }));
+    }, [availableViews]);
 
     const fetchRoles = async () => {
         setLoading(true);
@@ -225,24 +248,36 @@ const RolesConfig = () => {
 
                         <div>
                             <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500 mb-3">Vistas con acceso</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {availableViews.map((view) => {
-                                    const checked = form.permissions.includes(view.id);
-                                    return (
-                                        <label key={view.id} className={`flex items-start gap-3 rounded-xl border p-4 cursor-pointer transition ${checked ? 'border-blue-400 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}>
-                                            <input
-                                                type="checkbox"
-                                                checked={checked}
-                                                onChange={() => togglePermission(view.id)}
-                                                className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                            />
-                                            <div>
-                                                <p className="font-semibold text-slate-800">{view.label}</p>
-                                                <p className="text-xs text-slate-500 mt-1">{view.path}</p>
-                                            </div>
-                                        </label>
-                                    );
-                                })}
+                            <div className="space-y-5">
+                                {groupedViews.map((group) => (
+                                    <div key={group.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                                        <div className="mb-3">
+                                            <h4 className="text-sm font-bold uppercase tracking-wide text-slate-700">{group.title}</h4>
+                                            {group.description && (
+                                                <p className="text-xs text-slate-500 mt-1">{group.description}</p>
+                                            )}
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            {group.views.map((view) => {
+                                                const checked = form.permissions.includes(view.id);
+                                                return (
+                                                    <label key={view.id} className={`flex items-start gap-3 rounded-xl border bg-white p-4 cursor-pointer transition ${checked ? 'border-blue-400 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={checked}
+                                                            onChange={() => togglePermission(view.id)}
+                                                            className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                                        />
+                                                        <div>
+                                                            <p className="font-semibold text-slate-800">{view.label}</p>
+                                                            <p className="text-xs text-slate-500 mt-1">{view.path}</p>
+                                                        </div>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
 

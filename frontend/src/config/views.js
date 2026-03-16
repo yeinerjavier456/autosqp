@@ -11,7 +11,7 @@ export const SYSTEM_VIEWS = [
     { id: 'alerts', label: 'Alertas automaticas', path: '/admin/alerts', menuLabel: 'Alertas Auto', section: 'crm', scope: 'company' },
     { id: 'sales', label: 'Finanzas y ventas', path: '/admin/sales', menuLabel: 'Finanzas y Ventas', section: 'crm', scope: 'company' },
     { id: 'my_sales', label: 'Mis ventas', path: '/admin/my-sales', menuLabel: 'Mis Ventas', section: 'crm', scope: 'company' },
-    { id: 'credits', label: 'Solicitudes / creditos', path: '/admin/credits', menuLabel: 'Solicitudes / Creditos', section: 'crm', scope: 'company' },
+    { id: 'credits', label: 'Tablero de solicitudes de credito', path: '/admin/credits', menuLabel: 'Solicitudes de Credito', section: 'crm', scope: 'company' },
     { id: 'facebook_leads', label: 'Facebook leads', path: '/admin/leads/facebook', menuLabel: 'Facebook Leads', section: 'channels', scope: 'company' },
     { id: 'tiktok_leads', label: 'TikTok leads', path: '/admin/leads/tiktok', menuLabel: 'TikTok Leads', section: 'channels', scope: 'company' },
     { id: 'whatsapp_leads', label: 'WhatsApp leads', path: '/admin/leads/whatsapp', menuLabel: 'WhatsApp', section: 'channels', scope: 'company' },

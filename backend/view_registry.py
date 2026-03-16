@@ -11,7 +11,7 @@ SYSTEM_VIEWS = [
     {"id": "alerts", "label": "Alertas automaticas", "path": "/admin/alerts", "scope": "company"},
     {"id": "sales", "label": "Finanzas y ventas", "path": "/admin/sales", "scope": "company"},
     {"id": "my_sales", "label": "Mis ventas", "path": "/admin/my-sales", "scope": "company"},
-    {"id": "credits", "label": "Solicitudes / creditos", "path": "/admin/credits", "scope": "company"},
+    {"id": "credits", "label": "Tablero de solicitudes de credito", "path": "/admin/credits", "scope": "company"},
     {"id": "facebook_leads", "label": "Facebook leads", "path": "/admin/leads/facebook", "scope": "company"},
     {"id": "tiktok_leads", "label": "TikTok leads", "path": "/admin/leads/tiktok", "scope": "company"},
     {"id": "whatsapp_leads", "label": "WhatsApp leads", "path": "/admin/leads/whatsapp", "scope": "company"},
