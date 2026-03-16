@@ -5,10 +5,13 @@ import { useAuth } from '../context/AuthContext';
 import Swal from 'sweetalert2';
 import { useNavigate } from 'react-router-dom';
 
+const VALID_CREDIT_STATUSES = ['pending', 'in_review', 'approved', 'rejected', 'completed'];
+
 const CreditBoard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
-    const leadBoardPath = (user?.role?.name || user?.role) === 'aliado' ? '/aliado/dashboard' : '/admin/leads';
+    const effectiveRoleName = user?.role?.base_role_name || user?.role?.name || user?.role;
+    const leadBoardPath = effectiveRoleName === 'aliado' ? '/aliado/dashboard' : '/admin/leads';
     const [credits, setCredits] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);
@@ -48,7 +51,10 @@ const CreditBoard = () => {
             const items = Array.isArray(response.data?.items)
                 ? response.data.items
                 : (Array.isArray(response.data) ? response.data : []);
-            setCredits(items);
+            setCredits(items.map((item) => ({
+                ...item,
+                status: VALID_CREDIT_STATUSES.includes(item?.status) ? item.status : 'pending'
+            })));
         } catch (error) {
             console.error(error);
             Swal.fire('Error', 'No se pudieron cargar las solicitudes', 'error');

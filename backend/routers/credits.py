@@ -10,6 +10,14 @@ router = APIRouter(
     tags=["credits"]
 )
 
+VALID_CREDIT_STATUSES = {
+    models.CreditStatus.PENDING.value,
+    models.CreditStatus.IN_REVIEW.value,
+    models.CreditStatus.APPROVED.value,
+    models.CreditStatus.REJECTED.value,
+    models.CreditStatus.COMPLETED.value,
+}
+
 
 def _get_credit_desired_vehicle(db: Session, lead: models.Lead) -> str:
     detail = db.query(models.LeadProcessDetail).filter(
@@ -77,7 +85,7 @@ def sync_credit_applications_for_company(db: Session, company_id: int):
             if desired_vehicle and desired_vehicle != current_credit.desired_vehicle:
                 current_credit.desired_vehicle = desired_vehicle
                 changed = True
-            if not current_credit.status:
+            if current_credit.status not in VALID_CREDIT_STATUSES:
                 current_credit.status = models.CreditStatus.PENDING.value
                 changed = True
             if not current_credit.notes:
@@ -128,7 +136,8 @@ def read_credits(
     
     # Filter by Advisor (Asesor) - Only see assigned leads/credits? 
     # Usually credits are handled by admins or specialized agents, but sticking to same logic as leads for now
-    if current_user.role and current_user.role.name in ['asesor', 'vendedor']:
+    effective_role_name = getattr(getattr(current_user, "role", None), "base_role_name", None) or getattr(getattr(current_user, "role", None), "name", None)
+    if effective_role_name in ['asesor', 'vendedor']:
         query = query.filter(models.CreditApplication.assigned_to_id == current_user.id)
     
     if status:
@@ -145,6 +154,9 @@ def read_credits(
         
     total = query.count()
     credits = query.order_by(models.CreditApplication.created_at.desc()).offset(skip).limit(limit).all()
+    for credit in credits:
+        if credit.status not in VALID_CREDIT_STATUSES:
+            credit.status = models.CreditStatus.PENDING.value
     return {"items": credits, "total": total}
 
 @router.post("/", response_model=schemas.CreditApplication)
