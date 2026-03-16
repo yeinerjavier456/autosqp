@@ -109,6 +109,30 @@ class Lead(Base):
     process_detail = relationship("LeadProcessDetail", back_populates="lead", uselist=False)
     notes = relationship("LeadNote", back_populates="lead", cascade="all, delete-orphan")
     files = relationship("LeadFile", back_populates="lead", cascade="all, delete-orphan")
+    supervisor_links = relationship("LeadSupervisor", back_populates="lead", cascade="all, delete-orphan")
+    supervisors = relationship(
+        "User",
+        secondary="lead_supervisors",
+        back_populates="supervised_leads",
+        overlaps="supervisor_links,lead,supervisor"
+    )
+
+    @property
+    def supervisor_ids(self):
+        return [user.id for user in (self.supervisors or [])]
+
+
+class LeadSupervisor(Base):
+    __tablename__ = "lead_supervisors"
+
+    lead_id = Column(Integer, ForeignKey("leads.id"), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    assigned_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    lead = relationship("Lead", back_populates="supervisor_links", overlaps="supervisors")
+    supervisor = relationship("User", foreign_keys=[user_id], overlaps="supervised_leads,supervisors")
+    assigned_by = relationship("User", foreign_keys=[assigned_by_id])
 
 class LeadNote(Base):
     __tablename__ = "lead_notes"
@@ -188,6 +212,12 @@ class User(Base):
     role = relationship("Role") # Relationship to Role model
     leads = relationship("Lead", foreign_keys="[Lead.assigned_to_id]", back_populates="assigned_to")
     leads_created = relationship("Lead", foreign_keys="[Lead.created_by_id]", back_populates="created_by")
+    supervised_leads = relationship(
+        "Lead",
+        secondary="lead_supervisors",
+        back_populates="supervisors",
+        overlaps="supervisor_links,lead,supervisor"
+    )
     sales = relationship("Sale", foreign_keys="[Sale.seller_id]", back_populates="seller")
 
 class SaleStatus(str, enum.Enum):

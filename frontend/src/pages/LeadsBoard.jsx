@@ -28,6 +28,7 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
     };
 
     const creditStatusMeta = getCreditStatusMeta(lead.credit_application_status);
+    const supervisorUsers = getLeadSupervisorUsers(lead);
 
     return (
         <div
@@ -93,6 +94,24 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
                 </div>
             )}
 
+            {supervisorUsers.length > 0 && (
+                <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50/80 px-3 py-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-blue-700">Supervision</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                        {supervisorUsers.slice(0, 3).map((person) => (
+                            <span key={person.id} className="inline-flex items-center rounded-full border border-blue-200 bg-white px-2 py-1 text-[10px] font-semibold text-blue-700">
+                                {person.full_name || person.email}
+                            </span>
+                        ))}
+                        {supervisorUsers.length > 3 && (
+                            <span className="inline-flex items-center rounded-full border border-blue-200 bg-white px-2 py-1 text-[10px] font-semibold text-blue-700">
+                                +{supervisorUsers.length - 3} mas
+                            </span>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Actions Footer */}
             <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-auto">
                 {/* Advisor Info */}
@@ -140,6 +159,25 @@ const getEffectiveRoleName = (role) => {
     return role.base_role_name || role.name || '';
 };
 
+const getLeadSupervisorIds = (lead) => {
+    if (!lead) return [];
+    if (Array.isArray(lead.supervisor_ids) && lead.supervisor_ids.length > 0) {
+        return lead.supervisor_ids
+            .map((id) => parseInt(id, 10))
+            .filter((id) => Number.isInteger(id));
+    }
+    if (Array.isArray(lead.supervisors)) {
+        return lead.supervisors
+            .map((user) => parseInt(user?.id, 10))
+            .filter((id) => Number.isInteger(id));
+    }
+    return [];
+};
+
+const getLeadSupervisorUsers = (lead) => (
+    Array.isArray(lead?.supervisors) ? lead.supervisors.filter(Boolean) : []
+);
+
 // Kanban Column
 const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragStart, onViewHistory, highlightedLeadId, boardMode = 'general' }) => {
     return (
@@ -178,6 +216,7 @@ const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragS
 // History Modal Component
 const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVehicles, currentUserRole, boardMode = 'general' }) => {
     const [assignedAdvisor, setAssignedAdvisor] = useState(lead?.assigned_to?.id || '');
+    const [selectedSupervisors, setSelectedSupervisors] = useState(getLeadSupervisorIds(lead));
     const { createReminder } = useNotifications();
     const [newComment, setNewComment] = useState('');
     const [newStatus, setNewStatus] = useState(lead?.status || 'new');
@@ -210,6 +249,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
 
     useEffect(() => {
         setAssignedAdvisor(lead?.assigned_to?.id || '');
+        setSelectedSupervisors(getLeadSupervisorIds(lead));
     }, [lead?.id, lead?.assigned_to?.id]);
 
     useEffect(() => {
@@ -391,6 +431,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
             return canAssignToAnyRole || roleName === 'asesor';
         })
         : [];
+    const supervisorOptions = Array.isArray(advisors)
+        ? advisors.filter((adv) => getEffectiveRoleName(adv.role) !== 'user')
+        : [];
+    const selectedSupervisorUsers = supervisorOptions.filter((person) => selectedSupervisors.includes(person.id));
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -423,7 +467,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                     desired_vehicle: !hasVehicle ? desiredVehicle : null
                 };
             }
-            await onUpdate(lead.id, newStatus, newComment, processDetail);
+            await onUpdate(lead.id, newStatus, newComment, processDetail, selectedSupervisors);
             setNewComment('');
         } catch (error) {
             console.error("Update failed", error);
@@ -504,7 +548,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                                 value={assignedAdvisor}
                                 onChange={(e) => {
                                     setAssignedAdvisor(e.target.value);
-                                    if (onAssign) onAssign(lead.id, e.target.value);
+                                    if (onAssign) onAssign(lead.id, e.target.value, selectedSupervisors);
                                 }}
                             >
                                 <option value="">Sin asignar</option>
@@ -514,6 +558,41 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                                     </option>
                                 ))}
                             </select>
+                        </div>
+                        <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+                            <div className="flex items-center justify-between gap-2">
+                                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Supervision del lead</p>
+                                <span className="text-[11px] text-slate-400">{selectedSupervisors.length} persona(s)</span>
+                            </div>
+                            <select
+                                multiple
+                                value={selectedSupervisors.map(String)}
+                                onChange={(e) => {
+                                    const values = Array.from(e.target.selectedOptions)
+                                        .map((option) => parseInt(option.value, 10))
+                                        .filter((id) => Number.isInteger(id));
+                                    setSelectedSupervisors(values);
+                                }}
+                                className="mt-2 h-32 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                {supervisorOptions.map((person) => (
+                                    <option key={person.id} value={person.id}>
+                                        {person.full_name || person.email} - {getDisplayRoleName(person.role)}
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="mt-2 text-xs text-slate-500">
+                                Usa Ctrl o Cmd para elegir varias personas que deben seguir este lead.
+                            </p>
+                            {selectedSupervisorUsers.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                    {selectedSupervisorUsers.map((person) => (
+                                        <span key={person.id} className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 border border-blue-200">
+                                            {person.full_name || person.email}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition">
@@ -882,7 +961,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         source: boardMode === 'ally' ? 'referral' : 'web',
         message: '',
         status: 'new',
-        assigned_to_id: ''
+        assigned_to_id: '',
+        supervisor_ids: []
     });
 
     const isAllyBoard = boardMode === 'ally';
@@ -896,6 +976,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         const roleName = getEffectiveRoleName(adv.role);
         return roleName === 'aliado';
     });
+    const supervisionUsers = advisors.filter((adv) => getEffectiveRoleName(adv.role) !== 'user');
 
     useEffect(() => {
         fetchLeads();
@@ -957,6 +1038,11 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             } else {
                 delete payload.assigned_to_id;
             }
+            payload.supervisor_ids = Array.isArray(newLeadForm.supervisor_ids)
+                ? newLeadForm.supervisor_ids
+                    .map((id) => parseInt(id, 10))
+                    .filter((id) => Number.isInteger(id))
+                : [];
 
             const response = await axios.post('https://autosqp.co/api/leads', payload, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -964,7 +1050,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
             setLeads(prev => [response.data, ...prev]);
             setShowAddLeadModal(false);
-            setNewLeadForm({ name: '', email: '', phone: '', source: isAllyBoard ? 'referral' : 'web', message: '', status: 'new', assigned_to_id: '' });
+            setNewLeadForm({ name: '', email: '', phone: '', source: isAllyBoard ? 'referral' : 'web', message: '', status: 'new', assigned_to_id: '', supervisor_ids: [] });
 
             Swal.fire({
                 icon: 'success',
@@ -1124,7 +1210,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         }
     };
 
-    const handleUpdateHistory = async (leadId, newStatus, comment, processDetail = null) => {
+    const handleUpdateHistory = async (leadId, newStatus, comment, processDetail = null, supervisorIds = null) => {
         try {
             const token = localStorage.getItem('token');
             const payload = {
@@ -1133,6 +1219,9 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             };
             if (processDetail) {
                 payload.process_detail = processDetail;
+            }
+            if (Array.isArray(supervisorIds)) {
+                payload.supervisor_ids = supervisorIds;
             }
 
             await axios.put(`https://autosqp.co/api/leads/${leadId}`,
@@ -1143,7 +1232,14 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             // Optimistic update or refresh
             setLeads(prev => prev.map(l => {
                 if (l.id === leadId) {
-                    return { ...l, status: newStatus };
+                    return {
+                        ...l,
+                        status: newStatus,
+                        supervisor_ids: Array.isArray(supervisorIds) ? supervisorIds : l.supervisor_ids,
+                        supervisors: Array.isArray(supervisorIds)
+                            ? advisors.filter((adv) => supervisorIds.includes(adv.id))
+                            : l.supervisors
+                    };
                 }
                 return l;
             }));
@@ -1172,7 +1268,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         }
     };
 
-    const handleAssignLead = async (leadId, advisorId) => {
+    const handleAssignLead = async (leadId, advisorId, supervisorIds = null) => {
         try {
             const token = localStorage.getItem('token');
             // If empty string, send null
@@ -1180,6 +1276,9 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 assigned_to_id: advisorId ? parseInt(advisorId) : null,
                 comment: `Lead asignado a un nuevo responsable`
             };
+            if (Array.isArray(supervisorIds)) {
+                payload.supervisor_ids = supervisorIds;
+            }
 
             await axios.put(`https://autosqp.co/api/leads/${leadId}`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -1197,16 +1296,31 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             const advisorData = parsedAdvisorId
                 ? advisors.find(adv => adv.id === parsedAdvisorId) || null
                 : null;
+            const supervisorUsers = Array.isArray(supervisorIds)
+                ? advisors.filter((adv) => supervisorIds.includes(adv.id))
+                : null;
 
             setLeads(prev => prev.map(l => (
                 l.id === leadId
-                    ? { ...l, assigned_to: advisorData, assigned_to_id: parsedAdvisorId }
+                    ? {
+                        ...l,
+                        assigned_to: advisorData,
+                        assigned_to_id: parsedAdvisorId,
+                        supervisor_ids: Array.isArray(supervisorIds) ? supervisorIds : l.supervisor_ids,
+                        supervisors: Array.isArray(supervisorIds) ? supervisorUsers : l.supervisors
+                    }
                     : l
             )));
 
             setSelectedLeadForHistory(prev => (
                 prev && prev.id === leadId
-                    ? { ...prev, assigned_to: advisorData, assigned_to_id: parsedAdvisorId }
+                    ? {
+                        ...prev,
+                        assigned_to: advisorData,
+                        assigned_to_id: parsedAdvisorId,
+                        supervisor_ids: Array.isArray(supervisorIds) ? supervisorIds : prev.supervisor_ids,
+                        supervisors: Array.isArray(supervisorIds) ? supervisorUsers : prev.supervisors
+                    }
                     : prev
             ));
 
@@ -1266,6 +1380,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
     const filterByStatus = (status) => {
         return leads.filter(lead => {
+            const supervisorIds = getLeadSupervisorIds(lead);
             const matchesStatus = lead.status === status;
             const matchesSearch =
                 lead.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1274,13 +1389,15 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             const matchesDate = !dateFilter || lead.created_at?.startsWith(dateFilter);
 
             // "Mis Leads" Filter (Priority)
-            const matchesMyLeads = !showMyLeadsOnly || lead.assigned_to?.id === user?.id;
+            const matchesMyLeads = !showMyLeadsOnly || lead.assigned_to?.id === user?.id || supervisorIds.includes(user?.id);
 
             // Specific User filter
-            const matchesUser = !userFilter || lead.assigned_to?.id === parseInt(userFilter);
+            const parsedUserFilter = userFilter ? parseInt(userFilter, 10) : null;
+            const matchesUser = !parsedUserFilter || lead.assigned_to?.id === parsedUserFilter || supervisorIds.includes(parsedUserFilter);
 
+            const hasAnyResponsible = !!lead.assigned_to || supervisorIds.length > 0;
             const matchesAssigned = !assignedFilter ||
-                (assignedFilter === 'assigned' ? !!lead.assigned_to : !lead.assigned_to);
+                (assignedFilter === 'assigned' ? hasAnyResponsible : !hasAnyResponsible);
 
             const matchesGlobalStatus = !globalStatusFilter || lead.status === globalStatusFilter;
 
@@ -1631,6 +1748,30 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                                         required
                                     />
                                 </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Personas en supervision</label>
+                                <select
+                                    multiple
+                                    className="h-32 w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                    value={(newLeadForm.supervisor_ids || []).map(String)}
+                                    onChange={e => setNewLeadForm({
+                                        ...newLeadForm,
+                                        supervisor_ids: Array.from(e.target.selectedOptions)
+                                            .map((option) => parseInt(option.value, 10))
+                                            .filter((id) => Number.isInteger(id))
+                                    })}
+                                >
+                                    {supervisionUsers.map((person) => (
+                                        <option key={person.id} value={person.id}>
+                                            {person.full_name || person.email} - {getDisplayRoleName(person.role)}
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className="mt-1 text-xs text-gray-500">
+                                    Puedes dejar varias personas siguiendo este lead desde el inicio.
+                                </p>
                             </div>
 
                             <div className="flex gap-4 pt-4">

@@ -271,6 +271,126 @@ def get_user_role_name(user: Optional[models.User]) -> Optional[str]:
     return getattr(user.role, "base_role_name", None) or user.role.name
 
 
+def get_role_permissions(role: Optional[models.Role]) -> List[str]:
+    if not role:
+        return []
+    fallback = DEFAULT_ROLE_VIEW_ACCESS.get(getattr(role, "base_role_name", None) or role.name, [])
+    return sanitize_view_ids(parse_json_list(getattr(role, "permissions_json", None), fallback), getattr(role, "company_id", None))
+
+
+def get_credit_coordinator_users(db: Session, company_id: Optional[int]) -> List[models.User]:
+    if not company_id:
+        return []
+
+    candidates = db.query(models.User).join(models.Role, isouter=True).filter(
+        models.User.company_id == company_id
+    ).all()
+
+    coordinators = []
+    for user in candidates:
+        effective_role_name = get_user_role_name(user)
+        if effective_role_name != "coordinador":
+            continue
+        if "credits" not in get_role_permissions(user.role):
+            continue
+        coordinators.append(user)
+    return coordinators
+
+
+def choose_credit_coordinator(db: Session, company_id: Optional[int]) -> Optional[models.User]:
+    coordinators = get_credit_coordinator_users(db, company_id)
+    if not coordinators:
+        return None
+    return random.choice(coordinators)
+
+
+def normalize_supervisor_ids(supervisor_ids: Optional[List[int]]) -> List[int]:
+    normalized = []
+    for raw_id in supervisor_ids or []:
+        try:
+            user_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if user_id not in normalized:
+            normalized.append(user_id)
+    return normalized
+
+
+def validate_supervisors(
+    db: Session,
+    company_id: Optional[int],
+    supervisor_ids: Optional[List[int]]
+) -> List[models.User]:
+    normalized_ids = normalize_supervisor_ids(supervisor_ids)
+    if not normalized_ids:
+        return []
+
+    supervisors = db.query(models.User).filter(models.User.id.in_(normalized_ids)).all()
+    if len(supervisors) != len(normalized_ids):
+        raise HTTPException(status_code=400, detail="Uno o más supervisores no existen")
+
+    for supervisor in supervisors:
+        if company_id and supervisor.company_id != company_id:
+            raise HTTPException(status_code=400, detail="Todos los supervisores deben pertenecer a la misma empresa")
+
+    supervisors_by_id = {user.id: user for user in supervisors}
+    return [supervisors_by_id[user_id] for user_id in normalized_ids if user_id in supervisors_by_id]
+
+
+def sync_lead_supervisors(
+    db: Session,
+    lead: models.Lead,
+    supervisor_ids: Optional[List[int]],
+    assigned_by_id: Optional[int] = None
+) -> List[models.User]:
+    target_supervisors = validate_supervisors(db, lead.company_id, supervisor_ids)
+    target_ids = {user.id for user in target_supervisors}
+
+    existing_links = list(lead.supervisor_links or [])
+    for link in existing_links:
+        if link.user_id not in target_ids:
+            db.delete(link)
+
+    existing_ids = {link.user_id for link in existing_links}
+    for supervisor in target_supervisors:
+        if supervisor.id in existing_ids:
+            continue
+        db.add(models.LeadSupervisor(
+            lead_id=lead.id,
+            user_id=supervisor.id,
+            assigned_by_id=assigned_by_id
+        ))
+
+    db.flush()
+    db.refresh(lead)
+    return target_supervisors
+
+
+def ensure_user_in_supervisors(supervisor_ids: Optional[List[int]], user_id: Optional[int]) -> List[int]:
+    normalized_ids = normalize_supervisor_ids(supervisor_ids)
+    if user_id and user_id not in normalized_ids:
+        normalized_ids.append(user_id)
+    return normalized_ids
+
+
+def maybe_assign_credit_coordinator(
+    db: Session,
+    lead_company_id: Optional[int],
+    target_status: Optional[str],
+    assigned_to_id: Optional[int],
+    supervisor_ids: Optional[List[int]]
+):
+    if target_status != models.LeadStatus.CREDIT_APPLICATION.value:
+        return assigned_to_id, normalize_supervisor_ids(supervisor_ids), None
+
+    coordinator = choose_credit_coordinator(db, lead_company_id)
+    if not coordinator:
+        return assigned_to_id, normalize_supervisor_ids(supervisor_ids), None
+
+    next_supervisor_ids = ensure_user_in_supervisors(supervisor_ids, assigned_to_id)
+    return coordinator.id, next_supervisor_ids, coordinator
+
+
 def should_reset_status_for_board_transfer(previous_role_name: Optional[str], target_role_name: Optional[str]) -> bool:
     return (previous_role_name == "aliado") != (target_role_name == "aliado")
 
@@ -677,6 +797,8 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: model
         db.query(models.LeadHistory).filter(models.LeadHistory.user_id == user_id).update({"user_id": None})
         db.query(models.Lead).filter(models.Lead.assigned_to_id == user_id).update({"assigned_to_id": None})
         db.query(models.Lead).filter(models.Lead.created_by_id == user_id).update({"created_by_id": None})
+        db.query(models.LeadSupervisor).filter(models.LeadSupervisor.user_id == user_id).delete(synchronize_session=False)
+        db.query(models.LeadSupervisor).filter(models.LeadSupervisor.assigned_by_id == user_id).update({"assigned_by_id": None}, synchronize_session=False)
         db.query(models.Sale).filter(models.Sale.seller_id == user_id).update({"seller_id": None})
         
         db.delete(db_user)
@@ -1001,6 +1123,7 @@ def read_leads(
 ):
     query = db.query(models.Lead).options(
         joinedload(models.Lead.assigned_to),
+        joinedload(models.Lead.supervisors),
         joinedload(models.Lead.history),
         joinedload(models.Lead.conversation).joinedload(models.Conversation.messages),
         joinedload(models.Lead.notes),
@@ -1024,9 +1147,19 @@ def read_leads(
 
     if board_scope == "ally":
         if get_user_role_name(current_user) == "aliado":
-            query = query.filter(models.Lead.assigned_to_id == current_user.id)
+            query = query.filter(
+                or_(
+                    models.Lead.assigned_to_id == current_user.id,
+                    models.Lead.supervisors.any(models.User.id == current_user.id)
+                )
+            )
         elif aliado_user_ids:
-            query = query.filter(models.Lead.assigned_to_id.in_(aliado_user_ids))
+            query = query.filter(
+                or_(
+                    models.Lead.assigned_to_id.in_(aliado_user_ids),
+                    models.Lead.supervisors.any(models.User.id.in_(aliado_user_ids))
+                )
+            )
         else:
             query = query.filter(false())
     elif aliado_user_ids:
@@ -1039,11 +1172,21 @@ def read_leads(
 
     # Filter by Advisor (Asesor) - Only see assigned leads
     if get_user_role_name(current_user) in ['asesor', 'vendedor']:
-        query = query.filter(models.Lead.assigned_to_id == current_user.id)
+        query = query.filter(
+            or_(
+                models.Lead.assigned_to_id == current_user.id,
+                models.Lead.supervisors.any(models.User.id == current_user.id)
+            )
+        )
     
     # Filter by Aliado - Only see their own queue
     if get_user_role_name(current_user) == 'aliado':
-        query = query.filter(models.Lead.assigned_to_id == current_user.id)
+        query = query.filter(
+            or_(
+                models.Lead.assigned_to_id == current_user.id,
+                models.Lead.supervisors.any(models.User.id == current_user.id)
+            )
+        )
 
     if source:
         query = query.filter(models.Lead.source == source)
@@ -1134,6 +1277,7 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
 
     # 2. Assignment Logic
     assigned_user_id = lead.assigned_to_id
+    supervisor_ids = normalize_supervisor_ids(getattr(lead, "supervisor_ids", []))
     
     # Automatic Assignment if not provided
     if not assigned_user_id:
@@ -1166,6 +1310,13 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
         base_status=lead.status,
         assigned_to_id=assigned_user_id
     )
+    assigned_user_id, supervisor_ids, credit_coordinator = maybe_assign_credit_coordinator(
+        db=db,
+        lead_company_id=company_id,
+        target_status=effective_status,
+        assigned_to_id=assigned_user_id,
+        supervisor_ids=supervisor_ids
+    )
 
     new_lead = models.Lead(
         created_at=datetime.datetime.now(),
@@ -1182,13 +1333,19 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
     db.add(new_lead)
     db.commit()
     db.refresh(new_lead)
+    sync_lead_supervisors(db, new_lead, supervisor_ids, current_user.id)
 
     initial_history = models.LeadHistory(
         lead_id=new_lead.id,
         user_id=current_user.id,
         previous_status=None,
         new_status=new_lead.status,
-        comment=(new_lead.message or "Lead creado manualmente")
+        comment=(
+            f"{new_lead.message or 'Lead creado manualmente'} "
+            f"(Asignado automaticamente a coordinacion de credito: {credit_coordinator.full_name or credit_coordinator.email})"
+            if credit_coordinator else
+            (new_lead.message or "Lead creado manualmente")
+        )
     )
     db.add(initial_history)
     db.commit()
@@ -2278,6 +2435,8 @@ def update_lead(
     previous_assigned_user = lead.assigned_to
     previous_role_name = get_user_role_name(previous_assigned_user)
     target_assigned_user = previous_assigned_user
+    current_supervisor_ids = normalize_supervisor_ids(getattr(lead, "supervisor_ids", []))
+    target_supervisor_ids = normalize_supervisor_ids(lead_update.supervisor_ids) if lead_update.supervisor_ids is not None else current_supervisor_ids
 
     if lead_update.assigned_to_id is not None:
         if lead_update.assigned_to_id:
@@ -2294,6 +2453,17 @@ def update_lead(
     
     payload_update = lead_update.dict(exclude={'comment', 'process_detail'}, exclude_unset=True)
     target_assigned_to_id = payload_update.get('assigned_to_id', lead.assigned_to_id)
+    target_status = payload_update.get('status', lead.status)
+    target_assigned_to_id, target_supervisor_ids, credit_coordinator = maybe_assign_credit_coordinator(
+        db=db,
+        lead_company_id=lead.company_id,
+        target_status=target_status,
+        assigned_to_id=target_assigned_to_id,
+        supervisor_ids=target_supervisor_ids
+    )
+    if credit_coordinator:
+        target_assigned_user = credit_coordinator
+        payload_update['assigned_to_id'] = target_assigned_to_id
     target_role_name = get_user_role_name(target_assigned_user)
     board_transfer = should_reset_status_for_board_transfer(previous_role_name, target_role_name)
     effective_status = enforce_ally_managed_status(
@@ -2317,7 +2487,10 @@ def update_lead(
             if target_role_name == "aliado"
             else "Lead devuelto al tablero general"
         )
-    history_comment = lead_update.comment.strip() if lead_update.comment and lead_update.comment.strip() else auto_transfer_comment
+    auto_credit_comment = None
+    if credit_coordinator and credit_coordinator.id != getattr(previous_assigned_user, "id", None):
+        auto_credit_comment = f"Lead asignado automaticamente a coordinacion de credito: {credit_coordinator.full_name or credit_coordinator.email}"
+    history_comment = lead_update.comment.strip() if lead_update.comment and lead_update.comment.strip() else (auto_credit_comment or auto_transfer_comment)
     has_comment = bool(history_comment)
     
     if has_status_change or has_comment:
@@ -2337,6 +2510,8 @@ def update_lead(
     
     for field, value in payload_update.items():
         setattr(lead, field, value)
+
+    sync_lead_supervisors(db, lead, target_supervisor_ids, current_user.id)
         
     # Handle Process Detail Upsert
     if process_detail_data:
@@ -2360,11 +2535,15 @@ def update_lead(
     db.commit()
     db.refresh(lead)
 
-    if lead_update.assigned_to_id and lead_update.assigned_to_id != getattr(previous_assigned_user, "id", None):
+    if target_assigned_to_id and target_assigned_to_id != getattr(previous_assigned_user, "id", None):
         notification = models.Notification(
-            user_id=lead_update.assigned_to_id,
-            title="Lead Reasignado",
-            message=f"Se te ha asignado el lead: {lead.name}",
+            user_id=target_assigned_to_id,
+            title="Lead Reasignado" if not credit_coordinator else "Lead de crédito asignado",
+            message=(
+                f"Se te ha asignado el lead: {lead.name}"
+                if not credit_coordinator
+                else f"Se te ha asignado el lead en solicitud de crédito: {lead.name}"
+            ),
             type="info",
             link=build_lead_board_link(target_assigned_user, lead.id)
         )

@@ -302,6 +302,7 @@ class LeadBase(BaseModel):
     message: Optional[str] = None
     company_id: Optional[int] = None
     assigned_to_id: Optional[int] = None
+    supervisor_ids: List[int] = []
     has_unread_reply: Optional[int] = 0
     last_reply_at: Optional[datetime] = None
 
@@ -315,6 +316,7 @@ class LeadUpdate(BaseModel):
     status: Optional[str] = None
     message: Optional[str] = None
     assigned_to_id: Optional[int] = None
+    supervisor_ids: Optional[List[int]] = None
     comment: Optional[str] = None # Virtual field for history
     process_detail: Optional[LeadProcessDetailCreate] = None # Para recibir los detalles de proceso
     
@@ -327,6 +329,7 @@ class Lead(LeadBase):
     created_at: datetime
     created_by_id: Optional[int] = None
     assigned_to: Optional[User] = None
+    supervisors: List[User] = []
     credit_application_id: Optional[int] = None
     credit_application_status: Optional[str] = None
     credit_application_updated_at: Optional[datetime] = None
