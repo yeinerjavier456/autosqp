@@ -44,6 +44,31 @@ const RolesConfig = () => {
             views
         }));
     }, [availableViews]);
+    const groupedMenuOrder = useMemo(() => {
+        const groups = [];
+
+        form.menu_order.forEach((viewId, index) => {
+            const view = availableViews.find((item) => item.id === viewId);
+            if (!view) return;
+
+            const sectionId = view.section || 'general';
+            let sectionGroup = groups.find((group) => group.id === sectionId);
+
+            if (!sectionGroup) {
+                sectionGroup = {
+                    id: sectionId,
+                    title: SECTION_META[sectionId]?.title || sectionId,
+                    description: SECTION_META[sectionId]?.description || '',
+                    items: []
+                };
+                groups.push(sectionGroup);
+            }
+
+            sectionGroup.items.push({ view, index });
+        });
+
+        return groups;
+    }, [availableViews, form.menu_order]);
 
     const fetchRoles = async () => {
         setLoading(true);
@@ -283,26 +308,34 @@ const RolesConfig = () => {
 
                         <div>
                             <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500 mb-3">Orden del menu</h3>
-                            <div className="space-y-2">
+                            <div className="space-y-4">
                                 {form.menu_order.length === 0 && (
                                     <p className="text-sm text-slate-400">Selecciona vistas para ordenar el menu.</p>
                                 )}
-                                {form.menu_order.map((viewId, index) => {
-                                    const view = availableViews.find((item) => item.id === viewId);
-                                    if (!view) return null;
-                                    return (
-                                        <div key={viewId} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3">
-                                            <div>
-                                                <p className="font-semibold text-slate-800">{index + 1}. {view.menuLabel}</p>
-                                                <p className="text-xs text-slate-500">{view.path}</p>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <button type="button" onClick={() => moveView(viewId, 'up')} className="px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">Subir</button>
-                                                <button type="button" onClick={() => moveView(viewId, 'down')} className="px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">Bajar</button>
-                                            </div>
+                                {groupedMenuOrder.map((group) => (
+                                    <div key={group.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                                        <div className="mb-3">
+                                            <h4 className="text-sm font-bold uppercase tracking-wide text-slate-700">{group.title}</h4>
+                                            {group.description && (
+                                                <p className="text-xs text-slate-500 mt-1">{group.description}</p>
+                                            )}
                                         </div>
-                                    );
-                                })}
+                                        <div className="space-y-2">
+                                            {group.items.map(({ view, index }) => (
+                                                <div key={view.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                                                    <div className="pl-3 border-l border-slate-200">
+                                                        <p className="font-semibold text-slate-800">{index + 1}. {view.menuLabel}</p>
+                                                        <p className="text-xs text-slate-500">{view.path}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <button type="button" onClick={() => moveView(view.id, 'up')} className="px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">Subir</button>
+                                                        <button type="button" onClick={() => moveView(view.id, 'down')} className="px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">Bajar</button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
 
