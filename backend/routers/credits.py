@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
-from typing import List, Optional
+from typing import Optional
 from database import get_db
 import models, schemas
 from dependencies import get_current_user
@@ -9,6 +9,102 @@ router = APIRouter(
     prefix="/credits",
     tags=["credits"]
 )
+
+
+def _get_credit_desired_vehicle(db: Session, lead: models.Lead) -> str:
+    detail = db.query(models.LeadProcessDetail).filter(
+        models.LeadProcessDetail.lead_id == lead.id
+    ).first()
+
+    desired_vehicle = ""
+    if detail:
+        if detail.vehicle_id:
+            vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == detail.vehicle_id).first()
+            if vehicle:
+                desired_vehicle = " ".join(
+                    part for part in [vehicle.make, vehicle.model, str(vehicle.year or "")] if part
+                ).strip()
+        if not desired_vehicle:
+            desired_vehicle = (detail.desired_vehicle or "").strip()
+
+    if not desired_vehicle:
+        desired_vehicle = (lead.message or "").strip() or "Por definir"
+
+    return desired_vehicle
+
+
+def sync_credit_applications_for_company(db: Session, company_id: int):
+    credit_stage_leads = db.query(models.Lead).filter(
+        models.Lead.company_id == company_id,
+        models.Lead.status == models.LeadStatus.CREDIT_APPLICATION.value
+    ).all()
+
+    if not credit_stage_leads:
+        return
+
+    lead_ids = [lead.id for lead in credit_stage_leads]
+    existing_credits = db.query(models.CreditApplication).filter(
+        models.CreditApplication.lead_id.in_(lead_ids)
+    ).order_by(models.CreditApplication.created_at.desc()).all()
+
+    latest_by_lead = {}
+    for credit in existing_credits:
+        latest_by_lead.setdefault(credit.lead_id, credit)
+
+    changed = False
+    for lead in credit_stage_leads:
+        desired_vehicle = _get_credit_desired_vehicle(db, lead)
+        auto_note = f"Generado automaticamente desde lead #{lead.id}."
+        current_credit = latest_by_lead.get(lead.id)
+
+        if current_credit:
+            if current_credit.company_id != lead.company_id:
+                current_credit.company_id = lead.company_id
+                changed = True
+            if current_credit.assigned_to_id != lead.assigned_to_id:
+                current_credit.assigned_to_id = lead.assigned_to_id
+                changed = True
+            if (lead.name or current_credit.client_name) != current_credit.client_name:
+                current_credit.client_name = lead.name or current_credit.client_name
+                changed = True
+            normalized_phone = (lead.phone or "").strip()
+            if normalized_phone and normalized_phone != current_credit.phone:
+                current_credit.phone = normalized_phone
+                changed = True
+            if lead.email != current_credit.email:
+                current_credit.email = lead.email
+                changed = True
+            if desired_vehicle and desired_vehicle != current_credit.desired_vehicle:
+                current_credit.desired_vehicle = desired_vehicle
+                changed = True
+            if not current_credit.status:
+                current_credit.status = models.CreditStatus.PENDING.value
+                changed = True
+            if not current_credit.notes:
+                current_credit.notes = auto_note
+                changed = True
+            continue
+
+        db.add(models.CreditApplication(
+            lead_id=lead.id,
+            client_name=lead.name or f"Lead {lead.id}",
+            phone=(lead.phone or "").strip() or f"lead-{lead.id}",
+            email=lead.email,
+            desired_vehicle=desired_vehicle,
+            monthly_income=0,
+            other_income=0,
+            occupation="employee",
+            application_mode="individual",
+            down_payment=0,
+            status=models.CreditStatus.PENDING.value,
+            notes=auto_note,
+            company_id=lead.company_id,
+            assigned_to_id=lead.assigned_to_id
+        ))
+        changed = True
+
+    if changed:
+        db.commit()
 
 @router.get("/", response_model=schemas.CreditApplicationList)
 def read_credits(
@@ -19,6 +115,9 @@ def read_credits(
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(get_current_user)
 ):
+    if current_user.company_id:
+        sync_credit_applications_for_company(db, current_user.company_id)
+
     query = db.query(models.CreditApplication).options(
         joinedload(models.CreditApplication.assigned_to)
     )
