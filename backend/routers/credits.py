@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 from database import get_db
@@ -137,8 +138,15 @@ def read_credits(
     # Filter by Advisor (Asesor) - Only see assigned leads/credits? 
     # Usually credits are handled by admins or specialized agents, but sticking to same logic as leads for now
     effective_role_name = getattr(getattr(current_user, "role", None), "base_role_name", None) or getattr(getattr(current_user, "role", None), "name", None)
-    if effective_role_name in ['asesor', 'vendedor']:
-        query = query.filter(models.CreditApplication.assigned_to_id == current_user.id)
+    if effective_role_name in ['asesor', 'vendedor', 'aliado', 'coordinador']:
+        query = query.filter(
+            or_(
+                models.CreditApplication.assigned_to_id == current_user.id,
+                models.CreditApplication.lead.has(
+                    models.Lead.supervisors.any(models.User.id == current_user.id)
+                )
+            )
+        )
     
     if status:
         query = query.filter(models.CreditApplication.status == status)
