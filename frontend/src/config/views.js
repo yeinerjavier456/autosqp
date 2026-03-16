@@ -48,12 +48,12 @@ export const DEFAULT_ROLE_VIEW_ACCESS = {
         'dashboard', 'ally_board', 'credits', 'internal_chat', 'inventory'
     ],
     inventario: [
-        'inventory'
+        'inventory', 'internal_chat'
     ],
     compras: [
-        'credits'
+        'credits', 'internal_chat'
     ],
-    user: []
+    user: ['internal_chat']
 };
 
 export const DEFAULT_ROLE_MENU_ORDER = {

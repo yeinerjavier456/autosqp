@@ -34,9 +34,9 @@ DEFAULT_ROLE_VIEW_ACCESS = {
     "aliado": [
         "dashboard", "ally_board", "credits", "internal_chat", "inventory"
     ],
-    "inventario": ["inventory"],
-    "compras": ["credits"],
-    "user": [],
+    "inventario": ["inventory", "internal_chat"],
+    "compras": ["credits", "internal_chat"],
+    "user": ["internal_chat"],
 }
 
 DEFAULT_ROLE_MENU_ORDER = {

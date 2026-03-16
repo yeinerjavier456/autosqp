@@ -26,6 +26,7 @@ const FloatingChatButton = () => {
             const token = localStorage.getItem('token');
             if (!token) return;
             const response = await axios.get('https://autosqp.co/api/users/', {
+                params: { limit: 500 },
                 headers: { Authorization: `Bearer ${token}` }
             });
             setUsersList(response.data.items || []);

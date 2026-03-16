@@ -4,6 +4,16 @@ import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import Swal from 'sweetalert2';
 
+const ROLE_LABELS = {
+    super_admin: 'Super Administracion',
+    admin: 'Administracion',
+    asesor: 'Asesores',
+    aliado: 'Aliados',
+    inventario: 'Inventario',
+    compras: 'Compras',
+    user: 'Equipo',
+};
+
 const InternalChat = () => {
     const { user } = useAuth();
     const { resetUnreadCount } = useChat();
@@ -42,6 +52,7 @@ const InternalChat = () => {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.get('https://autosqp.co/api/users/', {
+                params: { limit: 500 },
                 headers: { Authorization: `Bearer ${token}` }
             });
             setUsersList(response.data.items || []);
@@ -149,6 +160,20 @@ const InternalChat = () => {
     const sidebarUsers = usersList.filter(u => u.id !== user?.id &&
         (searchTerm === '' || u.email.toLowerCase().includes(searchTerm.toLowerCase()) || (u.full_name && u.full_name.toLowerCase().includes(searchTerm.toLowerCase())))
     );
+    const groupedSidebarUsers = sidebarUsers.reduce((acc, currentUser) => {
+        const roleName = currentUser?.role?.name || 'user';
+        const groupId = ROLE_LABELS[roleName] ? roleName : 'user';
+        if (!acc[groupId]) {
+            acc[groupId] = {
+                id: groupId,
+                label: ROLE_LABELS[groupId] || 'Equipo',
+                users: []
+            };
+        }
+        acc[groupId].users.push(currentUser);
+        return acc;
+    }, {});
+    const sidebarGroups = Object.values(groupedSidebarUsers);
 
     const activeUser = usersList.find(u => u.id === parseInt(recipientId));
 
@@ -240,34 +265,41 @@ const InternalChat = () => {
                     </div>
 
                     <div className="px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-900/50">
-                        Usuarios
+                        Equipo interno
                     </div>
 
-                    {sidebarUsers.map(u => (
-                        <div
-                            key={u.id}
-                            onClick={() => setRecipientId(u.id.toString())}
-                            className={`p-3 mx-2 rounded-lg flex items-center gap-3 cursor-pointer transition mb-1 border border-transparent
-                                ${recipientId === u.id.toString()
-                                    ? 'bg-blue-600/20 text-white border-blue-500/30'
-                                    : 'hover:bg-slate-800 text-slate-300'}`}
-                        >
-                            <div className="relative">
-                                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold
-                                    ${recipientId === u.id.toString() ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300'}`}>
-                                    {getInitials(u.email)}
-                                </div>
-                                {u.is_online && (
-                                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-slate-900 rounded-full"></span>
-                                )}
+                    {sidebarGroups.map((group) => (
+                        <div key={group.id} className="mb-3">
+                            <div className="px-4 py-2 text-[11px] font-bold text-slate-400 uppercase tracking-[0.18em]">
+                                {group.label}
                             </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-center">
-                                    <h3 className="font-semibold text-sm truncate">{getUserName(u)}</h3>
-                                    {u.is_online && <span className="text-[10px] text-green-500 font-bold">ON</span>}
+                            {group.users.map((u) => (
+                                <div
+                                    key={u.id}
+                                    onClick={() => setRecipientId(u.id.toString())}
+                                    className={`p-3 mx-2 rounded-lg flex items-center gap-3 cursor-pointer transition mb-1 border border-transparent
+                                        ${recipientId === u.id.toString()
+                                            ? 'bg-blue-600/20 text-white border-blue-500/30'
+                                            : 'hover:bg-slate-800 text-slate-300'}`}
+                                >
+                                    <div className="relative">
+                                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold
+                                            ${recipientId === u.id.toString() ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300'}`}>
+                                            {getInitials(u.email)}
+                                        </div>
+                                        {u.is_online && (
+                                            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-slate-900 rounded-full"></span>
+                                        )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex justify-between items-center">
+                                            <h3 className="font-semibold text-sm truncate">{getUserName(u)}</h3>
+                                            {u.is_online && <span className="text-[10px] text-green-500 font-bold">ON</span>}
+                                        </div>
+                                        <p className="text-xs text-slate-500 truncate">{u.role?.label || ROLE_LABELS[u.role?.name] || 'Usuario'}</p>
+                                    </div>
                                 </div>
-                                <p className="text-xs text-slate-500 truncate">{u.role?.name || 'Usuario'}</p>
-                            </div>
+                            ))}
                         </div>
                     ))}
 
