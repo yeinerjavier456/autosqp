@@ -88,8 +88,8 @@ const InventoryList = () => {
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
                 Swal.fire({
-                    title: 'Â¡Actualizado!',
-                    text: 'El estado del vehÃ­culo ha sido cambiado.',
+                    title: 'Actualizado',
+                    text: 'El estado del vehiculo ha sido cambiado.',
                     icon: 'success',
                     timer: 2000,
                     showConfirmButton: false
@@ -141,7 +141,7 @@ const InventoryList = () => {
         <div className="bg-gray-50 min-h-full">
             <header className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between">
                 <div>
-                    <h1 className="text-3xl font-extrabold text-slate-800">Inventario de VehÃ­culos</h1>
+                    <h1 className="text-3xl font-extrabold text-slate-800">Inventario de Vehiculos</h1>
                     <p className="text-slate-500 mt-2">Gestiona el inventario de tu concesionario.</p>
                 </div>
                 {canEditInventory && <div className="mt-4 md:mt-0 flex gap-2">
@@ -251,8 +251,8 @@ const InventoryList = () => {
                         <thead className="bg-gray-50">
                             <tr>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Foto</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VehÃ­culo</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AÃ±o</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehiculo</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ano</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Placa</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio (COP) *</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
@@ -266,7 +266,7 @@ const InventoryList = () => {
                                 </tr>
                             ) : vehicles.length === 0 ? (
                                 <tr>
-                                    <td colSpan="7" className="px-6 py-10 text-center text-gray-500">No se encontraron vehÃ­culos.</td>
+                                    <td colSpan="7" className="px-6 py-10 text-center text-gray-500">No se encontraron vehiculos.</td>
                                 </tr>
                             ) : (
                                 vehicles.map((vehicle) => (
@@ -372,7 +372,7 @@ const InventoryList = () => {
                                 </button>
 
                                 <span className="relative inline-flex items-center px-4 py-2 border-t border-b border-gray-300 bg-white text-sm font-medium text-gray-700">
-                                    PÃ¡gina {page} de {totalPages || 1}
+                                    Pagina {page} de {totalPages || 1}
                                 </span>
 
                                 <button
