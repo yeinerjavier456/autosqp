@@ -862,7 +862,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     });
 
     const isAllyBoard = boardMode === 'ally';
-    const currentRoleName = user?.role?.name || user?.role;
+    const currentRoleName = user?.role?.base_role_name || user?.role?.name || user?.role;
     const boardTitle = isAllyBoard ? 'Tablero de Aliados' : 'Tablero de Leads';
     const boardDescription = isAllyBoard
         ? 'Gestiona los leads que estan en manos de aliados y transfiere al tablero general cuando corresponda.'

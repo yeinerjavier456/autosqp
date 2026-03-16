@@ -66,7 +66,10 @@ export const DEFAULT_ROLE_MENU_ORDER = {
     user: []
 };
 
-export const getRoleName = (user) => user?.role?.name || (typeof user?.role === 'string' ? user.role : '');
+export const getRoleName = (user) =>
+    user?.role?.base_role_name ||
+    user?.role?.name ||
+    (typeof user?.role === 'string' ? user.role : '');
 
 export const getRolePermissions = (role) => {
     if (!role) return [];

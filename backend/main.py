@@ -262,13 +262,13 @@ def enforce_ally_managed_status(
 
 
 def can_manually_assign_to_any_role(current_user: models.User) -> bool:
-    return bool(current_user.role and current_user.role.name in {"admin", "super_admin", "aliado"})
+    return bool(get_user_role_name(current_user) in {"admin", "super_admin", "aliado"})
 
 
 def get_user_role_name(user: Optional[models.User]) -> Optional[str]:
     if not user or not user.role:
         return None
-    return user.role.name
+    return getattr(user.role, "base_role_name", None) or user.role.name
 
 
 def should_reset_status_for_board_transfer(previous_role_name: Optional[str], target_role_name: Optional[str]) -> bool:
@@ -1011,13 +1011,19 @@ def read_leads(
     if current_user.company_id:
         query = query.filter(models.Lead.company_id == current_user.company_id)
     
-    aliado_role = db.query(models.Role).filter(models.Role.name == "aliado").first()
+    aliado_roles = db.query(models.Role).filter(
+        or_(
+            models.Role.name == "aliado",
+            models.Role.base_role_name == "aliado"
+        )
+    ).all()
+    aliado_role_ids = [role.id for role in aliado_roles]
     aliado_user_ids = []
-    if aliado_role:
-        aliado_user_ids = [row[0] for row in db.query(models.User.id).filter(models.User.role_id == aliado_role.id).all()]
+    if aliado_role_ids:
+        aliado_user_ids = [row[0] for row in db.query(models.User.id).filter(models.User.role_id.in_(aliado_role_ids)).all()]
 
     if board_scope == "ally":
-        if current_user.role and current_user.role.name == "aliado":
+        if get_user_role_name(current_user) == "aliado":
             query = query.filter(models.Lead.assigned_to_id == current_user.id)
         elif aliado_user_ids:
             query = query.filter(models.Lead.assigned_to_id.in_(aliado_user_ids))
@@ -1032,11 +1038,11 @@ def read_leads(
         )
 
     # Filter by Advisor (Asesor) - Only see assigned leads
-    if current_user.role and current_user.role.name in ['asesor', 'vendedor']:
+    if get_user_role_name(current_user) in ['asesor', 'vendedor']:
         query = query.filter(models.Lead.assigned_to_id == current_user.id)
     
     # Filter by Aliado - Only see their own queue
-    if current_user.role and current_user.role.name == 'aliado':
+    if get_user_role_name(current_user) == 'aliado':
         query = query.filter(models.Lead.assigned_to_id == current_user.id)
 
     if source:
