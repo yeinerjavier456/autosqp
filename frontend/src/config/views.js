@@ -20,6 +20,14 @@ export const SYSTEM_VIEWS = [
     { id: 'whatsapp_dashboard', label: 'Mensajeria WhatsApp', path: '/admin/whatsapp', menuLabel: 'Mensajeria WhatsApp', section: 'channels', scope: 'company' },
 ];
 
+export const VIEW_SECTIONS = {
+    general: { id: 'general', label: 'General' },
+    admin: { id: 'admin', label: 'Configuracion' },
+    crm: { id: 'crm', label: 'CRM' },
+    channels: { id: 'channels', label: 'Canales' },
+    global: { id: 'global', label: 'Global' },
+};
+
 export const VIEW_MAP = SYSTEM_VIEWS.reduce((acc, view) => {
     acc[view.id] = view;
     return acc;
@@ -99,6 +107,29 @@ export const getOrderedMenuViews = (user) => {
     });
 
     return ordered;
+};
+
+export const getGroupedMenuViews = (user) => {
+    const orderedViews = getOrderedMenuViews(user);
+    const groups = [];
+
+    orderedViews.forEach((view) => {
+        const sectionId = view.section || 'general';
+        let sectionGroup = groups.find((group) => group.id === sectionId);
+
+        if (!sectionGroup) {
+            sectionGroup = {
+                id: sectionId,
+                label: VIEW_SECTIONS[sectionId]?.label || sectionId,
+                views: [],
+            };
+            groups.push(sectionGroup);
+        }
+
+        sectionGroup.views.push(view);
+    });
+
+    return groups;
 };
 
 export const getVisibleSystemViews = (user) => {

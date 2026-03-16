@@ -5,7 +5,7 @@ import { useChat } from '../context/ChatContext';
 import Swal from 'sweetalert2';
 import NotificationBell from './NotificationBell';
 import FloatingChatButton from './FloatingChatButton';
-import { getOrderedMenuViews, getRoleName } from '../config/views';
+import { getGroupedMenuViews, getRoleName } from '../config/views';
 
 const MENU_ICONS = {
     dashboard: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>,
@@ -46,7 +46,7 @@ const Layout = () => {
     const isCompras = roleName === 'compras';
     const primaryColor = user?.company?.primary_color || '#0f172a';
     const secondaryColor = user?.company?.secondary_color || '#2563eb';
-    const orderedMenuViews = getOrderedMenuViews(user);
+    const groupedMenuViews = getGroupedMenuViews(user);
 
     const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
     const closeSidebar = () => setIsSidebarOpen(false);
@@ -79,13 +79,14 @@ const Layout = () => {
         });
     };
 
-    const NavItem = ({ to, icon, label }) => (
+    const NavItem = ({ to, icon, label, nested = false }) => (
         <Link
             to={to}
             onClick={closeSidebar}
             className={`
                 flex items-center gap-4 py-3 px-4 mx-2 rounded-xl transition-all duration-300 mb-2
                 ${isCollapsed ? 'justify-center px-2' : ''}
+                ${nested && !isCollapsed ? 'ml-5 mr-1 py-2.5 border-l border-white/10 rounded-l-none' : ''}
                 ${!isActive(to) ? 'hover:bg-white/10 text-slate-300 hover:text-white' : 'text-white shadow-lg'}
             `}
             style={isActive(to) ? { backgroundColor: secondaryColor } : {}}
@@ -101,7 +102,7 @@ const Layout = () => {
             </div>
             {!isCollapsed && (
                 <div className="flex justify-between items-center w-full">
-                    <span className="font-medium whitespace-nowrap overflow-hidden transition-all duration-300">{label}</span>
+                    <span className={`font-medium whitespace-nowrap overflow-hidden transition-all duration-300 ${nested ? 'text-[15px]' : ''}`}>{label}</span>
                     {label === 'Chat Interno' && unreadCount > 0 && (
                         <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full ml-auto">
                             {unreadCount}
@@ -174,14 +175,28 @@ const Layout = () => {
                     </div>
                 </div>
 
-                <nav className="flex-1 px-2 space-y-2 overflow-y-auto custom-scrollbar">
-                    {orderedMenuViews.map((view) => (
-                        <NavItem
-                            key={view.id}
-                            to={view.path}
-                            label={view.menuLabel}
-                            icon={MENU_ICONS[view.id] || MENU_ICONS.dashboard}
-                        />
+                <nav className="flex-1 px-2 space-y-3 overflow-y-auto custom-scrollbar">
+                    {groupedMenuViews.map((group) => (
+                        <div key={group.id} className="pb-1">
+                            {!isCollapsed && (
+                                <div className="px-4 mb-2">
+                                    <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-white/45">
+                                        {group.label}
+                                    </p>
+                                </div>
+                            )}
+                            <div className="space-y-1">
+                                {group.views.map((view) => (
+                                    <NavItem
+                                        key={view.id}
+                                        to={view.path}
+                                        label={view.menuLabel}
+                                        icon={MENU_ICONS[view.id] || MENU_ICONS.dashboard}
+                                        nested={!isCollapsed}
+                                    />
+                                ))}
+                            </div>
+                        </div>
                     ))}
                 </nav>
 
