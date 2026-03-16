@@ -42,6 +42,7 @@ class Role(Base):
     permissions_json = Column(Text, nullable=True)
     menu_order_json = Column(Text, nullable=True)
     is_system = Column(Boolean, default=False)
+    base_role_name = Column(String(50), nullable=True, index=True)
 
 class CarBrand(Base):
     __tablename__ = "car_brands"

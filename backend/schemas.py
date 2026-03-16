@@ -54,6 +54,7 @@ class RoleBase(BaseModel):
     menu_order: List[str] = []
     company_id: Optional[int] = None
     is_system: Optional[bool] = False
+    base_role_name: Optional[str] = None
 
 class RoleCreate(BaseModel):
     label: str

@@ -32,6 +32,7 @@ def ensure_role_configuration_columns():
             "permissions_json": "ALTER TABLE roles ADD COLUMN permissions_json TEXT NULL",
             "menu_order_json": "ALTER TABLE roles ADD COLUMN menu_order_json TEXT NULL",
             "is_system": "ALTER TABLE roles ADD COLUMN is_system BOOLEAN NOT NULL DEFAULT 0",
+            "base_role_name": "ALTER TABLE roles ADD COLUMN base_role_name VARCHAR(50) NULL",
         }
 
         for column_name, ddl in role_columns.items():
@@ -319,7 +320,8 @@ def serialize_role(role: models.Role) -> schemas.Role:
         permissions=permissions,
         menu_order=menu_order,
         company_id=getattr(role, "company_id", None),
-        is_system=bool(getattr(role, "is_system", False))
+        is_system=bool(getattr(role, "is_system", False)),
+        base_role_name=getattr(role, "base_role_name", None)
     )
 
 
@@ -327,6 +329,23 @@ def ensure_role_management_permissions(current_user: models.User):
     role_name = current_user.role.name if current_user.role else ""
     if role_name not in {"admin", "super_admin"}:
         raise HTTPException(status_code=403, detail="Not authorized")
+
+
+def get_company_role_override(db: Session, company_id: Optional[int], base_role_name: Optional[str]) -> Optional[models.Role]:
+    if not company_id or not base_role_name:
+        return None
+    return db.query(models.Role).filter(
+        models.Role.company_id == company_id,
+        models.Role.base_role_name == base_role_name
+    ).first()
+
+
+def resolve_assignable_role(db: Session, target_role: models.Role, company_id: Optional[int]) -> models.Role:
+    if company_id and target_role and target_role.is_system:
+        override = get_company_role_override(db, company_id, target_role.name)
+        if override:
+            return override
+    return target_role
 
 
 def serialize_user(user: models.User, is_online: Optional[bool] = None) -> dict:
@@ -526,6 +545,7 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
     role_obj = db.query(models.Role).filter(models.Role.id == user.role_id).first()
     if not role_obj:
         raise HTTPException(status_code=400, detail="Invalid Role ID")
+    role_obj = resolve_assignable_role(db, role_obj, current_user.company_id)
     if current_user.company_id and role_obj.company_id not in {None, current_user.company_id}:
         raise HTTPException(status_code=403, detail="No puedes usar roles de otra empresa")
 
@@ -546,7 +566,7 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
         email=user.email,
         full_name=user.full_name,
         hashed_password=hashed_password,
-        role_id=user.role_id, 
+        role_id=role_obj.id, 
         company_id=user.company_id
     )
     db.add(new_user)
@@ -589,10 +609,11 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
         target_role = db.query(models.Role).filter(models.Role.id == user_update.role_id).first()
         if not target_role:
             raise HTTPException(status_code=400, detail="Invalid Role ID")
+        target_role = resolve_assignable_role(db, target_role, current_user.company_id)
         if current_user.company_id and target_role.company_id not in {None, current_user.company_id}:
             raise HTTPException(status_code=403, detail="No puedes usar roles de otra empresa")
-        print(f"Setting role_id to: {user_update.role_id}") 
-        db_user.role_id = user_update.role_id
+        print(f"Setting role_id to: {target_role.id}") 
+        db_user.role_id = target_role.id
     if user_update.company_id is not None:
         if current_user.company_id and user_update.company_id != current_user.company_id:
             raise HTTPException(status_code=403, detail="No puedes mover usuarios a otra empresa")
@@ -792,6 +813,9 @@ def read_roles(
             )
         )
     roles = query.order_by(models.Role.is_system.desc(), models.Role.label.asc()).all()
+    if current_user.company_id:
+        override_names = {role.base_role_name for role in roles if role.company_id == current_user.company_id and role.base_role_name}
+        roles = [role for role in roles if not (role.is_system and role.name in override_names)]
     return [serialize_role(role) for role in roles]
 
 
@@ -820,7 +844,8 @@ def create_role(
         company_id=current_user.company_id,
         permissions_json=json.dumps(sanitized_permissions),
         menu_order_json=json.dumps(sanitized_menu_order),
-        is_system=False
+        is_system=False,
+        base_role_name=None
     )
     db.add(db_role)
     db.commit()
@@ -841,7 +866,45 @@ def update_role(
         raise HTTPException(status_code=404, detail="Role not found")
     if current_user.company_id and db_role.company_id not in {None, current_user.company_id}:
         raise HTTPException(status_code=403, detail="Not authorized")
-    if current_user.company_id and (db_role.company_id is None or db_role.is_system):
+
+    if current_user.company_id and db_role.is_system and db_role.company_id is None:
+        sanitized_permissions = sanitize_view_ids(role_update.permissions) if role_update.permissions is not None else DEFAULT_ROLE_VIEW_ACCESS.get(db_role.name, [])
+        sanitized_menu_order = sanitize_view_ids(role_update.menu_order) if role_update.menu_order is not None else DEFAULT_ROLE_MENU_ORDER.get(db_role.name, sanitized_permissions)
+        for view_id in sanitized_permissions:
+            if view_id not in sanitized_menu_order:
+                sanitized_menu_order.append(view_id)
+
+        override_role = get_company_role_override(db, current_user.company_id, db_role.name)
+        if not override_role:
+            override_role = models.Role(
+                name=f"override_{current_user.company_id}_{db_role.name}",
+                label=(role_update.label.strip() if role_update.label is not None else db_role.label),
+                company_id=current_user.company_id,
+                permissions_json=json.dumps(sanitized_permissions),
+                menu_order_json=json.dumps(sanitize_view_ids(sanitized_menu_order)),
+                is_system=False,
+                base_role_name=db_role.name
+            )
+            db.add(override_role)
+            db.commit()
+            db.refresh(override_role)
+        else:
+            if role_update.label is not None:
+                override_role.label = role_update.label.strip()
+            override_role.permissions_json = json.dumps(sanitized_permissions)
+            override_role.menu_order_json = json.dumps(sanitize_view_ids(sanitized_menu_order))
+            db.commit()
+            db.refresh(override_role)
+
+        db.query(models.User).filter(
+            models.User.company_id == current_user.company_id,
+            models.User.role_id == db_role.id
+        ).update({"role_id": override_role.id}, synchronize_session=False)
+        db.commit()
+        db.refresh(override_role)
+        return serialize_role(override_role)
+
+    if current_user.company_id and db_role.company_id is None:
         raise HTTPException(status_code=403, detail="No puedes modificar roles globales del sistema")
 
     if role_update.label is not None:
