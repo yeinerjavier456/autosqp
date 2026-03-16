@@ -555,68 +555,127 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                 </div>
                             </div>
                         )}
-                        <div className="mt-4 grid grid-cols-1 xl:grid-cols-[320px,1fr] gap-4">
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-2">Asignado a</label>
-                                <select
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-white focus:ring-blue-500 outline-none font-semibold text-indigo-600"
-                                    value={assignedAdvisor}
-                                    onChange={(e) => {
-                                        setAssignedAdvisor(e.target.value);
-                                        if (onAssign) onAssign(lead.id, e.target.value, selectedSupervisors);
-                                    }}
-                                >
-                                    <option value="">Sin asignar</option>
-                                    {assignableUsers.map(adv => (
-                                        <option key={adv.id} value={adv.id}>
-                                            {adv.full_name || adv.email} - {getDisplayRoleName(adv.role)}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="rounded-xl border border-slate-200 bg-white p-4">
-                                <div className="flex items-center justify-between gap-2">
-                                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Supervision del lead</p>
-                                    <span className="text-[11px] text-slate-400">{selectedSupervisors.length} persona(s)</span>
-                                </div>
-                                <select
-                                    multiple
-                                    value={selectedSupervisors.map(String)}
-                                    onChange={(e) => {
-                                        const values = Array.from(e.target.selectedOptions)
-                                            .map((option) => parseInt(option.value, 10))
-                                            .filter((id) => Number.isInteger(id));
-                                        setSelectedSupervisors(values);
-                                    }}
-                                    className="mt-2 h-40 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                                >
-                                    {supervisorOptions.map((person) => (
-                                        <option key={person.id} value={person.id}>
-                                            {person.full_name || person.email} - {getDisplayRoleName(person.role)}
-                                        </option>
-                                    ))}
-                                </select>
-                                <div className="mt-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                                    <p className="text-xs text-slate-500">
-                                        Usa Ctrl o Cmd para elegir varias personas que deben seguir este lead.
-                                    </p>
-                                    <button
-                                        type="button"
-                                        onClick={handleSaveSupervisorSelection}
-                                        disabled={savingSupervisors}
-                                        className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                        <div className="mt-4 grid grid-cols-1 xl:grid-cols-[360px,1fr] gap-4">
+                            <div className="space-y-4">
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-2">Asignado a</label>
+                                    <select
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-white focus:ring-blue-500 outline-none font-semibold text-indigo-600"
+                                        value={assignedAdvisor}
+                                        onChange={(e) => {
+                                            setAssignedAdvisor(e.target.value);
+                                            if (onAssign) onAssign(lead.id, e.target.value, selectedSupervisors);
+                                        }}
                                     >
-                                        {savingSupervisors ? 'Guardando...' : 'Guardar supervision'}
-                                    </button>
-                                </div>
-                                {selectedSupervisorUsers.length > 0 && (
-                                    <div className="mt-3 flex flex-wrap gap-2">
-                                        {selectedSupervisorUsers.map((person) => (
-                                            <span key={person.id} className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 border border-blue-200">
-                                                {person.full_name || person.email}
-                                            </span>
+                                        <option value="">Sin asignar</option>
+                                        {assignableUsers.map(adv => (
+                                            <option key={adv.id} value={adv.id}>
+                                                {adv.full_name || adv.email} - {getDisplayRoleName(adv.role)}
+                                            </option>
                                         ))}
+                                    </select>
+                                </div>
+                                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Supervision del lead</p>
+                                        <span className="text-[11px] text-slate-400">{selectedSupervisors.length} persona(s)</span>
                                     </div>
+                                    <select
+                                        multiple
+                                        value={selectedSupervisors.map(String)}
+                                        onChange={(e) => {
+                                            const values = Array.from(e.target.selectedOptions)
+                                                .map((option) => parseInt(option.value, 10))
+                                                .filter((id) => Number.isInteger(id));
+                                            setSelectedSupervisors(values);
+                                        }}
+                                        className="mt-2 h-36 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        {supervisorOptions.map((person) => (
+                                            <option key={person.id} value={person.id}>
+                                                {person.full_name || person.email} - {getDisplayRoleName(person.role)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <div className="mt-3 flex flex-col gap-3">
+                                        <p className="text-xs text-slate-500">
+                                            Usa Ctrl o Cmd para elegir varias personas que deben seguir este lead.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={handleSaveSupervisorSelection}
+                                            disabled={savingSupervisors}
+                                            className="self-start rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                                        >
+                                            {savingSupervisors ? 'Guardando...' : 'Guardar supervision'}
+                                        </button>
+                                    </div>
+                                    {selectedSupervisorUsers.length > 0 && (
+                                        <div className="mt-3 flex flex-wrap gap-2">
+                                            {selectedSupervisorUsers.map((person) => (
+                                                <span key={person.id} className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 border border-blue-200">
+                                                    {person.full_name || person.email}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col min-h-[340px]">
+                                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                                    <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                                        <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                                        Conversacion del Cliente ({messages.length})
+                                    </h3>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 custom-scrollbar">
+                                    {loadingMessages ? (
+                                        <div className="text-center text-sm text-gray-400 py-4">Cargando mensajes...</div>
+                                    ) : messages.length > 0 ? (
+                                        messages.map((msg, index) => (
+                                            <div key={msg.id || index} className={`flex flex-col ${msg.sender_type === 'user' ? 'items-end' : 'items-start'}`}>
+                                                <div className="flex items-end gap-1 mb-1">
+                                                    <span className="text-[10px] text-gray-400 font-medium">
+                                                        {msg.sender_type === 'user' ? (msg.sender?.email || 'Nosotros') : lead.name}
+                                                    </span>
+                                                </div>
+                                                <div className={`px-4 py-2 rounded-2xl max-w-[85%] ${msg.sender_type === 'user'
+                                                    ? 'bg-blue-600 text-white rounded-br-sm shadow-sm'
+                                                    : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm'
+                                                    }`}>
+                                                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                                                </div>
+                                                <span className="text-[9px] text-gray-400 mt-1">
+                                                    {new Date(msg.created_at).toLocaleString([], { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}
+                                                </span>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="h-full flex items-center justify-center text-sm text-gray-400">
+                                            No hay mensajes cargados para este lead.
+                                        </div>
+                                    )}
+                                </div>
+                                {(lead.source === 'facebook' || lead.source === 'instagram' || lead.source === 'whatsapp') && (
+                                    <form onSubmit={handleSendReply} className="bg-white border-t border-gray-200 p-3 flex gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder={`Responder por ${lead.source}...`}
+                                            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                            value={replyMessage}
+                                            onChange={(e) => setReplyMessage(e.target.value)}
+                                            disabled={sendingReply}
+                                        />
+                                        <button
+                                            type="submit"
+                                            disabled={!replyMessage.trim() || sendingReply}
+                                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm font-bold transition disabled:opacity-50 flex items-center gap-1"
+                                        >
+                                            {sendingReply ? '...' : (
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                                            )}
+                                        </button>
+                                    </form>
                                 )}
                             </div>
                         </div>
@@ -823,65 +882,6 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                             </button>
                         </form>
                     </div>
-
-                    {/* Chat Messages List */}
-                    {messages.length > 0 && (
-                        <div className="bg-white rounded-xl border border-gray-200 mt-4 overflow-hidden flex flex-col h-80">
-                            <div className="bg-gray-100 px-4 py-2 border-b border-gray-200">
-                                <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-                                    <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                                    Conversación del Cliente ({messages.length})
-                                </h3>
-                            </div>
-                            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 custom-scrollbar">
-                                {loadingMessages ? (
-                                    <div className="text-center text-sm text-gray-400 py-4">Cargando mensajes...</div>
-                                ) : (
-                                    messages.map((msg, index) => (
-                                        <div key={msg.id || index} className={`flex flex-col ${msg.sender_type === 'user' ? 'items-end' : 'items-start'}`}>
-                                            <div className="flex items-end gap-1 mb-1">
-                                                <span className="text-[10px] text-gray-400 font-medium">
-                                                    {msg.sender_type === 'user' ? (msg.sender?.email || 'Nosotros') : lead.name}
-                                                </span>
-                                            </div>
-                                            <div className={`px-4 py-2 rounded-2xl max-w-[85%] ${msg.sender_type === 'user'
-                                                ? 'bg-blue-600 text-white rounded-br-sm shadow-sm'
-                                                : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm'
-                                                }`}>
-                                                <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                                            </div>
-                                            <span className="text-[9px] text-gray-400 mt-1">
-                                                {new Date(msg.created_at).toLocaleString([], { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}
-                                            </span>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-
-                            {/* Reply Input Form */}
-                            {(lead.source === 'facebook' || lead.source === 'instagram' || lead.source === 'whatsapp') && (
-                                <form onSubmit={handleSendReply} className="bg-white border-t border-gray-200 p-2 flex gap-2">
-                                    <input
-                                        type="text"
-                                        placeholder={`Responder por ${lead.source}...`}
-                                        className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                                        value={replyMessage}
-                                        onChange={(e) => setReplyMessage(e.target.value)}
-                                        disabled={sendingReply}
-                                    />
-                                    <button
-                                        type="submit"
-                                        disabled={!replyMessage.trim() || sendingReply}
-                                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm font-bold transition disabled:opacity-50 flex items-center gap-1"
-                                    >
-                                        {sendingReply ? '...' : (
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
-                                        )}
-                                    </button>
-                                </form>
-                            )}
-                        </div>
-                    )}
 
                     {/* History List */}
                     <div>
