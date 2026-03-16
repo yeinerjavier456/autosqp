@@ -2584,7 +2584,17 @@ def update_lead(
         
     process_detail_data = lead_update.process_detail
     
+    allowed_lead_update_fields = {
+        "name",
+        "email",
+        "phone",
+        "status",
+        "message",
+        "assigned_to_id",
+    }
     for field, value in payload_update.items():
+        if field not in allowed_lead_update_fields:
+            continue
         setattr(lead, field, value)
 
     sync_lead_supervisors(db, lead, target_supervisor_ids, current_user.id)
