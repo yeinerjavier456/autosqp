@@ -435,6 +435,13 @@ def maybe_assign_credit_coordinator(
     return coordinator.id, next_supervisor_ids, coordinator
 
 
+def should_keep_assigner_as_supervisor(
+    current_user_id: Optional[int],
+    target_assigned_to_id: Optional[int]
+) -> bool:
+    return bool(current_user_id and target_assigned_to_id and current_user_id != target_assigned_to_id)
+
+
 def should_reset_status_for_board_transfer(previous_role_name: Optional[str], target_role_name: Optional[str]) -> bool:
     return (previous_role_name == "aliado") != (target_role_name == "aliado")
 
@@ -1288,20 +1295,40 @@ def bulk_assign_leads(
     if not target_user.role or target_user.role.name != "asesor":
         raise HTTPException(status_code=400, detail="Solo se pueden asignar leads a usuarios con rol asesor")
 
-    # Update leads
-    # Verify these leads belong to the company
-    leads_to_update = db.query(models.Lead).filter(
+    leads_to_update = db.query(models.Lead).options(joinedload(models.Lead.supervisors)).filter(
         models.Lead.id.in_(payload.lead_ids)
     )
     
     if current_user.company_id:
         leads_to_update = leads_to_update.filter(models.Lead.company_id == current_user.company_id)
     
-    result = leads_to_update.update(
-        {models.Lead.assigned_to_id: payload.assigned_to_id},
-        synchronize_session=False
-    )
-    
+    leads = leads_to_update.all()
+    result = 0
+    for lead in leads:
+        previous_assigned_to_id = lead.assigned_to_id
+        lead.assigned_to_id = payload.assigned_to_id
+        supervisor_ids = normalize_supervisor_ids(getattr(lead, "supervisor_ids", []))
+        if should_keep_assigner_as_supervisor(current_user.id, payload.assigned_to_id):
+            supervisor_ids = ensure_user_in_supervisors(supervisor_ids, current_user.id)
+        sync_lead_supervisors(db, lead, supervisor_ids, current_user.id)
+
+        if previous_assigned_to_id != payload.assigned_to_id:
+            db.add(models.LeadHistory(
+                lead_id=lead.id,
+                user_id=current_user.id,
+                previous_status=lead.status,
+                new_status=lead.status,
+                comment=f"Lead asignado a {target_user.full_name or target_user.email}; quien asigna queda en supervision"
+            ))
+            db.add(models.Notification(
+                user_id=payload.assigned_to_id,
+                title="Lead Asignado",
+                message=f"Se te asigno el lead: {lead.name}. Continúa con la gestion.",
+                type="info",
+                link=build_lead_board_link(target_user, lead.id)
+            ))
+        result += 1
+
     db.commit()
     return {"message": f"Successfully assigned {result} leads to user {target_user.email}"}
 
@@ -1361,6 +1388,8 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
         assigned_to_id=assigned_user_id,
         supervisor_ids=supervisor_ids
     )
+    if should_keep_assigner_as_supervisor(current_user.id, assigned_user_id):
+        supervisor_ids = ensure_user_in_supervisors(supervisor_ids, current_user.id)
 
     new_lead = models.Lead(
         created_at=datetime.datetime.now(),
@@ -2453,7 +2482,7 @@ def create_lead(
         notification = models.Notification(
             user_id=db_lead.assigned_to_id,
             title="Nuevo Lead Asignado",
-            message=f"Se te ha asignado un nuevo lead: {db_lead.name}",
+            message=f"Se te ha asignado un nuevo lead: {db_lead.name}. Continúa con la gestion.",
             type="info",
             link=build_lead_board_link(target_user, db_lead.id)
         )
@@ -2508,6 +2537,9 @@ def update_lead(
     if credit_coordinator:
         target_assigned_user = credit_coordinator
         payload_update['assigned_to_id'] = target_assigned_to_id
+    manual_assignment_requested = lead_update.assigned_to_id is not None
+    if (manual_assignment_requested or credit_coordinator) and should_keep_assigner_as_supervisor(current_user.id, target_assigned_to_id):
+        target_supervisor_ids = ensure_user_in_supervisors(target_supervisor_ids, current_user.id)
     target_role_name = get_user_role_name(target_assigned_user)
     board_transfer = should_reset_status_for_board_transfer(previous_role_name, target_role_name)
     effective_status = enforce_ally_managed_status(
@@ -2584,7 +2616,7 @@ def update_lead(
             user_id=target_assigned_to_id,
             title="Lead Reasignado" if not credit_coordinator else "Lead de crédito asignado",
             message=(
-                f"Se te ha asignado el lead: {lead.name}"
+                f"Se te ha asignado el lead: {lead.name}. Continua con la gestion."
                 if not credit_coordinator
                 else f"Se te ha asignado el lead en solicitud de crédito: {lead.name}"
             ),
