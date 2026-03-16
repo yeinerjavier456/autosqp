@@ -288,6 +288,11 @@ def normalize_role_text(value: Optional[str]) -> str:
         "í": "i",
         "ó": "o",
         "ú": "u",
+        "Ã¡": "a",
+        "Ã©": "e",
+        "Ã­": "i",
+        "Ã³": "o",
+        "Ãº": "u",
         "_": " ",
         "-": " ",
     }

@@ -133,7 +133,12 @@ def read_credits(
     
     # Filter by user company
     if current_user.company_id:
-        query = query.filter(models.CreditApplication.company_id == current_user.company_id)
+        query = query.filter(
+            or_(
+                models.CreditApplication.company_id == current_user.company_id,
+                models.CreditApplication.lead.has(models.Lead.company_id == current_user.company_id)
+            )
+        )
     
     # Filter by Advisor (Asesor) - Only see assigned leads/credits? 
     # Usually credits are handled by admins or specialized agents, but sticking to same logic as leads for now
