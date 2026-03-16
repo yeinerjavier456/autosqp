@@ -65,7 +65,7 @@ const InventoryList = () => {
                 'available': 'Disponible',
                 'alistamiento': 'Alistamiento',
                 'desembolso': 'Desembolso',
-                'reserved': 'Reservado',
+                'reserved': 'Separado',
                 'sold': 'Vendido'
             },
             inputValue: vehicle.status,
@@ -306,7 +306,7 @@ const InventoryList = () => {
                                                     vehicle.status === 'sold' ? 'Vendido' :
                                                         vehicle.status === 'alistamiento' ? 'Alistamiento' :
                                                             vehicle.status === 'desembolso' ? 'Desembolso' :
-                                                                'Reservado'}
+                                                                'Separado'}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">

@@ -2068,6 +2068,37 @@ def upsert_lead_process_detail(db: Session, lead_id: int, interested_vehicle: st
             desired_vehicle=interested_vehicle
         ))
 
+
+def sync_vehicle_reservation_for_lead(
+    db: Session,
+    lead_id: int,
+    previous_vehicle_id: Optional[int],
+    next_vehicle_id: Optional[int]
+):
+    if previous_vehicle_id == next_vehicle_id:
+        return
+
+    if previous_vehicle_id:
+        other_lead_holds = db.query(models.LeadProcessDetail).filter(
+            models.LeadProcessDetail.vehicle_id == previous_vehicle_id,
+            models.LeadProcessDetail.lead_id != lead_id
+        ).count()
+        pending_sale = db.query(models.Sale).filter(
+            models.Sale.vehicle_id == previous_vehicle_id,
+            models.Sale.status == models.SaleStatus.PENDING.value
+        ).first()
+        previous_vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == previous_vehicle_id).first()
+        if previous_vehicle and previous_vehicle.status == models.VehicleStatus.RESERVED.value and not other_lead_holds and not pending_sale:
+            previous_vehicle.status = models.VehicleStatus.AVAILABLE.value
+
+    if next_vehicle_id:
+        next_vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == next_vehicle_id).first()
+        if not next_vehicle:
+            raise HTTPException(status_code=404, detail="Vehicle not found")
+        if next_vehicle.status == models.VehicleStatus.SOLD.value:
+            raise HTTPException(status_code=400, detail="El vehículo ya fue vendido")
+        next_vehicle.status = models.VehicleStatus.RESERVED.value
+
 def sync_public_chat_to_lead_conversation(db: Session, session: models.PublicChatSession):
     if not session.lead_id:
         return
@@ -2618,6 +2649,8 @@ def update_lead(
         db.add(new_history)
         
     process_detail_data = lead_update.process_detail
+    previous_process_detail = db.query(models.LeadProcessDetail).filter(models.LeadProcessDetail.lead_id == lead.id).first()
+    previous_vehicle_id = previous_process_detail.vehicle_id if previous_process_detail else None
     
     allowed_lead_update_fields = {
         "name",
@@ -2646,6 +2679,13 @@ def update_lead(
                 **process_detail_data.dict()
             )
             db.add(new_detail)
+
+        sync_vehicle_reservation_for_lead(
+            db=db,
+            lead_id=lead.id,
+            previous_vehicle_id=previous_vehicle_id,
+            next_vehicle_id=process_detail_data.vehicle_id if process_detail_data.has_vehicle else None
+        )
 
     # Auto-create/update credit request queue when lead enters credit stage
     upsert_credit_application_from_lead(db, lead, lead_update.comment)
@@ -3137,6 +3177,36 @@ def approve_sale(
     if vehicle:
         vehicle.status = "sold"
         
+    db.commit()
+    db.refresh(sale)
+    return sale
+
+
+@app.put("/sales/{sale_id}/reject", response_model=schemas.Sale)
+def reject_sale(
+    sale_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if current_user.role.name not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Only admins can reject sales")
+
+    sale = db.query(models.Sale).filter(models.Sale.id == sale_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+
+    if sale.status == models.SaleStatus.REJECTED.value:
+        raise HTTPException(status_code=400, detail="Sale already rejected")
+    if sale.status == models.SaleStatus.APPROVED.value:
+        raise HTTPException(status_code=400, detail="Approved sales cannot be rejected")
+
+    sale.status = models.SaleStatus.REJECTED.value
+    sale.approved_by_id = current_user.id
+
+    vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == sale.vehicle_id).first()
+    if vehicle and vehicle.status != models.VehicleStatus.SOLD.value:
+        vehicle.status = models.VehicleStatus.AVAILABLE.value
+
     db.commit()
     db.refresh(sale)
     return sale

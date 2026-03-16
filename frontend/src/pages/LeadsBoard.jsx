@@ -235,6 +235,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
     // Reply State
     const [replyMessage, setReplyMessage] = useState('');
     const [sendingReply, setSendingReply] = useState(false);
+    const [isLeadHeaderCollapsed, setIsLeadHeaderCollapsed] = useState(false);
 
     // Reminder State
     const [reminderDate, setReminderDate] = useState('');
@@ -525,7 +526,17 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                 </span>
                             )}
                         </div>
-                        {(lead.message || lead.created_at) && (
+                        <div className="mt-4 flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setIsLeadHeaderCollapsed((prev) => !prev)}
+                                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+                            >
+                                <svg className={`h-4 w-4 transition-transform ${isLeadHeaderCollapsed ? '-rotate-90' : 'rotate-0'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                                {isLeadHeaderCollapsed ? 'Expandir cabecera' : 'Colapsar cabecera'}
+                            </button>
+                        </div>
+                        {!isLeadHeaderCollapsed && (lead.message || lead.created_at) && (
                             <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                     <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Resumen del lead</p>
@@ -540,7 +551,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                 </p>
                             </div>
                         )}
-                        {lead.credit_application_status && (
+                        {!isLeadHeaderCollapsed && lead.credit_application_status && (
                             <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                                 <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-700">Estado de la solicitud de credito</p>
                                 <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-emerald-900">
@@ -555,6 +566,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                 </div>
                             </div>
                         )}
+                        {!isLeadHeaderCollapsed && (
                         <div className="mt-4 grid grid-cols-1 xl:grid-cols-[360px,1fr] gap-4">
                             <div className="space-y-4">
                                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -679,6 +691,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                 )}
                             </div>
                         </div>
+                        )}
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition">
                         <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>

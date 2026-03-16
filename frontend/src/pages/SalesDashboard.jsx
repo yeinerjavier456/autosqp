@@ -71,6 +71,36 @@ const SalesDashboard = () => {
         }
     };
 
+    const handleReject = async (saleId) => {
+        const result = await Swal.fire({
+            title: 'Negar solicitud de venta',
+            text: "La venta quedará negada y el vehículo volverá a disponible.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, negar venta',
+            cancelButtonText: 'Cancelar',
+            customClass: {
+                confirmButton: 'bg-red-600 text-white px-4 py-2 rounded-lg ml-2',
+                cancelButton: 'bg-slate-600 text-white px-4 py-2 rounded-lg'
+            },
+            buttonsStyling: false
+        });
+
+        if (!result.isConfirmed) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            await axios.put(`https://autosqp.co/api/sales/${saleId}/reject`, {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            Swal.fire('Éxito', "Venta negada y vehículo liberado", 'success');
+            fetchData();
+        } catch (error) {
+            console.error(error);
+            Swal.fire('Error', "Error al negar: " + (error.response?.data?.detail || error.message), 'error');
+        }
+    };
+
     if (loading && !stats) return <div className="p-10 text-center">Cargando finanzas...</div>;
 
     return (
@@ -193,12 +223,20 @@ const SalesDashboard = () => {
                                     </td>
                                     {filterStatus === 'pending' && (
                                         <td className="p-4 text-right">
-                                            <button
-                                                onClick={() => handleApprove(sale.id)}
-                                                className="bg-green-100 text-green-700 px-3 py-1.5 rounded hover:bg-green-200 text-sm font-medium transition"
-                                            >
-                                                Aprobar
-                                            </button>
+                                            <div className="flex justify-end gap-2">
+                                                <button
+                                                    onClick={() => handleApprove(sale.id)}
+                                                    className="bg-green-100 text-green-700 px-3 py-1.5 rounded hover:bg-green-200 text-sm font-medium transition"
+                                                >
+                                                    Aprobar
+                                                </button>
+                                                <button
+                                                    onClick={() => handleReject(sale.id)}
+                                                    className="bg-red-100 text-red-700 px-3 py-1.5 rounded hover:bg-red-200 text-sm font-medium transition"
+                                                >
+                                                    Negar
+                                                </button>
+                                            </div>
                                         </td>
                                     )}
                                 </tr>
