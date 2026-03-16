@@ -125,7 +125,7 @@ def read_credits(
     current_user: models.User = Depends(get_current_user)
 ):
     effective_role_name = getattr(getattr(current_user, "role", None), "base_role_name", None) or getattr(getattr(current_user, "role", None), "name", None)
-    if current_user.company_id and effective_role_name != 'super_admin':
+    if current_user.company_id:
         sync_credit_applications_for_company(db, current_user.company_id)
 
     query = db.query(models.CreditApplication).options(
@@ -133,7 +133,7 @@ def read_credits(
     )
     
     # Filter by user company
-    if current_user.company_id and effective_role_name != 'super_admin':
+    if current_user.company_id:
         query = query.filter(
             or_(
                 models.CreditApplication.company_id == current_user.company_id,
