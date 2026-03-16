@@ -3,9 +3,12 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import Swal from 'sweetalert2';
+import { useNavigate } from 'react-router-dom';
 
 const CreditBoard = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
+    const leadBoardPath = (user?.role?.name || user?.role) === 'aliado' ? '/aliado/dashboard' : '/admin/leads';
     const [credits, setCredits] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);
@@ -137,6 +140,17 @@ const CreditBoard = () => {
         return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(val);
     };
 
+    const getCreditStatusLabel = (status) => {
+        switch (status) {
+            case 'pending': return 'Solicitud recibida';
+            case 'in_review': return 'En estudio';
+            case 'approved': return 'Aprobado';
+            case 'rejected': return 'No viable';
+            case 'completed': return 'Finalizado';
+            default: return status || 'Sin estado';
+        }
+    };
+
     return (
         <div className="p-8 min-h-screen">
             <div className="flex justify-between items-center mb-8">
@@ -193,6 +207,16 @@ const CreditBoard = () => {
                                                         </div>
 
                                                         <div className="space-y-1 text-xs text-slate-500">
+                                                            <div className="flex justify-between gap-2">
+                                                                <span>Telefono:</span>
+                                                                <span className="font-medium text-slate-700 truncate">{credit.phone || 'Sin telefono'}</span>
+                                                            </div>
+                                                            {credit.email && (
+                                                                <div className="flex justify-between gap-2">
+                                                                    <span>Email:</span>
+                                                                    <span className="font-medium text-slate-700 truncate">{credit.email}</span>
+                                                                </div>
+                                                            )}
                                                             <div className="flex justify-between">
                                                                 <span>Ingresos M.:</span>
                                                                 <span className="font-medium text-slate-700">{formatCurrency(credit.monthly_income)}</span>
@@ -202,6 +226,12 @@ const CreditBoard = () => {
                                                                 <span className="font-medium text-slate-700">{formatCurrency(credit.down_payment)}</span>
                                                             </div>
                                                         </div>
+
+                                                        {credit.notes && (
+                                                            <p className="mt-3 text-xs text-slate-600 bg-slate-50 rounded-lg border border-slate-100 p-2 line-clamp-3">
+                                                                {credit.notes}
+                                                            </p>
+                                                        )}
 
                                                         <div className="mt-3 pt-3 border-t border-slate-50 flex justify-between items-center">
                                                             <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border 
@@ -298,6 +328,62 @@ const CreditBoard = () => {
                                 <button type="submit" className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-bold shadow-lg">Crear Solicitud</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {selectedCredit && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedCredit(null)}>
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl border border-gray-100 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-4 mb-6">
+                            <div>
+                                <h2 className="text-2xl font-bold text-slate-800">Solicitud #{selectedCredit.id}</h2>
+                                <p className="text-slate-500 mt-1">{selectedCredit.client_name}</p>
+                            </div>
+                            <button onClick={() => setSelectedCredit(null)} className="text-2xl text-gray-400 hover:text-gray-600">&times;</button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Cliente</p>
+                                <div className="space-y-2 text-sm text-slate-700">
+                                    <p><span className="font-semibold">Telefono:</span> {selectedCredit.phone || 'Sin telefono'}</p>
+                                    <p><span className="font-semibold">Email:</span> {selectedCredit.email || 'Sin email'}</p>
+                                    <p><span className="font-semibold">Vehiculo:</span> {selectedCredit.desired_vehicle}</p>
+                                </div>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Proceso</p>
+                                <div className="space-y-2 text-sm text-slate-700">
+                                    <p><span className="font-semibold">Estado:</span> {getCreditStatusLabel(selectedCredit.status)}</p>
+                                    <p><span className="font-semibold">Ingresos:</span> {formatCurrency(selectedCredit.monthly_income || 0)}</p>
+                                    <p><span className="font-semibold">Cuota inicial:</span> {formatCurrency(selectedCredit.down_payment || 0)}</p>
+                                    <p><span className="font-semibold">Ocupacion:</span> {selectedCredit.occupation}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 bg-white p-4 mb-6">
+                            <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Notas de la solicitud</p>
+                            <p className="text-sm text-slate-700 whitespace-pre-wrap">{selectedCredit.notes || 'Sin notas registradas.'}</p>
+                        </div>
+
+                        <div className="flex flex-wrap justify-end gap-3">
+                            {selectedCredit.lead_id && (
+                                <button
+                                    onClick={() => navigate(`${leadBoardPath}?leadId=${selectedCredit.lead_id}`)}
+                                    className="px-4 py-2 rounded-xl border border-blue-200 text-blue-700 font-semibold hover:bg-blue-50"
+                                >
+                                    Abrir lead relacionado
+                                </button>
+                            )}
+                            <button
+                                onClick={() => setSelectedCredit(null)}
+                                className="px-4 py-2 rounded-xl bg-slate-800 text-white font-semibold hover:bg-slate-900"
+                            >
+                                Cerrar
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

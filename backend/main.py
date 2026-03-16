@@ -772,6 +772,27 @@ def read_leads(
     total = query.count()
     leads = query.order_by(models.Lead.id.desc()).offset(skip).limit(limit).all()
 
+    lead_ids = [lead.id for lead in leads]
+    credit_map = {}
+    if lead_ids:
+        related_credits = db.query(models.CreditApplication).filter(
+            models.CreditApplication.lead_id.in_(lead_ids)
+        ).order_by(
+            models.CreditApplication.updated_at.desc(),
+            models.CreditApplication.created_at.desc()
+        ).all()
+
+        for credit in related_credits:
+            if credit.lead_id and credit.lead_id not in credit_map:
+                credit_map[credit.lead_id] = credit
+
+    for lead in leads:
+        related_credit = credit_map.get(lead.id)
+        if related_credit:
+            lead.credit_application_id = related_credit.id
+            lead.credit_application_status = related_credit.status
+            lead.credit_application_updated_at = related_credit.updated_at
+
     return {"items": leads, "total": total}
 
 @app.put("/leads/bulk-assign", status_code=200)

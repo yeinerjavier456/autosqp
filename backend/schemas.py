@@ -312,6 +312,9 @@ class Lead(LeadBase):
     created_at: datetime
     created_by_id: Optional[int] = None
     assigned_to: Optional[User] = None
+    credit_application_id: Optional[int] = None
+    credit_application_status: Optional[str] = None
+    credit_application_updated_at: Optional[datetime] = None
     history: List[LeadHistory] = []
     conversation: Optional[Conversation] = None
     process_detail: Optional[LeadProcessDetail] = None

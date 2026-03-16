@@ -16,6 +16,19 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
         }
     };
 
+    const getCreditStatusMeta = (creditStatus) => {
+        switch (creditStatus) {
+            case 'pending': return { label: 'Solicitud recibida', className: 'bg-amber-100 text-amber-800 border-amber-200' };
+            case 'in_review': return { label: 'En estudio', className: 'bg-sky-100 text-sky-800 border-sky-200' };
+            case 'approved': return { label: 'Aprobado', className: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+            case 'rejected': return { label: 'No viable', className: 'bg-rose-100 text-rose-800 border-rose-200' };
+            case 'completed': return { label: 'Finalizado', className: 'bg-indigo-100 text-indigo-800 border-indigo-200' };
+            default: return null;
+        }
+    };
+
+    const creditStatusMeta = getCreditStatusMeta(lead.credit_application_status);
+
     return (
         <div
             id={`lead-card-${lead.id}`}
@@ -72,6 +85,13 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
             <p className="text-sm text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 italic mb-3">
                 "{lead.message}"
             </p>
+
+            {creditStatusMeta && (
+                <div className={`mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wide ${creditStatusMeta.className}`}>
+                    <span className="h-2 w-2 rounded-full bg-current opacity-70"></span>
+                    Credito: {creditStatusMeta.label}
+                </div>
+            )}
 
             {/* Actions Footer */}
             <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-auto">
@@ -307,6 +327,17 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
         });
     };
 
+    const getCreditStatusLabel = (creditStatus) => {
+        switch (creditStatus) {
+            case 'pending': return 'Solicitud recibida';
+            case 'in_review': return 'En estudio';
+            case 'approved': return 'Aprobado';
+            case 'rejected': return 'No viable';
+            case 'completed': return 'Finalizado';
+            default: return creditStatus || '';
+        }
+    };
+
     const hasManualCreationEntry = Array.isArray(lead.history) && lead.history.some((record) => {
         if (!record) return false;
         const normalizedComment = (record.comment || '').trim();
@@ -426,6 +457,21 @@ const HistoryModal = ({ lead, onClose, onUpdate, advisors, onAssign, availableVe
                                 <p className="mt-2 text-sm text-slate-700 whitespace-pre-wrap">
                                     {lead.message || 'Sin descripcion inicial registrada.'}
                                 </p>
+                            </div>
+                        )}
+                        {lead.credit_application_status && (
+                            <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                                <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-700">Estado de la solicitud de credito</p>
+                                <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-emerald-900">
+                                    <span className="rounded-full bg-white px-3 py-1 font-semibold border border-emerald-200">
+                                        {getCreditStatusLabel(lead.credit_application_status)}
+                                    </span>
+                                    {lead.credit_application_updated_at && (
+                                        <span className="text-xs text-emerald-700">
+                                            Actualizado: {formatLeadDate(lead.credit_application_updated_at)}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         )}
                         <div className="text-sm text-gray-500 mt-2 flex items-center gap-2">Asignado a:
