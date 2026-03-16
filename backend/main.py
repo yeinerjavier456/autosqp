@@ -17,7 +17,7 @@ import time
 import re
 import json
 import random
-from view_registry import SYSTEM_VIEWS, DEFAULT_ROLE_VIEW_ACCESS, DEFAULT_ROLE_MENU_ORDER, VALID_VIEW_IDS
+from view_registry import SYSTEM_VIEWS, DEFAULT_ROLE_VIEW_ACCESS, DEFAULT_ROLE_MENU_ORDER, VALID_VIEW_IDS, COMPANY_VIEW_IDS
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi.responses import FileResponse
@@ -293,21 +293,25 @@ def parse_json_list(value: Optional[str], fallback: Optional[List[str]] = None) 
     return fallback[:] if fallback else []
 
 
-def sanitize_view_ids(view_ids: Optional[List[str]]) -> List[str]:
+def sanitize_view_ids(view_ids: Optional[List[str]], company_id: Optional[int] = None) -> List[str]:
     if not view_ids:
         return []
     sanitized = []
     for view_id in view_ids:
         normalized = str(view_id)
-        if normalized in VALID_VIEW_IDS and normalized not in sanitized:
+        if normalized not in VALID_VIEW_IDS:
+            continue
+        if company_id and normalized not in COMPANY_VIEW_IDS:
+            continue
+        if normalized not in sanitized:
             sanitized.append(normalized)
     return sanitized
 
 
 def serialize_role(role: models.Role) -> schemas.Role:
     default_permissions = DEFAULT_ROLE_VIEW_ACCESS.get(role.name, [])
-    permissions = sanitize_view_ids(parse_json_list(getattr(role, "permissions_json", None), default_permissions))
-    menu_order = sanitize_view_ids(parse_json_list(getattr(role, "menu_order_json", None), DEFAULT_ROLE_MENU_ORDER.get(role.name, permissions)))
+    permissions = sanitize_view_ids(parse_json_list(getattr(role, "permissions_json", None), default_permissions), getattr(role, "company_id", None))
+    menu_order = sanitize_view_ids(parse_json_list(getattr(role, "menu_order_json", None), DEFAULT_ROLE_MENU_ORDER.get(role.name, permissions)), getattr(role, "company_id", None))
 
     for view_id in permissions:
         if view_id not in menu_order:
@@ -829,8 +833,8 @@ def create_role(
     if not current_user.company_id and current_user.role and current_user.role.name != "super_admin":
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    sanitized_permissions = sanitize_view_ids(role.permissions)
-    sanitized_menu_order = sanitize_view_ids(role.menu_order)
+    sanitized_permissions = sanitize_view_ids(role.permissions, current_user.company_id)
+    sanitized_menu_order = sanitize_view_ids(role.menu_order, current_user.company_id)
     for view_id in sanitized_permissions:
         if view_id not in sanitized_menu_order:
             sanitized_menu_order.append(view_id)
@@ -868,8 +872,8 @@ def update_role(
         raise HTTPException(status_code=403, detail="Not authorized")
 
     if current_user.company_id and db_role.is_system and db_role.company_id is None:
-        sanitized_permissions = sanitize_view_ids(role_update.permissions) if role_update.permissions is not None else DEFAULT_ROLE_VIEW_ACCESS.get(db_role.name, [])
-        sanitized_menu_order = sanitize_view_ids(role_update.menu_order) if role_update.menu_order is not None else DEFAULT_ROLE_MENU_ORDER.get(db_role.name, sanitized_permissions)
+        sanitized_permissions = sanitize_view_ids(role_update.permissions, current_user.company_id) if role_update.permissions is not None else sanitize_view_ids(DEFAULT_ROLE_VIEW_ACCESS.get(db_role.name, []), current_user.company_id)
+        sanitized_menu_order = sanitize_view_ids(role_update.menu_order, current_user.company_id) if role_update.menu_order is not None else sanitize_view_ids(DEFAULT_ROLE_MENU_ORDER.get(db_role.name, sanitized_permissions), current_user.company_id)
         for view_id in sanitized_permissions:
             if view_id not in sanitized_menu_order:
                 sanitized_menu_order.append(view_id)
@@ -881,7 +885,7 @@ def update_role(
                 label=(role_update.label.strip() if role_update.label is not None else db_role.label),
                 company_id=current_user.company_id,
                 permissions_json=json.dumps(sanitized_permissions),
-                menu_order_json=json.dumps(sanitize_view_ids(sanitized_menu_order)),
+                menu_order_json=json.dumps(sanitize_view_ids(sanitized_menu_order, current_user.company_id)),
                 is_system=False,
                 base_role_name=db_role.name
             )
@@ -892,7 +896,7 @@ def update_role(
             if role_update.label is not None:
                 override_role.label = role_update.label.strip()
             override_role.permissions_json = json.dumps(sanitized_permissions)
-            override_role.menu_order_json = json.dumps(sanitize_view_ids(sanitized_menu_order))
+            override_role.menu_order_json = json.dumps(sanitize_view_ids(sanitized_menu_order, current_user.company_id))
             db.commit()
             db.refresh(override_role)
 
@@ -910,16 +914,16 @@ def update_role(
     if role_update.label is not None:
         db_role.label = role_update.label.strip()
     if role_update.permissions is not None:
-        sanitized_permissions = sanitize_view_ids(role_update.permissions)
+        sanitized_permissions = sanitize_view_ids(role_update.permissions, current_user.company_id or db_role.company_id)
         db_role.permissions_json = json.dumps(sanitized_permissions)
-        current_menu = sanitize_view_ids(role_update.menu_order) if role_update.menu_order is not None else parse_json_list(db_role.menu_order_json, sanitized_permissions)
+        current_menu = sanitize_view_ids(role_update.menu_order, current_user.company_id or db_role.company_id) if role_update.menu_order is not None else parse_json_list(db_role.menu_order_json, sanitized_permissions)
         for view_id in sanitized_permissions:
             if view_id not in current_menu:
                 current_menu.append(view_id)
-        db_role.menu_order_json = json.dumps(sanitize_view_ids(current_menu))
+        db_role.menu_order_json = json.dumps(sanitize_view_ids(current_menu, current_user.company_id or db_role.company_id))
     elif role_update.menu_order is not None:
-        current_permissions = sanitize_view_ids(parse_json_list(db_role.permissions_json, DEFAULT_ROLE_VIEW_ACCESS.get(db_role.name, [])))
-        current_menu = sanitize_view_ids(role_update.menu_order)
+        current_permissions = sanitize_view_ids(parse_json_list(db_role.permissions_json, DEFAULT_ROLE_VIEW_ACCESS.get(db_role.name, [])), current_user.company_id or db_role.company_id)
+        current_menu = sanitize_view_ids(role_update.menu_order, current_user.company_id or db_role.company_id)
         for view_id in current_permissions:
             if view_id not in current_menu:
                 current_menu.append(view_id)

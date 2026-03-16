@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import Swal from 'sweetalert2';
-import { SYSTEM_VIEWS } from '../config/views';
+import { useAuth } from '../context/AuthContext';
+import { SYSTEM_VIEWS, getVisibleSystemViews } from '../config/views';
 
 const RolesConfig = () => {
+    const { user } = useAuth();
     const [roles, setRoles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -18,6 +20,7 @@ const RolesConfig = () => {
         () => roles.find((role) => role.id === selectedRoleId) || null,
         [roles, selectedRoleId]
     );
+    const availableViews = useMemo(() => getVisibleSystemViews(user), [user]);
 
     const fetchRoles = async () => {
         setLoading(true);
@@ -223,7 +226,7 @@ const RolesConfig = () => {
                         <div>
                             <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500 mb-3">Vistas con acceso</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {SYSTEM_VIEWS.map((view) => {
+                                {availableViews.map((view) => {
                                     const checked = form.permissions.includes(view.id);
                                     return (
                                         <label key={view.id} className={`flex items-start gap-3 rounded-xl border p-4 cursor-pointer transition ${checked ? 'border-blue-400 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}>
@@ -250,7 +253,7 @@ const RolesConfig = () => {
                                     <p className="text-sm text-slate-400">Selecciona vistas para ordenar el menu.</p>
                                 )}
                                 {form.menu_order.map((viewId, index) => {
-                                    const view = SYSTEM_VIEWS.find((item) => item.id === viewId);
+                                    const view = availableViews.find((item) => item.id === viewId);
                                     if (!view) return null;
                                     return (
                                         <div key={viewId} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3">

@@ -1,23 +1,23 @@
 SYSTEM_VIEWS = [
-    {"id": "dashboard", "label": "Dashboard", "path": "/admin/dashboard"},
-    {"id": "users", "label": "Usuarios", "path": "/admin/users"},
-    {"id": "roles", "label": "Roles y permisos", "path": "/admin/roles"},
-    {"id": "integrations", "label": "Configuracion", "path": "/admin/integrations"},
-    {"id": "logs", "label": "Auditoria / Logs", "path": "/admin/logs"},
-    {"id": "companies", "label": "Empresas globales", "path": "/admin/companies-list"},
-    {"id": "inventory", "label": "Inventario", "path": "/admin/inventory"},
-    {"id": "leads_board", "label": "Tablero de leads", "path": "/admin/leads"},
-    {"id": "ally_board", "label": "Tablero de aliados", "path": "/aliado/dashboard"},
-    {"id": "alerts", "label": "Alertas automaticas", "path": "/admin/alerts"},
-    {"id": "sales", "label": "Finanzas y ventas", "path": "/admin/sales"},
-    {"id": "my_sales", "label": "Mis ventas", "path": "/admin/my-sales"},
-    {"id": "credits", "label": "Solicitudes / creditos", "path": "/admin/credits"},
-    {"id": "facebook_leads", "label": "Facebook leads", "path": "/admin/leads/facebook"},
-    {"id": "tiktok_leads", "label": "TikTok leads", "path": "/admin/leads/tiktok"},
-    {"id": "whatsapp_leads", "label": "WhatsApp leads", "path": "/admin/leads/whatsapp"},
-    {"id": "instagram_leads", "label": "Instagram leads", "path": "/admin/leads/instagram"},
-    {"id": "internal_chat", "label": "Chat interno", "path": "/internal-chat"},
-    {"id": "whatsapp_dashboard", "label": "Mensajeria WhatsApp", "path": "/admin/whatsapp"},
+    {"id": "dashboard", "label": "Dashboard", "path": "/admin/dashboard", "scope": "company"},
+    {"id": "users", "label": "Usuarios", "path": "/admin/users", "scope": "company"},
+    {"id": "roles", "label": "Roles y permisos", "path": "/admin/roles", "scope": "company"},
+    {"id": "integrations", "label": "Configuracion", "path": "/admin/integrations", "scope": "company"},
+    {"id": "logs", "label": "Auditoria / Logs", "path": "/admin/logs", "scope": "company"},
+    {"id": "companies", "label": "Empresas globales", "path": "/admin/companies-list", "scope": "global"},
+    {"id": "inventory", "label": "Inventario", "path": "/admin/inventory", "scope": "company"},
+    {"id": "leads_board", "label": "Tablero de leads", "path": "/admin/leads", "scope": "company"},
+    {"id": "ally_board", "label": "Tablero de aliados", "path": "/aliado/dashboard", "scope": "company"},
+    {"id": "alerts", "label": "Alertas automaticas", "path": "/admin/alerts", "scope": "company"},
+    {"id": "sales", "label": "Finanzas y ventas", "path": "/admin/sales", "scope": "company"},
+    {"id": "my_sales", "label": "Mis ventas", "path": "/admin/my-sales", "scope": "company"},
+    {"id": "credits", "label": "Solicitudes / creditos", "path": "/admin/credits", "scope": "company"},
+    {"id": "facebook_leads", "label": "Facebook leads", "path": "/admin/leads/facebook", "scope": "company"},
+    {"id": "tiktok_leads", "label": "TikTok leads", "path": "/admin/leads/tiktok", "scope": "company"},
+    {"id": "whatsapp_leads", "label": "WhatsApp leads", "path": "/admin/leads/whatsapp", "scope": "company"},
+    {"id": "instagram_leads", "label": "Instagram leads", "path": "/admin/leads/instagram", "scope": "company"},
+    {"id": "internal_chat", "label": "Chat interno", "path": "/internal-chat", "scope": "company"},
+    {"id": "whatsapp_dashboard", "label": "Mensajeria WhatsApp", "path": "/admin/whatsapp", "scope": "company"},
 ]
 
 DEFAULT_ROLE_VIEW_ACCESS = {
@@ -44,3 +44,4 @@ DEFAULT_ROLE_MENU_ORDER = {
 }
 
 VALID_VIEW_IDS = {view["id"] for view in SYSTEM_VIEWS}
+COMPANY_VIEW_IDS = {view["id"] for view in SYSTEM_VIEWS if view.get("scope") != "global"}

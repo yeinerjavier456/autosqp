@@ -1,23 +1,23 @@
 export const SYSTEM_VIEWS = [
-    { id: 'dashboard', label: 'Dashboard', path: '/admin/dashboard', menuLabel: 'Dashboard', section: 'general' },
-    { id: 'users', label: 'Usuarios', path: '/admin/users', menuLabel: 'Usuarios', section: 'admin' },
-    { id: 'roles', label: 'Roles y permisos', path: '/admin/roles', menuLabel: 'Roles y permisos', section: 'admin' },
-    { id: 'integrations', label: 'Configuracion', path: '/admin/integrations', menuLabel: 'Configuracion', section: 'admin' },
-    { id: 'logs', label: 'Auditoria / Logs', path: '/admin/logs', menuLabel: 'Auditoria / Logs', section: 'admin' },
-    { id: 'companies', label: 'Empresas globales', path: '/admin/companies-list', menuLabel: 'Empresas Globales', section: 'global' },
-    { id: 'inventory', label: 'Inventario', path: '/admin/inventory', menuLabel: 'Inventario', section: 'crm' },
-    { id: 'leads_board', label: 'Tablero de leads', path: '/admin/leads', menuLabel: 'Tablero de Leads', section: 'crm' },
-    { id: 'ally_board', label: 'Tablero de aliados', path: '/aliado/dashboard', menuLabel: 'Tablero Aliados', section: 'crm' },
-    { id: 'alerts', label: 'Alertas automaticas', path: '/admin/alerts', menuLabel: 'Alertas Auto', section: 'crm' },
-    { id: 'sales', label: 'Finanzas y ventas', path: '/admin/sales', menuLabel: 'Finanzas y Ventas', section: 'crm' },
-    { id: 'my_sales', label: 'Mis ventas', path: '/admin/my-sales', menuLabel: 'Mis Ventas', section: 'crm' },
-    { id: 'credits', label: 'Solicitudes / creditos', path: '/admin/credits', menuLabel: 'Solicitudes / Creditos', section: 'crm' },
-    { id: 'facebook_leads', label: 'Facebook leads', path: '/admin/leads/facebook', menuLabel: 'Facebook Leads', section: 'channels' },
-    { id: 'tiktok_leads', label: 'TikTok leads', path: '/admin/leads/tiktok', menuLabel: 'TikTok Leads', section: 'channels' },
-    { id: 'whatsapp_leads', label: 'WhatsApp leads', path: '/admin/leads/whatsapp', menuLabel: 'WhatsApp', section: 'channels' },
-    { id: 'instagram_leads', label: 'Instagram leads', path: '/admin/leads/instagram', menuLabel: 'Instagram', section: 'channels' },
-    { id: 'internal_chat', label: 'Chat interno', path: '/internal-chat', menuLabel: 'Chat Interno', section: 'channels' },
-    { id: 'whatsapp_dashboard', label: 'Mensajeria WhatsApp', path: '/admin/whatsapp', menuLabel: 'Mensajeria WhatsApp', section: 'channels' },
+    { id: 'dashboard', label: 'Dashboard', path: '/admin/dashboard', menuLabel: 'Dashboard', section: 'general', scope: 'company' },
+    { id: 'users', label: 'Usuarios', path: '/admin/users', menuLabel: 'Usuarios', section: 'admin', scope: 'company' },
+    { id: 'roles', label: 'Roles y permisos', path: '/admin/roles', menuLabel: 'Roles y permisos', section: 'admin', scope: 'company' },
+    { id: 'integrations', label: 'Configuracion', path: '/admin/integrations', menuLabel: 'Configuracion', section: 'admin', scope: 'company' },
+    { id: 'logs', label: 'Auditoria / Logs', path: '/admin/logs', menuLabel: 'Auditoria / Logs', section: 'admin', scope: 'company' },
+    { id: 'companies', label: 'Empresas globales', path: '/admin/companies-list', menuLabel: 'Empresas Globales', section: 'global', scope: 'global' },
+    { id: 'inventory', label: 'Inventario', path: '/admin/inventory', menuLabel: 'Inventario', section: 'crm', scope: 'company' },
+    { id: 'leads_board', label: 'Tablero de leads', path: '/admin/leads', menuLabel: 'Tablero de Leads', section: 'crm', scope: 'company' },
+    { id: 'ally_board', label: 'Tablero de aliados', path: '/aliado/dashboard', menuLabel: 'Tablero Aliados', section: 'crm', scope: 'company' },
+    { id: 'alerts', label: 'Alertas automaticas', path: '/admin/alerts', menuLabel: 'Alertas Auto', section: 'crm', scope: 'company' },
+    { id: 'sales', label: 'Finanzas y ventas', path: '/admin/sales', menuLabel: 'Finanzas y Ventas', section: 'crm', scope: 'company' },
+    { id: 'my_sales', label: 'Mis ventas', path: '/admin/my-sales', menuLabel: 'Mis Ventas', section: 'crm', scope: 'company' },
+    { id: 'credits', label: 'Solicitudes / creditos', path: '/admin/credits', menuLabel: 'Solicitudes / Creditos', section: 'crm', scope: 'company' },
+    { id: 'facebook_leads', label: 'Facebook leads', path: '/admin/leads/facebook', menuLabel: 'Facebook Leads', section: 'channels', scope: 'company' },
+    { id: 'tiktok_leads', label: 'TikTok leads', path: '/admin/leads/tiktok', menuLabel: 'TikTok Leads', section: 'channels', scope: 'company' },
+    { id: 'whatsapp_leads', label: 'WhatsApp leads', path: '/admin/leads/whatsapp', menuLabel: 'WhatsApp', section: 'channels', scope: 'company' },
+    { id: 'instagram_leads', label: 'Instagram leads', path: '/admin/leads/instagram', menuLabel: 'Instagram', section: 'channels', scope: 'company' },
+    { id: 'internal_chat', label: 'Chat interno', path: '/internal-chat', menuLabel: 'Chat Interno', section: 'channels', scope: 'company' },
+    { id: 'whatsapp_dashboard', label: 'Mensajeria WhatsApp', path: '/admin/whatsapp', menuLabel: 'Mensajeria WhatsApp', section: 'channels', scope: 'company' },
 ];
 
 export const VIEW_MAP = SYSTEM_VIEWS.reduce((acc, view) => {
@@ -99,4 +99,9 @@ export const getOrderedMenuViews = (user) => {
     });
 
     return ordered;
+};
+
+export const getVisibleSystemViews = (user) => {
+    const isCompanyUser = Boolean(user?.company_id);
+    return SYSTEM_VIEWS.filter((view) => !isCompanyUser || view.scope !== 'global');
 };
