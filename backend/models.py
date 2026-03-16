@@ -113,8 +113,10 @@ class Lead(Base):
     supervisors = relationship(
         "User",
         secondary="lead_supervisors",
+        primaryjoin="Lead.id == LeadSupervisor.lead_id",
+        secondaryjoin="User.id == LeadSupervisor.user_id",
         back_populates="supervised_leads",
-        overlaps="supervisor_links,lead,supervisor"
+        overlaps="supervisor_links,lead,supervisor,assigned_by"
     )
 
     @property
@@ -215,8 +217,10 @@ class User(Base):
     supervised_leads = relationship(
         "Lead",
         secondary="lead_supervisors",
+        primaryjoin="User.id == LeadSupervisor.user_id",
+        secondaryjoin="Lead.id == LeadSupervisor.lead_id",
         back_populates="supervisors",
-        overlaps="supervisor_links,lead,supervisor"
+        overlaps="supervisor_links,lead,supervisor,assigned_by"
     )
     sales = relationship("Sale", foreign_keys="[Sale.seller_id]", back_populates="seller")
 
