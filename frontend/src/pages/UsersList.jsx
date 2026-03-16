@@ -50,7 +50,10 @@ const UsersList = () => {
                     <h1 className="text-3xl font-extrabold text-slate-800">Listado de Usuarios</h1>
                     <p className="text-slate-500 mt-2">Gestiona los usuarios y sus permisos.</p>
                 </div>
-                <div className="mt-4 md:mt-0">
+                <div className="mt-4 md:mt-0 flex gap-3">
+                    <Link to="/admin/roles" className="px-6 py-2 bg-slate-700 text-white font-bold rounded-lg shadow hover:bg-slate-800 transition">
+                        Roles y Permisos
+                    </Link>
                     <Link to="/admin/users/new" className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg shadow hover:bg-blue-700 transition">
                         + Nuevo Usuario
                     </Link>

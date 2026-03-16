@@ -30,24 +30,31 @@ import WhatsAppDashboard from './pages/WhatsAppDashboard';
 import CreditBoard from './pages/CreditBoard';
 import InternalChat from './pages/InternalChat';
 import SystemLogs from './pages/SystemLogs';
+import RolesConfig from './pages/RolesConfig';
+import { hasViewAccess, getRoleName } from './config/views';
 
-const PrivateRoute = ({ allowedRoles }) => {
+const PrivateRoute = ({ requiredView }) => {
   const { user, loading } = useAuth();
 
   if (loading) return <div className="p-10 text-center">Cargando sesion...</div>;
 
   if (!user) return <Navigate to="/login" replace />;
 
-  const roleName = user.role?.name || (typeof user.role === 'string' ? user.role : '');
-  if (allowedRoles && !allowedRoles.includes(roleName)) {
-    // User authorized but not for this specific route
-    if (roleName === 'inventario') {
+  const roleName = getRoleName(user);
+  if (requiredView && !hasViewAccess(user, requiredView)) {
+    if (hasViewAccess(user, 'inventory')) {
       return <Navigate to="/admin/inventory" replace />;
     }
-    if (roleName === 'compras') {
+    if (hasViewAccess(user, 'credits')) {
       return <Navigate to="/admin/credits" replace />;
     }
-    return <Navigate to="/admin/dashboard" replace />;
+    if (hasViewAccess(user, 'ally_board')) {
+      return <Navigate to="/aliado/dashboard" replace />;
+    }
+    if (hasViewAccess(user, 'dashboard')) {
+      return <Navigate to="/admin/dashboard" replace />;
+    }
+    return <Navigate to="/autos" replace />;
   }
 
   return <Outlet />;
@@ -76,62 +83,73 @@ function App() {
 
           {/* Protected Routes */}
           <Route element={<PrivateRoute />}>
-            <Route element={<AuthenticatedAppShell />}>
-              <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor', 'aliado']} />}>
+              <Route element={<AuthenticatedAppShell />}>
+              <Route element={<PrivateRoute requiredView="dashboard" />}>
                 <Route path="/admin/dashboard" element={<Dashboard />} />
               </Route>
 
-              {/* Super Admin & Company Admin Routes */}
-              <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin']} />}>
+              <Route element={<PrivateRoute requiredView="users" />}>
                 <Route path="/admin/users" element={<UsersList />} />
                 <Route path="/admin/users/new" element={<UserForm />} />
                 <Route path="/admin/users/:id" element={<UserForm />} />
-                <Route path="/admin/users/:id" element={<UserForm />} />
+              </Route>
+              <Route element={<PrivateRoute requiredView="roles" />}>
+                <Route path="/admin/roles" element={<RolesConfig />} />
+              </Route>
+              <Route element={<PrivateRoute requiredView="integrations" />}>
                 <Route path="/admin/integrations" element={<IntegrationsConfig />} />
+              </Route>
+              <Route element={<PrivateRoute requiredView="alerts" />}>
                 <Route path="/admin/alerts" element={<AdminAlerts />} />
+              </Route>
+              <Route element={<PrivateRoute requiredView="logs" />}>
                 <Route path="/admin/logs" element={<SystemLogs />} />
               </Route>
 
-              {/* Inventory Routes */}
-              <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor', 'aliado', 'inventario']} />}>
+              <Route element={<PrivateRoute requiredView="inventory" />}>
                 <Route path="/admin/inventory" element={<InventoryList />} />
                 <Route path="/admin/inventory/:id" element={<VehicleForm />} />
-              </Route>
-              <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'inventario']} />}>
                 <Route path="/admin/inventory/new" element={<VehicleForm />} />
               </Route>
 
-              {/* Shared Routes (Admin, Super Admin, Advisor) */}
-              <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor']} />}>
-                {/* Leads Routes */}
+              <Route element={<PrivateRoute requiredView="leads_board" />}>
                 <Route path="/admin/leads" element={<LeadsBoard boardMode="general" />} />
+              </Route>
+              <Route element={<PrivateRoute requiredView="sales" />}>
                 <Route path="/admin/sales" element={<SalesDashboard />} />
+              </Route>
+              <Route element={<PrivateRoute requiredView="my_sales" />}>
                 <Route path="/admin/my-sales" element={<MySales />} />
-
+              </Route>
+              <Route element={<PrivateRoute requiredView="facebook_leads" />}>
                 <Route path="/admin/leads/facebook" element={<FacebookLeads />} />
+              </Route>
+              <Route element={<PrivateRoute requiredView="tiktok_leads" />}>
                 <Route path="/admin/leads/tiktok" element={<TikTokLeads />} />
+              </Route>
+              <Route element={<PrivateRoute requiredView="whatsapp_leads" />}>
                 <Route path="/admin/leads/whatsapp" element={<WhatsAppLeads />} />
+              </Route>
+              <Route element={<PrivateRoute requiredView="instagram_leads" />}>
                 <Route path="/admin/leads/instagram" element={<InstagramLeads />} />
-
-                {/* Messaging */}
+              </Route>
+              <Route element={<PrivateRoute requiredView="whatsapp_dashboard" />}>
                 <Route path="/admin/whatsapp" element={<WhatsAppDashboard />} />
               </Route>
 
-              {/* Credits & Requests */}
-              <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'asesor', 'aliado', 'compras']} />}>
+              <Route element={<PrivateRoute requiredView="credits" />}>
                 <Route path="/admin/credits" element={<CreditBoard />} />
               </Route>
 
-              {/* Aliado Routes */}
-              <Route element={<PrivateRoute allowedRoles={['super_admin', 'admin', 'aliado']} />}>
+              <Route element={<PrivateRoute requiredView="ally_board" />}>
                 <Route path="/aliado/dashboard" element={<LeadsBoard boardMode="ally" />} />
               </Route>
 
-              {/* Internal Chat - Access for all authenticated users in company */}
-              <Route path="/internal-chat" element={<InternalChat />} />
+              <Route element={<PrivateRoute requiredView="internal_chat" />}>
+                <Route path="/internal-chat" element={<InternalChat />} />
+              </Route>
 
-              {/* Global Super Admin Only Routes */}
-              <Route element={<PrivateRoute allowedRoles={['super_admin']} />}>
+              <Route element={<PrivateRoute requiredView="companies" />}>
                 <Route path="/admin/companies" element={<AdminCompanySettings />} />
                 <Route path="/admin/companies/:id" element={<AdminCompanySettings />} />
                 <Route path="/admin/companies-list" element={<CompaniesList />} />

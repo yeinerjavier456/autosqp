@@ -48,8 +48,22 @@ class UserCreate(UserBase):
     password: str
 
 class RoleBase(BaseModel):
-    name: str
     label: str
+    name: Optional[str] = None
+    permissions: List[str] = []
+    menu_order: List[str] = []
+    company_id: Optional[int] = None
+    is_system: Optional[bool] = False
+
+class RoleCreate(BaseModel):
+    label: str
+    permissions: List[str] = []
+    menu_order: List[str] = []
+
+class RoleUpdate(BaseModel):
+    label: Optional[str] = None
+    permissions: Optional[List[str]] = None
+    menu_order: Optional[List[str]] = None
 
 class Role(RoleBase):
     id: int

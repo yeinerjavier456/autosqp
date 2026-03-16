@@ -38,6 +38,10 @@ class Role(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(50), unique=True, index=True) # e.g. "super_admin"
     label = Column(String(50)) # e.g. "Super Admin Global"
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True, index=True)
+    permissions_json = Column(Text, nullable=True)
+    menu_order_json = Column(Text, nullable=True)
+    is_system = Column(Boolean, default=False)
 
 class CarBrand(Base):
     __tablename__ = "car_brands"

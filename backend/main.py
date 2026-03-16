@@ -17,12 +17,46 @@ import time
 import re
 import json
 import random
+from view_registry import SYSTEM_VIEWS, DEFAULT_ROLE_VIEW_ACCESS, DEFAULT_ROLE_MENU_ORDER, VALID_VIEW_IDS
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi.responses import FileResponse
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
+
+def ensure_role_configuration_columns():
+    with engine.begin() as conn:
+        role_columns = {
+            "company_id": "ALTER TABLE roles ADD COLUMN company_id INTEGER NULL",
+            "permissions_json": "ALTER TABLE roles ADD COLUMN permissions_json TEXT NULL",
+            "menu_order_json": "ALTER TABLE roles ADD COLUMN menu_order_json TEXT NULL",
+            "is_system": "ALTER TABLE roles ADD COLUMN is_system BOOLEAN NOT NULL DEFAULT 0",
+        }
+
+        for column_name, ddl in role_columns.items():
+            exists = conn.execute(text(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'roles' "
+                "AND COLUMN_NAME = :column_name"
+            ), {"column_name": column_name}).scalar()
+            if not exists:
+                conn.execute(text(ddl))
+
+        index_exists = conn.execute(text(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'roles' "
+            "AND INDEX_NAME = 'ix_roles_company_id'"
+        )).scalar()
+        if not index_exists:
+            conn.execute(text("CREATE INDEX ix_roles_company_id ON roles (company_id)"))
+
+        conn.execute(text(
+            "UPDATE roles SET is_system = 1 WHERE name IN "
+            "('super_admin', 'admin', 'asesor', 'aliado', 'inventario', 'compras', 'user')"
+        ))
+
+ensure_role_configuration_columns()
 
 def ensure_chatbot_settings_columns():
     """
@@ -245,6 +279,63 @@ def build_lead_board_link(target_user: Optional[models.User], lead_id: int) -> s
     base_path = "/aliado/dashboard" if target_role_name == "aliado" else "/admin/leads"
     return f"{base_path}?leadId={lead_id}"
 
+
+def parse_json_list(value: Optional[str], fallback: Optional[List[str]] = None) -> List[str]:
+    if not value:
+        return fallback[:] if fallback else []
+    try:
+        parsed = json.loads(value)
+        if isinstance(parsed, list):
+            return [str(item) for item in parsed]
+    except Exception:
+        pass
+    return fallback[:] if fallback else []
+
+
+def sanitize_view_ids(view_ids: Optional[List[str]]) -> List[str]:
+    if not view_ids:
+        return []
+    sanitized = []
+    for view_id in view_ids:
+        normalized = str(view_id)
+        if normalized in VALID_VIEW_IDS and normalized not in sanitized:
+            sanitized.append(normalized)
+    return sanitized
+
+
+def serialize_role(role: models.Role) -> schemas.Role:
+    default_permissions = DEFAULT_ROLE_VIEW_ACCESS.get(role.name, [])
+    permissions = sanitize_view_ids(parse_json_list(getattr(role, "permissions_json", None), default_permissions))
+    menu_order = sanitize_view_ids(parse_json_list(getattr(role, "menu_order_json", None), DEFAULT_ROLE_MENU_ORDER.get(role.name, permissions)))
+
+    for view_id in permissions:
+        if view_id not in menu_order:
+            menu_order.append(view_id)
+
+    return schemas.Role(
+        id=role.id,
+        name=role.name,
+        label=role.label,
+        permissions=permissions,
+        menu_order=menu_order,
+        company_id=getattr(role, "company_id", None),
+        is_system=bool(getattr(role, "is_system", False))
+    )
+
+
+def ensure_role_management_permissions(current_user: models.User):
+    role_name = current_user.role.name if current_user.role else ""
+    if role_name not in {"admin", "super_admin"}:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+
+def serialize_user(user: models.User, is_online: Optional[bool] = None) -> dict:
+    payload = schemas.User.model_validate(user, from_attributes=True).model_dump()
+    payload["role"] = serialize_role(user.role) if user.role else None
+    if is_online is not None:
+        payload["is_online"] = is_online
+    return payload
+
 def upsert_purchase_request_from_lead(db: Session, lead: models.Lead):
     """
     Create/update a credit application for purchase managers when a lead is in
@@ -420,13 +511,12 @@ def read_users(
     users = query.offset(skip).limit(limit).all()
 
     # Compute is_online for each user
+    serialized_users = []
     for user in users:
-        if user.last_active and user.last_active > five_min_ago:
-            user.is_online = True
-        else:
-            user.is_online = False
+        is_online = bool(user.last_active and user.last_active > five_min_ago)
+        serialized_users.append(serialize_user(user, is_online=is_online))
 
-    return {"items": users, "total": total}
+    return {"items": serialized_users, "total": total}
 
 @app.post("/users/", response_model=schemas.User)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -436,6 +526,8 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
     role_obj = db.query(models.Role).filter(models.Role.id == user.role_id).first()
     if not role_obj:
         raise HTTPException(status_code=400, detail="Invalid Role ID")
+    if current_user.company_id and role_obj.company_id not in {None, current_user.company_id}:
+        raise HTTPException(status_code=403, detail="No puedes usar roles de otra empresa")
 
     # Check permissions and scope
     if current_user.company_id:
@@ -463,20 +555,20 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
     
     log_action_to_db(db, current_user.id, "CREATE", "User", new_user.id, f"Usuario creado: {new_user.email} con Rol ID {new_user.role_id}")
     
-    return new_user
+    return serialize_user(new_user)
 
 
 # Keep this for backward compatibility or strict "me" endpoint
 @app.get("/users/me", response_model=schemas.User)
 async def read_users_me(current_user: models.User = Depends(get_current_user)):
-    return current_user
+    return serialize_user(current_user)
 
 @app.get("/users/{user_id}", response_model=schemas.User)
 def read_user(user_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    return user
+    return serialize_user(user)
 
 @app.put("/users/{user_id}", response_model=schemas.User)
 def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -490,6 +582,11 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
     if user_update.password:
         db_user.hashed_password = auth_utils.get_password_hash(user_update.password)
     if user_update.role_id is not None:
+        target_role = db.query(models.Role).filter(models.Role.id == user_update.role_id).first()
+        if not target_role:
+            raise HTTPException(status_code=400, detail="Invalid Role ID")
+        if current_user.company_id and target_role.company_id not in {None, current_user.company_id}:
+            raise HTTPException(status_code=403, detail="No puedes usar roles de otra empresa")
         print(f"Setting role_id to: {user_update.role_id}") 
         db_user.role_id = user_update.role_id
     if user_update.company_id is not None:
@@ -514,7 +611,7 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
         
     log_action_to_db(db, current_user.id, "UPDATE", "User", db_user.id, f"Usuario modificado: {db_user.email}")
         
-    return db_user
+    return serialize_user(db_user)
 
 @app.delete("/users/{user_id}")
 def delete_user(user_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -669,9 +766,118 @@ def read_integration_settings(company_id: int, db: Session = Depends(get_db), cu
         
     return settings
 
+@app.get("/roles/views")
+def read_role_views(current_user: models.User = Depends(get_current_user)):
+    ensure_role_management_permissions(current_user)
+    return {"items": SYSTEM_VIEWS}
+
+
 @app.get("/roles/", response_model=list[schemas.Role])
-def read_roles(db: Session = Depends(get_db)):
-    return db.query(models.Role).all()
+def read_roles(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    query = db.query(models.Role)
+    if current_user.company_id:
+        query = query.filter(or_(models.Role.company_id == current_user.company_id, models.Role.company_id.is_(None)))
+    roles = query.order_by(models.Role.is_system.desc(), models.Role.label.asc()).all()
+    return [serialize_role(role) for role in roles]
+
+
+@app.post("/roles/", response_model=schemas.Role)
+def create_role(
+    role: schemas.RoleCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    ensure_role_management_permissions(current_user)
+    if not current_user.company_id and current_user.role and current_user.role.name != "super_admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    sanitized_permissions = sanitize_view_ids(role.permissions)
+    sanitized_menu_order = sanitize_view_ids(role.menu_order)
+    for view_id in sanitized_permissions:
+        if view_id not in sanitized_menu_order:
+            sanitized_menu_order.append(view_id)
+
+    slug_base = re.sub(r"[^a-z0-9]+", "_", role.label.lower()).strip("_") or "rol"
+    generated_name = f"custom_{current_user.company_id or 'global'}_{slug_base}_{int(time.time())}"
+
+    db_role = models.Role(
+        name=generated_name,
+        label=role.label.strip(),
+        company_id=current_user.company_id,
+        permissions_json=json.dumps(sanitized_permissions),
+        menu_order_json=json.dumps(sanitized_menu_order),
+        is_system=False
+    )
+    db.add(db_role)
+    db.commit()
+    db.refresh(db_role)
+    return serialize_role(db_role)
+
+
+@app.put("/roles/{role_id}", response_model=schemas.Role)
+def update_role(
+    role_id: int,
+    role_update: schemas.RoleUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    ensure_role_management_permissions(current_user)
+    db_role = db.query(models.Role).filter(models.Role.id == role_id).first()
+    if not db_role:
+        raise HTTPException(status_code=404, detail="Role not found")
+    if current_user.company_id and db_role.company_id not in {None, current_user.company_id}:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if current_user.company_id and (db_role.company_id is None or db_role.is_system):
+        raise HTTPException(status_code=403, detail="No puedes modificar roles globales del sistema")
+
+    if role_update.label is not None:
+        db_role.label = role_update.label.strip()
+    if role_update.permissions is not None:
+        sanitized_permissions = sanitize_view_ids(role_update.permissions)
+        db_role.permissions_json = json.dumps(sanitized_permissions)
+        current_menu = sanitize_view_ids(role_update.menu_order) if role_update.menu_order is not None else parse_json_list(db_role.menu_order_json, sanitized_permissions)
+        for view_id in sanitized_permissions:
+            if view_id not in current_menu:
+                current_menu.append(view_id)
+        db_role.menu_order_json = json.dumps(sanitize_view_ids(current_menu))
+    elif role_update.menu_order is not None:
+        current_permissions = sanitize_view_ids(parse_json_list(db_role.permissions_json, DEFAULT_ROLE_VIEW_ACCESS.get(db_role.name, [])))
+        current_menu = sanitize_view_ids(role_update.menu_order)
+        for view_id in current_permissions:
+            if view_id not in current_menu:
+                current_menu.append(view_id)
+        db_role.menu_order_json = json.dumps(current_menu)
+
+    db.commit()
+    db.refresh(db_role)
+    return serialize_role(db_role)
+
+
+@app.delete("/roles/{role_id}", status_code=204)
+def delete_role(
+    role_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    ensure_role_management_permissions(current_user)
+    db_role = db.query(models.Role).filter(models.Role.id == role_id).first()
+    if not db_role:
+        raise HTTPException(status_code=404, detail="Role not found")
+    if db_role.is_system:
+        raise HTTPException(status_code=400, detail="System roles cannot be deleted")
+    if current_user.company_id and db_role.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    in_use = db.query(models.User).filter(models.User.role_id == role_id).count()
+    if in_use:
+        raise HTTPException(status_code=400, detail="No se puede eliminar un rol que tiene usuarios asignados")
+
+    db.delete(db_role)
+    db.commit()
+    return None
 
 @app.put("/companies/{company_id}/integrations", response_model=schemas.IntegrationSettings)
 def update_integration_settings(company_id: int, settings_update: schemas.IntegrationSettingsUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):

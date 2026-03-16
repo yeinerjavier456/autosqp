@@ -5,6 +5,29 @@ import { useChat } from '../context/ChatContext';
 import Swal from 'sweetalert2';
 import NotificationBell from './NotificationBell';
 import FloatingChatButton from './FloatingChatButton';
+import { getOrderedMenuViews, getRoleName } from '../config/views';
+
+const MENU_ICONS = {
+    dashboard: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>,
+    users: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
+    roles: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6l4 2v4c0 2.5-1.5 4.5-4 6-2.5-1.5-4-3.5-4-6V8l4-2z" /></svg>,
+    integrations: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+    logs: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" /></svg>,
+    companies: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16" /></svg>,
+    inventory: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8" /></svg>,
+    leads_board: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2" /></svg>,
+    ally_board: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V7" /></svg>,
+    alerts: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11" /></svg>,
+    sales: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2" /></svg>,
+    my_sales: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2" /></svg>,
+    credits: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5" /></svg>,
+    facebook_leads: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 012 2v6" /></svg>,
+    tiktok_leads: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764" /></svg>,
+    whatsapp_leads: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8" /></svg>,
+    instagram_leads: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16" /></svg>,
+    internal_chat: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 012 2v6" /></svg>,
+    whatsapp_dashboard: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6" /></svg>,
+};
 
 const Layout = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -13,33 +36,17 @@ const Layout = () => {
     const { user, logout, loading } = useAuth();
     const { unreadCount } = useChat();
 
-    console.log("Layout Render - User:", user, "Loading:", loading);
-
     if (loading) {
-        return <div className="min-h-screen flex items-center justify-center bg-gray-100 text-slate-500">Cargando menú...</div>;
+        return <div className="min-h-screen flex items-center justify-center bg-gray-100 text-slate-500">Cargando menu...</div>;
     }
 
-    // Role Map Fallback
-    const ROLE_MAP = { 1: 'super_admin', 2: 'admin', 3: 'asesor', 4: 'user', 5: 'inventario' };
-
-    // Role Checks
-    // Handle role being an object (new), string (legacy), or fallback to ID
-    let roleName = user?.role?.name || (typeof user?.role === 'string' ? user?.role : '');
-    if (!roleName && user?.role_id) {
-        roleName = ROLE_MAP[user.role_id] || '';
-    }
-
-    const isGlobalAdmin = roleName === 'super_admin' && !user?.company_id;
-    const isCompanyAdmin = roleName === 'admin' || (roleName === 'super_admin' && user?.company_id);
-    const isAdvisor = roleName === 'asesor';
-    const isCustomer = roleName === 'user';
+    const roleName = getRoleName(user);
     const isAliado = roleName === 'aliado';
     const isInventario = roleName === 'inventario';
     const isCompras = roleName === 'compras';
-
-    // Dynamic Styling
-    const primaryColor = user?.company?.primary_color || '#0f172a'; // Default slate-900
-    const secondaryColor = user?.company?.secondary_color || '#2563eb'; // Default blue-600
+    const primaryColor = user?.company?.primary_color || '#0f172a';
+    const secondaryColor = user?.company?.secondary_color || '#2563eb';
+    const orderedMenuViews = getOrderedMenuViews(user);
 
     const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
     const closeSidebar = () => setIsSidebarOpen(false);
@@ -49,6 +56,27 @@ const Layout = () => {
         if (path === '/admin/leads') return location.pathname === '/admin/leads';
         if (path === '/aliado/dashboard') return location.pathname === '/aliado/dashboard';
         return location.pathname.startsWith(path);
+    };
+
+    const handleLogout = () => {
+        Swal.fire({
+            title: 'Cerrar sesion',
+            text: 'Estas seguro que deseas salir del sistema?',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Si, cerrar sesion',
+            cancelButtonText: 'Cancelar',
+            customClass: {
+                confirmButton: 'bg-blue-600 text-white px-4 py-2 rounded-lg ml-2',
+                cancelButton: 'bg-red-600 text-white px-4 py-2 rounded-lg'
+            },
+            buttonsStyling: false
+        }).then((result) => {
+            if (result.isConfirmed) {
+                logout();
+                window.location.href = '/login';
+            }
+        });
     };
 
     const NavItem = ({ to, icon, label }) => (
@@ -84,58 +112,24 @@ const Layout = () => {
         </Link>
     );
 
-    const handleLogout = () => {
-        Swal.fire({
-            title: '¿Cerrar Sesión?',
-            text: "¿Estás seguro que deseas salir del sistema?",
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonText: 'Sí, cerrar sesión',
-            cancelButtonText: 'Cancelar',
-            customClass: {
-                confirmButton: 'bg-blue-600 text-white px-4 py-2 rounded-lg ml-2',
-                cancelButton: 'bg-red-600 text-white px-4 py-2 rounded-lg'
-            },
-            buttonsStyling: false
-        }).then((result) => {
-            if (result.isConfirmed) {
-                logout();
-                window.location.href = '/login';
-            }
-        });
-    };
-
     return (
         <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row font-sans">
-            {/* Mobile Header */}
-            <div
-                className="md:hidden text-white p-4 flex justify-between items-center z-30 sticky top-0 shadow-md"
-                style={{ backgroundColor: primaryColor }}
-            >
+            <div className="md:hidden text-white p-4 flex justify-between items-center z-30 sticky top-0 shadow-md" style={{ backgroundColor: primaryColor }}>
                 <div className="flex items-center gap-2">
-                    <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center"
-                        style={{ backgroundColor: secondaryColor }}
-                    >
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: secondaryColor }}>
                         <span className="font-bold text-lg">A</span>
                     </div>
                     <span className="font-bold text-xl tracking-tight">{user?.company?.name || 'AutosQP'}</span>
                 </div>
                 <button onClick={toggleSidebar} className="p-2 rounded-lg hover:bg-white/10 transition">
-                    {isSidebarOpen ? (
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                    ) : (
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
-                    )}
+                    {isSidebarOpen ? <span className="text-2xl">&times;</span> : <span className="text-2xl">&#9776;</span>}
                 </button>
             </div>
 
-            {/* Sidebar Overlay for Mobile */}
             {isSidebarOpen && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-20 md:hidden" onClick={closeSidebar}></div>
             )}
 
-            {/* Sidebar */}
             <aside
                 className={`
                     fixed md:sticky top-0 left-0 h-screen text-white z-30
@@ -146,13 +140,9 @@ const Layout = () => {
                 `}
                 style={{ backgroundColor: primaryColor }}
             >
-                {/* Desktop Header & Toggle */}
                 <div className="h-16 flex items-center justify-between px-4 border-b border-white/10 mb-6 relative">
                     <div className={`flex items-center gap-3 overflow-hidden transition-all duration-300 ${isCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'}`}>
-                        <div
-                            className="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg"
-                            style={{ backgroundColor: secondaryColor }}
-                        >
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg" style={{ backgroundColor: secondaryColor }}>
                             <span className="font-bold text-xl">A</span>
                         </div>
                         <div className="flex flex-col min-w-0">
@@ -160,24 +150,19 @@ const Layout = () => {
                                 {user?.email?.split('@')[0].replace('.', ' ') || 'Usuario'}
                             </span>
                             <span className="text-xs text-blue-200 truncate font-normal opacity-80">
-                                {isAdvisor ? 'Asesor Comercial' : (isAliado ? 'Aliado' : (isInventario ? 'Gestor de Inventario' : (isCompras ? 'Gestor de Compras' : (user?.company?.name || 'AutosQP'))))}
+                                {isAliado ? 'Aliado' : isInventario ? 'Gestor de Inventario' : isCompras ? 'Gestor de Compras' : (user?.company?.name || 'AutosQP')}
                             </span>
                         </div>
                     </div>
 
-                    {/* Only show logo icon centered when collapsed */}
                     {isCollapsed && (
-                        <div
-                            className="absolute left-1/2 transform -translate-x-1/2 w-9 h-9 rounded-xl flex items-center justify-center"
-                            style={{ backgroundColor: secondaryColor }}
-                        >
+                        <div className="absolute left-1/2 transform -translate-x-1/2 w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: secondaryColor }}>
                             <span className="font-bold text-xl">A</span>
                         </div>
                     )}
 
                     <div className="flex items-center gap-2 absolute right-[-10px] md:right-[-20px]">
                         <NotificationBell />
-
                         <button
                             onClick={toggleCollapse}
                             className="hidden md:flex w-8 h-8 items-center justify-center rounded-full bg-white/10 text-slate-300 hover:text-white hover:bg-white/20 transition border border-white/10 shadow-xl backdrop-blur-sm ml-2"
@@ -190,241 +175,55 @@ const Layout = () => {
                 </div>
 
                 <nav className="flex-1 px-2 space-y-2 overflow-y-auto custom-scrollbar">
-                    {/* Common Dashboard Link */}
-                    {isAliado ? (
-                        <>
-                            <NavItem
-                                to="/aliado/dashboard"
-                                label="Tablero de Leads"
-                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
-                            />
-                            <NavItem
-                                to="/internal-chat"
-                                label="Chat Interno"
-                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" /></svg>}
-                            />
-                        </>
-                    ) : (
-                        <>
-                            {!isAdvisor && !isCustomer && !isInventario && !isCompras && (
-                                <NavItem
-                                    to="/admin/dashboard"
-                                    label="Dashboard"
-                                    icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>}
-                                />
-                            )}
-                        </>
-                    )}
-
-                    {/* Global Super Admin Links */}
-                    {isGlobalAdmin && (
-                        <>
-                            <NavItem
-                                to="/admin/companies-list"
-                                label="Empresas Globales"
-                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>}
-                            />
-                            <NavItem
-                                to="/admin/users"
-                                label="Usuarios Globales"
-                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>}
-                            />
-                        </>
-                    )}
-
-                    {/* Company Admin & Advisor & Aliado Links */}
-                    {(isCompanyAdmin || isAdvisor || isAliado || isInventario) && (
-                        <>
-                            <NavItem
-                                to="/admin/inventory"
-                                label="Inventario"
-                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>}
-                            />
-
-                            {/* CRM only for Admin/Advisor */}
-                            {(isCompanyAdmin || isAdvisor) && (
-                                <>
-                                    <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 mt-4 px-4">CRM</div>
-                                    <NavItem
-                                        to="/admin/leads"
-                                        label="Tablero de Leads"
-                                        icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
-                                    />
-                                    {isCompanyAdmin && (
-                                        <NavItem
-                                            to="/aliado/dashboard"
-                                            label="Tablero Aliados"
-                                            icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V7a2 2 0 012-2h4l2-2h2l2 2h4a2 2 0 012 2v7a2 2 0 01-2 2h-4m-6 0l-2 5m2-5h4m-4 0H9m7 0h-1" /></svg>}
-                                        />
-                                    )}
-                                    <NavItem
-                                        to="/admin/alerts"
-                                        label="Alertas Auto"
-                                        icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>}
-                                    />
-                                </>
-                            )}
-
-                            {isCompanyAdmin && (
-                                <>
-                                    <NavItem
-                                        to="/admin/sales"
-                                        label="Finanzas y Ventas"
-                                        icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-                                    />
-
-                                    <hr className="my-4 border-gray-700" />
-                                    <NavItem
-                                        to="/admin/users"
-                                        label="Usuarios"
-                                        icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>}
-                                    />
-                                </>
-                            )}
-                        </>
-                    )}
-
-                    {/* Advisor - Mis Ventas only (Inventory is above) */}
-                    {isAdvisor && (
+                    {orderedMenuViews.map((view) => (
                         <NavItem
-                            to="/admin/my-sales"
-                            label="Mis Ventas"
-                            icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                            key={view.id}
+                            to={view.path}
+                            label={view.menuLabel}
+                            icon={MENU_ICONS[view.id] || MENU_ICONS.dashboard}
                         />
-                    )}
-
-                    {isCompras && (
-                        <NavItem
-                            to="/admin/credits"
-                            label="Solicitudes / Créditos"
-                            icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
-                        />
-                    )}
-
-                    {/* Customer Links */}
-                    {isCustomer && (
-                        <>
-                            <NavItem
-                                to="#"
-                                label="Mis Compras"
-                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>}
-                            />
-                        </>
-                    )}
-
-                    <div className="my-4 border-t border-white/10 mx-4"></div>
-
-                    {(isGlobalAdmin || isCompanyAdmin) && (
-                        <>
-                            <div className="my-4 border-t border-white/10 mx-4"></div>
-                            <p className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Leads y Mensajes</p>
-
-                            <NavItem
-                                to="/admin/leads/facebook"
-                                label="Facebook Leads"
-                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" /></svg>}
-                            />
-                            <NavItem
-                                to="/admin/leads/tiktok"
-                                label="TikTok Leads"
-                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}
-                            />
-                            <NavItem
-                                to="/admin/leads/whatsapp"
-                                label="WhatsApp"
-                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>}
-                            />
-                            <NavItem
-                                to="/admin/leads/instagram"
-                                label="Instagram"
-                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
-                            />
-
-                            <NavItem
-                                to="/internal-chat"
-                                label="Chat Interno"
-                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" /></svg>}
-                            />
-
-                            <NavItem
-                                to="/admin/whatsapp"
-                                label="Mensajería WhatsApp"
-                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>}
-                            />
-
-                            <NavItem
-                                to="/admin/credits"
-                                label="Solicitudes / Créditos"
-                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
-                            />
-
-                            <div className="my-4 border-t border-white/10 mx-4"></div>
-                        </>
-                    )}
-
-                    {(roleName === 'admin' || roleName === 'super_admin') && (
-                        <>
-                            <hr className="my-4 border-gray-700" />
-
-
-                            <NavItem
-                                to="/admin/integrations"
-                                label="Configuración"
-                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
-                            />
-
-                            <NavItem
-                                to="/admin/logs"
-                                label="Auditoría / Logs"
-                                icon={<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>}
-                            />
-                        </>
-                    )}
+                    ))}
                 </nav>
 
-                {/* Public Web Link */}
                 <div className="p-4 border-t border-white/10">
                     <a
                         href="/autos"
                         target="_blank"
                         rel="noopener noreferrer"
                         className={`
-                            w-full flex items-center gap-3 py-3 px-4 rounded-xl text-green-300 hover:bg-green-500/20 hover:text-green-200 transition-colors
-                            ${isCollapsed ? 'justify-center px-0' : ''}
+                            flex items-center gap-3 py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 transition mb-3
+                            ${isCollapsed ? 'justify-center px-2' : ''}
                         `}
-                        title="Ver Mi Web (Inventario Público)"
+                        title={isCollapsed ? 'Ver Web Publica' : ''}
                     >
-                        <div className="w-5 h-5 flex-shrink-0">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
-                        </div>
-                        {!isCollapsed && <span className="font-bold text-sm">Ver Mi Web</span>}
+                        <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3.6 9h16.8M3.6 15h16.8" />
+                        </svg>
+                        {!isCollapsed && <span className="font-medium">Ver Web Publica</span>}
                     </a>
-                </div>
 
-                {/* User Profile / Logout */}
-                <div className="p-4 border-t border-white/10 pt-2">
                     <button
                         onClick={handleLogout}
                         className={`
-                            w-full flex items-center gap-3 py-3 px-4 rounded-xl text-red-300 hover:bg-red-500/20 hover:text-red-200 transition-colors
-                            ${isCollapsed ? 'justify-center px-0' : ''}
+                            w-full flex items-center gap-3 py-3 px-4 rounded-xl text-red-200 hover:text-white hover:bg-red-500/20 transition
+                            ${isCollapsed ? 'justify-center px-2' : ''}
                         `}
-                        title="Cerrar Sesión"
+                        title={isCollapsed ? 'Cerrar Sesion' : ''}
                     >
-                        <div className="w-5 h-5 flex-shrink-0">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                        </div>
-                        {!isCollapsed && <span className="font-bold text-sm">Salir</span>}
+                        <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 21h8" />
+                        </svg>
+                        {!isCollapsed && <span className="font-medium">Cerrar Sesion</span>}
                     </button>
                 </div>
             </aside>
 
-            {/* Main Content */}
-            <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 h-[calc(100vh-theme(spacing.16))] md:h-screen">
-                <div className="p-6 md:p-10 max-w-7xl mx-auto">
-                    <Outlet />
-                </div>
+            <main className="flex-1 p-4 md:p-8 overflow-y-auto">
+                <Outlet />
             </main>
+
             <FloatingChatButton />
         </div>
     );

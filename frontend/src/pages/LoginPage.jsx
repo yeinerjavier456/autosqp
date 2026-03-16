@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { getOrderedMenuViews, hasViewAccess, getRoleName } from '../config/views';
 
 const LoginPage = () => {
     const [email, setEmail] = useState('');
@@ -28,16 +29,19 @@ const LoginPage = () => {
             // Use context login which sets token and fetches user
             const loggedUser = await login(response.data.access_token);
 
-            const roleName = loggedUser?.role?.name || (typeof loggedUser?.role === 'string' ? loggedUser?.role : '');
+            const roleName = getRoleName(loggedUser);
+            const orderedViews = getOrderedMenuViews(loggedUser);
 
-            if (roleName === 'inventario') {
+            if (hasViewAccess(loggedUser, 'dashboard')) {
+                navigate('/admin/dashboard');
+            } else if (orderedViews.length > 0) {
+                navigate(orderedViews[0].path);
+            } else if (roleName === 'inventario') {
                 navigate('/admin/inventory');
             } else if (roleName === 'compras') {
                 navigate('/admin/credits');
-            } else if (roleName === 'asesor' || roleName === 'aliado') {
-                navigate('/admin/leads');
             } else {
-                navigate('/admin/dashboard');
+                navigate('/autos');
             }
 
         } catch (err) {
