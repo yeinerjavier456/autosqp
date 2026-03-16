@@ -2524,7 +2524,7 @@ def update_lead(
         else:
             target_assigned_user = None
     
-    payload_update = lead_update.dict(exclude={'comment', 'process_detail'}, exclude_unset=True)
+    payload_update = lead_update.dict(exclude={'comment', 'process_detail', 'supervisor_ids'}, exclude_unset=True)
     target_assigned_to_id = payload_update.get('assigned_to_id', lead.assigned_to_id)
     target_status = payload_update.get('status', lead.status)
     target_assigned_to_id, target_supervisor_ids, credit_coordinator = maybe_assign_credit_coordinator(
