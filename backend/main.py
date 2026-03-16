@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Query, Query
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, func, text, false
+from sqlalchemy import or_, and_, func, text, false
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, get_db
 import models, schemas, auth_utils
@@ -568,6 +568,8 @@ def read_user(user_id: int, db: Session = Depends(get_db), current_user: models.
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    if current_user.company_id and user.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="No tienes permisos para ver usuarios de otra empresa")
     return serialize_user(user)
 
 @app.put("/users/{user_id}", response_model=schemas.User)
@@ -576,6 +578,8 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
     db_user = db.query(models.User).filter(models.User.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
+    if current_user.company_id and db_user.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="No tienes permisos para editar usuarios de otra empresa")
     
     if user_update.email:
         db_user.email = user_update.email
@@ -590,6 +594,8 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
         print(f"Setting role_id to: {user_update.role_id}") 
         db_user.role_id = user_update.role_id
     if user_update.company_id is not None:
+        if current_user.company_id and user_update.company_id != current_user.company_id:
+            raise HTTPException(status_code=403, detail="No puedes mover usuarios a otra empresa")
         db_user.company_id = user_update.company_id
     
     # Update new fields
@@ -779,7 +785,12 @@ def read_roles(
 ):
     query = db.query(models.Role)
     if current_user.company_id:
-        query = query.filter(or_(models.Role.company_id == current_user.company_id, models.Role.company_id.is_(None)))
+        query = query.filter(
+            or_(
+                models.Role.company_id == current_user.company_id,
+                and_(models.Role.company_id.is_(None), models.Role.is_system == True)
+            )
+        )
     roles = query.order_by(models.Role.is_system.desc(), models.Role.label.asc()).all()
     return [serialize_role(role) for role in roles]
 
