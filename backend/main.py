@@ -278,6 +278,51 @@ def get_role_permissions(role: Optional[models.Role]) -> List[str]:
     return sanitize_view_ids(parse_json_list(getattr(role, "permissions_json", None), fallback), getattr(role, "company_id", None))
 
 
+def normalize_role_text(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    normalized = str(value).strip().lower()
+    replacements = {
+        "á": "a",
+        "é": "e",
+        "í": "i",
+        "ó": "o",
+        "ú": "u",
+        "_": " ",
+        "-": " ",
+    }
+    for source, target in replacements.items():
+        normalized = normalized.replace(source, target)
+    return " ".join(normalized.split())
+
+
+def is_credit_coordinator_role(role: Optional[models.Role]) -> bool:
+    if not role:
+        return False
+
+    role_names = {
+        normalize_role_text(getattr(role, "name", None)),
+        normalize_role_text(getattr(role, "base_role_name", None)),
+        normalize_role_text(getattr(role, "label", None)),
+    }
+    role_names.discard("")
+
+    explicit_credit_role_names = {
+        "coordinador",
+        "coordinador credito",
+        "coordinador de credito",
+        "coordinador creditos",
+        "coordinador de creditos",
+        "coordinador_credito",
+        "coordinador_creditos",
+    }
+
+    if role_names & explicit_credit_role_names:
+        return True
+
+    return any("coordinador" in role_name and "credit" in role_name for role_name in role_names)
+
+
 def get_credit_coordinator_users(db: Session, company_id: Optional[int]) -> List[models.User]:
     if not company_id:
         return []
@@ -288,8 +333,7 @@ def get_credit_coordinator_users(db: Session, company_id: Optional[int]) -> List
 
     coordinators = []
     for user in candidates:
-        effective_role_name = get_user_role_name(user)
-        if effective_role_name != "coordinador":
+        if not is_credit_coordinator_role(user.role):
             continue
         if "credits" not in get_role_permissions(user.role):
             continue
