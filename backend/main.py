@@ -357,6 +357,61 @@ def choose_credit_coordinator(db: Session, company_id: Optional[int]) -> Optiona
     return random.choice(coordinators)
 
 
+def is_purchase_manager_role(role: Optional[models.Role]) -> bool:
+    if not role:
+        return False
+
+    role_names = {
+        normalize_role_text(getattr(role, "name", None)),
+        normalize_role_text(getattr(role, "base_role_name", None)),
+        normalize_role_text(getattr(role, "label", None)),
+    }
+    role_names.discard("")
+
+    explicit_purchase_role_names = {
+        "compras",
+        "gestor compras",
+        "gestor de compras",
+        "gestor compra",
+        "gestor de compra",
+        "comprador",
+    }
+    if role_names & explicit_purchase_role_names:
+        return True
+
+    return any("compra" in role_name for role_name in role_names)
+
+
+def get_purchase_manager_users(db: Session, company_id: Optional[int]) -> List[models.User]:
+    if not company_id:
+        return []
+
+    candidates = db.query(models.User).join(models.Role, isouter=True).filter(
+        models.User.company_id == company_id
+    ).all()
+
+    purchase_users = []
+    purchase_enabled_users = []
+    for user in candidates:
+        role = getattr(user, "role", None)
+        if not role:
+            continue
+        if "purchase_board" not in get_role_permissions(role):
+            continue
+        purchase_enabled_users.append(user)
+        if is_purchase_manager_role(role):
+            purchase_users.append(user)
+
+    return purchase_users or purchase_enabled_users
+
+
+def choose_purchase_manager(db: Session, company_id: Optional[int]) -> Optional[models.User]:
+    candidates = get_purchase_manager_users(db, company_id)
+    if not candidates:
+        return None
+    return random.choice(candidates)
+
+
 def get_auto_assign_candidate_users(db: Session, company_id: Optional[int]) -> List[models.User]:
     if not company_id:
         return []
@@ -625,14 +680,9 @@ def upsert_purchase_request_from_lead(db: Session, lead: models.Lead):
             existing_credit.notes = auto_note
         return
 
-    compras_users = db.query(models.User).join(models.Role).filter(
-        models.User.company_id == lead.company_id,
-        or_(
-            models.Role.name == "compras",
-            models.Role.base_role_name == "compras"
-        )
-    ).all()
-    assigned_compras_id = compras_users[0].id if compras_users else None
+    compras_users = get_purchase_manager_users(db, lead.company_id)
+    assigned_purchase_user = choose_purchase_manager(db, lead.company_id)
+    assigned_compras_id = assigned_purchase_user.id if assigned_purchase_user else None
 
     new_credit = models.CreditApplication(
         lead_id=lead.id,

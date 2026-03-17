@@ -7,6 +7,8 @@ from dependencies import get_current_user
 import os
 import shutil
 import uuid
+import json
+import random
 
 router = APIRouter(
     prefix="/purchases",
@@ -18,6 +20,95 @@ def _build_lead_board_link(target_user: Optional[models.User], lead_id: int) -> 
     target_role_name = getattr(getattr(target_user, "role", None), "base_role_name", None) or getattr(getattr(target_user, "role", None), "name", None)
     base_path = "/aliado/dashboard" if target_role_name == "aliado" else "/admin/leads"
     return f"{base_path}?leadId={lead_id}"
+
+
+def _normalize_role_text(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    normalized = str(value).strip().lower()
+    replacements = {
+        "á": "a",
+        "é": "e",
+        "í": "i",
+        "ó": "o",
+        "ú": "u",
+        "Ã¡": "a",
+        "Ã©": "e",
+        "Ã­": "i",
+        "Ã³": "o",
+        "Ãº": "u",
+        "_": " ",
+        "-": " ",
+    }
+    for source, target in replacements.items():
+        normalized = normalized.replace(source, target)
+    return " ".join(normalized.split())
+
+
+def _parse_role_permissions(role: Optional[models.Role]) -> list[str]:
+    if not role or not getattr(role, "permissions_json", None):
+        return []
+    try:
+        payload = json.loads(role.permissions_json)
+    except Exception:
+        return []
+    if not isinstance(payload, list):
+        return []
+    return [str(item) for item in payload]
+
+
+def _is_purchase_manager_role(role: Optional[models.Role]) -> bool:
+    if not role:
+        return False
+
+    role_names = {
+        _normalize_role_text(getattr(role, "name", None)),
+        _normalize_role_text(getattr(role, "base_role_name", None)),
+        _normalize_role_text(getattr(role, "label", None)),
+    }
+    role_names.discard("")
+
+    explicit_purchase_role_names = {
+        "compras",
+        "gestor compras",
+        "gestor de compras",
+        "gestor compra",
+        "gestor de compra",
+        "comprador",
+    }
+    if role_names & explicit_purchase_role_names:
+        return True
+
+    return any("compra" in role_name for role_name in role_names)
+
+
+def _get_purchase_manager_users(db: Session, company_id: int):
+    candidates = db.query(models.User).join(models.Role, isouter=True).filter(
+        models.User.company_id == company_id
+    ).all()
+
+    purchase_users = []
+    purchase_enabled_users = []
+    for user in candidates:
+        role = getattr(user, "role", None)
+        if not role:
+            continue
+        permissions = _parse_role_permissions(role)
+        has_purchase_access = "purchase_board" in permissions or _is_purchase_manager_role(role)
+        if not has_purchase_access:
+            continue
+        purchase_enabled_users.append(user)
+        if _is_purchase_manager_role(role):
+            purchase_users.append(user)
+
+    return purchase_users or purchase_enabled_users
+
+
+def _choose_purchase_manager(db: Session, company_id: int) -> Optional[models.User]:
+    candidates = _get_purchase_manager_users(db, company_id)
+    if not candidates:
+        return None
+    return random.choice(candidates)
 
 VALID_PURCHASE_STATUSES = {
     models.CreditStatus.PENDING.value,
@@ -68,14 +159,9 @@ def _sync_purchase_requests_for_company(db: Session, company_id: int):
     if not leads:
         return {"processed": 0, "created": 0, "updated": 0}
 
-    compras_users = db.query(models.User).join(models.Role, isouter=True).filter(
-        models.User.company_id == company_id,
-        (
-            (models.Role.name == "compras") |
-            (models.Role.base_role_name == "compras")
-        )
-    ).all()
-    assigned_compras_id = compras_users[0].id if compras_users else None
+    compras_users = _get_purchase_manager_users(db, company_id)
+    assigned_purchase_user = _choose_purchase_manager(db, company_id)
+    assigned_compras_id = assigned_purchase_user.id if assigned_purchase_user else None
 
     processed = 0
     created = 0
