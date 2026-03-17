@@ -501,8 +501,8 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
-            <div className="bg-white rounded-2xl p-6 w-full max-w-6xl shadow-2xl animate-fade-in-up border border-gray-100 max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 md:p-4" onClick={onClose}>
+            <div className="bg-white rounded-2xl p-5 md:p-6 w-[min(97vw,1700px)] shadow-2xl animate-fade-in-up border border-gray-100 h-[96vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-start mb-4 border-b border-gray-100 pb-4 gap-4">
                     <div className="flex-1 min-w-0">
                         <h2 className="text-xl font-bold text-gray-800">Detalles del Lead</h2>
@@ -567,7 +567,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                             </div>
                         )}
                         {!isLeadHeaderCollapsed && (
-                        <div className="mt-4 grid grid-cols-1 xl:grid-cols-[360px,1fr] gap-4">
+                        <div className="mt-4 grid grid-cols-1 xl:grid-cols-[420px,minmax(0,1fr)] gap-4">
                             <div className="space-y-4">
                                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                                     <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-2">Asignado a</label>
@@ -633,14 +633,14 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                     )}
                                 </div>
                             </div>
-                            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col min-h-[340px]">
+                            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col min-h-[460px] max-h-[62vh]">
                                 <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
                                     <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
                                         <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                                         Conversacion del Cliente ({messages.length})
                                     </h3>
                                 </div>
-                                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 custom-scrollbar">
+                                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 custom-scrollbar min-h-0">
                                     {loadingMessages ? (
                                         <div className="text-center text-sm text-gray-400 py-4">Cargando mensajes...</div>
                                     ) : messages.length > 0 ? (
