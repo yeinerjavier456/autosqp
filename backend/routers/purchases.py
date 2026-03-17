@@ -143,6 +143,26 @@ def _store_purchase_option_photos(files):
     return stored_paths
 
 
+def _refresh_purchase_status_from_options(db: Session, purchase: Optional[models.CreditApplication]):
+    if not purchase or not purchase.lead_id:
+        return
+
+    options = db.query(models.PurchaseOption).filter(
+        models.PurchaseOption.lead_id == purchase.lead_id
+    ).all()
+    if not options:
+        return
+
+    statuses = [(option.decision_status or "pending").lower() for option in options]
+    if any(status == "accepted" for status in statuses):
+        purchase.status = models.CreditStatus.APPROVED.value
+        return
+    if all(status == "rejected" for status in statuses):
+        purchase.status = models.CreditStatus.REJECTED.value
+        return
+    purchase.status = models.CreditStatus.APPROVED.value
+
+
 def _eligible_purchase_leads(db: Session, company_id: int):
     return db.query(models.Lead).options(
         joinedload(models.Lead.process_detail),
@@ -533,6 +553,7 @@ async def create_purchase_option(
         photos=photo_paths
     )
     db.add(option)
+    purchase.status = models.CreditStatus.APPROVED.value
     db.add(models.LeadNote(
         lead_id=purchase.lead_id,
         user_id=current_user.id,
@@ -603,6 +624,9 @@ def update_purchase_option_decision(
     option.decision_note = decision_note
     option.decision_user_id = current_user.id
     option.decision_at = datetime.datetime.utcnow()
+    purchase = db.query(models.CreditApplication).filter(
+        models.CreditApplication.lead_id == option.lead_id
+    ).order_by(models.CreditApplication.created_at.desc()).first()
 
     action_label = "aceptó" if decision_status == "accepted" else "rechazó"
     option_label = option.title or "opción sin título"
@@ -618,6 +642,11 @@ def update_purchase_option_decision(
         new_status=models.LeadStatus.INTERESTED.value,
         comment=f"Se {action_label} la opción '{option_label}'. Nota: {decision_note}"
     ))
+
+    if purchase:
+        stamped_note = f"[{current_user.full_name or current_user.email}] Se {action_label} la opciÃ³n '{option_label}'. Nota: {decision_note}"
+        purchase.notes = f"{purchase.notes}\n{stamped_note}".strip() if purchase.notes else stamped_note
+        _refresh_purchase_status_from_options(db, purchase)
 
     if lead and lead.assigned_to_id and lead.assigned_to_id != current_user.id:
         target_user = db.query(models.User).options(joinedload(models.User.role)).filter(

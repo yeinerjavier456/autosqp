@@ -642,7 +642,13 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
             showCancelButton: true,
             confirmButtonText: isAccepted ? 'Aceptar opcion' : 'Rechazar opcion',
             cancelButtonText: 'Cancelar',
-            confirmButtonColor: isAccepted ? '#059669' : '#dc2626',
+            buttonsStyling: false,
+            customClass: {
+                confirmButton: isAccepted
+                    ? 'inline-flex items-center justify-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700'
+                    : 'inline-flex items-center justify-center rounded-lg bg-rose-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-rose-700',
+                cancelButton: 'inline-flex items-center justify-center rounded-lg bg-slate-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-slate-700 ml-3'
+            },
             inputValidator: (value) => {
                 if (!value || !value.trim()) {
                     return 'Debes escribir una nota para continuar';
