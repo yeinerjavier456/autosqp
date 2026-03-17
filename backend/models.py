@@ -273,6 +273,29 @@ class Sale(Base):
     seller = relationship("User", foreign_keys=[seller_id], back_populates="sales")
     company = relationship("Company")
     approved_by = relationship("User", foreign_keys=[approved_by_id])
+    payment_receipts = relationship("PaymentReceipt", back_populates="sale", cascade="all, delete-orphan")
+
+
+class PaymentReceipt(Base):
+    __tablename__ = "payment_receipts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), index=True, nullable=False)
+    sale_id = Column(Integer, ForeignKey("sales.id"), index=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    receipt_number = Column(String(120), nullable=True)
+    payment_date = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    amount = Column(Integer, nullable=False, default=0)
+    category = Column(String(50), default="sale_payment")
+    notes = Column(Text, nullable=True)
+    file_name = Column(String(255), nullable=True)
+    file_path = Column(String(500), nullable=True)
+    file_type = Column(String(120), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    sale = relationship("Sale", back_populates="payment_receipts")
+    company = relationship("Company")
+    user = relationship("User")
 
 class NotificationType(str, enum.Enum):
     INFO = "info"

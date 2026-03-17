@@ -482,6 +482,38 @@ class SaleList(BaseModel):
     items: List[Sale]
     total: int
 
+
+class PaymentReceiptBase(BaseModel):
+    sale_id: int
+    receipt_number: Optional[str] = None
+    payment_date: Optional[datetime] = None
+    amount: int
+    category: Optional[str] = "sale_payment"
+    notes: Optional[str] = None
+
+
+class PaymentReceiptCreate(PaymentReceiptBase):
+    pass
+
+
+class PaymentReceipt(PaymentReceiptBase):
+    id: int
+    company_id: int
+    user_id: int
+    file_name: Optional[str] = None
+    file_path: Optional[str] = None
+    file_type: Optional[str] = None
+    created_at: datetime
+    sale: Optional[Sale] = None
+    user: Optional[User] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PaymentReceiptList(BaseModel):
+    items: List[PaymentReceipt]
+    total: int
+
 # --- STATS ---
 
 class DashboardStats(BaseModel):

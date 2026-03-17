@@ -3654,7 +3654,7 @@ def reject_sale(
 @app.get("/finance/stats")
 def get_finance_stats(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     # Only Admin/Super Admin
-    if current_user.role.name not in ["admin", "super_admin"]:
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
          raise HTTPException(status_code=403, detail="Not authorized")
          
     # 1. Total Stats (All time)
@@ -3688,6 +3688,15 @@ def get_finance_stats(db: Session = Depends(get_db), current_user: models.User =
     
     users = user_query.all()
     payroll_expenses = sum(u.base_salary or 0 for u in users)
+
+    receipts_query = db.query(models.PaymentReceipt)
+    if current_user.company_id:
+        receipts_query = receipts_query.filter(models.PaymentReceipt.company_id == current_user.company_id)
+    receipts = receipts_query.all()
+    current_month_receipts = [
+        receipt for receipt in receipts
+        if receipt.payment_date and receipt.payment_date.month == now.month and receipt.payment_date.year == now.year
+    ]
     
     return {
         "total_revenue": total_revenue,
@@ -3696,8 +3705,128 @@ def get_finance_stats(db: Session = Depends(get_db), current_user: models.User =
         "pending_sales_count": pending_count,
         "monthly_revenue": monthly_revenue, 
         "monthly_commissions": monthly_commissions,
-        "payroll_expenses": payroll_expenses
+        "payroll_expenses": payroll_expenses,
+        "receipts_total_count": len(receipts),
+        "receipts_total_amount": sum(receipt.amount or 0 for receipt in receipts),
+        "receipts_monthly_amount": sum(receipt.amount or 0 for receipt in current_month_receipts)
     }
+
+
+@app.get("/finance/receipts", response_model=schemas.PaymentReceiptList)
+def read_payment_receipts(
+    sale_id: Optional[int] = None,
+    category: Optional[str] = None,
+    q: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    query = db.query(models.PaymentReceipt).options(
+        joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.vehicle),
+        joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.seller),
+        joinedload(models.PaymentReceipt.user)
+    )
+    if current_user.company_id:
+        query = query.filter(models.PaymentReceipt.company_id == current_user.company_id)
+    if sale_id:
+        query = query.filter(models.PaymentReceipt.sale_id == sale_id)
+    if category:
+        query = query.filter(models.PaymentReceipt.category == category)
+    if q:
+        search = f"%{q}%"
+        query = query.join(models.Sale, models.PaymentReceipt.sale_id == models.Sale.id).join(
+            models.Vehicle, models.Sale.vehicle_id == models.Vehicle.id, isouter=True
+        ).filter(
+            or_(
+                models.PaymentReceipt.receipt_number.ilike(search),
+                models.PaymentReceipt.notes.ilike(search),
+                models.Vehicle.make.ilike(search),
+                models.Vehicle.model.ilike(search),
+                models.Vehicle.plate.ilike(search)
+            )
+        )
+
+    total = query.count()
+    items = query.order_by(models.PaymentReceipt.payment_date.desc(), models.PaymentReceipt.id.desc()).offset(skip).limit(limit).all()
+    return {"items": items, "total": total}
+
+
+@app.post("/finance/receipts", response_model=schemas.PaymentReceipt)
+async def create_payment_receipt(
+    request: Request,
+    sale_id: int = Form(...),
+    amount: int = Form(...),
+    payment_date: Optional[str] = Form(None),
+    receipt_number: Optional[str] = Form(None),
+    category: Optional[str] = Form("sale_payment"),
+    notes: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    sale = db.query(models.Sale).options(
+        joinedload(models.Sale.vehicle),
+        joinedload(models.Sale.seller)
+    ).filter(models.Sale.id == sale_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+    if current_user.company_id and sale.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    parsed_payment_date = datetime.datetime.utcnow()
+    if payment_date:
+        payment_date = payment_date.strip()
+        try:
+            if len(payment_date) == 10:
+                parsed_payment_date = datetime.datetime.strptime(payment_date, "%Y-%m-%d")
+            else:
+                parsed_payment_date = datetime.datetime.fromisoformat(payment_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid payment date")
+
+    stored_file_name = None
+    stored_file_path = None
+    stored_file_type = None
+    if file and file.filename:
+        os.makedirs("static/accounting", exist_ok=True)
+        safe_name = os.path.basename(file.filename)
+        extension = safe_name.split(".")[-1] if "." in safe_name else "bin"
+        unique_filename = f"{uuid.uuid4()}.{extension}"
+        file_path = f"static/accounting/{unique_filename}"
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        stored_file_name = safe_name
+        stored_file_path = f"/{file_path.replace('\\', '/')}"
+        stored_file_type = file.content_type
+
+    receipt = models.PaymentReceipt(
+        company_id=sale.company_id,
+        sale_id=sale.id,
+        user_id=current_user.id,
+        receipt_number=(receipt_number or "").strip() or None,
+        payment_date=parsed_payment_date,
+        amount=amount,
+        category=(category or "sale_payment").strip() or "sale_payment",
+        notes=(notes or "").strip() or None,
+        file_name=stored_file_name,
+        file_path=stored_file_path,
+        file_type=stored_file_type
+    )
+    db.add(receipt)
+    db.commit()
+    db.refresh(receipt)
+    return db.query(models.PaymentReceipt).options(
+        joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.vehicle),
+        joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.seller),
+        joinedload(models.PaymentReceipt.user)
+    ).filter(models.PaymentReceipt.id == receipt.id).first()
 
 # --- INTERNAL CHAT ENDPOINTS ---
 
