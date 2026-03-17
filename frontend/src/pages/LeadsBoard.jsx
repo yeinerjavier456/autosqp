@@ -647,6 +647,11 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
         }
     };
 
+    const handleRemoveSupervisor = (supervisorId) => {
+        if (!canManageSupervision) return;
+        setSelectedSupervisors((currentSupervisors) => currentSupervisors.filter((id) => id !== supervisorId));
+    };
+
     const handleCopyPurchaseOptionText = async (option) => {
         try {
             await navigator.clipboard.writeText(buildPurchaseOptionShareText(lead, option));
@@ -941,7 +946,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                     <div className="mt-3 flex flex-col gap-3">
                                         <p className="text-xs text-slate-500">
                                             {canManageSupervision
-                                                ? 'Usa Ctrl o Cmd para elegir varias personas que deben seguir este lead.'
+                                                ? 'Usa Ctrl o Cmd para elegir varias personas o quitalas desde las etiquetas de abajo.'
                                                 : 'Solo un administrador puede agregar o quitar personas en supervisión.'}
                                         </p>
                                         <button
@@ -956,8 +961,18 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                     {selectedSupervisorUsers.length > 0 && (
                                         <div className="mt-3 flex flex-wrap gap-2">
                                             {selectedSupervisorUsers.map((person) => (
-                                                <span key={person.id} className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 border border-blue-200">
-                                                    {person.full_name || person.email}
+                                                <span key={person.id} className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 border border-blue-200">
+                                                    <span>{person.full_name || person.email}</span>
+                                                    {canManageSupervision && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveSupervisor(person.id)}
+                                                            className="rounded-full px-1 text-[10px] leading-none text-blue-700 transition hover:bg-blue-100"
+                                                            aria-label={`Quitar a ${person.full_name || person.email} de supervision`}
+                                                        >
+                                                            x
+                                                        </button>
+                                                    )}
                                                 </span>
                                             ))}
                                         </div>
