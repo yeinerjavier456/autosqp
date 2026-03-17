@@ -273,7 +273,13 @@ def ping():
     print("DEBUG: Ping called", flush=True)
     return {"message": "pong"}
 
-from dependencies import get_current_user, oauth2_scheme
+from dependencies import (
+    get_current_user,
+    oauth2_scheme,
+    ensure_can_modify_lead,
+    ensure_can_manage_lead_supervision,
+    is_company_admin,
+)
 
 @app.post("/token", response_model=schemas.Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -1571,6 +1577,8 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
     # 2. Assignment Logic
     assigned_user_id = lead.assigned_to_id
     supervisor_ids = normalize_supervisor_ids(getattr(lead, "supervisor_ids", []))
+    if supervisor_ids and not is_company_admin(current_user):
+        raise HTTPException(status_code=403, detail="Solo un administrador puede agregar o quitar supervisores de un lead.")
     
     # Automatic Assignment if not provided
     if not assigned_user_id:
@@ -2867,6 +2875,9 @@ def create_lead(
     
     # Exclude company_id because we pass it manually
     lead_data = lead.dict(exclude={'company_id'})
+    supervisor_ids = normalize_supervisor_ids(getattr(lead, "supervisor_ids", []))
+    if supervisor_ids and not is_company_admin(current_user):
+        raise HTTPException(status_code=403, detail="Solo un administrador puede agregar o quitar supervisores de un lead.")
     
     # Manual Assignment by Aliado/Admin
     assigned_to_id = lead.assigned_to_id
@@ -2948,6 +2959,9 @@ def update_lead(
         
     if current_user.company_id and lead.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Not authorized")
+    ensure_can_modify_lead(current_user, lead)
+    if lead_update.supervisor_ids is not None:
+        ensure_can_manage_lead_supervision(current_user, lead)
 
     previous_assigned_user = lead.assigned_to
     previous_role_name = get_user_role_name(previous_assigned_user)
@@ -3109,6 +3123,7 @@ def create_lead_note(
         
     if current_user.company_id and lead.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Not authorized")
+    ensure_can_modify_lead(current_user, lead)
         
     db_note = models.LeadNote(
         lead_id=lead_id,
@@ -3159,6 +3174,7 @@ async def upload_lead_file(
         
     if current_user.company_id and lead.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Not authorized")
+    ensure_can_modify_lead(current_user, lead)
         
     os.makedirs("static/leads", exist_ok=True)
     file_extension = file.filename.split(".")[-1]
@@ -3216,6 +3232,7 @@ def delete_lead_file(
 
     if current_user.company_id and lead.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Not authorized")
+    ensure_can_modify_lead(current_user, lead)
 
     reason = (payload.reason or "").strip()
     if not reason:

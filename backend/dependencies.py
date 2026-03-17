@@ -29,3 +29,58 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     if user is None:
         raise credentials_exception
     return user
+
+
+def get_effective_role_name(user: models.User | None) -> str:
+    if not user or not user.role:
+        return ""
+    return getattr(user.role, "base_role_name", None) or getattr(user.role, "name", None) or ""
+
+
+def is_company_admin(user: models.User | None) -> bool:
+    return get_effective_role_name(user) in {"admin", "super_admin"}
+
+
+def get_lead_supervisor_ids(lead: models.Lead | None) -> set[int]:
+    if not lead:
+        return set()
+
+    raw_ids = getattr(lead, "supervisor_ids", None)
+    if raw_ids:
+        normalized_ids = set()
+        for raw_id in raw_ids:
+            try:
+                normalized_ids.add(int(raw_id))
+            except (TypeError, ValueError):
+                continue
+        if normalized_ids:
+            return normalized_ids
+
+    return {
+        int(user.id)
+        for user in getattr(lead, "supervisors", []) or []
+        if user and getattr(user, "id", None) is not None
+    }
+
+
+def ensure_can_modify_lead(current_user: models.User, lead: models.Lead):
+    if is_company_admin(current_user):
+        return
+
+    supervisor_ids = get_lead_supervisor_ids(lead)
+    is_supervisor_only = current_user.id in supervisor_ids and lead.assigned_to_id != current_user.id
+    if is_supervisor_only:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Los supervisores solo pueden ver el lead. Solo un administrador puede modificarlo."
+        )
+
+
+def ensure_can_manage_lead_supervision(current_user: models.User, lead: models.Lead):
+    if is_company_admin(current_user):
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Solo un administrador puede agregar o quitar supervisores de un lead."
+    )

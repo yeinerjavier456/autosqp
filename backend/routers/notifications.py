@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import models, schemas, database
-from dependencies import get_current_user, get_db
+from dependencies import get_current_user, get_db, ensure_can_modify_lead
 import datetime
 import os
 from zoneinfo import ZoneInfo
@@ -91,6 +91,9 @@ def create_lead_reminder(
     lead = db.query(models.Lead).filter(models.Lead.id == lead_id).first()
     if not lead:
          raise HTTPException(status_code=404, detail="Lead not found")
+    if current_user.company_id and lead.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    ensure_can_modify_lead(current_user, lead)
 
     db_reminder = models.LeadReminder(
         user_id=current_user.id,

@@ -337,6 +337,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
 
     const handleSendReply = async (e) => {
         e.preventDefault();
+        if (!canModifyLead) {
+            showReadOnlyWarning();
+            return;
+        }
         if (!replyMessage.trim()) return;
 
         // Ensure we have a conversation ID (from existing messages)
@@ -384,6 +388,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
 
     const handleAddNote = async (e) => {
         e.preventDefault();
+        if (!canModifyLead) {
+            showReadOnlyWarning();
+            return;
+        }
         if (!noteContent.trim()) return;
         setUploadingNote(true);
         try {
@@ -406,6 +414,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
 
     const handleFileUpload = async (e) => {
         e.preventDefault();
+        if (!canModifyLead) {
+            showReadOnlyWarning();
+            return;
+        }
         if (!selectedFiles || selectedFiles.length === 0) return;
         setUploadingFile(true);
         try {
@@ -438,6 +450,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
     };
 
     const handleDeleteLeadFile = async (fileToDelete) => {
+        if (!canModifyLead) {
+            showReadOnlyWarning();
+            return;
+        }
         const { value: reason } = await Swal.fire({
             title: 'Eliminar documento',
             input: 'textarea',
@@ -527,6 +543,13 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
     ];
 
     const canAssignToAnyRole = currentUserRole === 'admin' || currentUserRole === 'super_admin' || currentUserRole === 'aliado';
+    const isCompanyAdmin = currentUserRole === 'admin' || currentUserRole === 'super_admin';
+    const currentUserId = user?.id ? parseInt(user.id, 10) : null;
+    const leadSupervisorIds = getLeadSupervisorIds(lead);
+    const isAssignedLeadOwner = lead?.assigned_to?.id === currentUserId;
+    const isSupervisorOnlyViewer = !isCompanyAdmin && leadSupervisorIds.includes(currentUserId) && !isAssignedLeadOwner;
+    const canModifyLead = !isSupervisorOnlyViewer;
+    const canManageSupervision = isCompanyAdmin;
     const assignableUsers = Array.isArray(advisors)
         ? advisors.filter((adv) => {
             const roleName = getEffectiveRoleName(adv.role);
@@ -541,8 +564,16 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
         : [];
     const selectedSupervisorUsers = supervisorOptions.filter((person) => selectedSupervisors.includes(person.id));
 
+    const showReadOnlyWarning = () => {
+        Swal.fire('Solo lectura', 'Tienes este lead en supervisión. Puedes verlo, pero solo un administrador puede modificarlo.', 'info');
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!canModifyLead) {
+            showReadOnlyWarning();
+            return;
+        }
 
         // Si no es status 'interested', comprobamos el comment
         const adminCanSaveWithoutNote = currentUserRole === 'admin' || currentUserRole === 'super_admin';
@@ -572,7 +603,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                     desired_vehicle: !hasVehicle ? desiredVehicle : null
                 };
             }
-            await onUpdate(lead.id, newStatus, newComment, processDetail, selectedSupervisors);
+            await onUpdate(lead.id, newStatus, newComment, processDetail, canManageSupervision ? selectedSupervisors : null);
             setNewComment('');
         } catch (error) {
             console.error("Update failed", error);
@@ -582,6 +613,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
     };
 
     const handleCreateReminder = async () => {
+        if (!canModifyLead) {
+            showReadOnlyWarning();
+            return;
+        }
         if (!reminderDate || !reminderNote) {
             Swal.fire('Error', 'Fecha y nota son requeridas', 'warning');
             return;
@@ -593,6 +628,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
 
     const handleSaveSupervisorSelection = async () => {
         if (!onSaveSupervisors) return;
+        if (!canManageSupervision) {
+            Swal.fire('Sin permisos', 'Solo un administrador puede agregar o quitar supervisores de un lead.', 'info');
+            return;
+        }
         setSavingSupervisors(true);
         try {
             await onSaveSupervisors(lead.id, selectedSupervisors);
@@ -630,6 +669,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
     };
 
     const handlePurchaseOptionDecision = async (option, decisionStatus) => {
+        if (!canModifyLead) {
+            showReadOnlyWarning();
+            return;
+        }
         const isAccepted = decisionStatus === 'accepted';
         const { value: decisionNote } = await Swal.fire({
             title: isAccepted ? 'Aceptar opcion' : 'Rechazar opcion',
@@ -816,14 +859,16 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                                 <button
                                                     type="button"
                                                     onClick={() => handlePurchaseOptionDecision(option, 'accepted')}
-                                                    className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100"
+                                                    disabled={!canModifyLead}
+                                                    className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
                                                     Aceptar
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => handlePurchaseOptionDecision(option, 'rejected')}
-                                                    className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
+                                                    disabled={!canModifyLead}
+                                                    className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
                                                     Rechazar
                                                 </button>
@@ -849,9 +894,11 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                     <select
                                         className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-white focus:ring-blue-500 outline-none font-semibold text-indigo-600"
                                         value={assignedAdvisor}
+                                        disabled={!canModifyLead}
                                         onChange={(e) => {
+                                            if (!canModifyLead) return;
                                             setAssignedAdvisor(e.target.value);
-                                            if (onAssign) onAssign(lead.id, e.target.value, selectedSupervisors);
+                                            if (onAssign) onAssign(lead.id, e.target.value, canManageSupervision ? selectedSupervisors : null);
                                         }}
                                     >
                                         <option value="">Sin asignar</option>
@@ -870,7 +917,9 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                     <select
                                         multiple
                                         value={selectedSupervisors.map(String)}
+                                        disabled={!canManageSupervision}
                                         onChange={(e) => {
+                                            if (!canManageSupervision) return;
                                             const values = Array.from(e.target.selectedOptions)
                                                 .map((option) => parseInt(option.value, 10))
                                                 .filter((id) => Number.isInteger(id));
@@ -886,13 +935,15 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                     </select>
                                     <div className="mt-3 flex flex-col gap-3">
                                         <p className="text-xs text-slate-500">
-                                            Usa Ctrl o Cmd para elegir varias personas que deben seguir este lead.
+                                            {canManageSupervision
+                                                ? 'Usa Ctrl o Cmd para elegir varias personas que deben seguir este lead.'
+                                                : 'Solo un administrador puede agregar o quitar personas en supervisión.'}
                                         </p>
                                         <button
                                             type="button"
                                             onClick={handleSaveSupervisorSelection}
-                                            disabled={savingSupervisors}
-                                            className="self-start rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                                            disabled={savingSupervisors || !canManageSupervision}
+                                            className="self-start rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                             {savingSupervisors ? 'Guardando...' : 'Guardar supervision'}
                                         </button>
@@ -951,11 +1002,11 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                             className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                                             value={replyMessage}
                                             onChange={(e) => setReplyMessage(e.target.value)}
-                                            disabled={sendingReply}
+                                            disabled={sendingReply || !canModifyLead}
                                         />
                                         <button
                                             type="submit"
-                                            disabled={!replyMessage.trim() || sendingReply}
+                                            disabled={!replyMessage.trim() || sendingReply || !canModifyLead}
                                             className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm font-bold transition disabled:opacity-50 flex items-center gap-1"
                                         >
                                             {sendingReply ? '...' : (
@@ -974,6 +1025,11 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                 </div>
 
                 <div className="overflow-y-auto custom-scrollbar pr-2 flex-1 space-y-6">
+                    {isSupervisorOnlyViewer && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                            Este lead está en modo solo lectura para ti por estar en supervisión. Solo un administrador puede modificarlo.
+                        </div>
+                    )}
 
                     {/* Reminder Section */}
                     <div className="bg-indigo-50/60 p-4 rounded-xl border border-indigo-100">
@@ -989,6 +1045,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                     className="w-full border border-indigo-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
                                     value={reminderDate}
                                     onChange={(e) => setReminderDate(e.target.value)}
+                                    disabled={!canModifyLead}
                                 />
                             </div>
                             <div className="w-full sm:flex-[2]">
@@ -999,11 +1056,13 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                     className="w-full border border-indigo-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
                                     value={reminderNote}
                                     onChange={(e) => setReminderNote(e.target.value)}
+                                    disabled={!canModifyLead}
                                 />
                             </div>
                             <button
                                 onClick={handleCreateReminder}
-                                className="w-full sm:w-auto bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 transition shadow-sm h-[38px]"
+                                disabled={!canModifyLead}
+                                className="w-full sm:w-auto bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 transition shadow-sm h-[38px] disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Agendar
                             </button>
@@ -1023,6 +1082,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                     <select
                                         value={newStatus}
                                         onChange={(e) => setNewStatus(e.target.value)}
+                                        disabled={!canModifyLead}
                                         className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                                     >
                                         <option value="new">Nuevo</option>
@@ -1038,6 +1098,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                     <textarea
                                         value={newComment}
                                         onChange={(e) => setNewComment(e.target.value)}
+                                        disabled={!canModifyLead}
                                         className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                                         rows="1"
                                         placeholder="Escribe detalles..."
@@ -1053,6 +1114,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                             type="checkbox"
                                             className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500 cursor-pointer"
                                             checked={hasVehicle}
+                                            disabled={!canModifyLead}
                                             onChange={(e) => setHasVehicle(e.target.checked)}
                                         />
                                         ¿Tenemos el vehículo deseado en inventario?
@@ -1063,6 +1125,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                             <select
                                                 className="w-full text-sm border border-orange-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-orange-500 bg-white shadow-inner"
                                                 value={selectedVehicleId}
+                                                disabled={!canModifyLead}
                                                 onChange={(e) => setSelectedVehicleId(e.target.value)}
                                             >
                                                 <option value="">-- Buscar Auto Disponible --</option>
@@ -1078,6 +1141,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                                 type="text"
                                                 className="w-full text-sm border border-orange-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-orange-500 bg-white shadow-inner"
                                                 value={desiredVehicle}
+                                                disabled={!canModifyLead}
                                                 onChange={(e) => setDesiredVehicle(e.target.value)}
                                                 placeholder="Ej: Toyota Hilux 2020 Color Blanco..."
                                             />
@@ -1096,11 +1160,12 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                         placeholder="Agregar una nueva nota..."
                                         value={noteContent}
                                         onChange={(e) => setNoteContent(e.target.value)}
+                                        disabled={!canModifyLead}
                                     />
                                     <button
                                         type="button"
                                         onClick={handleAddNote}
-                                        disabled={uploadingNote || !noteContent.trim()}
+                                        disabled={uploadingNote || !noteContent.trim() || !canModifyLead}
                                         className="bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-orange-700 disabled:opacity-50"
                                     >
                                         {uploadingNote ? 'Guardando...' : 'Agregar'}
@@ -1131,12 +1196,13 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                         multiple
                                         accept="*"
                                         className="flex-1 text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-orange-100 file:text-orange-700 hover:file:bg-orange-200"
+                                        disabled={!canModifyLead}
                                         onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
                                     />
                                     <button
                                         type="button"
                                         onClick={handleFileUpload}
-                                        disabled={uploadingFile || selectedFiles.length === 0}
+                                        disabled={uploadingFile || selectedFiles.length === 0 || !canModifyLead}
                                         className="bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-orange-700 disabled:opacity-50"
                                     >
                                         {uploadingFile ? 'Subiendo...' : `Subir ${selectedFiles.length > 0 ? `(${selectedFiles.length})` : ''}`}
@@ -1160,7 +1226,8 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                                 <button
                                                     type="button"
                                                     onClick={() => handleDeleteLeadFile(file)}
-                                                    className="w-full rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600 transition hover:bg-red-100"
+                                                    disabled={!canModifyLead}
+                                                    className="w-full rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600 transition hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
                                                     Eliminar
                                                 </button>
@@ -1172,7 +1239,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
 
                             <button
                                 type="submit"
-                                disabled={loading}
+                                disabled={loading || !canModifyLead}
                                 className="w-full bg-blue-600 text-white text-sm font-bold py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
                             >
                                 {loading ? 'Guardando...' : 'Guardar Nota y Actualizar'}
@@ -2134,29 +2201,31 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                                 </div>
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Personas en supervision</label>
-                                <select
-                                    multiple
-                                    className="h-32 w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                                    value={(newLeadForm.supervisor_ids || []).map(String)}
-                                    onChange={e => setNewLeadForm({
-                                        ...newLeadForm,
-                                        supervisor_ids: Array.from(e.target.selectedOptions)
-                                            .map((option) => parseInt(option.value, 10))
-                                            .filter((id) => Number.isInteger(id))
-                                    })}
-                                >
-                                    {supervisionUsers.map((person) => (
-                                        <option key={person.id} value={person.id}>
-                                            {person.full_name || person.email} - {getDisplayRoleName(person.role)}
-                                        </option>
-                                    ))}
-                                </select>
-                                <p className="mt-1 text-xs text-gray-500">
-                                    Puedes dejar varias personas siguiendo este lead desde el inicio.
-                                </p>
-                            </div>
+                            {(currentRoleName === 'admin' || currentRoleName === 'super_admin') && (
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">Personas en supervision</label>
+                                    <select
+                                        multiple
+                                        className="h-32 w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                        value={(newLeadForm.supervisor_ids || []).map(String)}
+                                        onChange={e => setNewLeadForm({
+                                            ...newLeadForm,
+                                            supervisor_ids: Array.from(e.target.selectedOptions)
+                                                .map((option) => parseInt(option.value, 10))
+                                                .filter((id) => Number.isInteger(id))
+                                        })}
+                                    >
+                                        {supervisionUsers.map((person) => (
+                                            <option key={person.id} value={person.id}>
+                                                {person.full_name || person.email} - {getDisplayRoleName(person.role)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <p className="mt-1 text-xs text-gray-500">
+                                        Puedes dejar varias personas siguiendo este lead desde el inicio.
+                                    </p>
+                                </div>
+                            )}
 
                             <div className="flex gap-4 pt-4">
                                 <button
