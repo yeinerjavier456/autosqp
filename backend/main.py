@@ -58,7 +58,8 @@ def ensure_payment_receipts_columns():
             return
 
         receipt_columns = {
-            "concept": "ALTER TABLE payment_receipts ADD COLUMN concept VARCHAR(200) NULL"
+            "concept": "ALTER TABLE payment_receipts ADD COLUMN concept VARCHAR(200) NULL",
+            "movement_type": "ALTER TABLE payment_receipts ADD COLUMN movement_type VARCHAR(20) NOT NULL DEFAULT 'income'"
         }
         for column_name, ddl in receipt_columns.items():
             exists = conn.execute(text(
@@ -3730,6 +3731,10 @@ def get_finance_stats(db: Session = Depends(get_db), current_user: models.User =
         receipt for receipt in receipts
         if receipt.payment_date and receipt.payment_date.month == now.month and receipt.payment_date.year == now.year
     ]
+    total_income = sum((receipt.amount or 0) for receipt in receipts if (receipt.movement_type or "income") == "income")
+    total_expense = sum((receipt.amount or 0) for receipt in receipts if (receipt.movement_type or "income") == "expense")
+    monthly_income = sum((receipt.amount or 0) for receipt in current_month_receipts if (receipt.movement_type or "income") == "income")
+    monthly_expense = sum((receipt.amount or 0) for receipt in current_month_receipts if (receipt.movement_type or "income") == "expense")
     
     return {
         "total_revenue": total_revenue,
@@ -3741,7 +3746,13 @@ def get_finance_stats(db: Session = Depends(get_db), current_user: models.User =
         "payroll_expenses": payroll_expenses,
         "receipts_total_count": len(receipts),
         "receipts_total_amount": sum(receipt.amount or 0 for receipt in receipts),
-        "receipts_monthly_amount": sum(receipt.amount or 0 for receipt in current_month_receipts)
+        "receipts_monthly_amount": sum(receipt.amount or 0 for receipt in current_month_receipts),
+        "accounting_income_total": total_income,
+        "accounting_expense_total": total_expense,
+        "accounting_balance_total": total_income - total_expense,
+        "accounting_income_monthly": monthly_income,
+        "accounting_expense_monthly": monthly_expense,
+        "accounting_balance_monthly": monthly_income - monthly_expense
     }
 
 
@@ -3812,6 +3823,7 @@ async def create_payment_receipt(
     sale_id: Optional[int] = Form(None),
     concept: Optional[str] = Form(None),
     amount: int = Form(...),
+    movement_type: Optional[str] = Form("income"),
     payment_date: Optional[str] = Form(None),
     receipt_number: Optional[str] = Form(None),
     category: Optional[str] = Form("sale_payment"),
@@ -3824,6 +3836,9 @@ async def create_payment_receipt(
         raise HTTPException(status_code=403, detail="Not authorized")
 
     concept_value = (concept or "").strip() or None
+    movement_type_value = (movement_type or "income").strip().lower()
+    if movement_type_value not in {"income", "expense"}:
+        raise HTTPException(status_code=400, detail="movement_type must be income or expense")
     sale = None
     company_id = current_user.company_id
     if sale_id:
@@ -3870,6 +3885,7 @@ async def create_payment_receipt(
         sale_id=sale.id if sale else None,
         user_id=current_user.id,
         concept=concept_value,
+        movement_type=movement_type_value,
         receipt_number=(receipt_number or "").strip() or None,
         payment_date=parsed_payment_date,
         amount=amount,
@@ -3928,6 +3944,7 @@ def download_payment_receipt_pdf(
         ("Numero de recibo", receipt.receipt_number or "Sin consecutivo"),
         ("Fecha de pago", receipt.payment_date.strftime("%d/%m/%Y") if receipt.payment_date else "Sin fecha"),
         ("Categoria", (receipt.category or "sale_payment").replace("_", " ")),
+        ("Tipo", "Ingreso" if (receipt.movement_type or "income") == "income" else "Egreso"),
         ("Concepto", receipt.concept or "Sin concepto"),
         ("Valor", f"COP ${int(receipt.amount or 0):,}".replace(",", ".")),
         ("Registrado por", getattr(receipt.user, "full_name", None) or getattr(receipt.user, "email", "") or "Usuario"),

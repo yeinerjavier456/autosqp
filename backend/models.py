@@ -284,6 +284,7 @@ class PaymentReceipt(Base):
     sale_id = Column(Integer, ForeignKey("sales.id"), index=True, nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     concept = Column(String(200), nullable=True)
+    movement_type = Column(String(20), default="income")
     receipt_number = Column(String(120), nullable=True)
     payment_date = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
     amount = Column(Integer, nullable=False, default=0)

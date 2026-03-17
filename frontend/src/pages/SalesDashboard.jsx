@@ -13,7 +13,13 @@ const SalesDashboard = () => {
         payroll_expenses: 0,
         receipts_total_count: 0,
         receipts_total_amount: 0,
-        receipts_monthly_amount: 0
+        receipts_monthly_amount: 0,
+        accounting_income_total: 0,
+        accounting_expense_total: 0,
+        accounting_balance_total: 0,
+        accounting_income_monthly: 0,
+        accounting_expense_monthly: 0,
+        accounting_balance_monthly: 0
     });
     const [sales, setSales] = useState([]);
     const [approvedSales, setApprovedSales] = useState([]);
@@ -25,6 +31,7 @@ const SalesDashboard = () => {
     const [receiptForm, setReceiptForm] = useState({
         sale_id: '',
         concept: '',
+        movement_type: 'income',
         amount: '',
         payment_date: new Date().toISOString().slice(0, 10),
         receipt_number: '',
@@ -136,6 +143,7 @@ const SalesDashboard = () => {
                 formData.append('sale_id', receiptForm.sale_id);
             }
             formData.append('concept', receiptForm.concept);
+            formData.append('movement_type', receiptForm.movement_type);
             formData.append('amount', receiptForm.amount);
             formData.append('payment_date', receiptForm.payment_date);
             formData.append('receipt_number', receiptForm.receipt_number);
@@ -155,6 +163,7 @@ const SalesDashboard = () => {
             setReceiptForm({
                 sale_id: '',
                 concept: '',
+                movement_type: 'income',
                 amount: '',
                 payment_date: new Date().toISOString().slice(0, 10),
                 receipt_number: '',
@@ -352,19 +361,37 @@ const SalesDashboard = () => {
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                            <p className="text-sm font-medium uppercase text-gray-500">Recibos Registrados</p>
+                            <p className="text-sm font-medium uppercase text-gray-500">Movimientos Registrados</p>
                             <p className="mt-2 text-3xl font-bold text-slate-800">{stats.receipts_total_count || 0}</p>
                             <p className="mt-2 text-xs text-slate-500">Total de soportes cargados en contabilidad.</p>
                         </div>
                         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                            <p className="text-sm font-medium uppercase text-gray-500">Valor Recibido</p>
-                            <p className="mt-2 text-3xl font-bold text-emerald-600">${stats.receipts_total_amount?.toLocaleString() || '0'}</p>
-                            <p className="mt-2 text-xs text-emerald-700">Suma historica de recibos registrados.</p>
+                            <p className="text-sm font-medium uppercase text-gray-500">Ingresos Totales</p>
+                            <p className="mt-2 text-3xl font-bold text-emerald-600">${stats.accounting_income_total?.toLocaleString() || '0'}</p>
+                            <p className="mt-2 text-xs text-emerald-700">Suma historica de ingresos contabilizados.</p>
                         </div>
                         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                            <p className="text-sm font-medium uppercase text-gray-500">Valor del Mes</p>
-                            <p className="mt-2 text-3xl font-bold text-blue-600">${stats.receipts_monthly_amount?.toLocaleString() || '0'}</p>
-                            <p className="mt-2 text-xs text-blue-700">Movimiento contable registrado este mes.</p>
+                            <p className="text-sm font-medium uppercase text-gray-500">Balance Total</p>
+                            <p className={`mt-2 text-3xl font-bold ${Number(stats.accounting_balance_total || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>${stats.accounting_balance_total?.toLocaleString() || '0'}</p>
+                            <p className="mt-2 text-xs text-blue-700">Ingresos menos egresos contabilizados.</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                            <p className="text-sm font-medium uppercase text-gray-500">Egresos Totales</p>
+                            <p className="mt-2 text-3xl font-bold text-rose-600">${stats.accounting_expense_total?.toLocaleString() || '0'}</p>
+                            <p className="mt-2 text-xs text-rose-700">Gastos y salidas de caja registradas.</p>
+                        </div>
+                        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                            <p className="text-sm font-medium uppercase text-gray-500">Ingresos del Mes</p>
+                            <p className="mt-2 text-3xl font-bold text-emerald-600">${stats.accounting_income_monthly?.toLocaleString() || '0'}</p>
+                            <p className="mt-2 text-xs text-emerald-700">Ingresos contabilizados en el mes actual.</p>
+                        </div>
+                        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                            <p className="text-sm font-medium uppercase text-gray-500">Balance del Mes</p>
+                            <p className={`mt-2 text-3xl font-bold ${Number(stats.accounting_balance_monthly || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>${stats.accounting_balance_monthly?.toLocaleString() || '0'}</p>
+                            <p className="mt-2 text-xs text-blue-700">Resultado neto del mes actual.</p>
                         </div>
                     </div>
 
@@ -404,7 +431,20 @@ const SalesDashboard = () => {
 
                                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                     <div>
-                                        <label className="mb-1 block text-sm font-semibold text-gray-700">Valor recibido</label>
+                                        <label className="mb-1 block text-sm font-semibold text-gray-700">Tipo de movimiento</label>
+                                        <select
+                                            value={receiptForm.movement_type}
+                                            onChange={(e) => setReceiptForm({ ...receiptForm, movement_type: e.target.value })}
+                                            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            <option value="income">Ingreso</option>
+                                            <option value="expense">Egreso</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="mb-1 block text-sm font-semibold text-gray-700">
+                                            {receiptForm.movement_type === 'expense' ? 'Valor del egreso' : 'Valor del ingreso'}
+                                        </label>
                                         <input
                                             type="number"
                                             min="1"
@@ -445,6 +485,7 @@ const SalesDashboard = () => {
                                             className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
                                         >
                                             <option value="sale_payment">Pago de venta</option>
+                                            <option value="other_income">Otro ingreso</option>
                                             <option value="commission_payment">Pago de comision</option>
                                             <option value="expense">Egreso</option>
                                         </select>
@@ -493,6 +534,7 @@ const SalesDashboard = () => {
                                             <th className="border-b p-4">Fecha</th>
                                             <th className="border-b p-4">Venta</th>
                                             <th className="border-b p-4">Recibo</th>
+                                            <th className="border-b p-4">Tipo</th>
                                             <th className="border-b p-4">Categoria</th>
                                             <th className="border-b p-4">Valor</th>
                                             <th className="border-b p-4">Soporte</th>
@@ -521,10 +563,15 @@ const SalesDashboard = () => {
                                                     <div className="font-medium">{receipt.receipt_number || 'Sin consecutivo'}</div>
                                                     <div className="line-clamp-2 text-xs text-gray-500">{receipt.notes || 'Sin nota'}</div>
                                                 </td>
+                                                <td className="p-4 text-sm">
+                                                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${receipt.movement_type === 'expense' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                        {receipt.movement_type === 'expense' ? 'Egreso' : 'Ingreso'}
+                                                    </span>
+                                                </td>
                                                 <td className="p-4 text-sm capitalize text-gray-600">
                                                     {(receipt.category || 'sale_payment').replaceAll('_', ' ')}
                                                 </td>
-                                                <td className="p-4 font-semibold text-emerald-600">
+                                                <td className={`p-4 font-semibold ${receipt.movement_type === 'expense' ? 'text-rose-600' : 'text-emerald-600'}`}>
                                                     ${Number(receipt.amount || 0).toLocaleString()}
                                                 </td>
                                                 <td className="p-4 text-sm">
@@ -563,7 +610,7 @@ const SalesDashboard = () => {
                                         ))}
                                         {receipts.length === 0 && (
                                             <tr>
-                                                <td colSpan="7" className="p-8 text-center italic text-gray-400">
+                                                <td colSpan="8" className="p-8 text-center italic text-gray-400">
                                                     Aun no hay recibos registrados en contabilidad.
                                                 </td>
                                             </tr>
