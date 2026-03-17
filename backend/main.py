@@ -535,7 +535,7 @@ def get_auto_assign_candidate_users(db: Session, company_id: Optional[int]) -> L
         role = getattr(user, "role", None)
         if not role:
             continue
-        if bool(getattr(role, "auto_assign_leads", False)):
+        if bool(getattr(role, "auto_assign_leads", False)) and is_advisor_role(role):
             eligible_users.append(user)
 
     if eligible_users:
@@ -544,7 +544,7 @@ def get_auto_assign_candidate_users(db: Session, company_id: Optional[int]) -> L
     # Backward-compatible fallback for companies that still rely on the default advisor role.
     fallback_users = []
     for user in candidates:
-        if get_user_role_name(user) == "asesor":
+        if is_advisor_role(getattr(user, "role", None)):
             fallback_users.append(user)
 
     if fallback_users:
