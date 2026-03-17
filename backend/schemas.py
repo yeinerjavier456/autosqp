@@ -510,6 +510,9 @@ class CreditApplicationUpdate(BaseModel):
     status: Optional[str] = None
     assigned_to_id: Optional[int] = None
 
+class CreditNoteCreate(BaseModel):
+    content: str
+
 class CreditApplication(CreditApplicationBase):
     id: int
     lead_id: Optional[int] = None

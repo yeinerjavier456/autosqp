@@ -2747,6 +2747,25 @@ def create_lead_note(
     
     return db_note
 
+@app.get("/leads/{lead_id}/notes", response_model=List[schemas.LeadNote])
+def get_lead_notes(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    lead = db.query(models.Lead).filter(models.Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    if current_user.company_id and lead.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    return db.query(models.LeadNote).options(
+        joinedload(models.LeadNote.user)
+    ).filter(
+        models.LeadNote.lead_id == lead_id
+    ).order_by(models.LeadNote.created_at.desc()).all()
+
 @app.post("/leads/{lead_id}/files", response_model=schemas.LeadFile)
 async def upload_lead_file(
     lead_id: int, 
@@ -2787,6 +2806,25 @@ async def upload_lead_file(
     log_action_to_db(db, current_user.id, "CREATE", "LeadFile", db_file.id, f"Archivo adjuntado al lead {lead.name}")
     
     return db_file
+
+@app.get("/leads/{lead_id}/files", response_model=List[schemas.LeadFile])
+def get_lead_files(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    lead = db.query(models.Lead).filter(models.Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    if current_user.company_id and lead.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    return db.query(models.LeadFile).options(
+        joinedload(models.LeadFile.user)
+    ).filter(
+        models.LeadFile.lead_id == lead_id
+    ).order_by(models.LeadFile.created_at.desc()).all()
 
 @app.delete("/leads/{lead_id}/files/{file_id}")
 def delete_lead_file(

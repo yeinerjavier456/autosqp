@@ -1,10 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 from database import get_db
 import models, schemas
 from dependencies import get_current_user
+import os
+import shutil
+import uuid
 
 router = APIRouter(
     prefix="/credits",
@@ -18,6 +21,16 @@ VALID_CREDIT_STATUSES = {
     models.CreditStatus.REJECTED.value,
     models.CreditStatus.COMPLETED.value,
 }
+
+
+def _credit_status_label(status_value: Optional[str]) -> str:
+    return {
+        models.CreditStatus.PENDING.value: "Solicitud recibida",
+        models.CreditStatus.IN_REVIEW.value: "En estudio",
+        models.CreditStatus.APPROVED.value: "Aprobado",
+        models.CreditStatus.REJECTED.value: "No viable",
+        models.CreditStatus.COMPLETED.value: "Finalizado",
+    }.get(status_value or "", status_value or "Sin estado")
 
 
 def _get_credit_desired_vehicle(db: Session, lead: models.Lead) -> str:
@@ -283,12 +296,138 @@ def update_credit(
     if current_user.company_id and credit.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Not authorized")
     
+    previous_status = credit.status
+    previous_notes = credit.notes or ""
+
     for field, value in credit_update.dict(exclude_unset=True).items():
         setattr(credit, field, value)
-        
+
     db.commit()
     db.refresh(credit)
+
+    if credit.lead_id:
+        lead = db.query(models.Lead).filter(models.Lead.id == credit.lead_id).first()
+        if lead:
+            lead_updates = []
+            if previous_status != credit.status:
+                status_message = f"Solicitud de crédito actualizada: {_credit_status_label(previous_status)} -> {_credit_status_label(credit.status)}"
+                lead_updates.append(status_message)
+                db.add(models.LeadHistory(
+                    lead_id=lead.id,
+                    user_id=current_user.id,
+                    previous_status=lead.status,
+                    new_status=lead.status,
+                    comment=status_message
+                ))
+
+            if credit.notes and (credit.notes or "").strip() != previous_notes.strip():
+                lead_updates.append(f"Nota en créditos actualizada: {credit.notes.strip()}")
+
+            for message in lead_updates:
+                db.add(models.LeadNote(
+                    lead_id=lead.id,
+                    user_id=current_user.id,
+                    content=message
+                ))
+
+            if lead_updates:
+                db.commit()
+
     return credit
+
+@router.post("/{credit_id}/notes")
+def add_credit_note(
+    credit_id: int,
+    note: schemas.CreditNoteCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    credit = db.query(models.CreditApplication).filter(models.CreditApplication.id == credit_id).first()
+    if not credit:
+        raise HTTPException(status_code=404, detail="Credit Application not found")
+
+    if current_user.company_id and credit.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    content = (note.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Note content is required")
+
+    stamped_note = f"[{current_user.full_name or current_user.email}] {content}"
+    credit.notes = f"{credit.notes}\n{stamped_note}".strip() if credit.notes else stamped_note
+    db.add(credit)
+
+    lead_note = None
+    if credit.lead_id:
+        lead_note = models.LeadNote(
+            lead_id=credit.lead_id,
+            user_id=current_user.id,
+            content=f"Nota desde solicitudes de crédito: {content}"
+        )
+        db.add(lead_note)
+        db.add(models.LeadHistory(
+            lead_id=credit.lead_id,
+            user_id=current_user.id,
+            previous_status=models.LeadStatus.CREDIT_APPLICATION.value,
+            new_status=models.LeadStatus.CREDIT_APPLICATION.value,
+            comment=f"Se agregó nota en solicitud de crédito: {content}"
+        ))
+
+    db.commit()
+    db.refresh(credit)
+    if lead_note:
+        db.refresh(lead_note)
+
+    return {"credit": credit, "lead_note": lead_note}
+
+@router.post("/{credit_id}/files", response_model=schemas.LeadFile)
+async def upload_credit_file(
+    credit_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    credit = db.query(models.CreditApplication).filter(models.CreditApplication.id == credit_id).first()
+    if not credit:
+        raise HTTPException(status_code=404, detail="Credit Application not found")
+
+    if current_user.company_id and credit.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if not credit.lead_id:
+        raise HTTPException(status_code=400, detail="Credit application has no related lead")
+
+    os.makedirs("static/leads", exist_ok=True)
+    file_extension = file.filename.split(".")[-1]
+    unique_filename = f"{uuid.uuid4()}.{file_extension}"
+    file_path = f"static/leads/{unique_filename}"
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    db_file = models.LeadFile(
+        lead_id=credit.lead_id,
+        user_id=current_user.id,
+        file_name=file.filename,
+        file_path=f"/{file_path}",
+        file_type=file.content_type
+    )
+    db.add(db_file)
+    db.add(models.LeadNote(
+        lead_id=credit.lead_id,
+        user_id=current_user.id,
+        content=f"Documento agregado desde solicitudes de crédito: {file.filename}"
+    ))
+    db.add(models.LeadHistory(
+        lead_id=credit.lead_id,
+        user_id=current_user.id,
+        previous_status=models.LeadStatus.CREDIT_APPLICATION.value,
+        new_status=models.LeadStatus.CREDIT_APPLICATION.value,
+        comment=f"Documento adjuntado en solicitud de crédito: {file.filename}"
+    ))
+    db.commit()
+    db.refresh(db_file)
+    return db_file
 
 @router.get("/stats")
 def get_credit_stats(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
