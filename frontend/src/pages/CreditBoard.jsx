@@ -158,6 +158,35 @@ const CreditBoard = () => {
         }
     };
 
+    const handleSyncCredits = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post(
+                'https://autosqp.co/api/credits/sync',
+                {},
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            await fetchCredits();
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Solicitudes resincronizadas',
+                html: `
+                    <div style="text-align:left">
+                        <p><strong>Leads revisados:</strong> ${response.data?.processed || 0}</p>
+                        <p><strong>Solicitudes creadas:</strong> ${response.data?.created || 0}</p>
+                        <p><strong>Solicitudes actualizadas:</strong> ${response.data?.updated || 0}</p>
+                    </div>
+                `,
+                confirmButtonText: 'Entendido'
+            });
+        } catch (error) {
+            console.error('Error syncing credit applications', error);
+            Swal.fire('Error', 'No se pudieron traer los leads en solicitud de credito', 'error');
+        }
+    };
+
     // Filter credits by column
     const filteredCredits = credits.filter((credit) => {
         const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -203,18 +232,29 @@ const CreditBoard = () => {
 
     return (
         <div className="p-8 min-h-screen">
-            <div className="flex justify-between items-center mb-8">
+            <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                     <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Gestión de Créditos y Solicitudes</h1>
                     <p className="text-slate-500 mt-1 font-medium">Administra clientes en proceso de aprobación o búsqueda de vehículo.</p>
                 </div>
-                <button
-                    onClick={() => setShowAddModal(true)}
-                    className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-5 py-2.5 rounded-xl hover:shadow-lg hover:scale-105 transition-all font-bold text-sm"
-                >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
-                    Nueva Solicitud
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                    <button
+                        onClick={handleSyncCredits}
+                        className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v6h6M20 20v-6h-6M5.64 18.36A9 9 0 0018.36 18.36M18.36 5.64A9 9 0 005.64 5.64" />
+                        </svg>
+                        Traer leads en credito
+                    </button>
+                    <button
+                        onClick={() => setShowAddModal(true)}
+                        className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-5 py-2.5 rounded-xl hover:shadow-lg hover:scale-105 transition-all font-bold text-sm"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+                        Nueva Solicitud
+                    </button>
+                </div>
             </div>
 
             <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

@@ -49,7 +49,7 @@ def sync_credit_applications_for_company(db: Session, company_id: int):
     ).all()
 
     if not credit_stage_leads:
-        return
+        return {"processed": 0, "created": 0, "updated": 0}
 
     lead_ids = [lead.id for lead in credit_stage_leads]
     existing_credits = db.query(models.CreditApplication).filter(
@@ -61,6 +61,8 @@ def sync_credit_applications_for_company(db: Session, company_id: int):
         latest_by_lead.setdefault(credit.lead_id, credit)
 
     changed = False
+    created_count = 0
+    updated_count = 0
     for lead in credit_stage_leads:
         desired_vehicle = _get_credit_desired_vehicle(db, lead)
         auto_note = f"Generado automaticamente desde lead #{lead.id}."
@@ -70,28 +72,36 @@ def sync_credit_applications_for_company(db: Session, company_id: int):
             if current_credit.company_id != lead.company_id:
                 current_credit.company_id = lead.company_id
                 changed = True
+                updated_count += 1
             if current_credit.assigned_to_id != lead.assigned_to_id:
                 current_credit.assigned_to_id = lead.assigned_to_id
                 changed = True
+                updated_count += 1
             if (lead.name or current_credit.client_name) != current_credit.client_name:
                 current_credit.client_name = lead.name or current_credit.client_name
                 changed = True
+                updated_count += 1
             normalized_phone = (lead.phone or "").strip()
             if normalized_phone and normalized_phone != current_credit.phone:
                 current_credit.phone = normalized_phone
                 changed = True
+                updated_count += 1
             if lead.email != current_credit.email:
                 current_credit.email = lead.email
                 changed = True
+                updated_count += 1
             if desired_vehicle and desired_vehicle != current_credit.desired_vehicle:
                 current_credit.desired_vehicle = desired_vehicle
                 changed = True
+                updated_count += 1
             if current_credit.status not in VALID_CREDIT_STATUSES:
                 current_credit.status = models.CreditStatus.PENDING.value
                 changed = True
+                updated_count += 1
             if not current_credit.notes:
                 current_credit.notes = auto_note
                 changed = True
+                updated_count += 1
             continue
 
         db.add(models.CreditApplication(
@@ -111,9 +121,26 @@ def sync_credit_applications_for_company(db: Session, company_id: int):
             assigned_to_id=lead.assigned_to_id
         ))
         changed = True
+        created_count += 1
 
     if changed:
         db.commit()
+    return {"processed": len(credit_stage_leads), "created": created_count, "updated": updated_count}
+
+
+@router.post("/sync", status_code=200)
+def sync_credit_board(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if not current_user.company_id:
+        raise HTTPException(status_code=400, detail="Company ID required")
+
+    result = sync_credit_applications_for_company(db, current_user.company_id)
+    return {
+        "message": "Solicitudes de credito resincronizadas correctamente",
+        **result
+    }
 
 @router.get("/", response_model=schemas.CreditApplicationList)
 def read_credits(
