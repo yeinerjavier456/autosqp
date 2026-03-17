@@ -212,6 +212,11 @@ const getLeadSupervisorUsers = (lead) => (
     Array.isArray(lead?.supervisors) ? lead.supervisors.filter(Boolean) : []
 );
 
+const parseUserId = (value) => {
+    const parsedValue = parseInt(value, 10);
+    return Number.isInteger(parsedValue) ? parsedValue : null;
+};
+
 const buildPurchaseOptionShareText = (lead, option) => {
     const lines = [
         `Lead: ${lead?.name || 'Cliente'}`,
@@ -1356,6 +1361,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     });
 
     const isAllyBoard = boardMode === 'ally';
+    const currentUserId = parseUserId(user?.id);
     const currentRoleName = user?.role?.base_role_name || user?.role?.name || user?.role;
     const boardTitle = isAllyBoard ? 'Tablero de Aliados' : 'Tablero de Leads';
     const boardDescription = isAllyBoard
@@ -1832,6 +1838,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const filterByStatus = (status) => {
         return leads.filter(lead => {
             const supervisorIds = getLeadSupervisorIds(lead);
+            const assignedUserId = parseUserId(lead.assigned_to?.id);
             const matchesStatus = lead.status === status;
             const matchesSearch =
                 lead.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1840,11 +1847,11 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             const matchesDate = !dateFilter || lead.created_at?.startsWith(dateFilter);
 
             // "Mis Leads" Filter (Priority)
-            const matchesMyLeads = !showMyLeadsOnly || lead.assigned_to?.id === user?.id || supervisorIds.includes(user?.id);
+            const matchesMyLeads = !showMyLeadsOnly || assignedUserId === currentUserId || supervisorIds.includes(currentUserId);
 
             // Specific User filter
-            const parsedUserFilter = userFilter ? parseInt(userFilter, 10) : null;
-            const matchesUser = !parsedUserFilter || lead.assigned_to?.id === parsedUserFilter || supervisorIds.includes(parsedUserFilter);
+            const parsedUserFilter = parseUserId(userFilter);
+            const matchesUser = !parsedUserFilter || assignedUserId === parsedUserFilter || supervisorIds.includes(parsedUserFilter);
 
             const hasAnyResponsible = !!lead.assigned_to || supervisorIds.length > 0;
             const matchesAssigned = !assignedFilter ||
