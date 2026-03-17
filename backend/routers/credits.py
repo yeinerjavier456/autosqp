@@ -161,47 +161,58 @@ def read_credits(
                 models.Lead.status == models.LeadStatus.CREDIT_APPLICATION.value
             ).all()
         ]
-
-    query = db.query(models.CreditApplication).options(
-        joinedload(models.CreditApplication.assigned_to)
-    )
-    
-    # Filter by user company
+    credits = []
     if current_user.company_id:
-        company_filters = [models.CreditApplication.company_id == current_user.company_id]
+        company_credit_rows = db.query(models.CreditApplication).options(
+            joinedload(models.CreditApplication.assigned_to)
+        ).filter(
+            models.CreditApplication.company_id == current_user.company_id
+        ).order_by(models.CreditApplication.created_at.desc()).all()
+
+        linked_credit_rows = []
         if credit_stage_lead_ids:
-            company_filters.append(models.CreditApplication.lead_id.in_(credit_stage_lead_ids))
-        query = query.filter(or_(*company_filters))
-    
-    # Advisors, vendors and allies stay scoped to their own queue or supervised leads.
-    # Coordinators/admin users with access to this board should see all company requests.
+            linked_credit_rows = db.query(models.CreditApplication).options(
+                joinedload(models.CreditApplication.assigned_to)
+            ).filter(
+                models.CreditApplication.lead_id.in_(credit_stage_lead_ids)
+            ).order_by(models.CreditApplication.created_at.desc()).all()
+
+        merged_by_id = {}
+        for credit in [*linked_credit_rows, *company_credit_rows]:
+            merged_by_id[credit.id] = credit
+        credits = list(merged_by_id.values())
+    else:
+        credits = db.query(models.CreditApplication).options(
+            joinedload(models.CreditApplication.assigned_to)
+        ).order_by(models.CreditApplication.created_at.desc()).all()
+
     if effective_role_name in ['asesor', 'vendedor', 'aliado']:
-        supervised_lead_ids = [
+        supervised_lead_ids = {
             lead_id for (lead_id,) in db.query(models.Lead.id).filter(
                 models.Lead.supervisors.any(models.User.id == current_user.id)
             ).all()
+        }
+        credits = [
+            credit for credit in credits
+            if credit.assigned_to_id == current_user.id or (credit.lead_id in supervised_lead_ids)
         ]
-        owner_filters = [models.CreditApplication.assigned_to_id == current_user.id]
-        if supervised_lead_ids:
-            owner_filters.append(models.CreditApplication.lead_id.in_(supervised_lead_ids))
-        query = query.filter(
-            or_(*owner_filters)
-        )
-    
+
     if status:
-        query = query.filter(models.CreditApplication.status == status)
+        credits = [credit for credit in credits if credit.status == status]
 
     if q:
-        search = f"%{q}%"
-        query = query.filter(
-            (models.CreditApplication.client_name.ilike(search)) | 
-            (models.CreditApplication.email.ilike(search)) | 
-            (models.CreditApplication.phone.ilike(search)) |
-            (models.CreditApplication.desired_vehicle.ilike(search))
-        )
-        
-    total = query.count()
-    credits = query.order_by(models.CreditApplication.created_at.desc()).offset(skip).limit(limit).all()
+        normalized_q = q.lower()
+        credits = [
+            credit for credit in credits
+            if normalized_q in (credit.client_name or "").lower()
+            or normalized_q in (credit.email or "").lower()
+            or normalized_q in (credit.phone or "").lower()
+            or normalized_q in (credit.desired_vehicle or "").lower()
+        ]
+
+    credits.sort(key=lambda credit: credit.created_at or 0, reverse=True)
+    total = len(credits)
+    credits = credits[skip:skip + limit]
     for credit in credits:
         if credit.status not in VALID_CREDIT_STATUSES:
             credit.status = models.CreditStatus.PENDING.value
