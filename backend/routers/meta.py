@@ -257,7 +257,7 @@ async def receive_meta_message(request: Request, db: Session = Depends(get_db)):
                     media_url=media_url,
                 )
 
-                if result.get("duplicate") or not result.get("assistant_reply"):
+                if result.get("duplicate"):
                     continue
 
                 if result.get("lead_id"):
@@ -272,6 +272,9 @@ async def receive_meta_message(request: Request, db: Session = Depends(get_db)):
                         if lead:
                             notify_company_about_lead_reply(db, lead, lead_source, content)
                             db.commit()
+
+                if not result.get("assistant_reply"):
+                    continue
 
                 outbound_status = "failed"
                 outbound_id = None

@@ -230,12 +230,18 @@ def find_or_create_channel_session(
     source: str,
     external_user_id: str,
     recipient_id: Optional[str],
-) -> tuple[models.ChannelChatSession, models.Conversation]:
+) -> tuple[models.ChannelChatSession, models.Conversation, bool]:
     session = db.query(models.ChannelChatSession).filter(
         models.ChannelChatSession.company_id == company_id,
         models.ChannelChatSession.source == source,
         models.ChannelChatSession.external_user_id == external_user_id,
     ).first()
+    existing_lead = db.query(models.Lead).filter(
+        models.Lead.company_id == company_id,
+        models.Lead.source == source,
+        models.Lead.phone == external_user_id,
+    ).first()
+    is_new_contact = session is None and existing_lead is None
 
     if session and session.conversation_id:
         conversation = db.query(models.Conversation).filter(models.Conversation.id == session.conversation_id).first()
@@ -244,7 +250,7 @@ def find_or_create_channel_session(
                 session.recipient_id = recipient_id
             session.last_message_at = datetime.datetime.utcnow()
             db.commit()
-            return session, conversation
+            return session, conversation, False
 
     conversation = models.Conversation(
         company_id=company_id,
@@ -271,7 +277,7 @@ def find_or_create_channel_session(
         session.last_message_at = datetime.datetime.utcnow()
     db.commit()
     db.refresh(session)
-    return session, conversation
+    return session, conversation, is_new_contact
 
 
 def store_conversation_message(
@@ -457,7 +463,7 @@ def process_channel_bot_message(
     media_url: Optional[str] = None,
     created_at: Optional[datetime.datetime] = None,
 ) -> Dict[str, Any]:
-    chat_session, conversation = find_or_create_channel_session(
+    chat_session, conversation, is_new_contact = find_or_create_channel_session(
         db=db,
         company_id=company_id,
         source=source,
@@ -490,12 +496,15 @@ def process_channel_bot_message(
     api_key, model_name = get_company_ai_settings(db, company_id)
     env_fallback_key = (os.getenv("OPENAI_API_KEY") or "").strip() or None
     bot_name, _, _ = get_company_chatbot_settings(db, company_id)
+    should_auto_reply = source != "facebook" or is_new_contact
 
     normalized_message = (user_message or "").strip()
     if not normalized_message and media_url:
         normalized_message = f"El cliente envió un archivo de tipo {message_type}."
 
-    if is_inventory_request(normalized_message):
+    if not should_auto_reply:
+        assistant_reply = None
+    elif is_inventory_request(normalized_message):
         assistant_reply = build_inventory_response(db, company_id)
     elif api_key:
         system_prompt = build_channel_system_prompt(bot_name)
@@ -524,14 +533,13 @@ def process_channel_bot_message(
             "Cuéntame qué carro estás buscando y te ayudo con el proceso."
         )
 
-    full_text = build_full_conversation_text(db, conversation.id)
-    if full_text:
-        full_text = f"{full_text}\nassistant: {assistant_reply}"
-    else:
-        full_text = f"user: {normalized_message}\nassistant: {assistant_reply}"
-
     lead_id = chat_session.lead_id
-    if api_key:
+    if api_key and assistant_reply:
+        full_text = build_full_conversation_text(db, conversation.id)
+        if full_text:
+            full_text = f"{full_text}\nassistant: {assistant_reply}"
+        else:
+            full_text = f"user: {normalized_message}\nassistant: {assistant_reply}"
         try:
             extraction_key = api_key
             if not extraction_key and env_fallback_key and env_fallback_key.strip():
@@ -549,4 +557,6 @@ def process_channel_bot_message(
         "assistant_reply": assistant_reply,
         "bot_name": bot_name,
         "inbound_message_id": inbound_message.id,
+        "is_new_contact": is_new_contact,
+        "should_auto_reply": should_auto_reply,
     }
