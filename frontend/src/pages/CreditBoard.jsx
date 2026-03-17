@@ -7,6 +7,14 @@ import { useNavigate } from 'react-router-dom';
 
 const VALID_CREDIT_STATUSES = ['pending', 'in_review', 'approved', 'rejected', 'completed'];
 
+const normalizeCreditItems = (responseData) => {
+    if (Array.isArray(responseData?.items)) return responseData.items;
+    if (Array.isArray(responseData?.payload?.items)) return responseData.payload.items;
+    if (Array.isArray(responseData?.payload)) return responseData.payload;
+    if (Array.isArray(responseData)) return responseData;
+    return [];
+};
+
 const CreditBoard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -57,9 +65,17 @@ const CreditBoard = () => {
                 headers: { Authorization: `Bearer ${token}` },
                 params: { limit: 500 }
             });
-            const items = Array.isArray(response.data?.items)
-                ? response.data.items
-                : (Array.isArray(response.data) ? response.data : []);
+            let items = normalizeCreditItems(response.data);
+
+            if (items.length === 0) {
+                const syncResponse = await axios.post(
+                    'https://autosqp.co/api/credits/sync',
+                    {},
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                items = normalizeCreditItems(syncResponse.data);
+            }
+
             setCredits(items.map((item) => ({
                 ...item,
                 status: VALID_CREDIT_STATUSES.includes(item?.status) ? item.status : 'pending'
@@ -166,8 +182,15 @@ const CreditBoard = () => {
                 {},
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-
-            await fetchCredits();
+            const items = normalizeCreditItems(response.data);
+            if (items.length > 0) {
+                setCredits(items.map((item) => ({
+                    ...item,
+                    status: VALID_CREDIT_STATUSES.includes(item?.status) ? item.status : 'pending'
+                })));
+            } else {
+                await fetchCredits();
+            }
 
             Swal.fire({
                 icon: 'success',

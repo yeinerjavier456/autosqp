@@ -128,28 +128,13 @@ def sync_credit_applications_for_company(db: Session, company_id: int):
     return {"processed": len(credit_stage_leads), "created": created_count, "updated": updated_count}
 
 
-@router.post("/sync", status_code=200)
-def sync_credit_board(
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    if not current_user.company_id:
-        raise HTTPException(status_code=400, detail="Company ID required")
-
-    result = sync_credit_applications_for_company(db, current_user.company_id)
-    return {
-        "message": "Solicitudes de credito resincronizadas correctamente",
-        **result
-    }
-
-@router.get("/", response_model=schemas.CreditApplicationList)
-def read_credits(
-    status: str = None,
-    q: str = None,
-    skip: int = 0, 
-    limit: int = 50, 
-    db: Session = Depends(get_db), 
-    current_user: models.User = Depends(get_current_user)
+def _build_credit_feed(
+    db: Session,
+    current_user: models.User,
+    status: Optional[str] = None,
+    q: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
 ):
     effective_role_name = getattr(getattr(current_user, "role", None), "base_role_name", None) or getattr(getattr(current_user, "role", None), "name", None)
     credit_stage_lead_ids = []
@@ -161,6 +146,7 @@ def read_credits(
                 models.Lead.status == models.LeadStatus.CREDIT_APPLICATION.value
             ).all()
         ]
+
     credits = []
     if current_user.company_id:
         company_credit_rows = db.query(models.CreditApplication).options(
@@ -217,6 +203,42 @@ def read_credits(
         if credit.status not in VALID_CREDIT_STATUSES:
             credit.status = models.CreditStatus.PENDING.value
     return {"items": credits, "total": total}
+
+
+@router.post("/sync", status_code=200)
+def sync_credit_board(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if not current_user.company_id:
+        raise HTTPException(status_code=400, detail="Company ID required")
+
+    result = sync_credit_applications_for_company(db, current_user.company_id)
+    feed = _build_credit_feed(db, current_user, skip=0, limit=500)
+    return {
+        "message": "Solicitudes de credito resincronizadas correctamente",
+        **result,
+        "items": feed["items"],
+        "total": feed["total"],
+    }
+
+@router.get("/", response_model=schemas.CreditApplicationList)
+def read_credits(
+    status: str = None,
+    q: str = None,
+    skip: int = 0, 
+    limit: int = 50, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    return _build_credit_feed(
+        db=db,
+        current_user=current_user,
+        status=status,
+        q=q,
+        skip=skip,
+        limit=limit,
+    )
 
 @router.post("/", response_model=schemas.CreditApplication)
 def create_credit(
