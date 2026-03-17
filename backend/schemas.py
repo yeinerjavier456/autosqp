@@ -493,12 +493,22 @@ class ReportsStats(BaseModel):
     conversion_rate: float
     active_pipeline_count: int
     unread_replies_count: int
+    credit_applications_count: int
+    purchase_requests_count: int
+    available_inventory_count: int
+    approved_sales_count: int
+    pending_sales_count: int
     leads_by_status: Dict[str, int]
     leads_by_source: Dict[str, int]
     leads_by_advisor: Dict[str, int]
     recent_leads_by_day: Dict[str, int]
     unread_replies_by_source: Dict[str, int]
     assignment_split: Dict[str, int]
+    credit_status_split: Dict[str, int]
+    purchase_status_split: Dict[str, int]
+    purchase_option_decision_split: Dict[str, int]
+    vehicle_status_split: Dict[str, int]
+    sales_status_split: Dict[str, int]
 
 # --- CREDITS ---
 

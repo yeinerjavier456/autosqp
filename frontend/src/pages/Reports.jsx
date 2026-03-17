@@ -47,6 +47,40 @@ const SOURCE_LABELS = {
     manual: 'Manual'
 };
 
+const CREDIT_STATUS_LABELS = {
+    pending: 'Solicitud recibida',
+    in_review: 'En estudio',
+    approved: 'Aprobado',
+    rejected: 'No viable',
+    completed: 'Finalizado'
+};
+
+const PURCHASE_STATUS_LABELS = {
+    pending: 'Solicitud recibida',
+    in_review: 'En busqueda',
+    approved: 'Opciones encontradas',
+    rejected: 'Sin resultado',
+    completed: 'Cerrado'
+};
+
+const VEHICLE_STATUS_LABELS = {
+    available: 'Disponibles',
+    reserved: 'Separados',
+    sold: 'Vendidos'
+};
+
+const SALES_STATUS_LABELS = {
+    pending: 'Pendientes',
+    approved: 'Aprobadas',
+    rejected: 'Negadas'
+};
+
+const PURCHASE_OPTION_DECISION_LABELS = {
+    pending: 'Pendientes',
+    accepted: 'Aceptadas',
+    rejected: 'Rechazadas'
+};
+
 const formatLabel = (value, map) => map[value] || value || 'Sin dato';
 
 const buildSingleDataset = (label, values, color) => ({
@@ -105,6 +139,21 @@ const Reports = () => {
 
     const assignmentEntries = Object.entries(stats.assignment_split || {})
         .map(([key, value]) => [key === 'assigned' ? 'Asignados' : 'Sin asignar', value]);
+    const creditEntries = Object.entries(stats.credit_status_split || {})
+        .map(([key, value]) => [formatLabel(key, CREDIT_STATUS_LABELS), value])
+        .sort((a, b) => b[1] - a[1]);
+    const purchaseEntries = Object.entries(stats.purchase_status_split || {})
+        .map(([key, value]) => [formatLabel(key, PURCHASE_STATUS_LABELS), value])
+        .sort((a, b) => b[1] - a[1]);
+    const inventoryEntries = Object.entries(stats.vehicle_status_split || {})
+        .map(([key, value]) => [formatLabel(key, VEHICLE_STATUS_LABELS), value])
+        .sort((a, b) => b[1] - a[1]);
+    const salesEntries = Object.entries(stats.sales_status_split || {})
+        .map(([key, value]) => [formatLabel(key, SALES_STATUS_LABELS), value])
+        .sort((a, b) => b[1] - a[1]);
+    const optionDecisionEntries = Object.entries(stats.purchase_option_decision_split || {})
+        .map(([key, value]) => [formatLabel(key, PURCHASE_OPTION_DECISION_LABELS), value])
+        .sort((a, b) => b[1] - a[1]);
 
     const statusData = {
         labels: statusEntries.map(([label]) => label),
@@ -130,6 +179,10 @@ const Reports = () => {
     const sourceData = buildSingleDataset('Leads por fuente', sourceEntries, '#2563eb');
     const advisorData = buildSingleDataset('Leads asignados', advisorEntries, '#0f766e');
     const unreadBySourceData = buildSingleDataset('Respuestas pendientes', unreadBySourceEntries, '#f97316');
+    const creditData = buildSingleDataset('Solicitudes de credito', creditEntries, '#7c3aed');
+    const purchaseData = buildSingleDataset('Solicitudes de compra', purchaseEntries, '#db2777');
+    const inventoryData = buildSingleDataset('Inventario', inventoryEntries, '#2563eb');
+    const salesData = buildSingleDataset('Ventas', salesEntries, '#0f766e');
 
     const assignmentData = {
         labels: assignmentEntries.map(([label]) => label),
@@ -159,6 +212,17 @@ const Reports = () => {
 
     const soldCount = stats.leads_by_status?.sold || 0;
     const newCount = stats.leads_by_status?.new || 0;
+    const optionDecisionData = {
+        labels: optionDecisionEntries.map(([label]) => label),
+        datasets: [
+            {
+                label: 'Decisiones sobre opciones',
+                data: optionDecisionEntries.map(([, value]) => value),
+                backgroundColor: ['#f59e0b', '#16a34a', '#dc2626'],
+                borderWidth: 0,
+            },
+        ],
+    };
 
     return (
         <div className="space-y-6">
@@ -190,6 +254,29 @@ const Reports = () => {
                     <p className="text-sm font-medium text-orange-700">Respuestas pendientes</p>
                     <p className="mt-2 text-3xl font-bold text-orange-800">{stats.unread_replies_count}</p>
                     <p className="mt-2 text-xs text-orange-700">Clientes con mensaje nuevo sin revisar.</p>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-2xl border border-violet-200 bg-violet-50 p-5 shadow-sm">
+                    <p className="text-sm font-medium text-violet-700">Solicitudes de credito</p>
+                    <p className="mt-2 text-3xl font-bold text-violet-800">{stats.credit_applications_count}</p>
+                    <p className="mt-2 text-xs text-violet-700">Vista consolidada de la cola de creditos.</p>
+                </div>
+                <div className="rounded-2xl border border-pink-200 bg-pink-50 p-5 shadow-sm">
+                    <p className="text-sm font-medium text-pink-700">Solicitudes de compra</p>
+                    <p className="mt-2 text-3xl font-bold text-pink-800">{stats.purchase_requests_count}</p>
+                    <p className="mt-2 text-xs text-pink-700">Leads en busqueda de vehiculo fuera de inventario.</p>
+                </div>
+                <div className="rounded-2xl border border-sky-200 bg-sky-50 p-5 shadow-sm">
+                    <p className="text-sm font-medium text-sky-700">Inventario disponible</p>
+                    <p className="mt-2 text-3xl font-bold text-sky-800">{stats.available_inventory_count}</p>
+                    <p className="mt-2 text-xs text-sky-700">Vehiculos actualmente libres para gestion comercial.</p>
+                </div>
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+                    <p className="text-sm font-medium text-emerald-700">Ventas aprobadas</p>
+                    <p className="mt-2 text-3xl font-bold text-emerald-800">{stats.approved_sales_count}</p>
+                    <p className="mt-2 text-xs text-emerald-700">{stats.pending_sales_count} ventas pendientes por decision.</p>
                 </div>
             </div>
 
@@ -305,6 +392,128 @@ const Reports = () => {
                         ) : (
                             <div className="flex h-full items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
                                 No hay respuestas pendientes registradas por ahora.
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">Embudo de creditos</h3>
+                        <p className="text-sm text-slate-500">Estado actual de las solicitudes de credito.</p>
+                    </div>
+                    <div className="h-72">
+                        {creditEntries.length > 0 ? (
+                            <Bar
+                                data={creditData}
+                                options={{
+                                    maintainAspectRatio: false,
+                                    responsive: true,
+                                    plugins: { legend: { display: false } },
+                                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+                                }}
+                            />
+                        ) : (
+                            <div className="flex h-full items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
+                                Aun no hay solicitudes de credito registradas.
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">Gestion de compras</h3>
+                        <p className="text-sm text-slate-500">Como va la cola de busqueda de vehiculos.</p>
+                    </div>
+                    <div className="h-72">
+                        {purchaseEntries.length > 0 ? (
+                            <Bar
+                                data={purchaseData}
+                                options={{
+                                    maintainAspectRatio: false,
+                                    responsive: true,
+                                    plugins: { legend: { display: false } },
+                                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+                                }}
+                            />
+                        ) : (
+                            <div className="flex h-full items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
+                                Aun no hay solicitudes de compra activas.
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">Decision de opciones</h3>
+                        <p className="text-sm text-slate-500">Respuesta del equipo comercial sobre las opciones encontradas.</p>
+                    </div>
+                    <div className="h-72">
+                        {optionDecisionEntries.length > 0 ? (
+                            <Doughnut
+                                data={optionDecisionData}
+                                options={{
+                                    maintainAspectRatio: false,
+                                    plugins: { legend: { position: 'bottom' } },
+                                }}
+                            />
+                        ) : (
+                            <div className="flex h-full items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
+                                Aun no hay decisiones registradas sobre opciones.
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">Estado del inventario</h3>
+                        <p className="text-sm text-slate-500">Disponibles, separados y vendidos dentro de la empresa.</p>
+                    </div>
+                    <div className="h-72">
+                        {inventoryEntries.length > 0 ? (
+                            <Bar
+                                data={inventoryData}
+                                options={{
+                                    maintainAspectRatio: false,
+                                    responsive: true,
+                                    plugins: { legend: { display: false } },
+                                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+                                }}
+                            />
+                        ) : (
+                            <div className="flex h-full items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
+                                No hay vehiculos registrados por ahora.
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">Estado de ventas</h3>
+                        <p className="text-sm text-slate-500">Aprobadas, pendientes y negadas en finanzas y ventas.</p>
+                    </div>
+                    <div className="h-72">
+                        {salesEntries.length > 0 ? (
+                            <Bar
+                                data={salesData}
+                                options={{
+                                    maintainAspectRatio: false,
+                                    responsive: true,
+                                    plugins: { legend: { display: false } },
+                                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+                                }}
+                            />
+                        ) : (
+                            <div className="flex h-full items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
+                                Aun no hay ventas registradas.
                             </div>
                         )}
                     </div>

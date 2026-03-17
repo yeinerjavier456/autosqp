@@ -1581,6 +1581,21 @@ def get_reports_stats(db: Session = Depends(get_db), current_user: models.User =
         
         leads = query.all()
         total_leads = len(leads)
+        credit_query = db.query(models.CreditApplication)
+        purchase_query = db.query(models.CreditApplication).filter(models.CreditApplication.lead_id.isnot(None))
+        vehicle_query = db.query(models.Vehicle)
+        sales_query = db.query(models.Sale)
+
+        if current_user.company_id:
+            credit_query = credit_query.filter(models.CreditApplication.company_id == current_user.company_id)
+            purchase_query = purchase_query.filter(models.CreditApplication.company_id == current_user.company_id)
+            vehicle_query = vehicle_query.filter(models.Vehicle.company_id == current_user.company_id)
+            sales_query = sales_query.filter(models.Sale.company_id == current_user.company_id)
+
+        credit_applications = credit_query.all()
+        purchase_requests = purchase_query.all()
+        vehicles = vehicle_query.all()
+        sales = sales_query.all()
         
         # Calculate Stats
         leads_by_status = {}
@@ -1591,6 +1606,11 @@ def get_reports_stats(db: Session = Depends(get_db), current_user: models.User =
         unread_replies_count = 0
         unread_replies_by_source = {}
         assignment_split = {"assigned": 0, "unassigned": 0}
+        credit_status_split = {}
+        purchase_status_split = {}
+        purchase_option_decision_split = {"pending": 0, "accepted": 0, "rejected": 0}
+        vehicle_status_split = {}
+        sales_status_split = {}
 
         today = datetime.datetime.utcnow().date()
         recent_dates = [today - datetime.timedelta(days=offset) for offset in range(6, -1, -1)]
@@ -1626,6 +1646,28 @@ def get_reports_stats(db: Session = Depends(get_db), current_user: models.User =
             if created_at in recent_dates:
                 recent_leads_by_day[created_at.strftime("%d/%m")] += 1
 
+            for option in lead.purchase_options or []:
+                decision_status = (getattr(option, "decision_status", None) or "pending").lower()
+                if decision_status not in purchase_option_decision_split:
+                    purchase_option_decision_split[decision_status] = 0
+                purchase_option_decision_split[decision_status] += 1
+
+        for application in credit_applications:
+            status_key = application.status or "pending"
+            credit_status_split[status_key] = credit_status_split.get(status_key, 0) + 1
+
+        for purchase in purchase_requests:
+            status_key = purchase.status or "pending"
+            purchase_status_split[status_key] = purchase_status_split.get(status_key, 0) + 1
+
+        for vehicle in vehicles:
+            status_key = vehicle.status or "available"
+            vehicle_status_split[status_key] = vehicle_status_split.get(status_key, 0) + 1
+
+        for sale in sales:
+            status_key = sale.status or "pending"
+            sales_status_split[status_key] = sales_status_split.get(status_key, 0) + 1
+
         conversion_rate = (converted_count / total_leads * 100) if total_leads > 0 else 0.0
 
         return {
@@ -1633,12 +1675,22 @@ def get_reports_stats(db: Session = Depends(get_db), current_user: models.User =
             "conversion_rate": round(conversion_rate, 2),
             "active_pipeline_count": active_pipeline_count,
             "unread_replies_count": unread_replies_count,
+            "credit_applications_count": len(credit_applications),
+            "purchase_requests_count": len(purchase_requests),
+            "available_inventory_count": vehicle_status_split.get("available", 0),
+            "approved_sales_count": sales_status_split.get("approved", 0),
+            "pending_sales_count": sales_status_split.get("pending", 0),
             "leads_by_status": leads_by_status,
             "leads_by_source": leads_by_source,
             "leads_by_advisor": leads_by_advisor,
             "recent_leads_by_day": recent_leads_by_day,
             "unread_replies_by_source": unread_replies_by_source,
             "assignment_split": assignment_split,
+            "credit_status_split": credit_status_split,
+            "purchase_status_split": purchase_status_split,
+            "purchase_option_decision_split": purchase_option_decision_split,
+            "vehicle_status_split": vehicle_status_split,
+            "sales_status_split": sales_status_split,
         }
     except Exception as e:
         import traceback
