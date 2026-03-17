@@ -12,6 +12,7 @@ import models
 
 
 DIRECT_CONTACT_NUMBER = "3227704222"
+FACEBOOK_BOT_REPLY_WINDOW = datetime.timedelta(days=1)
 
 
 def get_company_ai_settings(db: Session, company_id: Optional[int]) -> tuple[Optional[str], str]:
@@ -230,7 +231,7 @@ def find_or_create_channel_session(
     source: str,
     external_user_id: str,
     recipient_id: Optional[str],
-) -> tuple[models.ChannelChatSession, models.Conversation, bool]:
+) -> tuple[models.ChannelChatSession, models.Conversation, bool, Optional[datetime.datetime]]:
     session = db.query(models.ChannelChatSession).filter(
         models.ChannelChatSession.company_id == company_id,
         models.ChannelChatSession.source == source,
@@ -242,6 +243,7 @@ def find_or_create_channel_session(
         models.Lead.phone == external_user_id,
     ).first()
     is_new_contact = session is None and existing_lead is None
+    previous_last_message_at = session.last_message_at if session else None
 
     if session and session.conversation_id:
         conversation = db.query(models.Conversation).filter(models.Conversation.id == session.conversation_id).first()
@@ -250,7 +252,7 @@ def find_or_create_channel_session(
                 session.recipient_id = recipient_id
             session.last_message_at = datetime.datetime.utcnow()
             db.commit()
-            return session, conversation, False
+            return session, conversation, False, previous_last_message_at
 
     conversation = models.Conversation(
         company_id=company_id,
@@ -277,7 +279,7 @@ def find_or_create_channel_session(
         session.last_message_at = datetime.datetime.utcnow()
     db.commit()
     db.refresh(session)
-    return session, conversation, is_new_contact
+    return session, conversation, is_new_contact, previous_last_message_at
 
 
 def store_conversation_message(
@@ -463,7 +465,7 @@ def process_channel_bot_message(
     media_url: Optional[str] = None,
     created_at: Optional[datetime.datetime] = None,
 ) -> Dict[str, Any]:
-    chat_session, conversation, is_new_contact = find_or_create_channel_session(
+    chat_session, conversation, is_new_contact, previous_last_message_at = find_or_create_channel_session(
         db=db,
         company_id=company_id,
         source=source,
@@ -496,7 +498,11 @@ def process_channel_bot_message(
     api_key, model_name = get_company_ai_settings(db, company_id)
     env_fallback_key = (os.getenv("OPENAI_API_KEY") or "").strip() or None
     bot_name, _, _ = get_company_chatbot_settings(db, company_id)
-    should_auto_reply = source != "facebook" or is_new_contact
+    interaction_is_recent = (
+        previous_last_message_at is not None
+        and (datetime.datetime.utcnow() - previous_last_message_at) <= FACEBOOK_BOT_REPLY_WINDOW
+    )
+    should_auto_reply = source != "facebook" or is_new_contact or interaction_is_recent
 
     normalized_message = (user_message or "").strip()
     if not normalized_message and media_url:
@@ -558,5 +564,6 @@ def process_channel_bot_message(
         "bot_name": bot_name,
         "inbound_message_id": inbound_message.id,
         "is_new_contact": is_new_contact,
+        "interaction_is_recent": interaction_is_recent,
         "should_auto_reply": should_auto_reply,
     }
