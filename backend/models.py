@@ -281,8 +281,9 @@ class PaymentReceipt(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), index=True, nullable=False)
-    sale_id = Column(Integer, ForeignKey("sales.id"), index=True, nullable=False)
+    sale_id = Column(Integer, ForeignKey("sales.id"), index=True, nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    concept = Column(String(200), nullable=True)
     receipt_number = Column(String(120), nullable=True)
     payment_date = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
     amount = Column(Integer, nullable=False, default=0)

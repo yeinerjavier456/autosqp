@@ -45,6 +45,36 @@ def ensure_role_configuration_columns():
             if not exists:
                 conn.execute(text(ddl))
 
+
+def ensure_payment_receipts_columns():
+    with engine.begin() as conn:
+        table_exists = conn.execute(text(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_receipts'"
+        )).scalar()
+        if not table_exists:
+            return
+
+        receipt_columns = {
+            "concept": "ALTER TABLE payment_receipts ADD COLUMN concept VARCHAR(200) NULL"
+        }
+        for column_name, ddl in receipt_columns.items():
+            exists = conn.execute(text(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_receipts' "
+                "AND COLUMN_NAME = :column_name"
+            ), {"column_name": column_name}).scalar()
+            if not exists:
+                conn.execute(text(ddl))
+
+        sale_id_nullable = conn.execute(text(
+            "SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_receipts' "
+            "AND COLUMN_NAME = 'sale_id'"
+        )).scalar()
+        if sale_id_nullable == "NO":
+            conn.execute(text("ALTER TABLE payment_receipts MODIFY COLUMN sale_id INTEGER NULL"))
+
         index_exists = conn.execute(text(
             "SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS "
             "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'roles' "
@@ -59,6 +89,7 @@ def ensure_role_configuration_columns():
         ))
 
 ensure_role_configuration_columns()
+ensure_payment_receipts_columns()
 
 def ensure_chatbot_settings_columns():
     """
@@ -3738,10 +3769,11 @@ def read_payment_receipts(
         query = query.filter(models.PaymentReceipt.category == category)
     if q:
         search = f"%{q}%"
-        query = query.join(models.Sale, models.PaymentReceipt.sale_id == models.Sale.id).join(
+        query = query.join(models.Sale, models.PaymentReceipt.sale_id == models.Sale.id, isouter=True).join(
             models.Vehicle, models.Sale.vehicle_id == models.Vehicle.id, isouter=True
         ).filter(
             or_(
+                models.PaymentReceipt.concept.ilike(search),
                 models.PaymentReceipt.receipt_number.ilike(search),
                 models.PaymentReceipt.notes.ilike(search),
                 models.Vehicle.make.ilike(search),
@@ -3758,7 +3790,8 @@ def read_payment_receipts(
 @app.post("/finance/receipts", response_model=schemas.PaymentReceipt)
 async def create_payment_receipt(
     request: Request,
-    sale_id: int = Form(...),
+    sale_id: Optional[int] = Form(None),
+    concept: Optional[str] = Form(None),
     amount: int = Form(...),
     payment_date: Optional[str] = Form(None),
     receipt_number: Optional[str] = Form(None),
@@ -3771,14 +3804,21 @@ async def create_payment_receipt(
     if get_user_role_name(current_user) not in ["admin", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    sale = db.query(models.Sale).options(
-        joinedload(models.Sale.vehicle),
-        joinedload(models.Sale.seller)
-    ).filter(models.Sale.id == sale_id).first()
-    if not sale:
-        raise HTTPException(status_code=404, detail="Sale not found")
-    if current_user.company_id and sale.company_id != current_user.company_id:
-        raise HTTPException(status_code=403, detail="Not authorized")
+    concept_value = (concept or "").strip() or None
+    sale = None
+    company_id = current_user.company_id
+    if sale_id:
+        sale = db.query(models.Sale).options(
+            joinedload(models.Sale.vehicle),
+            joinedload(models.Sale.seller)
+        ).filter(models.Sale.id == sale_id).first()
+        if not sale:
+            raise HTTPException(status_code=404, detail="Sale not found")
+        if current_user.company_id and sale.company_id != current_user.company_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        company_id = sale.company_id
+    elif not concept_value:
+        raise HTTPException(status_code=400, detail="Debes indicar una venta o un concepto contable")
 
     parsed_payment_date = datetime.datetime.utcnow()
     if payment_date:
@@ -3807,9 +3847,10 @@ async def create_payment_receipt(
         stored_file_type = file.content_type
 
     receipt = models.PaymentReceipt(
-        company_id=sale.company_id,
-        sale_id=sale.id,
+        company_id=company_id,
+        sale_id=sale.id if sale else None,
         user_id=current_user.id,
+        concept=concept_value,
         receipt_number=(receipt_number or "").strip() or None,
         payment_date=parsed_payment_date,
         amount=amount,

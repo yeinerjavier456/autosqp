@@ -24,6 +24,7 @@ const SalesDashboard = () => {
     const [creatingReceipt, setCreatingReceipt] = useState(false);
     const [receiptForm, setReceiptForm] = useState({
         sale_id: '',
+        concept: '',
         amount: '',
         payment_date: new Date().toISOString().slice(0, 10),
         receipt_number: '',
@@ -122,8 +123,8 @@ const SalesDashboard = () => {
 
     const handleCreateReceipt = async (e) => {
         e.preventDefault();
-        if (!receiptForm.sale_id || !receiptForm.amount || Number(receiptForm.amount) <= 0) {
-            Swal.fire('Atencion', 'Debes seleccionar una venta y un valor valido.', 'warning');
+        if ((!receiptForm.sale_id && !receiptForm.concept.trim()) || !receiptForm.amount || Number(receiptForm.amount) <= 0) {
+            Swal.fire('Atencion', 'Debes elegir una venta o escribir un concepto y poner un valor valido.', 'warning');
             return;
         }
 
@@ -131,7 +132,10 @@ const SalesDashboard = () => {
         try {
             const token = localStorage.getItem('token');
             const formData = new FormData();
-            formData.append('sale_id', receiptForm.sale_id);
+            if (receiptForm.sale_id) {
+                formData.append('sale_id', receiptForm.sale_id);
+            }
+            formData.append('concept', receiptForm.concept);
             formData.append('amount', receiptForm.amount);
             formData.append('payment_date', receiptForm.payment_date);
             formData.append('receipt_number', receiptForm.receipt_number);
@@ -150,6 +154,7 @@ const SalesDashboard = () => {
 
             setReceiptForm({
                 sale_id: '',
+                concept: '',
                 amount: '',
                 payment_date: new Date().toISOString().slice(0, 10),
                 receipt_number: '',
@@ -336,7 +341,7 @@ const SalesDashboard = () => {
                     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[420px,1fr]">
                         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                             <h3 className="text-lg font-bold text-gray-800">Agregar recibo de pago</h3>
-                            <p className="mt-1 text-sm text-gray-500">Registra el soporte contable ligado a una venta aprobada.</p>
+                            <p className="mt-1 text-sm text-gray-500">Registra soportes ligados a ventas o movimientos contables libres.</p>
 
                             <form onSubmit={handleCreateReceipt} className="mt-5 space-y-4">
                                 <div>
@@ -345,15 +350,26 @@ const SalesDashboard = () => {
                                         value={receiptForm.sale_id}
                                         onChange={(e) => setReceiptForm({ ...receiptForm, sale_id: e.target.value })}
                                         className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
-                                        required
                                     >
-                                        <option value="">Selecciona una venta</option>
+                                        <option value="">Sin venta asociada</option>
                                         {approvedSales.map((sale) => (
                                             <option key={sale.id} value={sale.id}>
                                                 #{sale.id} - {sale.vehicle?.make} {sale.vehicle?.model} - {sale.vehicle?.plate}
                                             </option>
                                         ))}
                                     </select>
+                                </div>
+
+                                <div>
+                                    <label className="mb-1 block text-sm font-semibold text-gray-700">Concepto</label>
+                                    <input
+                                        type="text"
+                                        value={receiptForm.concept}
+                                        onChange={(e) => setReceiptForm({ ...receiptForm, concept: e.target.value })}
+                                        className="w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder="Ej: pago de traspaso, caja menor, anticipo, gasto operativo"
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500">Si no asocias una venta, este concepto sera obligatorio.</p>
                                 </div>
 
                                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -460,10 +476,14 @@ const SalesDashboard = () => {
                                                 </td>
                                                 <td className="p-4">
                                                     <div className="font-medium text-gray-800">
-                                                        #{receipt.sale?.id} - {receipt.sale?.vehicle?.make} {receipt.sale?.vehicle?.model}
+                                                        {receipt.sale?.id
+                                                            ? `#${receipt.sale.id} - ${receipt.sale?.vehicle?.make || ''} ${receipt.sale?.vehicle?.model || ''}`.trim()
+                                                            : (receipt.concept || 'Movimiento contable')}
                                                     </div>
                                                     <div className="text-xs text-gray-500">
-                                                        {receipt.sale?.vehicle?.plate} · {receipt.sale?.seller?.full_name || receipt.sale?.seller?.email}
+                                                        {receipt.sale?.id
+                                                            ? `${receipt.sale?.vehicle?.plate || ''} · ${receipt.sale?.seller?.full_name || receipt.sale?.seller?.email || ''}`
+                                                            : 'Sin venta asociada'}
                                                     </div>
                                                 </td>
                                                 <td className="p-4 text-sm text-gray-600">

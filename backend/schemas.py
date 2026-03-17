@@ -484,7 +484,8 @@ class SaleList(BaseModel):
 
 
 class PaymentReceiptBase(BaseModel):
-    sale_id: int
+    sale_id: Optional[int] = None
+    concept: Optional[str] = None
     receipt_number: Optional[str] = None
     payment_date: Optional[datetime] = None
     amount: int
