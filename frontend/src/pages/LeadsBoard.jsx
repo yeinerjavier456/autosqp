@@ -193,6 +193,24 @@ const getEffectiveRoleName = (role) => {
     return role.base_role_name || role.name || '';
 };
 
+const normalizeRoleKey = (role) => {
+    const directRoleName = getEffectiveRoleName(role);
+    const normalizedDirectRoleName = String(directRoleName || '').trim().toLowerCase();
+    if (normalizedDirectRoleName) {
+        return normalizedDirectRoleName;
+    }
+
+    const rawLabel = typeof role === 'object' ? role?.label : role;
+    const normalizedLabel = String(rawLabel || '').trim().toLowerCase();
+    if (normalizedLabel === 'administrador de empresa' || normalizedLabel === 'administrador') {
+        return 'admin';
+    }
+    if (normalizedLabel === 'super admin' || normalizedLabel === 'super administrador') {
+        return 'super_admin';
+    }
+    return normalizedLabel;
+};
+
 const getLeadSupervisorIds = (lead) => {
     if (!lead) return [];
     if (Array.isArray(lead.supervisor_ids) && lead.supervisor_ids.length > 0) {
@@ -547,8 +565,9 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
         ...(Array.isArray(lead.history) ? lead.history : [])
     ];
 
-    const canAssignToAnyRole = currentUserRole === 'admin' || currentUserRole === 'super_admin' || currentUserRole === 'aliado';
-    const isCompanyAdmin = currentUserRole === 'admin' || currentUserRole === 'super_admin';
+    const normalizedCurrentUserRole = normalizeRoleKey(user?.role) || normalizeRoleKey(currentUserRole);
+    const canAssignToAnyRole = normalizedCurrentUserRole === 'admin' || normalizedCurrentUserRole === 'super_admin' || normalizedCurrentUserRole === 'aliado';
+    const isCompanyAdmin = normalizedCurrentUserRole === 'admin' || normalizedCurrentUserRole === 'super_admin';
     const currentUserId = user?.id ? parseInt(user.id, 10) : null;
     const leadSupervisorIds = getLeadSupervisorIds(lead);
     const isAssignedLeadOwner = lead?.assigned_to?.id === currentUserId;
@@ -1377,7 +1396,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
     const isAllyBoard = boardMode === 'ally';
     const currentUserId = parseUserId(user?.id);
-    const currentRoleName = user?.role?.base_role_name || user?.role?.name || user?.role;
+    const currentRoleName = normalizeRoleKey(user?.role);
     const boardTitle = isAllyBoard ? 'Tablero de Aliados' : 'Tablero de Leads';
     const boardDescription = isAllyBoard
         ? 'Gestiona los leads que estan en manos de aliados y transfiere al tablero general cuando corresponda.'
@@ -1451,7 +1470,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         e.preventDefault();
         try {
             const token = localStorage.getItem('token');
-            if (isAllyBoard && currentRoleName !== 'aliado' && !newLeadForm.assigned_to_id) {
+        if (isAllyBoard && currentRoleName !== 'aliado' && !newLeadForm.assigned_to_id) {
                 Swal.fire('Error', 'Debes seleccionar el aliado responsable de este lead.', 'warning');
                 return;
             }
@@ -2173,7 +2192,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                         </div>
 
                         <form onSubmit={handleConfirmSale} className="space-y-5">
-                            {(currentRoleName === 'admin' || currentRoleName === 'super_admin') && (
+                        {(currentRoleName === 'admin' || currentRoleName === 'super_admin') && (
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2">Asignar Venta A:</label>
                                     <select
@@ -2223,7 +2242,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                                 </div>
                             </div>
 
-                            {(currentRoleName === 'admin' || currentRoleName === 'super_admin') && (
+                        {(currentRoleName === 'admin' || currentRoleName === 'super_admin') && (
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-1">Personas en supervision</label>
                                     <select
