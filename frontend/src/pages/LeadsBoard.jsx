@@ -1302,10 +1302,27 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const supervisionUsers = advisors.filter((adv) => getEffectiveRoleName(adv.role) !== 'user');
 
     useEffect(() => {
+        setLoading(true);
+        setLeads([]);
+        setSelectedLeadForHistory(null);
+        setShowHistoryModal(false);
+        setHighlightedLeadId(null);
+        setPendingStatusChange(null);
+        setStatusComment('');
+        setNewLeadForm({
+            name: '',
+            email: '',
+            phone: '',
+            source: boardMode === 'ally' ? 'referral' : 'web',
+            message: '',
+            status: 'new',
+            assigned_to_id: '',
+            supervisor_ids: []
+        });
         fetchLeads();
         fetchAdvisors();
         fetchAvailableVehicles();
-    }, []);
+    }, [boardMode]);
 
     useEffect(() => {
         const intervalId = setInterval(() => {
@@ -1313,7 +1330,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         }, 15000);
 
         return () => clearInterval(intervalId);
-    }, []);
+    }, [boardMode]);
 
     useEffect(() => {
         const leadIdFromQuery = parseInt(searchParams.get('leadId') || '', 10);

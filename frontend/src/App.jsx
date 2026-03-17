@@ -114,7 +114,7 @@ function App() {
               </Route>
 
               <Route element={<PrivateRoute requiredView="leads_board" />}>
-                <Route path="/admin/leads" element={<LeadsBoard boardMode="general" />} />
+                <Route path="/admin/leads" element={<LeadsBoard key="general-leads-board" boardMode="general" />} />
               </Route>
               <Route element={<PrivateRoute requiredView="sales" />}>
                 <Route path="/admin/sales" element={<SalesDashboard />} />
@@ -147,7 +147,7 @@ function App() {
               </Route>
 
               <Route element={<PrivateRoute requiredView="ally_board" />}>
-                <Route path="/aliado/dashboard" element={<LeadsBoard boardMode="ally" />} />
+                <Route path="/aliado/dashboard" element={<LeadsBoard key="ally-leads-board" boardMode="ally" />} />
               </Route>
 
               <Route element={<PrivateRoute requiredView="internal_chat" />}>
