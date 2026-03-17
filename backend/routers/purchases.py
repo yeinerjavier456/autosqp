@@ -9,6 +9,7 @@ import shutil
 import uuid
 import json
 import random
+import datetime
 
 router = APIRouter(
     prefix="/purchases",
@@ -497,7 +498,8 @@ def get_purchase_options(
     if not purchase.lead_id:
         return []
     return db.query(models.PurchaseOption).options(
-        joinedload(models.PurchaseOption.user)
+        joinedload(models.PurchaseOption.user),
+        joinedload(models.PurchaseOption.decision_user)
     ).filter(
         models.PurchaseOption.lead_id == purchase.lead_id
     ).order_by(models.PurchaseOption.created_at.desc()).all()
@@ -565,6 +567,70 @@ async def create_purchase_option(
             type="info",
             link=_build_lead_board_link(target_user, purchase.lead_id)
         ))
+    db.commit()
+    db.refresh(option)
+    return option
+
+
+@router.put("/options/{option_id}/decision", response_model=schemas.PurchaseOption)
+def update_purchase_option_decision(
+    option_id: int,
+    decision_payload: schemas.PurchaseOptionDecisionUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    option = db.query(models.PurchaseOption).options(
+        joinedload(models.PurchaseOption.lead),
+        joinedload(models.PurchaseOption.user),
+        joinedload(models.PurchaseOption.decision_user)
+    ).filter(models.PurchaseOption.id == option_id).first()
+    if not option:
+        raise HTTPException(status_code=404, detail="Purchase option not found")
+
+    lead = option.lead
+    if current_user.company_id and (not lead or lead.company_id != current_user.company_id):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    decision_status = (decision_payload.decision_status or "").strip().lower()
+    if decision_status not in {"accepted", "rejected"}:
+        raise HTTPException(status_code=400, detail="Decision status must be accepted or rejected")
+
+    decision_note = (decision_payload.decision_note or "").strip()
+    if not decision_note:
+        raise HTTPException(status_code=400, detail="Debes indicar una nota para aceptar o rechazar la opcion")
+
+    option.decision_status = decision_status
+    option.decision_note = decision_note
+    option.decision_user_id = current_user.id
+    option.decision_at = datetime.datetime.utcnow()
+
+    action_label = "aceptó" if decision_status == "accepted" else "rechazó"
+    option_label = option.title or "opción sin título"
+    db.add(models.LeadNote(
+        lead_id=option.lead_id,
+        user_id=current_user.id,
+        content=f"Se {action_label} la opción '{option_label}'. Nota: {decision_note}"
+    ))
+    db.add(models.LeadHistory(
+        lead_id=option.lead_id,
+        user_id=current_user.id,
+        previous_status=models.LeadStatus.INTERESTED.value,
+        new_status=models.LeadStatus.INTERESTED.value,
+        comment=f"Se {action_label} la opción '{option_label}'. Nota: {decision_note}"
+    ))
+
+    if lead and lead.assigned_to_id and lead.assigned_to_id != current_user.id:
+        target_user = db.query(models.User).options(joinedload(models.User.role)).filter(
+            models.User.id == lead.assigned_to_id
+        ).first()
+        db.add(models.Notification(
+            user_id=lead.assigned_to_id,
+            title="Respuesta sobre opción de vehículo",
+            message=f"Se {action_label} una opción para el lead {lead.name or 'sin nombre'}.",
+            type="info",
+            link=_build_lead_board_link(target_user, lead.id)
+        ))
+
     db.commit()
     db.refresh(option)
     return option

@@ -153,6 +153,43 @@ def ensure_credit_application_link_column():
 
 ensure_credit_application_link_column()
 
+
+def ensure_purchase_option_decision_columns():
+    try:
+        with engine.connect() as conn:
+            existing_cols_result = conn.execute(text(
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'purchase_options'"
+            ))
+            existing_cols = {row[0] for row in existing_cols_result.fetchall()}
+
+            if "decision_status" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE purchase_options "
+                    "ADD COLUMN decision_status VARCHAR(30) NULL DEFAULT 'pending'"
+                ))
+            if "decision_note" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE purchase_options "
+                    "ADD COLUMN decision_note TEXT NULL"
+                ))
+            if "decision_user_id" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE purchase_options "
+                    "ADD COLUMN decision_user_id INT NULL"
+                ))
+            if "decision_at" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE purchase_options "
+                    "ADD COLUMN decision_at DATETIME NULL"
+                ))
+            conn.commit()
+    except Exception as exc:
+        print(f"Warning: could not ensure purchase option decision columns: {exc}", flush=True)
+
+
+ensure_purchase_option_decision_columns()
+
 app = FastAPI(title="AutosQP API", description="API para gestión de compra venta de carros")
 
 @app.exception_handler(Exception)

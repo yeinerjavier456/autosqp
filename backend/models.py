@@ -203,10 +203,15 @@ class PurchaseOption(Base):
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
     photos = Column(JSON, nullable=True)
+    decision_status = Column(String(30), default="pending")
+    decision_note = Column(Text, nullable=True)
+    decision_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    decision_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     lead = relationship("Lead", back_populates="purchase_options")
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
+    decision_user = relationship("User", foreign_keys=[decision_user_id])
 
 class User(Base):
     __tablename__ = "users"

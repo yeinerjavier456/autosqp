@@ -308,10 +308,20 @@ class PurchaseOption(PurchaseOptionBase):
     lead_id: int
     user_id: Optional[int] = None
     photos: List[str] = []
+    decision_status: Optional[str] = "pending"
+    decision_note: Optional[str] = None
+    decision_user_id: Optional[int] = None
+    decision_at: Optional[datetime] = None
     created_at: datetime
     user: Optional[User] = None
+    decision_user: Optional[User] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PurchaseOptionDecisionUpdate(BaseModel):
+    decision_status: str
+    decision_note: str
 
 class LeadBase(BaseModel):
     source: str

@@ -27,7 +27,34 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
         }
     };
 
+    const getPurchaseOptionsMeta = (leadItem) => {
+        const options = Array.isArray(leadItem?.purchase_options) ? leadItem.purchase_options : [];
+        if (options.length === 0) return null;
+
+        const acceptedCount = options.filter((option) => option?.decision_status === 'accepted').length;
+        const rejectedCount = options.filter((option) => option?.decision_status === 'rejected').length;
+        const pendingCount = options.length - acceptedCount - rejectedCount;
+
+        if (acceptedCount > 0) {
+            return {
+                label: acceptedCount === 1 ? 'Opcion aceptada' : `${acceptedCount} opciones aceptadas`,
+                className: 'bg-emerald-100 text-emerald-800 border-emerald-200'
+            };
+        }
+        if (pendingCount > 0) {
+            return {
+                label: pendingCount === 1 ? 'Opcion encontrada' : `${pendingCount} opciones encontradas`,
+                className: 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200'
+            };
+        }
+        return {
+            label: rejectedCount === 1 ? 'Opcion rechazada' : `${rejectedCount} opciones rechazadas`,
+            className: 'bg-rose-100 text-rose-800 border-rose-200'
+        };
+    };
+
     const creditStatusMeta = getCreditStatusMeta(lead.credit_application_status);
+    const purchaseOptionsMeta = getPurchaseOptionsMeta(lead);
     const supervisorUsers = getLeadSupervisorUsers(lead);
 
     return (
@@ -91,6 +118,13 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
                 <div className={`mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wide ${creditStatusMeta.className}`}>
                     <span className="h-2 w-2 rounded-full bg-current opacity-70"></span>
                     Credito: {creditStatusMeta.label}
+                </div>
+            )}
+
+            {purchaseOptionsMeta && (
+                <div className={`mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wide ${purchaseOptionsMeta.className}`}>
+                    <span className="h-2 w-2 rounded-full bg-current opacity-70"></span>
+                    {purchaseOptionsMeta.label}
                 </div>
             )}
 
@@ -234,7 +268,8 @@ const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragS
 };
 
 // History Modal Component
-const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, onAssign, availableVehicles, currentUserRole, boardMode = 'general' }) => {
+const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, onAssign, onRefreshLeadBoard, availableVehicles, currentUserRole, boardMode = 'general' }) => {
+    const { user } = useAuth();
     const [assignedAdvisor, setAssignedAdvisor] = useState(lead?.assigned_to?.id || '');
     const [selectedSupervisors, setSelectedSupervisors] = useState(getLeadSupervisorIds(lead));
     const { createReminder } = useNotifications();
@@ -268,6 +303,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
     const [uploadingFile, setUploadingFile] = useState(false);
     const [leadNotes, setLeadNotes] = useState([]);
     const [leadFiles, setLeadFiles] = useState([]);
+    const [purchaseOptions, setPurchaseOptions] = useState(Array.isArray(lead?.purchase_options) ? lead.purchase_options : []);
 
     useEffect(() => {
         setAssignedAdvisor(lead?.assigned_to?.id || '');
@@ -279,6 +315,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
             fetchMessages();
             setLeadNotes(lead.notes || []);
             setLeadFiles(lead.files || []);
+            setPurchaseOptions(Array.isArray(lead.purchase_options) ? lead.purchase_options : []);
         }
     }, [lead]);
 
@@ -592,6 +629,63 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
         });
     };
 
+    const handlePurchaseOptionDecision = async (option, decisionStatus) => {
+        const isAccepted = decisionStatus === 'accepted';
+        const { value: decisionNote } = await Swal.fire({
+            title: isAccepted ? 'Aceptar opcion' : 'Rechazar opcion',
+            input: 'textarea',
+            inputLabel: 'Nota obligatoria',
+            inputPlaceholder: isAccepted
+                ? 'Explica por que esta opcion fue aceptada o que sigue con el cliente'
+                : 'Explica por que esta opcion fue rechazada por el lead',
+            inputAttributes: { 'aria-label': 'Nota obligatoria' },
+            showCancelButton: true,
+            confirmButtonText: isAccepted ? 'Aceptar opcion' : 'Rechazar opcion',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: isAccepted ? '#059669' : '#dc2626',
+            inputValidator: (value) => {
+                if (!value || !value.trim()) {
+                    return 'Debes escribir una nota para continuar';
+                }
+                return null;
+            }
+        });
+
+        if (!decisionNote) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.put(
+                `https://autosqp.co/api/purchases/options/${option.id}/decision`,
+                {
+                    decision_status: decisionStatus,
+                    decision_note: decisionNote.trim()
+                },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            const updatedOption = response.data;
+            setPurchaseOptions((prev) => prev.map((item) => item.id === updatedOption.id ? updatedOption : item));
+            setLeadNotes((prevNotes) => [
+                ...prevNotes,
+                {
+                    id: `purchase-option-decision-${updatedOption.id}-${Date.now()}`,
+                    content: `Se ${isAccepted ? 'acepto' : 'rechazo'} la opcion '${updatedOption.title}'. Nota: ${decisionNote.trim()}`,
+                    created_at: new Date().toISOString(),
+                    user_id: user?.id,
+                    user: user || null,
+                }
+            ]);
+            if (onRefreshLeadBoard) {
+                await onRefreshLeadBoard();
+            }
+            Swal.fire('Exito', `La opcion fue ${isAccepted ? 'aceptada' : 'rechazada'} correctamente`, 'success');
+        } catch (error) {
+            console.error('Error updating purchase option decision', error);
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo actualizar la opcion', 'error');
+        }
+    };
+
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 md:p-4" onClick={onClose}>
             <div className="bg-white rounded-2xl p-5 md:p-6 w-[min(97vw,1700px)] shadow-2xl animate-fade-in-up border border-gray-100 h-[96vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -658,21 +752,36 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                 </div>
                             </div>
                         )}
-                        {!isLeadHeaderCollapsed && Array.isArray(lead.purchase_options) && lead.purchase_options.length > 0 && (
+                        {!isLeadHeaderCollapsed && Array.isArray(purchaseOptions) && purchaseOptions.length > 0 && (
                             <div className="mt-3 rounded-xl border border-pink-200 bg-pink-50 p-3">
                                 <div className="flex items-center justify-between gap-2">
                                     <p className="text-[11px] font-bold uppercase tracking-wide text-pink-700">Opciones encontradas para la búsqueda</p>
-                                    <span className="text-[11px] font-medium text-pink-500">{lead.purchase_options.length} opcion(es)</span>
+                                    <span className="text-[11px] font-medium text-pink-500">{purchaseOptions.length} opcion(es)</span>
                                 </div>
                                 <div className="mt-3 space-y-3">
-                                    {lead.purchase_options.map((option) => (
+                                    {purchaseOptions.map((option) => (
                                         <div key={option.id} className="rounded-xl border border-pink-100 bg-white p-3">
                                             <div className="flex items-start justify-between gap-3">
                                                 <div>
                                                     <p className="text-sm font-bold text-slate-800">{option.title}</p>
                                                     {option.description && <p className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">{option.description}</p>}
                                                 </div>
-                                                <span className="text-[10px] text-slate-400">{option.created_at ? formatLeadDate(option.created_at) : 'Reciente'}</span>
+                                                <div className="flex flex-col items-end gap-2">
+                                                    <span className="text-[10px] text-slate-400">{option.created_at ? formatLeadDate(option.created_at) : 'Reciente'}</span>
+                                                    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                                                        option.decision_status === 'accepted'
+                                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                                            : option.decision_status === 'rejected'
+                                                                ? 'border-rose-200 bg-rose-50 text-rose-700'
+                                                                : 'border-amber-200 bg-amber-50 text-amber-700'
+                                                    }`}>
+                                                        {option.decision_status === 'accepted'
+                                                            ? 'Aceptada'
+                                                            : option.decision_status === 'rejected'
+                                                                ? 'Rechazada'
+                                                                : 'Pendiente'}
+                                                    </span>
+                                                </div>
                                             </div>
                                             {Array.isArray(option.photos) && option.photos.length > 0 && (
                                                 <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3">
@@ -698,7 +807,29 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                                 >
                                                     Descargar fotos
                                                 </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handlePurchaseOptionDecision(option, 'accepted')}
+                                                    className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100"
+                                                >
+                                                    Aceptar
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handlePurchaseOptionDecision(option, 'rejected')}
+                                                    className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
+                                                >
+                                                    Rechazar
+                                                </button>
                                             </div>
+                                            {option.decision_note && (
+                                                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                                                        Nota de {option.decision_status === 'accepted' ? 'aceptacion' : 'decision'}
+                                                    </p>
+                                                    <p className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">{option.decision_note}</p>
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -2033,6 +2164,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     onSaveSupervisors={handleSaveSupervisors}
                     advisors={advisors}
                     onAssign={handleAssignLead}
+                    onRefreshLeadBoard={fetchLeads}
                     availableVehicles={availableVehicles}
                     currentUserRole={currentRoleName}
                     boardMode={boardMode}
