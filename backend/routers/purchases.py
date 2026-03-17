@@ -13,6 +13,12 @@ router = APIRouter(
     tags=["purchases"]
 )
 
+
+def _build_lead_board_link(target_user: Optional[models.User], lead_id: int) -> str:
+    target_role_name = getattr(getattr(target_user, "role", None), "base_role_name", None) or getattr(getattr(target_user, "role", None), "name", None)
+    base_path = "/aliado/dashboard" if target_role_name == "aliado" else "/admin/leads"
+    return f"{base_path}?leadId={lead_id}"
+
 VALID_PURCHASE_STATUSES = {
     models.CreditStatus.PENDING.value,
     models.CreditStatus.IN_REVIEW.value,
@@ -451,6 +457,28 @@ async def create_purchase_option(
         new_status=models.LeadStatus.INTERESTED.value,
         comment=f"Se agregó opción de compra: {title.strip()}"
     ))
+    lead = db.query(models.Lead).options(
+        joinedload(models.Lead.assigned_to),
+        joinedload(models.Lead.supervisors).joinedload(models.User.role)
+    ).filter(models.Lead.id == purchase.lead_id).first()
+    notified_user_ids = set()
+    notification_targets = []
+    if lead and lead.assigned_to_id and lead.assigned_to:
+        notification_targets.append(lead.assigned_to)
+    if lead and lead.supervisors:
+        notification_targets.extend(list(lead.supervisors))
+
+    for target_user in notification_targets:
+        if not target_user or target_user.id in notified_user_ids or target_user.id == current_user.id:
+            continue
+        notified_user_ids.add(target_user.id)
+        db.add(models.Notification(
+            user_id=target_user.id,
+            title="Nuevas opciones de vehículo",
+            message=f"Se agregaron opciones para mostrar al lead {lead.name if lead else purchase.client_name}.",
+            type="info",
+            link=_build_lead_board_link(target_user, purchase.lead_id)
+        ))
     db.commit()
     db.refresh(option)
     return option

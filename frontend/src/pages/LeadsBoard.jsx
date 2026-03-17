@@ -178,6 +178,26 @@ const getLeadSupervisorUsers = (lead) => (
     Array.isArray(lead?.supervisors) ? lead.supervisors.filter(Boolean) : []
 );
 
+const buildPurchaseOptionShareText = (lead, option) => {
+    const lines = [
+        `Lead: ${lead?.name || 'Cliente'}`,
+        `Opcion: ${option?.title || 'Sin titulo'}`
+    ];
+
+    if (option?.description) {
+        lines.push('');
+        lines.push(option.description);
+    }
+
+    if (Array.isArray(option?.photos) && option.photos.length > 0) {
+        lines.push('');
+        lines.push('Fotos:');
+        option.photos.forEach((photo) => lines.push(`https://autosqp.co/api${photo}`));
+    }
+
+    return lines.join('\n');
+};
+
 // Kanban Column
 const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragStart, onViewHistory, highlightedLeadId, boardMode = 'general' }) => {
     return (
@@ -546,6 +566,32 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
         }
     };
 
+    const handleCopyPurchaseOptionText = async (option) => {
+        try {
+            await navigator.clipboard.writeText(buildPurchaseOptionShareText(lead, option));
+            Swal.fire('Exito', 'Texto copiado para compartir con el lead', 'success');
+        } catch (error) {
+            console.error('Error copying purchase option text', error);
+            Swal.fire('Error', 'No se pudo copiar el texto de la opcion', 'error');
+        }
+    };
+
+    const handleDownloadPurchaseOptionPhotos = (option) => {
+        if (!Array.isArray(option?.photos) || option.photos.length === 0) {
+            Swal.fire('Info', 'Esta opcion no tiene fotos para descargar', 'info');
+            return;
+        }
+
+        option.photos.forEach((photo, index) => {
+            const link = document.createElement('a');
+            link.href = `https://autosqp.co/api${photo}`;
+            link.download = `${option.title || 'opcion'}-${index + 1}.jpg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+    };
+
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 md:p-4" onClick={onClose}>
             <div className="bg-white rounded-2xl p-5 md:p-6 w-[min(97vw,1700px)] shadow-2xl animate-fade-in-up border border-gray-100 h-[96vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -637,6 +683,22 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                                     ))}
                                                 </div>
                                             )}
+                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleCopyPurchaseOptionText(option)}
+                                                    className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+                                                >
+                                                    Copiar texto
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDownloadPurchaseOptionPhotos(option)}
+                                                    className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100"
+                                                >
+                                                    Descargar fotos
+                                                </button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>

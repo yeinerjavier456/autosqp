@@ -15,6 +15,17 @@ const normalizePurchaseItems = (responseData) => {
     return [];
 };
 
+const buildOptionShareText = (option) => {
+    const lines = [option.title];
+    if (option.description) lines.push(option.description);
+    if (Array.isArray(option.photos) && option.photos.length > 0) {
+        lines.push('');
+        lines.push('Fotos:');
+        option.photos.forEach((photo) => lines.push(`https://autosqp.co/api${photo}`));
+    }
+    return lines.join('\n');
+};
+
 const STATUS_LABELS = {
     pending: 'Solicitud recibida',
     in_review: 'En busqueda',
@@ -281,6 +292,28 @@ const PurchaseBoard = () => {
         }
     };
 
+    const handleCopyOptionText = async (option) => {
+        try {
+            await navigator.clipboard.writeText(buildOptionShareText(option));
+            Swal.fire('Éxito', 'Texto copiado para compartir con el lead', 'success');
+        } catch (error) {
+            console.error('Error copying option text', error);
+            Swal.fire('Error', 'No se pudo copiar el texto', 'error');
+        }
+    };
+
+    const handleDownloadOptionPhotos = (option) => {
+        if (!Array.isArray(option.photos) || option.photos.length === 0) return;
+        option.photos.forEach((photo, index) => {
+            const link = document.createElement('a');
+            link.href = `https://autosqp.co/api${photo}`;
+            link.download = `${option.title || 'opcion'}-${index + 1}.jpg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+    };
+
     const filteredPurchases = purchases.filter((purchase) => {
         const normalizedSearch = searchTerm.trim().toLowerCase();
         const matchesSearch = !normalizedSearch || [purchase.client_name, purchase.phone, purchase.email, purchase.desired_vehicle]
@@ -453,6 +486,22 @@ const PurchaseBoard = () => {
                                                     ))}
                                                 </div>
                                             )}
+                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleCopyOptionText(option)}
+                                                    className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+                                                >
+                                                    Copiar texto
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDownloadOptionPhotos(option)}
+                                                    className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100"
+                                                >
+                                                    Descargar fotos
+                                                </button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
