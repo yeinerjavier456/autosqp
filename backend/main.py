@@ -1781,46 +1781,157 @@ def upsert_brand_model(db: Session, make: Optional[str], model: Optional[str]):
         if not existing_model:
             db.add(models.CarModel(name=model_name, brand_id=brand.id))
 
-@app.get("/stats/advisor")
+@app.get("/stats/advisor", response_model=schemas.RoleDashboardStats)
 def read_advisor_stats(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # Only for advisors or company users
     if not current_user.company_id:
-        return {"error": "Not an advisor"}
-        
-    # Leads Assigned High Level
-    leads_query = db.query(models.Lead).filter(models.Lead.assigned_to_id == current_user.id)
-    total_leads = leads_query.count()
-    
-    # Status Counts
-    # Use sqlalchemy func for grouping
-    from sqlalchemy import func
-    status_counts = db.query(models.Lead.status, func.count(models.Lead.status))\
-        .filter(models.Lead.assigned_to_id == current_user.id)\
-        .group_by(models.Lead.status).all()
-        
-    stats_map = {s[0]: s[1] for s in status_counts}
-    
-    # Sold count (Lead status 'sold' OR Sales table)
-    # We will trust Lead status 'sold' as per LeadsBoard logic
-    leads_sold = stats_map.get('sold', 0)
-    
-    leads_new = stats_map.get('new', 0)
-    
-    # Conversion Rate
-    conversion_rate = 0
-    if total_leads > 0:
-        conversion_rate = (leads_sold / total_leads) * 100
-        
+        raise HTTPException(status_code=400, detail="Dashboard disponible solo para usuarios de empresa")
+
+    role_name = get_user_role_name(current_user) or ""
+    permissions = set(get_role_permissions(current_user.role))
+    company_scope = role_name in {"admin", "super_admin"}
+
+    leads_query = db.query(models.Lead).options(
+        joinedload(models.Lead.supervisors),
+        joinedload(models.Lead.purchase_options)
+    ).filter(models.Lead.company_id == current_user.company_id)
+    if not company_scope:
+        leads_query = leads_query.filter(
+            or_(
+                models.Lead.assigned_to_id == current_user.id,
+                models.Lead.supervisors.any(models.User.id == current_user.id)
+            )
+        )
+    leads = leads_query.all()
+
+    status_distribution = {}
+    unread_replies_count = 0
+    active_pipeline_count = 0
+    purchase_option_decision_distribution = {"pending": 0, "accepted": 0, "rejected": 0}
+    today = datetime.datetime.utcnow().date()
+    recent_dates = [today - datetime.timedelta(days=offset) for offset in range(6, -1, -1)]
+    recent_leads_by_day = {day.strftime("%d/%m"): 0 for day in recent_dates}
+
+    relevant_lead_ids = []
+    for lead in leads:
+        relevant_lead_ids.append(lead.id)
+        status_key = lead.status or "new"
+        status_distribution[status_key] = status_distribution.get(status_key, 0) + 1
+        if status_key not in {"sold", "lost"}:
+            active_pipeline_count += 1
+        if lead.has_unread_reply:
+            unread_replies_count += 1
+        created_at = lead.created_at.date() if lead.created_at else None
+        if created_at in recent_dates:
+            recent_leads_by_day[created_at.strftime("%d/%m")] += 1
+        for option in lead.purchase_options or []:
+            decision_status = (getattr(option, "decision_status", None) or "pending").lower()
+            if decision_status not in purchase_option_decision_distribution:
+                purchase_option_decision_distribution[decision_status] = 0
+            purchase_option_decision_distribution[decision_status] += 1
+
+    total_leads = len(leads)
+    leads_sold = status_distribution.get("sold", 0)
+    leads_new = status_distribution.get("new", 0)
+    conversion_rate = (leads_sold / total_leads * 100) if total_leads else 0
+
+    credit_status_distribution = {}
+    credit_total = 0
+    if "credits" in permissions:
+        credits_query = db.query(models.CreditApplication).filter(
+            models.CreditApplication.company_id == current_user.company_id
+        )
+        if not company_scope:
+            credits_query = credits_query.filter(
+                or_(
+                    models.CreditApplication.assigned_to_id == current_user.id,
+                    models.CreditApplication.lead_id.in_(relevant_lead_ids or [-1])
+                )
+            )
+        credits = credits_query.all()
+        credit_total = len(credits)
+        for credit in credits:
+            status_key = credit.status or "pending"
+            credit_status_distribution[status_key] = credit_status_distribution.get(status_key, 0) + 1
+
+    purchase_status_distribution = {}
+    purchase_total = 0
+    if "purchase_board" in permissions:
+        purchase_lead_ids = [
+            lead_id for (lead_id,) in db.query(models.Lead.id).filter(
+                models.Lead.company_id == current_user.company_id,
+                models.Lead.status == models.LeadStatus.INTERESTED.value,
+                models.Lead.process_detail.has(models.LeadProcessDetail.has_vehicle == False),  # noqa: E712
+                models.Lead.process_detail.has(models.LeadProcessDetail.desired_vehicle.isnot(None))
+            ).all()
+        ]
+        purchases_query = db.query(models.CreditApplication).filter(
+            models.CreditApplication.company_id == current_user.company_id,
+            models.CreditApplication.lead_id.in_(purchase_lead_ids or [-1])
+        )
+        if not company_scope:
+            purchases_query = purchases_query.filter(
+                or_(
+                    models.CreditApplication.assigned_to_id == current_user.id,
+                    models.CreditApplication.lead_id.in_(relevant_lead_ids or [-1])
+                )
+            )
+        purchases = purchases_query.all()
+        purchase_total = len(purchases)
+        for purchase in purchases:
+            status_key = purchase.status or "pending"
+            purchase_status_distribution[status_key] = purchase_status_distribution.get(status_key, 0) + 1
+
+    sales_status_distribution = {}
+    sales_total = 0
+    sales_approved = 0
+    sales_pending = 0
+    if "sales" in permissions or "my_sales" in permissions:
+        sales_query = db.query(models.Sale).filter(models.Sale.company_id == current_user.company_id)
+        if "my_sales" in permissions and not company_scope:
+            sales_query = sales_query.filter(models.Sale.seller_id == current_user.id)
+        sales = sales_query.all()
+        sales_total = len(sales)
+        for sale in sales:
+            status_key = sale.status or "pending"
+            sales_status_distribution[status_key] = sales_status_distribution.get(status_key, 0) + 1
+        sales_approved = sales_status_distribution.get("approved", 0)
+        sales_pending = sales_status_distribution.get("pending", 0)
+
+    inventory_status_distribution = {}
+    inventory_total = 0
+    if "inventory" in permissions:
+        vehicles = db.query(models.Vehicle).filter(
+            models.Vehicle.company_id == current_user.company_id
+        ).all()
+        inventory_total = len(vehicles)
+        for vehicle in vehicles:
+            status_key = vehicle.status or "available"
+            inventory_status_distribution[status_key] = inventory_status_distribution.get(status_key, 0) + 1
+
     return {
         "total_leads": total_leads,
         "leads_new": leads_new,
         "leads_sold": leads_sold,
         "conversion_rate": round(conversion_rate, 2),
-        "response_time_min": 37, # Simulated as per mockup
-        "status_distribution": stats_map
+        "response_time_min": 37,
+        "active_pipeline_count": active_pipeline_count,
+        "unread_replies_count": unread_replies_count,
+        "status_distribution": status_distribution,
+        "recent_leads_by_day": recent_leads_by_day,
+        "credit_total": credit_total,
+        "credit_status_distribution": credit_status_distribution,
+        "purchase_total": purchase_total,
+        "purchase_status_distribution": purchase_status_distribution,
+        "purchase_option_decision_distribution": purchase_option_decision_distribution,
+        "sales_total": sales_total,
+        "sales_approved": sales_approved,
+        "sales_pending": sales_pending,
+        "sales_status_distribution": sales_status_distribution,
+        "inventory_total": inventory_total,
+        "inventory_status_distribution": inventory_status_distribution,
     }
 
 @app.post("/seed/brands")

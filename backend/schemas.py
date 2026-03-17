@@ -488,6 +488,28 @@ class DashboardStats(BaseModel):
     companies_count: int
     users_count: int
 
+class RoleDashboardStats(BaseModel):
+    total_leads: int
+    leads_new: int
+    leads_sold: int
+    conversion_rate: float
+    response_time_min: int
+    active_pipeline_count: int
+    unread_replies_count: int
+    status_distribution: Dict[str, int]
+    recent_leads_by_day: Dict[str, int]
+    credit_total: int
+    credit_status_distribution: Dict[str, int]
+    purchase_total: int
+    purchase_status_distribution: Dict[str, int]
+    purchase_option_decision_distribution: Dict[str, int]
+    sales_total: int
+    sales_approved: int
+    sales_pending: int
+    sales_status_distribution: Dict[str, int]
+    inventory_total: int
+    inventory_status_distribution: Dict[str, int]
+
 class ReportsStats(BaseModel):
     total_leads: int
     conversion_rate: float

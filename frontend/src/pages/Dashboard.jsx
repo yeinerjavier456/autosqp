@@ -2,40 +2,28 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import AdvisorDashboard from './AdvisorDashboard';
-import Reports from './Reports';
 
 const Dashboard = () => {
     const { user } = useAuth();
     const [stats, setStats] = useState({ companies_count: 0, users_count: 0 });
 
     // Helper to get role name
-    const roleName = user?.role?.name || (typeof user?.role === 'string' ? user?.role : '');
+    const roleName = user?.role?.base_role_name || user?.role?.name || (typeof user?.role === 'string' ? user?.role : '');
     const roleLabel = user?.role?.label || roleName;
 
     // ----------------------------------------------------------------
     // ROUTING LOGIC
     // ----------------------------------------------------------------
 
-    // 1. ADVISORS / SELLERS -> New Dedicated Dashboard
-    if (roleName === 'advisor' || roleName === 'seller' || roleName === 'vendedor' || roleName === 'asesor') {
+    // 1. COMPANY USERS -> Dedicated role dashboard
+    if (user?.company_id) {
         return <AdvisorDashboard />;
     }
 
-    // 2. COMPANY ADMINS -> Legacy Reports Dashboard
-    // If they are 'admin' (not super_admin), they want the full charts.
-    if (roleName === 'admin') {
-        return <Reports />;
-    }
-
     // ----------------------------------------------------------------
-    // 3. GLOBAL SUPER ADMIN -> Custom Global Stats View
+    // 2. GLOBAL SUPER ADMIN -> Custom Global Stats View
     // ----------------------------------------------------------------
     const isGlobalSuperAdmin = roleName === 'super_admin';
-
-    // Fallback: If not super admin but has company, probably an admin variant -> Reports
-    if (!isGlobalSuperAdmin && user?.company_id) {
-        return <Reports />;
-    }
 
     // --- Fetch Global Stats for Super Admin ---
     useEffect(() => {
