@@ -9,6 +9,7 @@ const WhatsAppDashboard = () => {
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState("");
     const [loading, setLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const messagesEndRef = useRef(null);
 
@@ -63,6 +64,18 @@ const WhatsAppDashboard = () => {
         }
     };
 
+    const handleRefreshData = async () => {
+        setIsRefreshing(true);
+        try {
+            await fetchConversations();
+            if (selectedConversation?.id) {
+                await fetchMessages(selectedConversation.id);
+            }
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
     const handleSendMessage = async (e) => {
         e.preventDefault();
         if (!newMessage.trim() || !selectedConversation) return;
@@ -104,9 +117,29 @@ const WhatsAppDashboard = () => {
         <div className="h-[calc(100vh-100px)] flex bg-gray-100 rounded-2xl overflow-hidden shadow-xl border border-gray-200">
             {/* Sidebar - Conversations List */}
             <div className="w-1/3 bg-white border-r border-gray-200 flex flex-col">
-                <div className="p-4 bg-gray-50 border-b border-gray-200">
-                    <h2 className="text-xl font-bold text-slate-800">Mensajes</h2>
-                    <p className="text-xs text-slate-500">Chats de WhatsApp Business</p>
+                <div className="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-3">
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-800">Mensajes</h2>
+                        <p className="text-xs text-slate-500">Chats de WhatsApp Business</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleRefreshData}
+                        disabled={isRefreshing}
+                        className="rounded-full bg-[#00a884] p-2 text-white shadow transition hover:bg-[#008f6f] disabled:opacity-50"
+                        title="Traer datos de WhatsApp"
+                    >
+                        {isRefreshing ? (
+                            <svg className="h-5 w-5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        ) : (
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                        )}
+                    </button>
                 </div>
 
                 {/* Search Bar */}
