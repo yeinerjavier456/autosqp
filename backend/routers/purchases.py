@@ -32,6 +32,19 @@ def _purchase_status_label(status_value: Optional[str]) -> str:
     }.get(status_value or "", status_value or "Sin estado")
 
 
+def _store_purchase_option_photos(files):
+    os.makedirs("static/purchase-options", exist_ok=True)
+    stored_paths = []
+    for file in files:
+        extension = file.filename.split(".")[-1]
+        unique_filename = f"{uuid.uuid4()}.{extension}"
+        file_path = f"static/purchase-options/{unique_filename}"
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        stored_paths.append(f"/{file_path}")
+    return stored_paths
+
+
 def _eligible_purchase_leads(db: Session, company_id: int):
     return db.query(models.Lead).options(
         joinedload(models.Lead.process_detail),
@@ -376,3 +389,68 @@ async def upload_purchase_file(
     db.commit()
     db.refresh(db_file)
     return db_file
+
+
+@router.get("/{purchase_id}/options", response_model=list[schemas.PurchaseOption])
+def get_purchase_options(
+    purchase_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    purchase = db.query(models.CreditApplication).filter(models.CreditApplication.id == purchase_id).first()
+    if not purchase:
+        raise HTTPException(status_code=404, detail="Purchase request not found")
+    if current_user.company_id and purchase.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if not purchase.lead_id:
+        return []
+    return db.query(models.PurchaseOption).options(
+        joinedload(models.PurchaseOption.user)
+    ).filter(
+        models.PurchaseOption.lead_id == purchase.lead_id
+    ).order_by(models.PurchaseOption.created_at.desc()).all()
+
+
+@router.post("/{purchase_id}/options", response_model=schemas.PurchaseOption)
+async def create_purchase_option(
+    purchase_id: int,
+    title: str,
+    description: str = "",
+    photos: list[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    purchase = db.query(models.CreditApplication).filter(models.CreditApplication.id == purchase_id).first()
+    if not purchase:
+        raise HTTPException(status_code=404, detail="Purchase request not found")
+    if current_user.company_id and purchase.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if not purchase.lead_id:
+        raise HTTPException(status_code=400, detail="Purchase request has no related lead")
+    if len(photos) < 3:
+        raise HTTPException(status_code=400, detail="Debes adjuntar minimo 3 fotos por opcion")
+
+    photo_paths = _store_purchase_option_photos(photos)
+    option = models.PurchaseOption(
+        lead_id=purchase.lead_id,
+        user_id=current_user.id,
+        title=title.strip(),
+        description=(description or "").strip() or None,
+        photos=photo_paths
+    )
+    db.add(option)
+    db.add(models.LeadNote(
+        lead_id=purchase.lead_id,
+        user_id=current_user.id,
+        content=f"Opción de vehículo agregada desde compras: {title.strip()}"
+    ))
+    db.add(models.LeadHistory(
+        lead_id=purchase.lead_id,
+        user_id=current_user.id,
+        previous_status=models.LeadStatus.INTERESTED.value,
+        new_status=models.LeadStatus.INTERESTED.value,
+        comment=f"Se agregó opción de compra: {title.strip()}"
+    ))
+    db.commit()
+    db.refresh(option)
+    return option

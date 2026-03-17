@@ -299,6 +299,20 @@ class LeadFile(LeadFileBase):
 class LeadFileDeleteRequest(BaseModel):
     reason: str
 
+class PurchaseOptionBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+
+class PurchaseOption(PurchaseOptionBase):
+    id: int
+    lead_id: int
+    user_id: Optional[int] = None
+    photos: List[str] = []
+    created_at: datetime
+    user: Optional[User] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
 class LeadBase(BaseModel):
     source: str
     name: str
@@ -344,6 +358,7 @@ class Lead(LeadBase):
     process_detail: Optional[LeadProcessDetail] = None
     notes: List[LeadNote] = []
     files: List[LeadFile] = []
+    purchase_options: List[PurchaseOption] = []
     
     model_config = ConfigDict(from_attributes=True)
 

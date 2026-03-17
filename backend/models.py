@@ -110,6 +110,7 @@ class Lead(Base):
     process_detail = relationship("LeadProcessDetail", back_populates="lead", uselist=False)
     notes = relationship("LeadNote", back_populates="lead", cascade="all, delete-orphan")
     files = relationship("LeadFile", back_populates="lead", cascade="all, delete-orphan")
+    purchase_options = relationship("PurchaseOption", back_populates="lead", cascade="all, delete-orphan")
     supervisor_links = relationship("LeadSupervisor", back_populates="lead", cascade="all, delete-orphan")
     supervisors = relationship(
         "User",
@@ -192,6 +193,20 @@ class LeadProcessDetail(Base):
 
     lead = relationship("Lead", back_populates="process_detail")
     vehicle = relationship("Vehicle")
+
+class PurchaseOption(Base):
+    __tablename__ = "purchase_options"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    photos = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    lead = relationship("Lead", back_populates="purchase_options")
+    user = relationship("User")
 
 class User(Base):
     __tablename__ = "users"

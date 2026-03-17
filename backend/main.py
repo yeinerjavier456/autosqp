@@ -1245,7 +1245,8 @@ def read_leads(
         joinedload(models.Lead.history),
         joinedload(models.Lead.conversation).joinedload(models.Conversation.messages),
         joinedload(models.Lead.notes),
-        joinedload(models.Lead.files)
+        joinedload(models.Lead.files),
+        joinedload(models.Lead.purchase_options)
     )
     
     # Filter by user company

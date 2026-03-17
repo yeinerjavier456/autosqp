@@ -612,6 +612,36 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                 </div>
                             </div>
                         )}
+                        {!isLeadHeaderCollapsed && Array.isArray(lead.purchase_options) && lead.purchase_options.length > 0 && (
+                            <div className="mt-3 rounded-xl border border-pink-200 bg-pink-50 p-3">
+                                <div className="flex items-center justify-between gap-2">
+                                    <p className="text-[11px] font-bold uppercase tracking-wide text-pink-700">Opciones encontradas para la búsqueda</p>
+                                    <span className="text-[11px] font-medium text-pink-500">{lead.purchase_options.length} opcion(es)</span>
+                                </div>
+                                <div className="mt-3 space-y-3">
+                                    {lead.purchase_options.map((option) => (
+                                        <div key={option.id} className="rounded-xl border border-pink-100 bg-white p-3">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div>
+                                                    <p className="text-sm font-bold text-slate-800">{option.title}</p>
+                                                    {option.description && <p className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">{option.description}</p>}
+                                                </div>
+                                                <span className="text-[10px] text-slate-400">{option.created_at ? formatLeadDate(option.created_at) : 'Reciente'}</span>
+                                            </div>
+                                            {Array.isArray(option.photos) && option.photos.length > 0 && (
+                                                <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3">
+                                                    {option.photos.map((photo, index) => (
+                                                        <a key={`${option.id}-${index}`} href={`https://autosqp.co/api${photo}`} target="_blank" rel="noopener noreferrer" className="overflow-hidden rounded-lg border border-pink-100 bg-slate-50">
+                                                            <img src={`https://autosqp.co/api${photo}`} alt={option.title} className="h-24 w-full object-cover" />
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         {!isLeadHeaderCollapsed && (
                         <div className="mt-4 grid grid-cols-1 xl:grid-cols-[420px,minmax(0,1fr)] gap-4">
                             <div className="space-y-4">

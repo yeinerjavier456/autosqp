@@ -48,10 +48,15 @@ const PurchaseBoard = () => {
     const [showMyPurchasesOnly, setShowMyPurchasesOnly] = useState(false);
     const [purchaseLeadNotes, setPurchaseLeadNotes] = useState([]);
     const [purchaseLeadFiles, setPurchaseLeadFiles] = useState([]);
+    const [purchaseOptions, setPurchaseOptions] = useState([]);
     const [purchaseNoteInput, setPurchaseNoteInput] = useState('');
     const [purchaseSelectedFiles, setPurchaseSelectedFiles] = useState([]);
+    const [optionTitle, setOptionTitle] = useState('');
+    const [optionDescription, setOptionDescription] = useState('');
+    const [optionPhotos, setOptionPhotos] = useState([]);
     const [savingPurchaseNote, setSavingPurchaseNote] = useState(false);
     const [uploadingPurchaseFiles, setUploadingPurchaseFiles] = useState(false);
+    const [savingPurchaseOption, setSavingPurchaseOption] = useState(false);
 
     useEffect(() => {
         fetchPurchases();
@@ -62,8 +67,12 @@ const PurchaseBoard = () => {
         if (!selectedPurchase?.lead_id) {
             setPurchaseLeadNotes([]);
             setPurchaseLeadFiles([]);
+            setPurchaseOptions([]);
             setPurchaseNoteInput('');
             setPurchaseSelectedFiles([]);
+            setOptionTitle('');
+            setOptionDescription('');
+            setOptionPhotos([]);
             return;
         }
         fetchSelectedPurchaseResources(selectedPurchase.lead_id);
@@ -113,16 +122,19 @@ const PurchaseBoard = () => {
     const fetchSelectedPurchaseResources = async (leadId) => {
         try {
             const token = localStorage.getItem('token');
-            const [notesResponse, filesResponse] = await Promise.all([
+            const [notesResponse, filesResponse, optionsResponse] = await Promise.all([
                 axios.get(`https://autosqp.co/api/leads/${leadId}/notes`, { headers: { Authorization: `Bearer ${token}` } }),
-                axios.get(`https://autosqp.co/api/leads/${leadId}/files`, { headers: { Authorization: `Bearer ${token}` } })
+                axios.get(`https://autosqp.co/api/leads/${leadId}/files`, { headers: { Authorization: `Bearer ${token}` } }),
+                axios.get(`https://autosqp.co/api/purchases/${selectedPurchase.id}/options`, { headers: { Authorization: `Bearer ${token}` } })
             ]);
             setPurchaseLeadNotes(Array.isArray(notesResponse.data) ? notesResponse.data : []);
             setPurchaseLeadFiles(Array.isArray(filesResponse.data) ? filesResponse.data : []);
+            setPurchaseOptions(Array.isArray(optionsResponse.data) ? optionsResponse.data : []);
         } catch (error) {
             console.error('Error fetching purchase lead resources', error);
             setPurchaseLeadNotes([]);
             setPurchaseLeadFiles([]);
+            setPurchaseOptions([]);
         }
     };
 
@@ -227,6 +239,45 @@ const PurchaseBoard = () => {
             Swal.fire('Error', 'No se pudieron agregar los documentos', 'error');
         } finally {
             setUploadingPurchaseFiles(false);
+        }
+    };
+
+    const handleCreatePurchaseOption = async () => {
+        if (!selectedPurchase?.id) return;
+        if (!optionTitle.trim()) {
+            Swal.fire('Error', 'Debes indicar el nombre o referencia de la opción', 'warning');
+            return;
+        }
+        if (optionPhotos.length < 3) {
+            Swal.fire('Error', 'Debes adjuntar mínimo 3 fotos por opción', 'warning');
+            return;
+        }
+
+        setSavingPurchaseOption(true);
+        try {
+            const token = localStorage.getItem('token');
+            const formData = new FormData();
+            formData.append('title', optionTitle.trim());
+            formData.append('description', optionDescription.trim());
+            optionPhotos.forEach((photo) => formData.append('photos', photo));
+
+            const response = await axios.post(
+                `https://autosqp.co/api/purchases/${selectedPurchase.id}/options`,
+                formData,
+                { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' } }
+            );
+
+            setPurchaseOptions((prev) => [response.data, ...prev]);
+            setOptionTitle('');
+            setOptionDescription('');
+            setOptionPhotos([]);
+            await fetchSelectedPurchaseResources(selectedPurchase.lead_id);
+            Swal.fire('Éxito', 'Opción agregada correctamente', 'success');
+        } catch (error) {
+            console.error('Error creating purchase option', error);
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo agregar la opción', 'error');
+        } finally {
+            setSavingPurchaseOption(false);
         }
     };
 
@@ -375,6 +426,80 @@ const PurchaseBoard = () => {
                         <div className="rounded-xl border border-slate-200 bg-white p-4 mb-6">
                             <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Notas de la solicitud</p>
                             <p className="text-sm text-slate-700 whitespace-pre-wrap">{selectedPurchase.notes || 'Sin notas registradas.'}</p>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 bg-white p-4 mb-6 space-y-4">
+                            <div className="flex items-center justify-between gap-3">
+                                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Opciones encontradas</p>
+                                <span className="text-xs font-semibold text-slate-400">{purchaseOptions.length} opcion(es)</span>
+                            </div>
+                            {purchaseOptions.length > 0 ? (
+                                <div className="space-y-4">
+                                    {purchaseOptions.map((option) => (
+                                        <div key={option.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div>
+                                                    <h4 className="text-sm font-bold text-slate-800">{option.title}</h4>
+                                                    {option.description && <p className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">{option.description}</p>}
+                                                </div>
+                                                <span className="text-[11px] text-slate-400">{option.created_at ? new Date(option.created_at).toLocaleDateString() : 'Reciente'}</span>
+                                            </div>
+                                            {Array.isArray(option.photos) && option.photos.length > 0 && (
+                                                <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3">
+                                                    {option.photos.map((photo, index) => (
+                                                        <a key={`${option.id}-${index}`} href={`https://autosqp.co/api${photo}`} target="_blank" rel="noopener noreferrer" className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                                                            <img src={`https://autosqp.co/api${photo}`} alt={option.title} className="h-28 w-full object-cover" />
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-slate-500">Aún no se han registrado opciones para este lead.</p>
+                            )}
+
+                            <div className="border-t border-slate-100 pt-4">
+                                <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Agregar opción</p>
+                                <div className="grid grid-cols-1 gap-3">
+                                    <input
+                                        type="text"
+                                        className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                        placeholder="Ej: Mazda CX-5 2022 gris"
+                                        value={optionTitle}
+                                        onChange={(e) => setOptionTitle(e.target.value)}
+                                    />
+                                    <textarea
+                                        rows="3"
+                                        className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                        placeholder="Describe precio, kilometraje, ubicación, negociación o cualquier detalle relevante..."
+                                        value={optionDescription}
+                                        onChange={(e) => setOptionDescription(e.target.value)}
+                                    />
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                        <input
+                                            type="file"
+                                            multiple
+                                            accept="image/*"
+                                            className="flex-1 text-xs text-slate-500 file:mr-4 file:rounded-lg file:border-0 file:bg-emerald-50 file:px-4 file:py-2 file:font-semibold file:text-emerald-700 hover:file:bg-emerald-100"
+                                            onChange={(e) => setOptionPhotos(Array.from(e.target.files || []))}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleCreatePurchaseOption}
+                                            disabled={savingPurchaseOption}
+                                            className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                                        >
+                                            {savingPurchaseOption ? 'Guardando...' : 'Agregar opción'}
+                                        </button>
+                                    </div>
+                                    <p className="text-xs text-slate-500">Debes adjuntar mínimo 3 fotos por opción. Puedes cargar muchas opciones al mismo lead.</p>
+                                    {optionPhotos.length > 0 && (
+                                        <p className="text-xs font-semibold text-emerald-700">{optionPhotos.length} foto(s) seleccionada(s)</p>
+                                    )}
+                                </div>
+                            </div>
                         </div>
 
                         <div className="rounded-xl border border-slate-200 bg-white p-4 mb-6 space-y-4">
