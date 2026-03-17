@@ -103,6 +103,7 @@ const AdvisorDashboard = () => {
     const permissions = new Set(getRolePermissions(user?.role || { name: roleName }));
 
     const hasLeadsSection = permissions.has('leads_board') || permissions.has('ally_board') || roleName === 'admin' || roleName === 'super_admin';
+    const hasAllySection = permissions.has('ally_board') || roleName === 'admin' || roleName === 'super_admin';
     const hasCreditsSection = permissions.has('credits');
     const hasPurchasesSection = permissions.has('purchase_board');
     const hasInventorySection = permissions.has('inventory');
@@ -129,6 +130,9 @@ const AdvisorDashboard = () => {
     }
 
     const leadEntries = Object.entries(stats.status_distribution || {})
+        .map(([key, value]) => [formatLabel(key, LEAD_STATUS_LABELS), value])
+        .sort((a, b) => b[1] - a[1]);
+    const allyEntries = Object.entries(stats.ally_status_distribution || {})
         .map(([key, value]) => [formatLabel(key, LEAD_STATUS_LABELS), value])
         .sort((a, b) => b[1] - a[1]);
     const creditEntries = Object.entries(stats.credit_status_distribution || {})
@@ -173,6 +177,7 @@ const AdvisorDashboard = () => {
             },
         ],
     };
+    const allyData = buildBarData(allyEntries, 'Aliados', '#14b8a6');
 
     const creditData = buildBarData(creditEntries, 'Creditos', '#7c3aed');
     const purchaseData = buildBarData(purchaseEntries, 'Compras', '#db2777');
@@ -229,6 +234,15 @@ const AdvisorDashboard = () => {
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {hasAllySection && (
+                    <DashboardMetric
+                        title="Gestion de aliados"
+                        value={stats.ally_total}
+                        helper="Leads donde un aliado esta asignado o en supervision."
+                        className="border-cyan-200 bg-cyan-50 text-cyan-900"
+                        helperClassName="text-cyan-700"
+                    />
+                )}
                 {hasCreditsSection && (
                     <DashboardMetric
                         title="Solicitudes de credito"
@@ -301,6 +315,33 @@ const AdvisorDashboard = () => {
                                 }}
                             />
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {hasAllySection && (
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">Gestion de aliados</h3>
+                        <p className="text-sm text-slate-500">Estados actuales de la cola donde participan aliados en tu empresa.</p>
+                    </div>
+                    <div className="h-72">
+                        {allyEntries.length > 0 ? (
+                            <Bar
+                                data={allyData}
+                                options={{
+                                    indexAxis: 'y',
+                                    maintainAspectRatio: false,
+                                    responsive: true,
+                                    plugins: { legend: { display: false } },
+                                    scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+                                }}
+                            />
+                        ) : (
+                            <div className="flex h-full items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
+                                Aun no hay actividad de aliados visible.
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

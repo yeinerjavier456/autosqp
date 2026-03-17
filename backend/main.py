@@ -317,6 +317,33 @@ def get_role_permissions(role: Optional[models.Role]) -> List[str]:
     return sanitize_view_ids(parse_json_list(getattr(role, "permissions_json", None), fallback), getattr(role, "company_id", None))
 
 
+def get_company_ally_user_ids(db: Session, company_id: Optional[int]) -> List[int]:
+    if not company_id:
+        return []
+
+    aliado_roles = db.query(models.Role).filter(
+        or_(
+            models.Role.name == "aliado",
+            models.Role.base_role_name == "aliado"
+        ),
+        or_(
+            models.Role.company_id == company_id,
+            models.Role.company_id.is_(None)
+        )
+    ).all()
+    aliado_role_ids = [role.id for role in aliado_roles]
+    if not aliado_role_ids:
+        return []
+
+    return [
+        row[0]
+        for row in db.query(models.User.id).filter(
+            models.User.company_id == company_id,
+            models.User.role_id.in_(aliado_role_ids)
+        ).all()
+    ]
+
+
 def normalize_role_text(value: Optional[str]) -> str:
     if not value:
         return ""
@@ -1575,14 +1602,28 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
 def get_reports_stats(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     try:
         # Base query filtered by company
-        query = db.query(models.Lead).options(joinedload(models.Lead.assigned_to))
+        query = db.query(models.Lead).options(
+            joinedload(models.Lead.assigned_to),
+            joinedload(models.Lead.supervisors),
+            joinedload(models.Lead.purchase_options)
+        )
         if current_user.company_id:
             query = query.filter(models.Lead.company_id == current_user.company_id)
         
         leads = query.all()
         total_leads = len(leads)
+        ally_user_ids = set(get_company_ally_user_ids(db, current_user.company_id))
         credit_query = db.query(models.CreditApplication)
-        purchase_query = db.query(models.CreditApplication).filter(models.CreditApplication.lead_id.isnot(None))
+        purchase_query = db.query(models.CreditApplication).filter(
+            models.CreditApplication.lead_id.isnot(None),
+            models.CreditApplication.lead.has(
+                and_(
+                    models.Lead.status == models.LeadStatus.INTERESTED.value,
+                    models.Lead.process_detail.has(models.LeadProcessDetail.has_vehicle == False),  # noqa: E712
+                    models.Lead.process_detail.has(models.LeadProcessDetail.desired_vehicle.isnot(None))
+                )
+            )
+        )
         vehicle_query = db.query(models.Vehicle)
         sales_query = db.query(models.Sale)
 
@@ -1606,6 +1647,7 @@ def get_reports_stats(db: Session = Depends(get_db), current_user: models.User =
         unread_replies_count = 0
         unread_replies_by_source = {}
         assignment_split = {"assigned": 0, "unassigned": 0}
+        ally_status_split = {}
         credit_status_split = {}
         purchase_status_split = {}
         purchase_option_decision_split = {"pending": 0, "accepted": 0, "rejected": 0}
@@ -1615,6 +1657,7 @@ def get_reports_stats(db: Session = Depends(get_db), current_user: models.User =
         today = datetime.datetime.utcnow().date()
         recent_dates = [today - datetime.timedelta(days=offset) for offset in range(6, -1, -1)]
         recent_leads_by_day = {day.strftime("%d/%m"): 0 for day in recent_dates}
+        ally_board_count = 0
         
         for lead in leads:
             # Status
@@ -1641,6 +1684,17 @@ def get_reports_stats(db: Session = Depends(get_db), current_user: models.User =
             if lead.has_unread_reply:
                 unread_replies_count += 1
                 unread_replies_by_source[source] = unread_replies_by_source.get(source, 0) + 1
+
+            supervisor_ids = {supervisor.id for supervisor in (lead.supervisors or []) if supervisor and supervisor.id}
+            touches_ally_board = bool(
+                ally_user_ids and (
+                    (lead.assigned_to_id in ally_user_ids) or
+                    bool(supervisor_ids & ally_user_ids)
+                )
+            )
+            if touches_ally_board:
+                ally_board_count += 1
+                ally_status_split[status] = ally_status_split.get(status, 0) + 1
 
             created_at = lead.created_at.date() if lead.created_at else None
             if created_at in recent_dates:
@@ -1675,6 +1729,7 @@ def get_reports_stats(db: Session = Depends(get_db), current_user: models.User =
             "conversion_rate": round(conversion_rate, 2),
             "active_pipeline_count": active_pipeline_count,
             "unread_replies_count": unread_replies_count,
+            "ally_board_count": ally_board_count,
             "credit_applications_count": len(credit_applications),
             "purchase_requests_count": len(purchase_requests),
             "available_inventory_count": vehicle_status_split.get("available", 0),
@@ -1686,6 +1741,7 @@ def get_reports_stats(db: Session = Depends(get_db), current_user: models.User =
             "recent_leads_by_day": recent_leads_by_day,
             "unread_replies_by_source": unread_replies_by_source,
             "assignment_split": assignment_split,
+            "ally_status_split": ally_status_split,
             "credit_status_split": credit_status_split,
             "purchase_status_split": purchase_status_split,
             "purchase_option_decision_split": purchase_option_decision_split,
@@ -1792,6 +1848,7 @@ def read_advisor_stats(
     role_name = get_user_role_name(current_user) or ""
     permissions = set(get_role_permissions(current_user.role))
     company_scope = role_name in {"admin", "super_admin"}
+    ally_user_ids = set(get_company_ally_user_ids(db, current_user.company_id))
 
     leads_query = db.query(models.Lead).options(
         joinedload(models.Lead.supervisors),
@@ -1807,6 +1864,7 @@ def read_advisor_stats(
     leads = leads_query.all()
 
     status_distribution = {}
+    ally_status_distribution = {}
     unread_replies_count = 0
     active_pipeline_count = 0
     purchase_option_decision_distribution = {"pending": 0, "accepted": 0, "rejected": 0}
@@ -1815,6 +1873,7 @@ def read_advisor_stats(
     recent_leads_by_day = {day.strftime("%d/%m"): 0 for day in recent_dates}
 
     relevant_lead_ids = []
+    ally_total = 0
     for lead in leads:
         relevant_lead_ids.append(lead.id)
         status_key = lead.status or "new"
@@ -1831,6 +1890,17 @@ def read_advisor_stats(
             if decision_status not in purchase_option_decision_distribution:
                 purchase_option_decision_distribution[decision_status] = 0
             purchase_option_decision_distribution[decision_status] += 1
+
+        supervisor_ids = {supervisor.id for supervisor in (lead.supervisors or []) if supervisor and supervisor.id}
+        touches_ally_board = bool(
+            ally_user_ids and (
+                (lead.assigned_to_id in ally_user_ids) or
+                bool(supervisor_ids & ally_user_ids)
+            )
+        )
+        if touches_ally_board:
+            ally_total += 1
+            ally_status_distribution[status_key] = ally_status_distribution.get(status_key, 0) + 1
 
     total_leads = len(leads)
     leads_sold = status_distribution.get("sold", 0)
@@ -1915,11 +1985,13 @@ def read_advisor_stats(
         "total_leads": total_leads,
         "leads_new": leads_new,
         "leads_sold": leads_sold,
+        "ally_total": ally_total,
         "conversion_rate": round(conversion_rate, 2),
         "response_time_min": 37,
         "active_pipeline_count": active_pipeline_count,
         "unread_replies_count": unread_replies_count,
         "status_distribution": status_distribution,
+        "ally_status_distribution": ally_status_distribution,
         "recent_leads_by_day": recent_leads_by_day,
         "credit_total": credit_total,
         "credit_status_distribution": credit_status_distribution,

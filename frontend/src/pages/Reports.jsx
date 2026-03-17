@@ -139,6 +139,9 @@ const Reports = () => {
 
     const assignmentEntries = Object.entries(stats.assignment_split || {})
         .map(([key, value]) => [key === 'assigned' ? 'Asignados' : 'Sin asignar', value]);
+    const allyEntries = Object.entries(stats.ally_status_split || {})
+        .map(([key, value]) => [formatLabel(key, STATUS_LABELS), value])
+        .sort((a, b) => b[1] - a[1]);
     const creditEntries = Object.entries(stats.credit_status_split || {})
         .map(([key, value]) => [formatLabel(key, CREDIT_STATUS_LABELS), value])
         .sort((a, b) => b[1] - a[1]);
@@ -178,6 +181,7 @@ const Reports = () => {
 
     const sourceData = buildSingleDataset('Leads por fuente', sourceEntries, '#2563eb');
     const advisorData = buildSingleDataset('Leads asignados', advisorEntries, '#0f766e');
+    const allyData = buildSingleDataset('Gestion de aliados', allyEntries, '#14b8a6');
     const unreadBySourceData = buildSingleDataset('Respuestas pendientes', unreadBySourceEntries, '#f97316');
     const creditData = buildSingleDataset('Solicitudes de credito', creditEntries, '#7c3aed');
     const purchaseData = buildSingleDataset('Solicitudes de compra', purchaseEntries, '#db2777');
@@ -257,11 +261,16 @@ const Reports = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
                 <div className="rounded-2xl border border-violet-200 bg-violet-50 p-5 shadow-sm">
                     <p className="text-sm font-medium text-violet-700">Solicitudes de credito</p>
                     <p className="mt-2 text-3xl font-bold text-violet-800">{stats.credit_applications_count}</p>
                     <p className="mt-2 text-xs text-violet-700">Vista consolidada de la cola de creditos.</p>
+                </div>
+                <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-5 shadow-sm">
+                    <p className="text-sm font-medium text-cyan-700">Cola de aliados</p>
+                    <p className="mt-2 text-3xl font-bold text-cyan-800">{stats.ally_board_count}</p>
+                    <p className="mt-2 text-xs text-cyan-700">Leads donde aliados estan asignados o supervisando.</p>
                 </div>
                 <div className="rounded-2xl border border-pink-200 bg-pink-50 p-5 shadow-sm">
                     <p className="text-sm font-medium text-pink-700">Solicitudes de compra</p>
@@ -316,7 +325,7 @@ const Reports = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div className="mb-4">
                         <h3 className="text-lg font-bold text-slate-800">Leads por fuente</h3>
@@ -352,6 +361,31 @@ const Reports = () => {
                                 scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
                             }}
                         />
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">Gestion de aliados</h3>
+                        <p className="text-sm text-slate-500">Estados actuales de la cola donde participan aliados.</p>
+                    </div>
+                    <div className="h-80">
+                        {allyEntries.length > 0 ? (
+                            <Bar
+                                data={allyData}
+                                options={{
+                                    indexAxis: 'y',
+                                    maintainAspectRatio: false,
+                                    responsive: true,
+                                    plugins: { legend: { display: false } },
+                                    scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+                                }}
+                            />
+                        ) : (
+                            <div className="flex h-full items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
+                                Aun no hay gestion de aliados registrada.
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

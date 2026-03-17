@@ -492,11 +492,13 @@ class RoleDashboardStats(BaseModel):
     total_leads: int
     leads_new: int
     leads_sold: int
+    ally_total: int
     conversion_rate: float
     response_time_min: int
     active_pipeline_count: int
     unread_replies_count: int
     status_distribution: Dict[str, int]
+    ally_status_distribution: Dict[str, int]
     recent_leads_by_day: Dict[str, int]
     credit_total: int
     credit_status_distribution: Dict[str, int]
@@ -515,6 +517,7 @@ class ReportsStats(BaseModel):
     conversion_rate: float
     active_pipeline_count: int
     unread_replies_count: int
+    ally_board_count: int
     credit_applications_count: int
     purchase_requests_count: int
     available_inventory_count: int
@@ -526,6 +529,7 @@ class ReportsStats(BaseModel):
     recent_leads_by_day: Dict[str, int]
     unread_replies_by_source: Dict[str, int]
     assignment_split: Dict[str, int]
+    ally_status_split: Dict[str, int]
     credit_status_split: Dict[str, int]
     purchase_status_split: Dict[str, int]
     purchase_option_decision_split: Dict[str, int]
