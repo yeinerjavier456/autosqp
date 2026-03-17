@@ -26,6 +26,21 @@ const buildOptionShareText = (option) => {
     return lines.join('\n');
 };
 
+const getApiErrorMessage = (error, fallbackMessage) => {
+    const detail = error?.response?.data?.detail;
+    if (typeof detail === 'string' && detail.trim()) return detail;
+    if (Array.isArray(detail)) {
+        const firstMessage = detail
+            .map((item) => item?.msg || item?.message || item?.detail)
+            .find((value) => typeof value === 'string' && value.trim());
+        if (firstMessage) return firstMessage;
+    }
+    if (typeof error?.response?.data?.error === 'string' && error.response.data.error.trim()) {
+        return error.response.data.error;
+    }
+    return fallbackMessage;
+};
+
 const STATUS_LABELS = {
     pending: 'Solicitud recibida',
     in_review: 'En busqueda',
@@ -286,7 +301,7 @@ const PurchaseBoard = () => {
             Swal.fire('Éxito', 'Opción agregada correctamente', 'success');
         } catch (error) {
             console.error('Error creating purchase option', error);
-            Swal.fire('Error', error.response?.data?.detail || 'No se pudo agregar la opción', 'error');
+            Swal.fire('Error', getApiErrorMessage(error, 'No se pudo agregar la opcion'), 'error');
         } finally {
             setSavingPurchaseOption(false);
         }

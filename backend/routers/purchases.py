@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 from database import get_db
@@ -508,8 +508,8 @@ def get_purchase_options(
 @router.post("/{purchase_id}/options", response_model=schemas.PurchaseOption)
 async def create_purchase_option(
     purchase_id: int,
-    title: str,
-    description: str = "",
+    title: str = Form(...),
+    description: str = Form(""),
     photos: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
