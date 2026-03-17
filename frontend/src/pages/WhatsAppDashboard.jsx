@@ -92,6 +92,14 @@ const WhatsAppDashboard = () => {
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
 
+    const getConversationDisplayName = (conversation) => (
+        conversation?.lead?.name || conversation?.lead?.phone || conversation?.external_user_id || 'Desconocido'
+    );
+
+    const getConversationPhone = (conversation) => (
+        conversation?.lead?.phone || conversation?.external_user_id || ''
+    );
+
     return (
         <div className="h-[calc(100vh-100px)] flex bg-gray-100 rounded-2xl overflow-hidden shadow-xl border border-gray-200">
             {/* Sidebar - Conversations List */}
@@ -125,8 +133,8 @@ const WhatsAppDashboard = () => {
                             {conversations
                                 .filter(conv => {
                                     const query = searchTerm.toLowerCase();
-                                    const name = (conv.lead?.name || '').toLowerCase();
-                                    const phone = (conv.lead?.phone || '').toLowerCase();
+                                    const name = getConversationDisplayName(conv).toLowerCase();
+                                    const phone = getConversationPhone(conv).toLowerCase();
                                     return name.includes(query) || phone.includes(query);
                                 })
                                 .map(conv => (
@@ -137,7 +145,7 @@ const WhatsAppDashboard = () => {
                                     >
                                         <div className="flex justify-between items-start">
                                             <div className="font-semibold text-slate-800">
-                                                {conv.lead ? (conv.lead.name || conv.lead.phone) : 'Desconocido'}
+                                                {getConversationDisplayName(conv)}
                                             </div>
                                             <div className="text-xs text-slate-400">
                                                 {formatTime(conv.last_message_at)}
@@ -162,11 +170,11 @@ const WhatsAppDashboard = () => {
                         <div className="p-4 bg-gray-100 border-b border-gray-200 flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-white font-bold text-lg">
-                                    {selectedConversation.lead?.name?.[0] || '#'}
+                                    {getConversationDisplayName(selectedConversation)?.[0] || '#'}
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-slate-800">{selectedConversation.lead?.name || selectedConversation.lead?.phone}</h3>
-                                    <p className="text-xs text-slate-500">{selectedConversation.lead?.phone}</p>
+                                    <h3 className="font-bold text-slate-800">{getConversationDisplayName(selectedConversation)}</h3>
+                                    <p className="text-xs text-slate-500">{getConversationPhone(selectedConversation)}</p>
                                 </div>
                             </div>
                         </div>

@@ -1,6 +1,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from database import get_db
 import models, schemas_whatsapp, auth_utils
 from typing import List, Optional
@@ -9,6 +9,7 @@ import json
 import datetime
 import requests
 from bot_integration import process_channel_bot_message, store_conversation_message
+from dependencies import get_current_user
 
 router = APIRouter(
     prefix="/whatsapp",
@@ -224,24 +225,70 @@ async def receive_whatsapp_message(request: Request, db: Session = Depends(get_d
 # --- API ENDPOINTS FOR FRONTEND ---
 
 @router.get("/conversations", response_model=List[schemas_whatsapp.Conversation])
-def get_conversations(db: Session = Depends(get_db)):
-    # In real app, verify user company
-    return db.query(models.Conversation).filter(
-        models.Conversation.lead_id.isnot(None)
-    ).order_by(models.Conversation.last_message_at.desc()).all()
+def get_conversations(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    session_query = db.query(models.ChannelChatSession).options(
+        joinedload(models.ChannelChatSession.conversation).joinedload(models.Conversation.lead)
+    ).filter(
+        models.ChannelChatSession.source == "whatsapp",
+        models.ChannelChatSession.conversation_id.isnot(None)
+    )
+    if current_user.company_id:
+        session_query = session_query.filter(models.ChannelChatSession.company_id == current_user.company_id)
+
+    chat_sessions = session_query.order_by(models.ChannelChatSession.last_message_at.desc()).all()
+    conversations = []
+    for chat_session in chat_sessions:
+        conversation = chat_session.conversation
+        if not conversation:
+            continue
+        conversations.append({
+            "id": conversation.id,
+            "lead_id": conversation.lead_id,
+            "company_id": conversation.company_id,
+            "last_message_at": conversation.last_message_at,
+            "lead": conversation.lead,
+            "external_user_id": chat_session.external_user_id,
+        })
+    return conversations
 
 @router.get("/conversations/{conversation_id}/messages", response_model=List[schemas_whatsapp.Message])
-def get_messages(conversation_id: int, db: Session = Depends(get_db)):
+def get_messages(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    conversation = db.query(models.Conversation).filter(models.Conversation.id == conversation_id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    if current_user.company_id and conversation.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="No autorizado para esta conversacion")
     return db.query(models.Message).filter(models.Message.conversation_id == conversation_id).order_by(models.Message.created_at.asc()).all()
 
 @router.post("/conversations/{conversation_id}/send")
-def send_message(conversation_id: int, message: schemas_whatsapp.MessageCreate, db: Session = Depends(get_db)):
-    # 1. Get Conversation and Lead
-    conversation = db.query(models.Conversation).filter(models.Conversation.id == conversation_id).first()
-    if not conversation or not conversation.lead:
-        raise HTTPException(status_code=404, detail="Conversation or Lead not found")
-        
-    lead_phone = conversation.lead.phone
+def send_message(
+    conversation_id: int,
+    message: schemas_whatsapp.MessageCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    conversation = db.query(models.Conversation).options(
+        joinedload(models.Conversation.lead)
+    ).filter(models.Conversation.id == conversation_id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    if current_user.company_id and conversation.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="No autorizado para esta conversacion")
+
+    chat_session = db.query(models.ChannelChatSession).filter(
+        models.ChannelChatSession.source == "whatsapp",
+        models.ChannelChatSession.conversation_id == conversation_id
+    ).first()
+    lead_phone = conversation.lead.phone if conversation.lead and conversation.lead.phone else (chat_session.external_user_id if chat_session else None)
+    if not lead_phone:
+        raise HTTPException(status_code=404, detail="Conversation recipient not found")
     
     # 2. Get Credentials (DB or Env)
     # Priority: DB Settings -> Env

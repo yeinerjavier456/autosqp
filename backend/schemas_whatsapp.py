@@ -42,6 +42,7 @@ class Conversation(ConversationBase):
     id: int
     last_message_at: datetime
     lead: Optional[LeadInfo] = None
+    external_user_id: Optional[str] = None
     # messages: List[Message] = []
 
     class Config:
