@@ -338,13 +338,15 @@ def get_credit_coordinator_users(db: Session, company_id: Optional[int]) -> List
     ).all()
 
     coordinators = []
+    credit_enabled_users = []
     for user in candidates:
-        if not is_credit_coordinator_role(user.role):
-            continue
         if "credits" not in get_role_permissions(user.role):
             continue
+        credit_enabled_users.append(user)
+        if not is_credit_coordinator_role(user.role):
+            continue
         coordinators.append(user)
-    return coordinators
+    return coordinators or credit_enabled_users
 
 
 def choose_credit_coordinator(db: Session, company_id: Optional[int]) -> Optional[models.User]:

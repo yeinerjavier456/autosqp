@@ -125,8 +125,15 @@ def read_credits(
     current_user: models.User = Depends(get_current_user)
 ):
     effective_role_name = getattr(getattr(current_user, "role", None), "base_role_name", None) or getattr(getattr(current_user, "role", None), "name", None)
+    credit_stage_lead_ids = []
     if current_user.company_id:
         sync_credit_applications_for_company(db, current_user.company_id)
+        credit_stage_lead_ids = [
+            lead_id for (lead_id,) in db.query(models.Lead.id).filter(
+                models.Lead.company_id == current_user.company_id,
+                models.Lead.status == models.LeadStatus.CREDIT_APPLICATION.value
+            ).all()
+        ]
 
     query = db.query(models.CreditApplication).options(
         joinedload(models.CreditApplication.assigned_to)
@@ -134,22 +141,23 @@ def read_credits(
     
     # Filter by user company
     if current_user.company_id:
-        query = query.filter(
-            or_(
-                models.CreditApplication.company_id == current_user.company_id,
-                models.CreditApplication.lead.has(models.Lead.company_id == current_user.company_id)
-            )
-        )
+        company_filters = [models.CreditApplication.company_id == current_user.company_id]
+        if credit_stage_lead_ids:
+            company_filters.append(models.CreditApplication.lead_id.in_(credit_stage_lead_ids))
+        query = query.filter(or_(*company_filters))
     
     # Filter by Advisor (Asesor) - Only see assigned leads/credits?
     if effective_role_name in ['asesor', 'vendedor', 'aliado', 'coordinador']:
+        supervised_lead_ids = [
+            lead_id for (lead_id,) in db.query(models.Lead.id).filter(
+                models.Lead.supervisors.any(models.User.id == current_user.id)
+            ).all()
+        ]
+        owner_filters = [models.CreditApplication.assigned_to_id == current_user.id]
+        if supervised_lead_ids:
+            owner_filters.append(models.CreditApplication.lead_id.in_(supervised_lead_ids))
         query = query.filter(
-            or_(
-                models.CreditApplication.assigned_to_id == current_user.id,
-                models.CreditApplication.lead.has(
-                    models.Lead.supervisors.any(models.User.id == current_user.id)
-                )
-            )
+            or_(*owner_filters)
         )
     
     if status:
