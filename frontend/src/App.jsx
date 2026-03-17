@@ -28,6 +28,7 @@ import InstagramLeads from './pages/leads/InstagramLeads';
 import Reports from './pages/Reports';
 import WhatsAppDashboard from './pages/WhatsAppDashboard';
 import CreditBoard from './pages/CreditBoard';
+import PurchaseBoard from './pages/PurchaseBoard';
 import InternalChat from './pages/InternalChat';
 import SystemLogs from './pages/SystemLogs';
 import RolesConfig from './pages/RolesConfig';
@@ -139,6 +140,10 @@ function App() {
 
               <Route element={<PrivateRoute requiredView="credits" />}>
                 <Route path="/admin/credits" element={<CreditBoard />} />
+              </Route>
+
+              <Route element={<PrivateRoute requiredView="purchase_board" />}>
+                <Route path="/admin/purchases" element={<PurchaseBoard />} />
               </Route>
 
               <Route element={<PrivateRoute requiredView="ally_board" />}>

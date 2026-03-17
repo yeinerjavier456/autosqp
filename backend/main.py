@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, get_db
 import models, schemas, auth_utils
 from models import LeadNote, LeadFile # Explicitly for create_all to see them
-from routers import whatsapp, credits, notifications, rules, vehicles, meta, tiktok # Import the new routers
+from routers import whatsapp, credits, purchases, notifications, rules, vehicles, meta, tiktok # Import the new routers
 from jose import JWTError, jwt
 import datetime
 import os
@@ -166,6 +166,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 app.include_router(whatsapp.router) # Register the router
 app.include_router(credits.router) # Register credits router
+app.include_router(purchases.router)
 app.include_router(notifications.router)
 app.include_router(rules.router)
 app.include_router(vehicles.router)
@@ -599,30 +600,42 @@ def upsert_purchase_request_from_lead(db: Session, lead: models.Lead):
     safe_phone = (lead.phone or "").strip() or f"lead-{lead.id}"
     existing_credit = db.query(models.CreditApplication).filter(
         models.CreditApplication.company_id == lead.company_id,
-        models.CreditApplication.phone == safe_phone,
-        models.CreditApplication.desired_vehicle == desired_vehicle,
-        models.CreditApplication.status.in_([
-            models.CreditStatus.PENDING.value,
-            models.CreditStatus.IN_REVIEW.value,
-            models.CreditStatus.APPROVED.value
-        ])
+        or_(
+            models.CreditApplication.lead_id == lead.id,
+            and_(
+                models.CreditApplication.phone == safe_phone,
+                models.CreditApplication.desired_vehicle == desired_vehicle,
+                models.CreditApplication.status.in_([
+                    models.CreditStatus.PENDING.value,
+                    models.CreditStatus.IN_REVIEW.value,
+                    models.CreditStatus.APPROVED.value
+                ])
+            )
+        )
     ).order_by(models.CreditApplication.created_at.desc()).first()
 
     auto_note = f"Generado automáticamente desde lead #{lead.id} en estado En proceso."
     if existing_credit:
+        existing_credit.lead_id = lead.id
         existing_credit.client_name = lead.name or existing_credit.client_name
         existing_credit.email = lead.email or existing_credit.email
+        existing_credit.company_id = lead.company_id
+        existing_credit.desired_vehicle = desired_vehicle or existing_credit.desired_vehicle
         if not existing_credit.notes:
             existing_credit.notes = auto_note
         return
 
     compras_users = db.query(models.User).join(models.Role).filter(
         models.User.company_id == lead.company_id,
-        models.Role.name == "compras"
+        or_(
+            models.Role.name == "compras",
+            models.Role.base_role_name == "compras"
+        )
     ).all()
     assigned_compras_id = compras_users[0].id if compras_users else None
 
     new_credit = models.CreditApplication(
+        lead_id=lead.id,
         client_name=lead.name or f"Lead {lead.id}",
         phone=safe_phone,
         email=lead.email,
@@ -645,7 +658,7 @@ def upsert_purchase_request_from_lead(db: Session, lead: models.Lead):
             title="Nuevo vehículo por buscar",
             message=f"{lead.name or 'Lead'} busca: {desired_vehicle}",
             type="warning",
-            link="/admin/credits"
+            link="/admin/purchases"
         ))
 
 

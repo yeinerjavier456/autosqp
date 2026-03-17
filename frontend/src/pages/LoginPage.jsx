@@ -39,7 +39,7 @@ const LoginPage = () => {
             } else if (roleName === 'inventario') {
                 navigate('/admin/inventory');
             } else if (roleName === 'compras') {
-                navigate('/admin/credits');
+                navigate('/admin/purchases');
             } else {
                 navigate('/autos');
             }

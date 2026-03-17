@@ -12,6 +12,7 @@ export const SYSTEM_VIEWS = [
     { id: 'sales', label: 'Finanzas y ventas', path: '/admin/sales', menuLabel: 'Finanzas y Ventas', section: 'crm', scope: 'company' },
     { id: 'my_sales', label: 'Mis ventas', path: '/admin/my-sales', menuLabel: 'Mis Ventas', section: 'crm', scope: 'company' },
     { id: 'credits', label: 'Tablero de solicitudes de credito', path: '/admin/credits', menuLabel: 'Solicitudes de Credito', section: 'crm', scope: 'company' },
+    { id: 'purchase_board', label: 'Tablero de compras y busquedas', path: '/admin/purchases', menuLabel: 'Solicitudes de Compra', section: 'crm', scope: 'company' },
     { id: 'facebook_leads', label: 'Facebook leads', path: '/admin/leads/facebook', menuLabel: 'Facebook Leads', section: 'channels', scope: 'company' },
     { id: 'tiktok_leads', label: 'TikTok leads', path: '/admin/leads/tiktok', menuLabel: 'TikTok Leads', section: 'channels', scope: 'company' },
     { id: 'whatsapp_leads', label: 'WhatsApp leads', path: '/admin/leads/whatsapp', menuLabel: 'WhatsApp', section: 'channels', scope: 'company' },
@@ -37,7 +38,7 @@ export const DEFAULT_ROLE_VIEW_ACCESS = {
     super_admin: SYSTEM_VIEWS.map((view) => view.id),
     admin: [
         'dashboard', 'users', 'roles', 'integrations', 'logs', 'inventory',
-        'leads_board', 'ally_board', 'alerts', 'sales', 'credits',
+        'leads_board', 'ally_board', 'alerts', 'sales', 'credits', 'purchase_board',
         'facebook_leads', 'tiktok_leads', 'whatsapp_leads', 'instagram_leads',
         'internal_chat', 'whatsapp_dashboard'
     ],
@@ -51,7 +52,7 @@ export const DEFAULT_ROLE_VIEW_ACCESS = {
         'inventory', 'internal_chat'
     ],
     compras: [
-        'credits', 'internal_chat'
+        'purchase_board', 'internal_chat'
     ],
     user: ['internal_chat']
 };
