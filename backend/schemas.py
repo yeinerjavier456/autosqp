@@ -296,6 +296,9 @@ class LeadFile(LeadFileBase):
     
     model_config = ConfigDict(from_attributes=True)
 
+class LeadFileDeleteRequest(BaseModel):
+    reason: str
+
 class LeadBase(BaseModel):
     source: str
     name: str

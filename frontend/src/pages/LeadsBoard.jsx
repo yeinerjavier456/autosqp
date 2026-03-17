@@ -380,6 +380,52 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
         }
     };
 
+    const handleDeleteLeadFile = async (fileToDelete) => {
+        const { value: reason } = await Swal.fire({
+            title: 'Eliminar documento',
+            input: 'textarea',
+            inputLabel: 'Motivo de eliminación',
+            inputPlaceholder: 'Escribe por qué se elimina este documento',
+            inputAttributes: { 'aria-label': 'Motivo de eliminación' },
+            showCancelButton: true,
+            confirmButtonText: 'Eliminar documento',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#dc2626',
+            inputValidator: (value) => {
+                if (!value || !value.trim()) {
+                    return 'Debes indicar el motivo de eliminación';
+                }
+                return null;
+            }
+        });
+
+        if (!reason) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            await axios.delete(`https://autosqp.co/api/leads/${lead.id}/files/${fileToDelete.id}`, {
+                headers: { Authorization: `Bearer ${token}` },
+                data: { reason: reason.trim() }
+            });
+
+            setLeadFiles((prevFiles) => prevFiles.filter((file) => file.id !== fileToDelete.id));
+            setLeadNotes((prevNotes) => [
+                ...prevNotes,
+                {
+                    id: `deleted-file-note-${fileToDelete.id}-${Date.now()}`,
+                    content: `Se eliminó el documento '${fileToDelete.file_name}'. Motivo: ${reason.trim()}`,
+                    created_at: new Date().toISOString(),
+                    user_id: user?.id,
+                    user: user || null,
+                }
+            ]);
+            Swal.fire('Éxito', 'Documento eliminado correctamente', 'success');
+        } catch (error) {
+            console.error('Error deleting lead file', error);
+            Swal.fire('Error', 'No se pudo eliminar el documento', 'error');
+        }
+    };
+
     if (!lead) return null;
 
     const formatLeadDate = (value) => {
@@ -871,16 +917,25 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                 {leadFiles.length > 0 && (
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
                                         {leadFiles.map((file) => (
-                                            <a key={file.id} href={`https://autosqp.co/api${file.file_path}`} target="_blank" rel="noopener noreferrer" className="bg-white p-2 rounded border border-gray-200 hover:border-orange-500 transition shadow-sm flex flex-col items-center gap-1 group">
-                                                {file.file_type && file.file_type.includes('image') ? (
-                                                    <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center overflow-hidden">
-                                                        <img src={`https://autosqp.co/api${file.file_path}`} alt="File" className="w-full h-full object-cover" />
-                                                    </div>
-                                                ) : (
-                                                    <svg className="w-8 h-8 text-gray-400 group-hover:text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                                                )}
-                                                <span className="text-[10px] text-gray-600 truncate w-full text-center">{file.file_name}</span>
-                                            </a>
+                                            <div key={file.id} className="bg-white p-2 rounded border border-gray-200 shadow-sm flex flex-col gap-2">
+                                                <a href={`https://autosqp.co/api${file.file_path}`} target="_blank" rel="noopener noreferrer" className="hover:border-orange-500 transition flex flex-col items-center gap-1 group">
+                                                    {file.file_type && file.file_type.includes('image') ? (
+                                                        <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center overflow-hidden">
+                                                            <img src={`https://autosqp.co/api${file.file_path}`} alt="File" className="w-full h-full object-cover" />
+                                                        </div>
+                                                    ) : (
+                                                        <svg className="w-8 h-8 text-gray-400 group-hover:text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                                                    )}
+                                                    <span className="text-[10px] text-gray-600 truncate w-full text-center">{file.file_name}</span>
+                                                </a>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDeleteLeadFile(file)}
+                                                    className="w-full rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600 transition hover:bg-red-100"
+                                                >
+                                                    Eliminar
+                                                </button>
+                                            </div>
                                         ))}
                                     </div>
                                 )}

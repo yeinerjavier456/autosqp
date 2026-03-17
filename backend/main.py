@@ -2788,6 +2788,70 @@ async def upload_lead_file(
     
     return db_file
 
+@app.delete("/leads/{lead_id}/files/{file_id}")
+def delete_lead_file(
+    lead_id: int,
+    file_id: int,
+    payload: schemas.LeadFileDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    lead = db.query(models.Lead).filter(models.Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    if current_user.company_id and lead.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    reason = (payload.reason or "").strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="Deletion reason is required")
+
+    lead_file = db.query(models.LeadFile).filter(
+        models.LeadFile.id == file_id,
+        models.LeadFile.lead_id == lead_id
+    ).first()
+    if not lead_file:
+        raise HTTPException(status_code=404, detail="Lead file not found")
+
+    stored_path = (lead_file.file_path or "").lstrip("/")
+    if stored_path and os.path.exists(stored_path):
+        try:
+            os.remove(stored_path)
+        except OSError:
+            pass
+
+    history_entry = models.LeadHistory(
+        lead_id=lead.id,
+        user_id=current_user.id,
+        previous_status=lead.status,
+        new_status=lead.status,
+        comment=f"Documento eliminado: {lead_file.file_name}. Motivo: {reason}"
+    )
+    db.add(history_entry)
+
+    db_note = models.LeadNote(
+        lead_id=lead.id,
+        user_id=current_user.id,
+        content=f"Se eliminó el documento '{lead_file.file_name}'. Motivo: {reason}"
+    )
+    db.add(db_note)
+
+    file_name = lead_file.file_name
+    db.delete(lead_file)
+    db.commit()
+
+    log_action_to_db(
+        db,
+        current_user.id,
+        "DELETE",
+        "LeadFile",
+        file_id,
+        f"Archivo {file_name} eliminado del lead {lead.name}. Motivo: {reason}"
+    )
+
+    return {"message": "Lead file deleted successfully"}
+
 @app.get("/leads/{lead_id}/messages")
 def get_lead_messages(
     lead_id: int, 
