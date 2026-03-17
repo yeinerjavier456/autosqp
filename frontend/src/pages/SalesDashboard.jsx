@@ -172,6 +172,36 @@ const SalesDashboard = () => {
         }
     };
 
+    const handleDeleteReceipt = async (receiptId) => {
+        const result = await Swal.fire({
+            title: 'Eliminar recibo',
+            text: 'Este recibo dejara de contabilizarse. Esta accion no se puede deshacer.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Si, eliminar',
+            cancelButtonText: 'Cancelar',
+            customClass: {
+                confirmButton: 'bg-red-600 text-white px-4 py-2 rounded-lg ml-2',
+                cancelButton: 'bg-slate-600 text-white px-4 py-2 rounded-lg'
+            },
+            buttonsStyling: false
+        });
+
+        if (!result.isConfirmed) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            await axios.delete(`https://autosqp.co/api/finance/receipts/${receiptId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            await fetchData();
+            Swal.fire('Exito', 'Recibo eliminado correctamente.', 'success');
+        } catch (error) {
+            console.error('Error deleting receipt', error);
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo eliminar el recibo.', 'error');
+        }
+    };
+
     if (loading) {
         return <div className="p-10 text-center">Cargando finanzas...</div>;
     }
@@ -466,6 +496,7 @@ const SalesDashboard = () => {
                                             <th className="border-b p-4">Categoria</th>
                                             <th className="border-b p-4">Valor</th>
                                             <th className="border-b p-4">Soporte</th>
+                                            <th className="border-b p-4 text-right">Acciones</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -510,11 +541,29 @@ const SalesDashboard = () => {
                                                         <span className="text-gray-400">Sin archivo</span>
                                                     )}
                                                 </td>
+                                                <td className="p-4">
+                                                    <div className="flex justify-end gap-2">
+                                                        <a
+                                                            href={`https://autosqp.co/api/finance/receipts/${receipt.id}/pdf`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center rounded-lg bg-emerald-50 px-3 py-1.5 font-medium text-emerald-700 hover:bg-emerald-100"
+                                                        >
+                                                            PDF
+                                                        </a>
+                                                        <button
+                                                            onClick={() => handleDeleteReceipt(receipt.id)}
+                                                            className="inline-flex items-center rounded-lg bg-red-50 px-3 py-1.5 font-medium text-red-700 hover:bg-red-100"
+                                                        >
+                                                            Eliminar
+                                                        </button>
+                                                    </div>
+                                                </td>
                                             </tr>
                                         ))}
                                         {receipts.length === 0 && (
                                             <tr>
-                                                <td colSpan="6" className="p-8 text-center italic text-gray-400">
+                                                <td colSpan="7" className="p-8 text-center italic text-gray-400">
                                                     Aun no hay recibos registrados en contabilidad.
                                                 </td>
                                             </tr>

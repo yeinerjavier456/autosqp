@@ -17,10 +17,12 @@ import time
 import re
 import json
 import random
+from io import BytesIO
 from view_registry import SYSTEM_VIEWS, DEFAULT_ROLE_VIEW_ACCESS, DEFAULT_ROLE_MENU_ORDER, VALID_VIEW_IDS, COMPANY_VIEW_IDS
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
@@ -3787,6 +3789,23 @@ def read_payment_receipts(
     return {"items": items, "total": total}
 
 
+def _get_receipt_with_access(
+    db: Session,
+    receipt_id: int,
+    current_user: models.User
+) -> models.PaymentReceipt:
+    receipt = db.query(models.PaymentReceipt).options(
+        joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.vehicle),
+        joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.seller),
+        joinedload(models.PaymentReceipt.user)
+    ).filter(models.PaymentReceipt.id == receipt_id).first()
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    if current_user.company_id and receipt.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return receipt
+
+
 @app.post("/finance/receipts", response_model=schemas.PaymentReceipt)
 async def create_payment_receipt(
     request: Request,
@@ -3868,6 +3887,120 @@ async def create_payment_receipt(
         joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.seller),
         joinedload(models.PaymentReceipt.user)
     ).filter(models.PaymentReceipt.id == receipt.id).first()
+
+
+@app.get("/finance/receipts/{receipt_id}/pdf")
+def download_payment_receipt_pdf(
+    receipt_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    receipt = _get_receipt_with_access(db, receipt_id, current_user)
+
+    try:
+        from reportlab.lib.colors import HexColor
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        raise HTTPException(status_code=500, detail="La libreria reportlab no esta instalada en el servidor")
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+
+    y = height - 60
+    pdf.setTitle(f"recibo_{receipt.id}.pdf")
+    pdf.setFillColor(HexColor("#0f172a"))
+    pdf.setFont("Helvetica-Bold", 20)
+    pdf.drawString(50, y, "Recibo de Contabilidad")
+    y -= 24
+
+    pdf.setFont("Helvetica", 10)
+    pdf.setFillColor(HexColor("#475569"))
+    pdf.drawString(50, y, f"Generado: {datetime.datetime.utcnow().strftime('%d/%m/%Y %H:%M')}")
+    y -= 36
+
+    lines = [
+        ("ID de recibo", str(receipt.id)),
+        ("Numero de recibo", receipt.receipt_number or "Sin consecutivo"),
+        ("Fecha de pago", receipt.payment_date.strftime("%d/%m/%Y") if receipt.payment_date else "Sin fecha"),
+        ("Categoria", (receipt.category or "sale_payment").replace("_", " ")),
+        ("Concepto", receipt.concept or "Sin concepto"),
+        ("Valor", f"COP ${int(receipt.amount or 0):,}".replace(",", ".")),
+        ("Registrado por", getattr(receipt.user, "full_name", None) or getattr(receipt.user, "email", "") or "Usuario"),
+    ]
+
+    if receipt.sale:
+        vehicle_label = " ".join(filter(None, [
+            getattr(receipt.sale.vehicle, "make", None),
+            getattr(receipt.sale.vehicle, "model", None),
+            getattr(receipt.sale.vehicle, "plate", None)
+        ])).strip()
+        lines.extend([
+            ("Venta asociada", f"#{receipt.sale.id}"),
+            ("Vehiculo", vehicle_label or "Sin vehiculo"),
+            ("Vendedor", getattr(receipt.sale.seller, "full_name", None) or getattr(receipt.sale.seller, "email", "") or "Sin vendedor")
+        ])
+    else:
+        lines.append(("Venta asociada", "No"))
+
+    pdf.setFont("Helvetica", 12)
+    pdf.setFillColor(HexColor("#111827"))
+    for label, value in lines:
+        pdf.setFont("Helvetica-Bold", 11)
+        pdf.drawString(50, y, f"{label}:")
+        pdf.setFont("Helvetica", 11)
+        pdf.drawString(190, y, str(value))
+        y -= 22
+
+    if receipt.notes:
+        y -= 8
+        pdf.setFont("Helvetica-Bold", 11)
+        pdf.drawString(50, y, "Notas:")
+        y -= 18
+        pdf.setFont("Helvetica", 10)
+        text_object = pdf.beginText(50, y)
+        for paragraph in str(receipt.notes).splitlines() or [""]:
+            safe_line = paragraph[:120]
+            text_object.textLine(safe_line)
+        pdf.drawText(text_object)
+
+    pdf.showPage()
+    pdf.save()
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="recibo_{receipt.id}.pdf"'}
+    )
+
+
+@app.delete("/finance/receipts/{receipt_id}")
+def delete_payment_receipt(
+    receipt_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Solo un administrador puede eliminar recibos")
+
+    receipt = _get_receipt_with_access(db, receipt_id, current_user)
+    if receipt.file_path:
+        try:
+            relative_path = receipt.file_path.lstrip("/").replace("/", os.sep)
+            absolute_path = os.path.abspath(relative_path)
+            if os.path.exists(absolute_path):
+                os.remove(absolute_path)
+        except Exception:
+            pass
+
+    db.delete(receipt)
+    db.commit()
+    return {"message": "Recibo eliminado correctamente"}
 
 # --- INTERNAL CHAT ENDPOINTS ---
 
