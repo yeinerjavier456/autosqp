@@ -344,6 +344,12 @@ def get_user_role_name(user: Optional[models.User]) -> Optional[str]:
     return getattr(user.role, "base_role_name", None) or user.role.name
 
 
+def is_advisor_role(role: Optional[models.Role]) -> bool:
+    if not role:
+        return False
+    return (getattr(role, "base_role_name", None) or getattr(role, "name", None)) == "asesor"
+
+
 def get_role_permissions(role: Optional[models.Role]) -> List[str]:
     if not role:
         return []
@@ -1508,7 +1514,7 @@ def bulk_assign_leads(
         
     if current_user.company_id and target_user.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Target user is in a different company")
-    if not target_user.role or target_user.role.name != "asesor":
+    if not is_advisor_role(target_user.role):
         raise HTTPException(status_code=400, detail="Solo se pueden asignar leads a usuarios con rol asesor")
 
     leads_to_update = db.query(models.Lead).options(joinedload(models.Lead.supervisors)).filter(
@@ -1579,7 +1585,7 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
         target_user = db.query(models.User).join(models.Role, isouter=True).filter(models.User.id == assigned_user_id).first()
         if not target_user or target_user.company_id != company_id:
             raise HTTPException(status_code=400, detail="Invalid assigned user (not in company)")
-        if not can_manually_assign_to_any_role(current_user) and (not target_user.role or target_user.role.name != "asesor"):
+        if not can_manually_assign_to_any_role(current_user) and not is_advisor_role(target_user.role):
             raise HTTPException(status_code=400, detail="Solo se pueden asignar leads a usuarios con rol asesor")
     
     effective_status = enforce_ally_managed_status(
@@ -2880,7 +2886,7 @@ def create_lead(
         target_user = db.query(models.User).join(models.Role, isouter=True).filter(models.User.id == assigned_to_id).first()
         if not target_user or target_user.company_id != company_id:
              raise HTTPException(status_code=400, detail="Invalid assigned user (not in company)")
-        if not can_manually_assign_to_any_role(current_user) and (not target_user.role or target_user.role.name != "asesor"):
+        if not can_manually_assign_to_any_role(current_user) and not is_advisor_role(target_user.role):
              raise HTTPException(status_code=400, detail="Solo se pueden asignar leads a usuarios con rol asesor")
 
     lead_data["status"] = enforce_ally_managed_status(
@@ -2956,7 +2962,7 @@ def update_lead(
             ).first()
             if not target_user or target_user.company_id != lead.company_id:
                 raise HTTPException(status_code=400, detail="Invalid assigned user (not in company)")
-            if not can_manually_assign_to_any_role(current_user) and (not target_user.role or target_user.role.name != "asesor"):
+            if not can_manually_assign_to_any_role(current_user) and not is_advisor_role(target_user.role):
                 raise HTTPException(status_code=400, detail="Solo se pueden asignar leads a usuarios con rol asesor")
             target_assigned_user = target_user
         else:

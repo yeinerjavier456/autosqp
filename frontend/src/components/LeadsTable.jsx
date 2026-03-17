@@ -79,15 +79,21 @@ const LeadsTable = ({ source, title }) => {
             const rolesRes = await axios.get('https://autosqp.co/api/roles/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            const asesorRole = rolesRes.data.find(r => r.name === 'asesor');
+            const advisorRoleIds = (rolesRes.data || [])
+                .filter((role) => (role.base_role_name || role.name) === 'asesor')
+                .map((role) => role.id);
 
-            if (asesorRole) {
-                // 2. Get Users with that role
+            if (advisorRoleIds.length > 0) {
+                // 2. Get Users and keep only advisor-role variants
                 const usersRes = await axios.get('https://autosqp.co/api/users/', {
-                    params: { role_id: asesorRole.id },
                     headers: { Authorization: `Bearer ${token}` }
                 });
-                setAdvisors(usersRes.data.items);
+                const advisorUsers = (usersRes.data.items || []).filter((user) =>
+                    advisorRoleIds.includes(user.role?.id)
+                );
+                setAdvisors(advisorUsers);
+            } else {
+                setAdvisors([]);
             }
         } catch (error) {
             console.error("Error fetching advisors", error);
