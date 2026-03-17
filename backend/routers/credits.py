@@ -173,8 +173,9 @@ def read_credits(
             company_filters.append(models.CreditApplication.lead_id.in_(credit_stage_lead_ids))
         query = query.filter(or_(*company_filters))
     
-    # Filter by Advisor (Asesor) - Only see assigned leads/credits?
-    if effective_role_name in ['asesor', 'vendedor', 'aliado', 'coordinador']:
+    # Advisors, vendors and allies stay scoped to their own queue or supervised leads.
+    # Coordinators/admin users with access to this board should see all company requests.
+    if effective_role_name in ['asesor', 'vendedor', 'aliado']:
         supervised_lead_ids = [
             lead_id for (lead_id,) in db.query(models.Lead.id).filter(
                 models.Lead.supervisors.any(models.User.id == current_user.id)
