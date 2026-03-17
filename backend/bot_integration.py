@@ -248,6 +248,10 @@ def find_or_create_channel_session(
     if session and session.conversation_id:
         conversation = db.query(models.Conversation).filter(models.Conversation.id == session.conversation_id).first()
         if conversation:
+            if existing_lead and session.lead_id != existing_lead.id:
+                session.lead_id = existing_lead.id
+            if existing_lead and conversation.lead_id != existing_lead.id:
+                conversation.lead_id = existing_lead.id
             if recipient_id and session.recipient_id != recipient_id:
                 session.recipient_id = recipient_id
             session.last_message_at = datetime.datetime.utcnow()
@@ -257,7 +261,10 @@ def find_or_create_channel_session(
     conversation = models.Conversation(
         company_id=company_id,
         last_message_at=datetime.datetime.utcnow(),
-        lead_id=session.lead_id if session and session.lead_id else None,
+        lead_id=(
+            session.lead_id if session and session.lead_id
+            else (existing_lead.id if existing_lead else None)
+        ),
     )
     db.add(conversation)
     db.commit()
@@ -274,6 +281,8 @@ def find_or_create_channel_session(
         )
         db.add(session)
     else:
+        if existing_lead and session.lead_id != existing_lead.id:
+            session.lead_id = existing_lead.id
         session.recipient_id = recipient_id
         session.conversation_id = conversation.id
         session.last_message_at = datetime.datetime.utcnow()

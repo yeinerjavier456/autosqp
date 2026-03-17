@@ -3301,8 +3301,24 @@ def get_lead_messages(
         lead.has_unread_reply = 0
         db.commit()
         
-    # Get the conversation for this lead
+    # Get the conversation directly linked to this lead.
     conversation = db.query(models.Conversation).filter(models.Conversation.lead_id == lead_id).first()
+    if not conversation and lead.source in {"facebook", "instagram", "whatsapp"} and lead.phone:
+        channel_session = db.query(models.ChannelChatSession).filter(
+            models.ChannelChatSession.company_id == lead.company_id,
+            models.ChannelChatSession.source == lead.source,
+            models.ChannelChatSession.external_user_id == lead.phone,
+            models.ChannelChatSession.conversation_id.isnot(None),
+        ).first()
+        if channel_session and channel_session.conversation_id:
+            conversation = db.query(models.Conversation).filter(
+                models.Conversation.id == channel_session.conversation_id
+            ).first()
+            if conversation and conversation.lead_id != lead.id:
+                conversation.lead_id = lead.id
+                if channel_session.lead_id != lead.id:
+                    channel_session.lead_id = lead.id
+                db.commit()
     if not conversation:
         return [] # No messages yet
         
