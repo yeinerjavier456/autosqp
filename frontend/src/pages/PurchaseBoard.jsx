@@ -85,9 +85,10 @@ const PurchaseBoard = () => {
     const [savingPurchaseOption, setSavingPurchaseOption] = useState(false);
 
     useEffect(() => {
+        if (!user?.id) return;
         fetchPurchases();
         fetchPurchaseUsers();
-    }, []);
+    }, [user?.id]);
 
     useEffect(() => {
         if (!selectedPurchase?.lead_id) {
@@ -105,8 +106,14 @@ const PurchaseBoard = () => {
     }, [selectedPurchase?.id, selectedPurchase?.lead_id]);
 
     const fetchPurchases = async () => {
+        if (!user?.id) return;
         try {
             const token = localStorage.getItem('token');
+            if (!token) {
+                setPurchases([]);
+                setLoading(false);
+                return;
+            }
             const response = await axios.get('https://autosqp.co/api/purchases', {
                 headers: { Authorization: `Bearer ${token}` },
                 params: { limit: 500 }
@@ -124,7 +131,7 @@ const PurchaseBoard = () => {
             })));
         } catch (error) {
             console.error(error);
-            Swal.fire('Error', 'No se pudieron cargar las solicitudes de compra', 'error');
+            Swal.fire('Error', getApiErrorMessage(error, 'No se pudieron cargar las solicitudes de compra'), 'error');
             setPurchases([]);
         } finally {
             setLoading(false);
@@ -132,8 +139,13 @@ const PurchaseBoard = () => {
     };
 
     const fetchPurchaseUsers = async () => {
+        if (!user?.id) return;
         try {
             const token = localStorage.getItem('token');
+            if (!token) {
+                setPurchaseUsers([]);
+                return;
+            }
             const response = await axios.get('https://autosqp.co/api/users/', {
                 headers: { Authorization: `Bearer ${token}` },
                 params: { limit: 500 }
@@ -211,7 +223,7 @@ const PurchaseBoard = () => {
             });
         } catch (error) {
             console.error('Error syncing purchases', error);
-            Swal.fire('Error', 'No se pudieron traer las solicitudes de compra', 'error');
+            Swal.fire('Error', getApiErrorMessage(error, 'No se pudieron traer las solicitudes de compra'), 'error');
         }
     };
 
