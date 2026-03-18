@@ -75,6 +75,8 @@ const GlobalNotifications = () => {
                     toast: true,
                     position: 'top-end',
                     showConfirmButton: false,
+                    showCloseButton: true,
+                    closeButtonHtml: '&times;',
                     timer: 10000,
                     timerProgressBar: true,
                     icon: 'info',

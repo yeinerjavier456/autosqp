@@ -741,6 +741,26 @@ def should_reset_status_for_board_transfer(previous_role_name: Optional[str], ta
     return (previous_role_name == "aliado") != (target_role_name == "aliado")
 
 
+def validate_interested_process_detail(
+    target_status: Optional[str],
+    process_detail_data: Optional[schemas.LeadProcessDetailCreate],
+    existing_detail: Optional[models.LeadProcessDetail] = None,
+):
+    if target_status != models.LeadStatus.INTERESTED.value:
+        return
+
+    has_vehicle = process_detail_data.has_vehicle if process_detail_data is not None else bool(getattr(existing_detail, "has_vehicle", False))
+    vehicle_id = process_detail_data.vehicle_id if process_detail_data is not None else getattr(existing_detail, "vehicle_id", None)
+    desired_vehicle = process_detail_data.desired_vehicle if process_detail_data is not None else getattr(existing_detail, "desired_vehicle", None)
+    desired_vehicle = (desired_vehicle or "").strip()
+
+    if has_vehicle and not vehicle_id:
+        raise HTTPException(status_code=400, detail="Debes seleccionar un vehículo disponible del inventario.")
+
+    if not has_vehicle and not desired_vehicle:
+        raise HTTPException(status_code=400, detail="Debes indicar qué vehículo busca el cliente.")
+
+
 def build_lead_board_link(target_user: Optional[models.User], lead_id: int) -> str:
     target_role_name = get_user_role_name(target_user)
     base_path = "/aliado/dashboard" if target_role_name == "aliado" else "/admin/leads"
@@ -3109,7 +3129,11 @@ def update_lead(
         auto_credit_comment = f"Lead asignado automaticamente a coordinacion de credito: {credit_coordinator.full_name or credit_coordinator.email}"
     history_comment = lead_update.comment.strip() if lead_update.comment and lead_update.comment.strip() else (auto_credit_comment or auto_transfer_comment)
     has_comment = bool(history_comment)
-    
+    process_detail_data = lead_update.process_detail
+    previous_process_detail = db.query(models.LeadProcessDetail).filter(models.LeadProcessDetail.lead_id == lead.id).first()
+    previous_vehicle_id = previous_process_detail.vehicle_id if previous_process_detail else None
+    validate_interested_process_detail(effective_status, process_detail_data, previous_process_detail)
+
     if has_status_change or has_comment:
         if has_status_change:
             lead.status_updated_at = datetime.datetime.utcnow()
@@ -3123,10 +3147,6 @@ def update_lead(
         )
         db.add(new_history)
         
-    process_detail_data = lead_update.process_detail
-    previous_process_detail = db.query(models.LeadProcessDetail).filter(models.LeadProcessDetail.lead_id == lead.id).first()
-    previous_vehicle_id = previous_process_detail.vehicle_id if previous_process_detail else None
-    
     allowed_lead_update_fields = {
         "name",
         "email",
