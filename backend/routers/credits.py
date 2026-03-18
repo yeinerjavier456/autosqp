@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
+import datetime
 from database import get_db
 import models, schemas
 from dependencies import get_current_user
@@ -61,8 +62,13 @@ def sync_credit_applications_for_company(db: Session, company_id: int):
         models.Lead.status == models.LeadStatus.CREDIT_APPLICATION.value
     ).all()
 
-    if not credit_stage_leads:
-        return {"processed": 0, "created": 0, "updated": 0}
+    orphan_credits = db.query(models.CreditApplication).filter(
+        models.CreditApplication.company_id == company_id,
+        models.CreditApplication.lead_id.is_(None)
+    ).order_by(models.CreditApplication.created_at.desc()).all()
+
+    if not credit_stage_leads and not orphan_credits:
+        return {"processed": 0, "created": 0, "updated": 0, "created_leads": 0}
 
     lead_ids = [lead.id for lead in credit_stage_leads]
     existing_credits = db.query(models.CreditApplication).filter(
@@ -76,6 +82,7 @@ def sync_credit_applications_for_company(db: Session, company_id: int):
     changed = False
     created_count = 0
     updated_count = 0
+    created_leads = 0
     for lead in credit_stage_leads:
         desired_vehicle = _get_credit_desired_vehicle(db, lead)
         auto_note = f"Generado automaticamente desde lead #{lead.id}."
@@ -136,9 +143,67 @@ def sync_credit_applications_for_company(db: Session, company_id: int):
         changed = True
         created_count += 1
 
+    for credit in orphan_credits:
+        auto_message = (credit.notes or "").strip() or f"Solicitud de crédito creada desde créditos #{credit.id}."
+        db_lead = models.Lead(
+            source=models.LeadSource.OTHER.value,
+            name=credit.client_name or f"Solicitud {credit.id}",
+            email=credit.email,
+            phone=credit.phone,
+            status=models.LeadStatus.CREDIT_APPLICATION.value,
+            message=auto_message[:1000],
+            company_id=credit.company_id,
+            assigned_to_id=credit.assigned_to_id,
+            created_by_id=None,
+            status_updated_at=datetime.datetime.utcnow(),
+        )
+        db.add(db_lead)
+        db.flush()
+
+        credit.lead_id = db_lead.id
+        if db_lead.status != models.LeadStatus.CREDIT_APPLICATION.value:
+            db_lead.status = models.LeadStatus.CREDIT_APPLICATION.value
+
+        db.add(models.LeadHistory(
+            lead_id=db_lead.id,
+            user_id=None,
+            previous_status="N/A",
+            new_status=models.LeadStatus.CREDIT_APPLICATION.value,
+            comment=f"Lead creado automaticamente desde solicitud de crédito #{credit.id}"
+        ))
+        db.add(models.LeadNote(
+            lead_id=db_lead.id,
+            user_id=None,
+            content=f"Solicitud de crédito #{credit.id} sincronizada automáticamente al tablero de leads."
+        ))
+        changed = True
+        created_leads += 1
+
+    for credit in db.query(models.CreditApplication).filter(
+        models.CreditApplication.company_id == company_id,
+        models.CreditApplication.lead_id.isnot(None)
+    ).all():
+        linked_lead = db.query(models.Lead).filter(models.Lead.id == credit.lead_id).first()
+        if not linked_lead:
+            continue
+        if linked_lead.status != models.LeadStatus.CREDIT_APPLICATION.value:
+            linked_lead.status = models.LeadStatus.CREDIT_APPLICATION.value
+            linked_lead.status_updated_at = datetime.datetime.utcnow()
+            changed = True
+            updated_count += 1
+        if credit.assigned_to_id and linked_lead.assigned_to_id != credit.assigned_to_id:
+            linked_lead.assigned_to_id = credit.assigned_to_id
+            changed = True
+            updated_count += 1
+
     if changed:
         db.commit()
-    return {"processed": len(credit_stage_leads), "created": created_count, "updated": updated_count}
+    return {
+        "processed": len(credit_stage_leads) + len(orphan_credits),
+        "created": created_count,
+        "updated": updated_count,
+        "created_leads": created_leads,
+    }
 
 
 def _build_credit_feed(
@@ -272,10 +337,37 @@ def create_credit(
     if not assigned_to_id and current_user.role.name in ['asesor', 'vendedor']:
         assigned_to_id = current_user.id
         
+    linked_lead_id = credit.lead_id
+    if not linked_lead_id:
+        auto_message = (credit.notes or "").strip() or f"Solicitud de crédito creada desde créditos."
+        db_lead = models.Lead(
+            source=models.LeadSource.OTHER.value,
+            name=credit.client_name,
+            email=credit.email,
+            phone=credit.phone,
+            status=models.LeadStatus.CREDIT_APPLICATION.value,
+            message=auto_message[:1000],
+            company_id=company_id,
+            assigned_to_id=assigned_to_id,
+            created_by_id=current_user.id,
+            status_updated_at=datetime.datetime.utcnow(),
+        )
+        db.add(db_lead)
+        db.flush()
+        linked_lead_id = db_lead.id
+        db.add(models.LeadHistory(
+            lead_id=db_lead.id,
+            user_id=current_user.id,
+            previous_status="N/A",
+            new_status=models.LeadStatus.CREDIT_APPLICATION.value,
+            comment="Lead creado automáticamente desde nueva solicitud de crédito"
+        ))
+
     db_credit = models.CreditApplication(
         **credit_data, 
         company_id=company_id, 
-        assigned_to_id=assigned_to_id
+        assigned_to_id=assigned_to_id,
+        lead_id=linked_lead_id
     )
     db.add(db_credit)
     db.commit()
