@@ -315,6 +315,15 @@ def _build_credit_quick_analysis(subject: Optional[str], summary: Optional[str])
             "El correo sugiere una preaprobacion o una viabilidad inicial. Conviene revisar condiciones y documentos pendientes antes de darlo por aprobado."
         )
     if any(token in source for token in [
+        "carta de aprobacion",
+        "carta aprobacion",
+        "ratificacion de carta",
+        "ratificacion carta",
+        "ratificación de carta",
+        "adjunto carta de aprobacion",
+        "adjunto carta aprobacion",
+        "prenda del cliente",
+        "aprobacion y prenda",
         "cliente viable",
         "viable para cupo",
         "viable",
@@ -657,6 +666,7 @@ def analyze_credit_related_emails(
                 best_credit = credit
 
         processed += 1
+        summary = _build_credit_email_summary(subject, from_value, body_text or (payload.get("snippet") or ""), attachment_texts)
         if not best_credit or best_score < 6 or not best_credit.lead_id:
             processed_record = already_processed or models.GmailProcessedMessage(
                 company_id=company_id,
@@ -667,7 +677,9 @@ def analyze_credit_related_emails(
             processed_record.credit_application_id = getattr(best_credit, "id", None)
             processed_record.sender = from_value
             processed_record.subject = subject
-            processed_record.summary = f"Sin match automatico o sin lead relacionado. Fecha: {date_value or 'Sin fecha'}"
+            processed_record.summary = (
+                f"Sin match automatico o sin lead relacionado. Fecha: {date_value or 'Sin fecha'}\n\n{summary}"
+            )[:2000]
             if not already_processed:
                 db.add(processed_record)
             db.commit()
@@ -675,7 +687,6 @@ def analyze_credit_related_emails(
 
         matched += 1
         lead = db.query(models.Lead).filter(models.Lead.id == best_credit.lead_id).first() if best_credit.lead_id else None
-        summary = _build_credit_email_summary(subject, from_value, body_text, attachment_texts)
 
         if not already_processed:
             db.add(models.LeadNote(
