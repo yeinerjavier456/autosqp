@@ -37,6 +37,7 @@ const CreditBoard = () => {
     const [creditSelectedFiles, setCreditSelectedFiles] = useState([]);
     const [savingCreditNote, setSavingCreditNote] = useState(false);
     const [uploadingCreditFiles, setUploadingCreditFiles] = useState(false);
+    const [syncingGmailCredits, setSyncingGmailCredits] = useState(false);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -251,6 +252,49 @@ const CreditBoard = () => {
         }
     };
 
+    const handleAnalyzeCreditEmails = async () => {
+        if (!user?.company_id) return;
+        setSyncingGmailCredits(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post(
+                'https://autosqp.co/api/gmail/credits/analyze',
+                {},
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                    params: { company_id: user.company_id, max_results: 20 }
+                }
+            );
+
+            await fetchCredits();
+            if (selectedCredit?.lead_id) {
+                await fetchSelectedCreditResources(selectedCredit.lead_id);
+            }
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Correos analizados',
+                html: `
+                    <div style="text-align:left">
+                        <p><strong>Correos revisados:</strong> ${response.data?.processed || 0}</p>
+                        <p><strong>Relacionados:</strong> ${response.data?.matched || 0}</p>
+                        <p><strong>Omitidos por ya procesados:</strong> ${response.data?.skipped || 0}</p>
+                        <p><strong>Notas creadas:</strong> ${response.data?.created_notes || 0}</p>
+                        <p><strong>Adjuntos guardados:</strong> ${response.data?.attached_files || 0}</p>
+                        <p><strong>Solicitudes actualizadas:</strong> ${response.data?.updated_credits || 0}</p>
+                        <p><strong>Alertas enviadas:</strong> ${response.data?.notifications_sent || 0}</p>
+                    </div>
+                `,
+                confirmButtonText: 'Entendido'
+            });
+        } catch (error) {
+            console.error('Error analyzing Gmail credit emails', error);
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudieron analizar los correos de credito', 'error');
+        } finally {
+            setSyncingGmailCredits(false);
+        }
+    };
+
     const handleCreditNoteSubmit = async () => {
         if (!selectedCredit?.id || !creditNoteInput.trim()) return;
         setSavingCreditNote(true);
@@ -370,6 +414,17 @@ const CreditBoard = () => {
                     <p className="text-slate-500 mt-1 font-medium">Administra clientes en proceso de aprobación o búsqueda de vehículo.</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
+                    <button
+                        onClick={handleAnalyzeCreditEmails}
+                        disabled={syncingGmailCredits}
+                        className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700 transition hover:bg-amber-100 disabled:opacity-60"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4h16v16H4z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m4 7 8 6 8-6" />
+                        </svg>
+                        {syncingGmailCredits ? 'Analizando correos...' : 'Analizar correos de credito'}
+                    </button>
                     <button
                         onClick={handleSyncCredits}
                         className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100"

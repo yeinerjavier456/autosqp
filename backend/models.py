@@ -404,6 +404,25 @@ class IntegrationSettings(Base):
     company = relationship("Company", back_populates="integration_settings")
 
 
+class GmailProcessedMessage(Base):
+    __tablename__ = "gmail_processed_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), index=True, nullable=False)
+    gmail_message_id = Column(String(255), unique=True, index=True, nullable=False)
+    gmail_thread_id = Column(String(255), nullable=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+    credit_application_id = Column(Integer, ForeignKey("credit_applications.id"), nullable=True)
+    sender = Column(String(255), nullable=True)
+    subject = Column(String(500), nullable=True)
+    summary = Column(Text, nullable=True)
+    processed_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    company = relationship("Company")
+    lead = relationship("Lead")
+    credit_application = relationship("CreditApplication")
+
+
 
 
 class VehicleStatus(str, enum.Enum):
