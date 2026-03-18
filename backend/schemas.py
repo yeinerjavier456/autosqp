@@ -200,6 +200,8 @@ class IntegrationSettingsBase(BaseModel):
     gmail_refresh_token: Optional[str] = None
     gmail_monitored_sender: Optional[str] = None
     gmail_label: Optional[str] = None
+    gmail_sync_days: Optional[int] = 7
+    gmail_sync_max_results: Optional[int] = 20
 
 class IntegrationSettingsUpdate(IntegrationSettingsBase):
     pass

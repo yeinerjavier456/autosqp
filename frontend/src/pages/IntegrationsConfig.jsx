@@ -48,7 +48,9 @@ const IntegrationsConfig = () => {
         gmail_redirect_uri: '',
         gmail_refresh_token: '',
         gmail_monitored_sender: '',
-        gmail_label: ''
+        gmail_label: '',
+        gmail_sync_days: 7,
+        gmail_sync_max_results: 20
     });
 
     useEffect(() => {
@@ -193,7 +195,10 @@ const IntegrationsConfig = () => {
             const response = await axios.get(
                 `https://autosqp.co/api/gmail/messages/preview`,
                 {
-                    params: { company_id: user.company_id, max_results: 10 },
+                    params: {
+                        company_id: user.company_id,
+                        max_results: settings.gmail_sync_max_results || 20
+                    },
                     headers: { Authorization: `Bearer ${token}` }
                 }
             );
@@ -520,6 +525,40 @@ const IntegrationsConfig = () => {
                                 </div>
                             </div>
 
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Dias a revisar</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="90"
+                                        name="gmail_sync_days"
+                                        value={settings.gmail_sync_days ?? 7}
+                                        onChange={handleChange}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    />
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        Ejemplo: 7 revisa solo correos de los ultimos 7 dias.
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Maximo de correos por corrida</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="100"
+                                        name="gmail_sync_max_results"
+                                        value={settings.gmail_sync_max_results ?? 20}
+                                        onChange={handleChange}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    />
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        Controla cuantos correos se analizan o se muestran por ejecucion.
+                                    </p>
+                                </div>
+                            </div>
+
                             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
                                 <p className="font-semibold text-slate-800 mb-2">Variables minimas para Gmail</p>
                                 <ul className="list-disc pl-5 space-y-1">
@@ -528,6 +567,8 @@ const IntegrationsConfig = () => {
                                     <li><span className="font-medium">Redirect URI</span>: URL autorizada para devolver el flujo OAuth.</li>
                                     <li><span className="font-medium">Refresh Token</span>: token persistente para consultar correos.</li>
                                     <li><span className="font-medium">Remitentes a monitorear</span>: opcional, soporta varios bancos o entidades.</li>
+                                    <li><span className="font-medium">Dias a revisar</span>: define la ventana de tiempo del analisis.</li>
+                                    <li><span className="font-medium">Maximo de correos</span>: limita cuantos correos toma cada corrida.</li>
                                 </ul>
                             </div>
 

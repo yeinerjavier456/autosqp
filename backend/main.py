@@ -135,6 +135,14 @@ def ensure_gmail_settings_columns():
                     "ALTER TABLE integration_settings "
                     "ADD COLUMN gmail_label VARCHAR(120) NULL"
                 ),
+                "gmail_sync_days": (
+                    "ALTER TABLE integration_settings "
+                    "ADD COLUMN gmail_sync_days INT NULL DEFAULT 7"
+                ),
+                "gmail_sync_max_results": (
+                    "ALTER TABLE integration_settings "
+                    "ADD COLUMN gmail_sync_max_results INT NULL DEFAULT 20"
+                ),
             }
 
             for column_name, ddl in gmail_columns.items():

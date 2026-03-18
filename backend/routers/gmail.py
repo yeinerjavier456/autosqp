@@ -308,12 +308,14 @@ def _build_gmail_query(settings: models.IntegrationSettings, sender: Optional[st
     query_parts = []
     monitored_senders = _parse_monitored_senders(sender or settings.gmail_monitored_sender)
     monitored_label = (settings.gmail_label or "").strip()
+    sync_days = max(1, int(getattr(settings, "gmail_sync_days", 7) or 7))
 
     if monitored_senders:
         sender_query = " OR ".join(f"from:{sender_value}" for sender_value in monitored_senders)
         query_parts.append(f"({sender_query})")
     if monitored_label:
         query_parts.append(f'label:"{monitored_label}"')
+    query_parts.append(f"newer_than:{sync_days}d")
 
     return " ".join(query_parts).strip()
 
@@ -414,7 +416,7 @@ def gmail_oauth_callback(
 @router.get("/messages/preview")
 def preview_gmail_messages(
     company_id: int = Query(...),
-    max_results: int = Query(10, ge=1, le=25),
+    max_results: Optional[int] = Query(None, ge=1, le=100),
     sender: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
@@ -426,12 +428,13 @@ def preview_gmail_messages(
 
     access_token = _refresh_access_token(settings)
     query = _build_gmail_query(settings, sender=sender)
+    effective_max_results = max(1, min(int(max_results or getattr(settings, "gmail_sync_max_results", 20) or 20), 100))
 
     list_response = requests.get(
         GMAIL_MESSAGES_URL,
         headers={"Authorization": f"Bearer {access_token}"},
         params={
-            "maxResults": max_results,
+            "maxResults": effective_max_results,
             "q": query or None,
         },
         timeout=20,
@@ -463,13 +466,15 @@ def preview_gmail_messages(
         "monitored_senders": _parse_monitored_senders(settings.gmail_monitored_sender),
         "gmail_label": settings.gmail_label,
         "gmail_enabled": bool(settings.gmail_enabled),
+        "gmail_sync_days": int(getattr(settings, "gmail_sync_days", 7) or 7),
+        "gmail_sync_max_results": effective_max_results,
     }
 
 
 @router.post("/credits/analyze")
 def analyze_credit_related_emails(
     company_id: int = Query(...),
-    max_results: int = Query(20, ge=1, le=50),
+    max_results: Optional[int] = Query(None, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -480,12 +485,13 @@ def analyze_credit_related_emails(
 
     access_token = _refresh_access_token(settings)
     query = _build_gmail_query(settings)
+    effective_max_results = max(1, min(int(max_results or getattr(settings, "gmail_sync_max_results", 20) or 20), 100))
 
     list_response = requests.get(
         GMAIL_MESSAGES_URL,
         headers={"Authorization": f"Bearer {access_token}"},
         params={
-            "maxResults": max_results,
+            "maxResults": effective_max_results,
             "q": query or None,
         },
         timeout=20,
@@ -629,4 +635,6 @@ def analyze_credit_related_emails(
         "updated_credits": updated_credits,
         "notifications_sent": notifications_sent,
         "query": query,
+        "gmail_sync_days": int(getattr(settings, "gmail_sync_days", 7) or 7),
+        "gmail_sync_max_results": effective_max_results,
     }

@@ -400,6 +400,8 @@ class IntegrationSettings(Base):
     gmail_refresh_token = Column(Text, nullable=True)
     gmail_monitored_sender = Column(String(255), nullable=True)
     gmail_label = Column(String(120), nullable=True)
+    gmail_sync_days = Column(Integer, default=7)
+    gmail_sync_max_results = Column(Integer, default=20)
 
     company = relationship("Company", back_populates="integration_settings")
 
