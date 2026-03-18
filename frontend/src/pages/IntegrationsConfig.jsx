@@ -490,17 +490,17 @@ const IntegrationsConfig = () => {
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-600 mb-1">Remitente a monitorear</label>
-                                    <input
-                                        type="text"
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Remitentes a monitorear</label>
+                                    <textarea
+                                        rows="4"
                                         name="gmail_monitored_sender"
                                         value={settings.gmail_monitored_sender || ''}
                                         onChange={handleChange}
-                                        placeholder="cliente@dominio.com"
+                                        placeholder={"yeison.daza@finanzauto.com.co\ncreditos@banco1.com\naprobaciones@banco2.com"}
                                         className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                                     />
                                     <p className="text-xs text-slate-400 mt-1">
-                                        Opcional. Sirve para enfocar el analisis en un remitente especifico.
+                                        Opcional. Puedes poner varios correos, uno por linea o separados por coma.
                                     </p>
                                 </div>
 
@@ -527,7 +527,7 @@ const IntegrationsConfig = () => {
                                     <li><span className="font-medium">Client Secret</span>: secreto del mismo cliente OAuth.</li>
                                     <li><span className="font-medium">Redirect URI</span>: URL autorizada para devolver el flujo OAuth.</li>
                                     <li><span className="font-medium">Refresh Token</span>: token persistente para consultar correos.</li>
-                                    <li><span className="font-medium">Remitente a monitorear</span>: opcional si quieres analizar un correo puntual.</li>
+                                    <li><span className="font-medium">Remitentes a monitorear</span>: opcional, soporta varios bancos o entidades.</li>
                                 </ul>
                             </div>
 

@@ -281,13 +281,29 @@ def _save_email_attachment_to_lead(lead_id: int, file_name: str, content_bytes: 
     return db_file
 
 
+def _parse_monitored_senders(raw_value: Optional[str]) -> list[str]:
+    if not raw_value:
+        return []
+    chunks = re.split(r"[\n,;]+", raw_value)
+    normalized = []
+    seen = set()
+    for chunk in chunks:
+        candidate = chunk.strip().lower()
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        normalized.append(candidate)
+    return normalized
+
+
 def _build_gmail_query(settings: models.IntegrationSettings, sender: Optional[str] = None) -> str:
     query_parts = []
-    monitored_sender = (sender or settings.gmail_monitored_sender or "").strip()
+    monitored_senders = _parse_monitored_senders(sender or settings.gmail_monitored_sender)
     monitored_label = (settings.gmail_label or "").strip()
 
-    if monitored_sender:
-        query_parts.append(f"from:{monitored_sender}")
+    if monitored_senders:
+        sender_query = " OR ".join(f"from:{sender_value}" for sender_value in monitored_senders)
+        query_parts.append(f"({sender_query})")
     if monitored_label:
         query_parts.append(f'label:"{monitored_label}"')
 
@@ -436,6 +452,7 @@ def preview_gmail_messages(
         "items": items,
         "query": query,
         "monitored_sender": settings.gmail_monitored_sender,
+        "monitored_senders": _parse_monitored_senders(settings.gmail_monitored_sender),
         "gmail_label": settings.gmail_label,
         "gmail_enabled": bool(settings.gmail_enabled),
     }
