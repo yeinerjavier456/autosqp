@@ -222,6 +222,8 @@ class GmailProcessedMessageItem(BaseModel):
     sender: Optional[str] = None
     subject: Optional[str] = None
     summary: Optional[str] = None
+    quick_status: Optional[str] = None
+    quick_analysis: Optional[str] = None
     processed_at: datetime
     lead_name: Optional[str] = None
     credit_client_name: Optional[str] = None

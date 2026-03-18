@@ -240,11 +240,42 @@ def _credit_match_score(credit: models.CreditApplication, haystack: str) -> int:
 
 def _classify_credit_email_status(text: str, current_status: Optional[str]) -> Optional[str]:
     normalized = _normalize_text(text)
-    if any(token in normalized for token in ["no viable", "rechazado", "rechazada", "negado"]):
+    if any(token in normalized for token in [
+        "no viable",
+        "rechazado",
+        "rechazada",
+        "negado",
+        "negada",
+        "no aprobado",
+        "no aprobada",
+    ]):
         return models.CreditStatus.REJECTED.value
-    if any(token in normalized for token in ["cliente viable", "aprobado", "aprobada", "cupo de credito aprobado", "viable para cupo"]):
+    if any(token in normalized for token in [
+        "cliente viable",
+        "viable",
+        "viabilidad",
+        "preaprobado",
+        "pre aprobada",
+        "pre aprobado",
+        "preaprobada",
+        "aprobado",
+        "aprobada",
+        "aprobacion",
+        "aprobación",
+        "cupo de credito aprobado",
+        "cupo aprobado",
+        "viable para cupo",
+    ]):
         return models.CreditStatus.APPROVED.value
-    if any(token in normalized for token in ["se requiere documentacion", "requiere documentacion", "pendiente documentos", "faltan documentos"]):
+    if any(token in normalized for token in [
+        "se requiere documentacion",
+        "requiere documentacion",
+        "pendiente documentos",
+        "faltan documentos",
+        "debe firmar",
+        "validar si es",
+        "documentos pendientes",
+    ]):
         return models.CreditStatus.IN_REVIEW.value
     return current_status
 
@@ -267,6 +298,75 @@ def _build_credit_compact_note(from_value: str, body_text: str, snippet: str, at
         source_text = f"{source_text}\nAdjuntos: {' '.join(attachment_texts)}".strip()
     compact = re.sub(r"\s+", " ", source_text).strip()[:1200]
     return f"[Gmail {from_value or 'Entidad'}] {compact or 'Sin texto visible'}".strip()
+
+
+def _build_credit_quick_analysis(subject: Optional[str], summary: Optional[str]) -> tuple[str, str]:
+    source = _normalize_text("\n".join(filter(None, [subject or "", summary or ""])))
+
+    if any(token in source for token in [
+        "preaprobado",
+        "pre aprobado",
+        "pre-aprobado",
+        "preaprobada",
+        "pre aprobada",
+    ]):
+        return (
+            "preapproved",
+            "El correo sugiere una preaprobacion o una viabilidad inicial. Conviene revisar condiciones y documentos pendientes antes de darlo por aprobado."
+        )
+    if any(token in source for token in [
+        "cliente viable",
+        "viable para cupo",
+        "viable",
+        "viabilidad",
+        "aprobado",
+        "aprobada",
+        "aprobacion",
+        "aprobación",
+        "cupo de credito aprobado",
+        "cupo aprobado",
+    ]):
+        return (
+            "approved",
+            "El correo indica que la solicitud parece viable o aprobada por la entidad financiera."
+        )
+    if any(token in source for token in [
+        "no viable",
+        "rechazado",
+        "rechazada",
+        "negado",
+        "negada",
+        "no aprobado",
+        "no aprobada",
+    ]):
+        return (
+            "rejected",
+            "El correo indica que la solicitud fue rechazada o que el cliente no es viable para credito."
+        )
+    if any(token in source for token in [
+        "se requiere documentacion",
+        "requiere documentacion",
+        "faltan documentos",
+        "pendiente documentos",
+        "debe firmar",
+        "debe enviar",
+        "validar si es soltero",
+        "documentos pendientes",
+        "pendiente de documentos",
+    ]):
+        return (
+            "documents_required",
+            "El correo no confirma aprobacion final; mas bien pide documentos o validaciones adicionales."
+        )
+    if any(token in source for token in ["en estudio", "en proceso", "en revision", "analisis"]):
+        return (
+            "in_review",
+            "El correo parece indicar que la solicitud sigue en estudio o en revision."
+        )
+    return (
+        "unknown",
+        "No se detecto una conclusion clara de aprobacion, rechazo o requerimiento documental en este correo."
+    )
 
 
 def _save_email_attachment_to_lead(lead_id: int, file_name: str, content_bytes: bytes, mime_type: str, db: Session) -> Optional[models.LeadFile]:
@@ -690,6 +790,7 @@ def list_processed_credit_emails(
 
     items = []
     for row in rows:
+        quick_status, quick_analysis = _build_credit_quick_analysis(row.subject, row.summary)
         items.append({
             "id": row.id,
             "company_id": row.company_id,
@@ -700,6 +801,8 @@ def list_processed_credit_emails(
             "sender": row.sender,
             "subject": row.subject,
             "summary": row.summary,
+            "quick_status": quick_status,
+            "quick_analysis": quick_analysis,
             "processed_at": row.processed_at,
             "lead_name": row.lead.name if row.lead else None,
             "credit_client_name": row.credit_application.client_name if row.credit_application else None,

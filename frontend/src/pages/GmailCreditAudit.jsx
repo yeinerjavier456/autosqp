@@ -43,6 +43,23 @@ const GmailCreditAudit = () => {
         fetchItems();
     };
 
+    const getQuickStatusMeta = (status) => {
+        switch (status) {
+            case 'approved':
+                return { label: 'Viable / Aprobado', className: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+            case 'preapproved':
+                return { label: 'Preaprobado', className: 'bg-cyan-100 text-cyan-800 border-cyan-200' };
+            case 'rejected':
+                return { label: 'Rechazado', className: 'bg-rose-100 text-rose-800 border-rose-200' };
+            case 'documents_required':
+                return { label: 'Pide documentos', className: 'bg-amber-100 text-amber-800 border-amber-200' };
+            case 'in_review':
+                return { label: 'En estudio', className: 'bg-blue-100 text-blue-800 border-blue-200' };
+            default:
+                return { label: 'Sin conclusion clara', className: 'bg-slate-100 text-slate-700 border-slate-200' };
+        }
+    };
+
     return (
         <div className="p-8 min-h-screen">
             <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -93,12 +110,18 @@ const GmailCreditAudit = () => {
                 ) : (
                     <div className="divide-y divide-slate-100">
                         {items.map((item) => (
+                            (() => {
+                                const quickStatusMeta = getQuickStatusMeta(item.quick_status);
+                                return (
                             <div key={item.id} className="px-6 py-5">
                                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                     <div className="min-w-0 flex-1">
                                         <div className="flex flex-wrap items-center gap-2 mb-2">
                                             <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-blue-700">
                                                 Correo verificado
+                                            </span>
+                                            <span className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wide ${quickStatusMeta.className}`}>
+                                                {quickStatusMeta.label}
                                             </span>
                                             <span className="text-xs text-slate-400">
                                                 {item.processed_at ? new Date(item.processed_at).toLocaleString() : ''}
@@ -115,11 +138,23 @@ const GmailCreditAudit = () => {
                                                 {item.summary || 'Sin resumen'}
                                             </p>
                                         </div>
+                                        <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+                                            <p className="text-[11px] font-bold uppercase tracking-wide text-indigo-700 mb-2">Analisis rapido</p>
+                                            <p className="text-sm text-indigo-900">
+                                                {item.quick_analysis || 'Sin analisis disponible.'}
+                                            </p>
+                                        </div>
                                     </div>
 
                                     <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-4">
                                         <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-3">Relacion</p>
                                         <div className="space-y-2 text-sm text-slate-700">
+                                            <p>
+                                                <span className="font-semibold">Resultado detectado:</span>{' '}
+                                                <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${quickStatusMeta.className}`}>
+                                                    {quickStatusMeta.label}
+                                                </span>
+                                            </p>
                                             <p><span className="font-semibold">Lead:</span> {item.lead_name || 'Sin lead relacionado'}</p>
                                             <p><span className="font-semibold">Solicitud:</span> {item.credit_client_name || 'Sin solicitud relacionada'}</p>
                                             <p><span className="font-semibold">Message ID:</span> <span className="break-all text-xs">{item.gmail_message_id}</span></p>
@@ -145,6 +180,8 @@ const GmailCreditAudit = () => {
                                     </div>
                                 </div>
                             </div>
+                                );
+                            })()
                         ))}
                     </div>
                 )}
