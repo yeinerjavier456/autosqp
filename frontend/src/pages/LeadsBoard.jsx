@@ -19,9 +19,9 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
     const getCreditStatusMeta = (creditStatus) => {
         switch (creditStatus) {
             case 'pending': return { label: 'Solicitud recibida', className: 'bg-amber-100 text-amber-800 border-amber-200' };
-            case 'in_review': return { label: 'En estudio', className: 'bg-sky-100 text-sky-800 border-sky-200' };
-            case 'approved': return { label: 'Aprobado', className: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
-            case 'rejected': return { label: 'No viable', className: 'bg-rose-100 text-rose-800 border-rose-200' };
+            case 'in_review': return { label: 'Respuesta crédito: En estudio', className: 'bg-sky-100 text-sky-800 border-sky-200' };
+            case 'approved': return { label: 'Respuesta crédito: Viable', className: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+            case 'rejected': return { label: 'Respuesta crédito: Rechazado', className: 'bg-rose-100 text-rose-800 border-rose-200' };
             case 'completed': return { label: 'Finalizado', className: 'bg-indigo-100 text-indigo-800 border-indigo-200' };
             default: return null;
         }
@@ -117,7 +117,7 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
             {creditStatusMeta && (
                 <div className={`mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wide ${creditStatusMeta.className}`}>
                     <span className="h-2 w-2 rounded-full bg-current opacity-70"></span>
-                    Credito: {creditStatusMeta.label}
+                    {creditStatusMeta.label}
                 </div>
             )}
 
