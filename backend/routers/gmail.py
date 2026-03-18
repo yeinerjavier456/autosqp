@@ -475,6 +475,7 @@ def preview_gmail_messages(
 def analyze_credit_related_emails(
     company_id: int = Query(...),
     max_results: Optional[int] = Query(None, ge=1, le=100),
+    force_reprocess: bool = Query(False),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -482,6 +483,12 @@ def analyze_credit_related_emails(
     settings = _get_or_create_settings(db, company_id)
     if not settings.gmail_enabled:
         raise HTTPException(status_code=400, detail="Gmail no esta habilitado para esta empresa")
+
+    try:
+        from routers.credits import sync_credit_applications_for_company
+        sync_credit_applications_for_company(db, company_id)
+    except Exception:
+        pass
 
     access_token = _refresh_access_token(settings)
     query = _build_gmail_query(settings)
@@ -511,6 +518,7 @@ def analyze_credit_related_emails(
     attached_files = 0
     updated_credits = 0
     notifications_sent = 0
+    reprocessed = 0
 
     for message_ref in message_refs:
         message_id = message_ref.get("id")
@@ -521,8 +529,11 @@ def analyze_credit_related_emails(
             models.GmailProcessedMessage.gmail_message_id == message_id
         ).first()
         if already_processed:
-            skipped += 1
-            continue
+            if force_reprocess:
+                reprocessed += 1
+            else:
+                skipped += 1
+                continue
 
         payload = _load_full_message(access_token, message_id)
         message_payload = payload.get("payload") or {}
@@ -546,18 +557,18 @@ def analyze_credit_related_emails(
 
         processed += 1
         if not best_credit or best_score < 6 or not best_credit.lead_id:
-            db.add(models.GmailProcessedMessage(
+            processed_record = already_processed or models.GmailProcessedMessage(
                 company_id=company_id,
                 gmail_message_id=message_id,
-                gmail_thread_id=payload.get("threadId"),
-                lead_id=getattr(best_credit, "lead_id", None),
-                credit_application_id=getattr(best_credit, "id", None),
-                sender=from_value,
-                subject=subject,
-                summary=(
-                    f"Sin match automatico o sin lead relacionado. Fecha: {date_value or 'Sin fecha'}"
-                ),
-            ))
+            )
+            processed_record.gmail_thread_id = payload.get("threadId")
+            processed_record.lead_id = getattr(best_credit, "lead_id", None)
+            processed_record.credit_application_id = getattr(best_credit, "id", None)
+            processed_record.sender = from_value
+            processed_record.subject = subject
+            processed_record.summary = f"Sin match automatico o sin lead relacionado. Fecha: {date_value or 'Sin fecha'}"
+            if not already_processed:
+                db.add(processed_record)
             db.commit()
             continue
 
@@ -565,20 +576,21 @@ def analyze_credit_related_emails(
         lead = db.query(models.Lead).filter(models.Lead.id == best_credit.lead_id).first() if best_credit.lead_id else None
         summary = _build_credit_email_summary(subject, from_value, body_text, attachment_texts)
 
-        db.add(models.LeadNote(
-            lead_id=best_credit.lead_id,
-            user_id=None,
-            content=summary,
-        ))
-        created_notes += 1
+        if not already_processed:
+            db.add(models.LeadNote(
+                lead_id=best_credit.lead_id,
+                user_id=None,
+                content=summary,
+            ))
+            created_notes += 1
 
-        db.add(models.LeadHistory(
-            lead_id=best_credit.lead_id,
-            user_id=None,
-            previous_status=lead.status if lead else models.LeadStatus.CREDIT_APPLICATION.value,
-            new_status=lead.status if lead else models.LeadStatus.CREDIT_APPLICATION.value,
-            comment=f"Correo de credito relacionado automaticamente desde Gmail: {subject or 'Sin asunto'}",
-        ))
+            db.add(models.LeadHistory(
+                lead_id=best_credit.lead_id,
+                user_id=None,
+                previous_status=lead.status if lead else models.LeadStatus.CREDIT_APPLICATION.value,
+                new_status=lead.status if lead else models.LeadStatus.CREDIT_APPLICATION.value,
+                comment=f"Correo de credito relacionado automaticamente desde Gmail: {subject or 'Sin asunto'}",
+            ))
 
         stamped_note = _build_credit_compact_note(
             from_value=from_value,
@@ -586,25 +598,27 @@ def analyze_credit_related_emails(
             snippet=payload.get("snippet") or "",
             attachment_texts=attachment_texts,
         )
-        best_credit.notes = f"{best_credit.notes}\n{stamped_note}".strip() if best_credit.notes else stamped_note
+        if not already_processed:
+            best_credit.notes = f"{best_credit.notes}\n{stamped_note}".strip() if best_credit.notes else stamped_note
 
         new_credit_status = _classify_credit_email_status("\n".join([body_text, *attachment_texts]), best_credit.status)
         if new_credit_status and new_credit_status != best_credit.status:
             best_credit.status = new_credit_status
             updated_credits += 1
 
-        for attachment in attachments:
-            db_file = _save_email_attachment_to_lead(
-                lead_id=best_credit.lead_id,
-                file_name=attachment.get("file_name") or "adjunto",
-                content_bytes=attachment.get("bytes") or b"",
-                mime_type=attachment.get("mime_type") or "application/octet-stream",
-                db=db,
-            )
-            if db_file:
-                attached_files += 1
+        if not already_processed:
+            for attachment in attachments:
+                db_file = _save_email_attachment_to_lead(
+                    lead_id=best_credit.lead_id,
+                    file_name=attachment.get("file_name") or "adjunto",
+                    content_bytes=attachment.get("bytes") or b"",
+                    mime_type=attachment.get("mime_type") or "application/octet-stream",
+                    db=db,
+                )
+                if db_file:
+                    attached_files += 1
 
-        if lead and lead.assigned_to_id:
+        if lead and lead.assigned_to_id and not already_processed:
             db.add(models.Notification(
                 user_id=lead.assigned_to_id,
                 title="Respuesta de entidad financiera",
@@ -614,22 +628,25 @@ def analyze_credit_related_emails(
             ))
             notifications_sent += 1
 
-        db.add(models.GmailProcessedMessage(
+        processed_record = already_processed or models.GmailProcessedMessage(
             company_id=company_id,
             gmail_message_id=message_id,
-            gmail_thread_id=payload.get("threadId"),
-            lead_id=best_credit.lead_id,
-            credit_application_id=best_credit.id,
-            sender=from_value,
-            subject=subject,
-            summary=summary[:2000],
-        ))
+        )
+        processed_record.gmail_thread_id = payload.get("threadId")
+        processed_record.lead_id = best_credit.lead_id
+        processed_record.credit_application_id = best_credit.id
+        processed_record.sender = from_value
+        processed_record.subject = subject
+        processed_record.summary = summary[:2000]
+        if not already_processed:
+            db.add(processed_record)
         db.commit()
 
     return {
         "processed": processed,
         "matched": matched,
         "skipped": skipped,
+        "reprocessed": reprocessed,
         "created_notes": created_notes,
         "attached_files": attached_files,
         "updated_credits": updated_credits,
@@ -637,4 +654,5 @@ def analyze_credit_related_emails(
         "query": query,
         "gmail_sync_days": int(getattr(settings, "gmail_sync_days", 7) or 7),
         "gmail_sync_max_results": effective_max_results,
+        "force_reprocess": force_reprocess,
     }

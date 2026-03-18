@@ -262,7 +262,7 @@ const CreditBoard = () => {
                 {},
                 {
                     headers: { Authorization: `Bearer ${token}` },
-                    params: { company_id: user.company_id, max_results: 20 }
+                    params: { company_id: user.company_id, force_reprocess: true }
                 }
             );
 
@@ -279,6 +279,7 @@ const CreditBoard = () => {
                         <p><strong>Correos revisados:</strong> ${response.data?.processed || 0}</p>
                         <p><strong>Relacionados:</strong> ${response.data?.matched || 0}</p>
                         <p><strong>Omitidos por ya procesados:</strong> ${response.data?.skipped || 0}</p>
+                        <p><strong>Reprocesados:</strong> ${response.data?.reprocessed || 0}</p>
                         <p><strong>Notas creadas:</strong> ${response.data?.created_notes || 0}</p>
                         <p><strong>Adjuntos guardados:</strong> ${response.data?.attached_files || 0}</p>
                         <p><strong>Solicitudes actualizadas:</strong> ${response.data?.updated_credits || 0}</p>
