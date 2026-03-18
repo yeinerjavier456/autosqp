@@ -80,7 +80,22 @@ const GlobalNotifications = () => {
                     timer: 10000,
                     timerProgressBar: true,
                     icon: 'info',
+                    customClass: {
+                        closeButton: 'swal2-visible-close-button'
+                    },
                     didOpen: (toast) => {
+                        const closeButton = toast.querySelector('.swal2-close');
+                        if (closeButton) {
+                            closeButton.style.display = 'flex';
+                            closeButton.style.alignItems = 'center';
+                            closeButton.style.justifyContent = 'center';
+                            closeButton.style.width = '28px';
+                            closeButton.style.height = '28px';
+                            closeButton.style.fontSize = '22px';
+                            closeButton.style.fontWeight = '700';
+                            closeButton.style.color = '#64748b';
+                            closeButton.style.margin = '6px 6px 0 0';
+                        }
                         toast.addEventListener('mouseenter', Swal.stopTimer)
                         toast.addEventListener('mouseleave', Swal.resumeTimer)
                     }

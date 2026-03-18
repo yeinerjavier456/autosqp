@@ -760,7 +760,8 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                             <p className="text-sm font-semibold text-slate-600">
                                 <span className="text-blue-600">{headerLeadName}</span>
                                 <span className="mx-2 text-slate-400">-</span>
-                                <span className="text-slate-700">{headerResponsibleName}</span>
+                                <span className="text-slate-500">Gestionado por</span>
+                                <span className="ml-2 text-slate-700">{headerResponsibleName}</span>
                             </p>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2">
