@@ -407,6 +407,15 @@ const CreditBoard = () => {
         }
     };
 
+    const getResponsibleName = (credit) => {
+        if (!credit) return 'Sin responsable';
+        if (credit.assigned_to?.full_name || credit.assigned_to?.email) {
+            return credit.assigned_to.full_name || credit.assigned_to.email;
+        }
+        const assignedUser = creditUsers.find((person) => person.id === credit.assigned_to_id);
+        return assignedUser?.full_name || assignedUser?.email || 'Sin responsable';
+    };
+
     return (
         <div className="p-8 min-h-screen">
             <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -552,9 +561,11 @@ const CreditBoard = () => {
                                                         onClick={() => setSelectedCredit(credit)}
                                                         className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-3 hover:shadow-md transition cursor-pointer group"
                                                     >
-                                                        <div className="flex justify-between items-start mb-2">
+                                                        <div className="mb-2">
                                                             <h4 className="font-bold text-slate-800">{credit.client_name}</h4>
-                                                            <span className="text-xs text-slate-400 font-mono">#{credit.id}</span>
+                                                            <p className="mt-1 text-xs font-semibold text-slate-500">
+                                                                Gestionado por <span className="text-slate-700">{getResponsibleName(credit)}</span>
+                                                            </p>
                                                         </div>
 
                                                         <div className="text-sm font-semibold text-blue-600 mb-3 flex items-center gap-1">
@@ -693,8 +704,10 @@ const CreditBoard = () => {
                     <div className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl border border-gray-100 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-start justify-between gap-4 mb-6">
                             <div>
-                                <h2 className="text-2xl font-bold text-slate-800">Solicitud #{selectedCredit.id}</h2>
-                                <p className="text-slate-500 mt-1">{selectedCredit.client_name}</p>
+                                <h2 className="text-2xl font-bold text-slate-800">{selectedCredit.client_name}</h2>
+                                <p className="mt-1 text-sm font-semibold text-slate-500">
+                                    Gestionado por <span className="text-slate-700">{getResponsibleName(selectedCredit)}</span>
+                                </p>
                             </div>
                             <button onClick={() => setSelectedCredit(null)} className="text-2xl text-gray-400 hover:text-gray-600">&times;</button>
                         </div>
