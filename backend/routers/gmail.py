@@ -260,6 +260,14 @@ def _build_credit_email_summary(subject: str, from_value: str, body_text: str, a
     ).strip()
 
 
+def _build_credit_compact_note(from_value: str, body_text: str, snippet: str, attachment_texts: list[str]) -> str:
+    source_text = body_text or snippet or ""
+    if attachment_texts:
+        source_text = f"{source_text}\nAdjuntos: {' '.join(attachment_texts)}".strip()
+    compact = re.sub(r"\s+", " ", source_text).strip()[:1200]
+    return f"[Gmail {from_value or 'Entidad'}] {compact or 'Sin texto visible'}".strip()
+
+
 def _save_email_attachment_to_lead(lead_id: int, file_name: str, content_bytes: bytes, mime_type: str, db: Session) -> Optional[models.LeadFile]:
     if not lead_id or not file_name or not content_bytes:
         return None
@@ -566,7 +574,12 @@ def analyze_credit_related_emails(
             comment=f"Correo de credito relacionado automaticamente desde Gmail: {subject or 'Sin asunto'}",
         ))
 
-        stamped_note = f"[Gmail {from_value or 'Entidad'}] {body_text or payload.get('snippet') or 'Sin texto visible'}".strip()
+        stamped_note = _build_credit_compact_note(
+            from_value=from_value,
+            body_text=body_text,
+            snippet=payload.get("snippet") or "",
+            attachment_texts=attachment_texts,
+        )
         best_credit.notes = f"{best_credit.notes}\n{stamped_note}".strip() if best_credit.notes else stamped_note
 
         new_credit_status = _classify_credit_email_status("\n".join([body_text, *attachment_texts]), best_credit.status)

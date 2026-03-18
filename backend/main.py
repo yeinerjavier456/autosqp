@@ -277,6 +277,27 @@ def ensure_purchase_option_decision_columns():
 
 ensure_purchase_option_decision_columns()
 
+
+def ensure_credit_notes_text_column():
+    try:
+        with engine.connect() as conn:
+            notes_column_type = conn.execute(text(
+                "SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_applications' "
+                "AND COLUMN_NAME = 'notes'"
+            )).scalar()
+
+            if notes_column_type and notes_column_type.lower() != "text":
+                conn.execute(text(
+                    "ALTER TABLE credit_applications MODIFY COLUMN notes TEXT NULL"
+                ))
+                conn.commit()
+    except Exception as exc:
+        print(f"Warning: could not ensure credit notes text column: {exc}", flush=True)
+
+
+ensure_credit_notes_text_column()
+
 app = FastAPI(title="AutosQP API", description="API para gestión de compra venta de carros")
 
 @app.exception_handler(Exception)

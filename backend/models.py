@@ -519,7 +519,7 @@ class CreditApplication(Base):
     down_payment = Column(Integer, default=0) # Cuota inicial disponible
     
     status = Column(String(50), default=CreditStatus.PENDING)
-    notes = Column(String(2000), nullable=True)
+    notes = Column(Text, nullable=True)
     
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
