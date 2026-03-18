@@ -32,12 +32,29 @@ router = APIRouter(
     tags=["vehicles"]
 )
 
+def get_effective_role_name(role) -> str:
+    if not role:
+        return ""
+    if isinstance(role, str):
+        return role.strip().lower()
+
+    effective_name = getattr(role, "base_role_name", None) or getattr(role, "name", None) or ""
+    normalized_name = str(effective_name).strip().lower()
+    if normalized_name:
+        return normalized_name
+
+    label = getattr(role, "label", None) or ""
+    normalized_label = str(label).strip().lower()
+    if normalized_label in ["administrador de empresa", "administrador"]:
+        return "admin"
+    return normalized_label
+
 def is_inventory_editor(current_user: models.User) -> bool:
-    role_name = current_user.role.name if current_user.role else ""
+    role_name = get_effective_role_name(current_user.role)
     return role_name in ["admin", "inventario"] or (role_name == "super_admin" and bool(current_user.company_id))
 
 def is_inventory_admin(current_user: models.User) -> bool:
-    role_name = current_user.role.name if current_user.role else ""
+    role_name = get_effective_role_name(current_user.role)
     return role_name == "admin" or (role_name == "super_admin" and bool(current_user.company_id))
 
 def ensure_inventory_editor(current_user: models.User):

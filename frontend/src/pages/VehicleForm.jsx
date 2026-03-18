@@ -8,7 +8,23 @@ import { normalizeMediaUrl } from '../utils/media';
 
 const VehicleForm = () => {
     const { user } = useAuth();
-    const roleName = user?.role?.name || (typeof user?.role === 'string' ? user?.role : '');
+    const normalizeRoleKey = (role) => {
+        if (!role) return '';
+        if (typeof role === 'string') return String(role).trim().toLowerCase();
+
+        const effectiveName = role.base_role_name || role.name || '';
+        if (effectiveName) {
+            return String(effectiveName).trim().toLowerCase();
+        }
+
+        const label = role.label || '';
+        const normalizedLabel = String(label).trim().toLowerCase();
+        if (normalizedLabel === 'administrador de empresa' || normalizedLabel === 'administrador') {
+            return 'admin';
+        }
+        return normalizedLabel;
+    };
+    const roleName = normalizeRoleKey(user?.role);
     const isCompanyAdmin = roleName === 'admin' || (roleName === 'super_admin' && !!user?.company_id);
     const canEditInventory = isCompanyAdmin || roleName === 'inventario';
     const isReadOnly = !canEditInventory;
@@ -80,11 +96,13 @@ const VehicleForm = () => {
     // When Make changes (and it matches a brand), fetch models
     useEffect(() => {
         if (formData.make && brands.length > 0) {
-            const selectedBrand = brands.find(b => b.name === formData.make);
+            const selectedBrand = brands.find((brand) => brand.name?.toLowerCase() === String(formData.make || '').trim().toLowerCase());
             if (selectedBrand) {
                 fetchModels(selectedBrand.id);
+                return;
             }
         }
+        setModelsList([]);
     }, [formData.make, brands]);
 
     const fetchModels = async (brandId) => {
@@ -234,13 +252,28 @@ const VehicleForm = () => {
         e.preventDefault();
         setSubmitting(true);
         const token = localStorage.getItem('token');
+        const normalizedMake = String(formData.make || '').trim();
+        const normalizedModel = String(formData.model || '').trim();
+        if (!normalizedMake) {
+            Swal.fire('Error', 'Debes indicar la marca del vehículo.', 'warning');
+            setSubmitting(false);
+            return;
+        }
+        if (!normalizedModel) {
+            Swal.fire('Error', 'Debes indicar el modelo del vehículo.', 'warning');
+            setSubmitting(false);
+            return;
+        }
         const payload = {
             ...formData,
+            make: normalizedMake,
+            model: normalizedModel,
             year: parseInt(formData.year) || null,
             price: parseInt(formData.price) || 0,
             purchase_price: formData.purchase_price ? parseInt(formData.purchase_price) : null,
             faseco: formData.faseco ? parseInt(formData.faseco) : null,
             mileage: formData.mileage ? parseInt(formData.mileage) : 0,
+            plate: String(formData.plate || '').trim().toUpperCase(),
             soat: formData.soat ? new Date(formData.soat).toISOString() : null,
             tecno: formData.tecno ? new Date(formData.tecno).toISOString() : null
         };
@@ -262,7 +295,7 @@ const VehicleForm = () => {
             navigate('/admin/inventory');
         } catch (error) {
             console.error(error);
-            Swal.fire('Error', "Error al guardar vehículo", 'error');
+            Swal.fire('Error', error.response?.data?.detail || "Error al guardar vehículo", 'error');
         } finally {
             setSubmitting(false);
         }
@@ -373,86 +406,43 @@ const VehicleForm = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Marca *</label>
-                                <select
+                                <input
+                                    type="text"
                                     name="make"
                                     required
-                                    value={brands.find(b => b.name === formData.make) ? formData.make : (formData.make ? 'OTRA' : '')}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        if (val === 'OTRA') {
-                                            setFormData(prev => ({ ...prev, make: '', model: '' }));
-                                            setModelsList([]);
-                                        } else {
-                                            setFormData(prev => ({ ...prev, make: val, model: '' }));
-                                        }
-                                    }}
-                                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white mb-2"
-                                >
-                                    <option value="">Selecciona Marca</option>
-                                    {brands.map(brand => (
-                                        <option key={brand.id} value={brand.name}>{brand.name}</option>
+                                    list="vehicle-brands"
+                                    value={formData.make}
+                                    onChange={handleChange}
+                                    placeholder="Escribe o pega la marca..."
+                                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                />
+                                <datalist id="vehicle-brands">
+                                    {brands.map((brand) => (
+                                        <option key={brand.id} value={brand.name} />
                                     ))}
-                                    <option value="OTRA">OTRA (Escribir manual)</option>
-                                </select>
-                                {(!brands.find(b => b.name === formData.make) && (formData.make || formData.make === '')) && (
-                                    <input
-                                        type="text"
-                                        name="make"
-                                        value={formData.make}
-                                        onChange={handleChange}
-                                        placeholder="Escribe la marca..."
-                                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white border-blue-300"
-                                    />
-                                )}
+                                </datalist>
+                                <p className="mt-1 text-xs text-slate-500">Puedes elegir una sugerencia o pegar una marca nueva y guardarla igual.</p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Modelo *</label>
-                                {brands.find(b => b.name === formData.make) ? (
-                                    <>
-                                        <select
-                                            name="model"
-                                            required
-                                            value={modelsList.find(m => m.name === formData.model) ? formData.model : (formData.model ? 'OTRO' : '')}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                if (val === 'OTRO') {
-                                                    setFormData(prev => ({ ...prev, model: '' }));
-                                                } else {
-                                                    setFormData(prev => ({ ...prev, model: val }));
-                                                }
-                                            }}
-                                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white mb-2"
-                                        >
-                                            <option value="">Selecciona Modelo</option>
-                                            {modelsList.map(model => (
-                                                <option key={model.id} value={model.name}>{model.name}</option>
-                                            ))}
-                                            <option value="OTRO">OTRO (Escribir manual)</option>
-                                        </select>
-                                        {((!modelsList.find(m => m.name === formData.model) && formData.model !== undefined) || !formData.model) &&
-                                            (!modelsList.find(m => m.name === formData.model)) && (
-                                                <input
-                                                    type="text"
-                                                    name="model"
-                                                    value={formData.model}
-                                                    onChange={handleChange}
-                                                    placeholder="Escribe el modelo..."
-                                                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white border-blue-300 ${!modelsList.find(m => m.name === formData.model) && formData.model ? '' : 'hidden'}`}
-                                                    style={{ display: !modelsList.find(m => m.name === formData.model) ? 'block' : 'none' }}
-                                                />
-                                            )}
-                                    </>
-                                ) : (
-                                    <input
-                                        type="text"
-                                        name="model"
-                                        required
-                                        value={formData.model}
-                                        onChange={handleChange}
-                                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                        placeholder="Escribe el modelo..."
-                                    />
+                                <input
+                                    type="text"
+                                    name="model"
+                                    required
+                                    list={modelsList.length > 0 ? 'vehicle-models' : undefined}
+                                    value={formData.model}
+                                    onChange={handleChange}
+                                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                    placeholder="Escribe o pega el modelo..."
+                                />
+                                {modelsList.length > 0 && (
+                                    <datalist id="vehicle-models">
+                                        {modelsList.map((model) => (
+                                            <option key={model.id} value={model.name} />
+                                        ))}
+                                    </datalist>
                                 )}
+                                <p className="mt-1 text-xs text-slate-500">Si el modelo no existe en la lista, puedes escribirlo manualmente.</p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Placa *</label>
