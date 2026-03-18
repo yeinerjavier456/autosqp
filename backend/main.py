@@ -94,6 +94,59 @@ def ensure_payment_receipts_columns():
 ensure_role_configuration_columns()
 ensure_payment_receipts_columns()
 
+def ensure_gmail_settings_columns():
+    """
+    Backward-compatible bootstrap for Gmail integration settings.
+    """
+    try:
+        with engine.connect() as conn:
+            existing_cols_result = conn.execute(text(
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'integration_settings'"
+            ))
+            existing_cols = {row[0] for row in existing_cols_result.fetchall()}
+
+            gmail_columns = {
+                "gmail_enabled": (
+                    "ALTER TABLE integration_settings "
+                    "ADD COLUMN gmail_enabled BOOLEAN NULL DEFAULT 0"
+                ),
+                "gmail_client_id": (
+                    "ALTER TABLE integration_settings "
+                    "ADD COLUMN gmail_client_id TEXT NULL"
+                ),
+                "gmail_client_secret": (
+                    "ALTER TABLE integration_settings "
+                    "ADD COLUMN gmail_client_secret TEXT NULL"
+                ),
+                "gmail_redirect_uri": (
+                    "ALTER TABLE integration_settings "
+                    "ADD COLUMN gmail_redirect_uri VARCHAR(500) NULL"
+                ),
+                "gmail_refresh_token": (
+                    "ALTER TABLE integration_settings "
+                    "ADD COLUMN gmail_refresh_token TEXT NULL"
+                ),
+                "gmail_monitored_sender": (
+                    "ALTER TABLE integration_settings "
+                    "ADD COLUMN gmail_monitored_sender VARCHAR(255) NULL"
+                ),
+                "gmail_label": (
+                    "ALTER TABLE integration_settings "
+                    "ADD COLUMN gmail_label VARCHAR(120) NULL"
+                ),
+            }
+
+            for column_name, ddl in gmail_columns.items():
+                if column_name not in existing_cols:
+                    conn.execute(text(ddl))
+
+            conn.commit()
+    except Exception as exc:
+        print(f"Warning: could not ensure gmail settings columns: {exc}", flush=True)
+
+ensure_gmail_settings_columns()
+
 def ensure_chatbot_settings_columns():
     """
     Backward-compatible bootstrap for legacy DBs where integration_settings

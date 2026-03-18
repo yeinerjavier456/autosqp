@@ -193,6 +193,13 @@ class IntegrationSettingsBase(BaseModel):
     chatbot_bot_name: Optional[str] = "Jennifer Quimbayo"
     chatbot_typing_min_ms: Optional[int] = 7000
     chatbot_typing_max_ms: Optional[int] = 18000
+    gmail_enabled: Optional[bool] = False
+    gmail_client_id: Optional[str] = None
+    gmail_client_secret: Optional[str] = None
+    gmail_redirect_uri: Optional[str] = None
+    gmail_refresh_token: Optional[str] = None
+    gmail_monitored_sender: Optional[str] = None
+    gmail_label: Optional[str] = None
 
 class IntegrationSettingsUpdate(IntegrationSettingsBase):
     pass

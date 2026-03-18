@@ -38,7 +38,14 @@ const IntegrationsConfig = () => {
         gw_model: 'gpt-4o',
         chatbot_bot_name: 'Jennifer Quimbayo',
         chatbot_typing_min_ms: 7000,
-        chatbot_typing_max_ms: 18000
+        chatbot_typing_max_ms: 18000,
+        gmail_enabled: false,
+        gmail_client_id: '',
+        gmail_client_secret: '',
+        gmail_redirect_uri: '',
+        gmail_refresh_token: '',
+        gmail_monitored_sender: '',
+        gmail_label: ''
     });
 
     useEffect(() => {
@@ -66,9 +73,10 @@ const IntegrationsConfig = () => {
     }, [user]);
 
     const handleChange = (e) => {
+        const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
         setSettings({
             ...settings,
-            [e.target.name]: e.target.value
+            [e.target.name]: value
         });
     };
 
@@ -173,6 +181,12 @@ const IntegrationsConfig = () => {
                         label="ChatGPT / AI"
                         onClick={() => setActiveTab('gpt')}
                         icon={<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M22.28 9.06a8.55 8.55 0 0 0-1.28-4.47 8.76 8.76 0 0 0-3.32-3.15 8.61 8.61 0 0 0-6.91-.4 8.67 8.67 0 0 0-4.48 2.5 8.62 8.62 0 0 0-2.52 4.48A8.61 8.61 0 0 0 4.15 15a8.59 8.59 0 0 0 1.28 4.47 8.76 8.76 0 0 0 3.32 3.15 8.68 8.68 0 0 0 3.84.88 8.62 8.62 0 0 0 3.06-.57 8.68 8.68 0 0 0 4.48-2.5 8.57 8.57 0 0 0 2.5-4.48 8.68 8.68 0 0 0-.4-6.91ZM10.74 3a6.83 6.83 0 0 1 3.86 1.36 1.21 1.21 0 0 1 .4 1.57l-.05.07-.12.18-.76 1.32-.47.81a6.6 6.6 0 0 0-4.07.6c-.19.09-.4.15-.61.16-.42.06-.85-.09-1.16-.38l-1.3-1.34a1.22 1.22 0 0 1 .15-1.84A6.73 6.73 0 0 1 10.74 3Zm-6.52 7a6.69 6.69 0 0 1 .84-3.52 1.22 1.22 0 0 1 1.62-.31l.07.05.18.11 1.35.77.8.46a6.56 6.56 0 0 0 2.22 3.49c.14.15.26.33.34.52.17.4.11.86-.15 1.21l-1.32 1.32a1.22 1.22 0 0 1-1.84-.13A6.74 6.74 0 0 1 4.22 10Zm2.94 8.73a6.79 6.79 0 0 1-2.9-2.92 1.22 1.22 0 0 1 .32-1.63l.06-.05.18-.11 1.35-.77.8-.46a6.61 6.61 0 0 0 4.12.22c.2-.06.4-.16.57-.31.33-.29.5-.72.45-1.15l-.26-1.85a1.22 1.22 0 0 1 .91-1.36 6.79 6.79 0 0 1 6.13.91 1.22 1.22 0 0 1 .32 1.63l-.06.05-.18.12-1.34.76-.8.46a6.57 6.57 0 0 0-2.23-3.48 1.58 1.58 0 0 1-.35-.53 1.22 1.22 0 0 1 .16-1.2l1.32-1.33a1.22 1.22 0 0 1 1.84.13 6.77 6.77 0 0 1 1.09 3.86 6.83 6.83 0 0 1-3.86 3.09 1.21 1.21 0 0 1-1.57-.4l-.06-.06-.11-.18-.77-1.33-.46-.8a6.59 6.59 0 0 0-4.06-.6 1.45 1.45 0 0 1-1.78.22l-1.34-1.34a1.22 1.22 0 0 1-.15-1.84Zm-6.52 7a6.69 6.69 0 0 1 .84-3.52 1.22 1.22 0 0 1 1.62-.31l.07.05.18.11 1.35.77.8.46a6.56 6.56 0 0 0 2.22 3.49c.14.15.26.33.34.52.17.4.11.86-.15 1.21l-1.32 1.32a1.22 1.22 0 0 1-1.84-.13A6.74 6.74 0 0 1 4.22 10Zm2.94 8.73a6.79 6.79 0 0 1-2.9-2.92 1.22 1.22 0 0 1 .32-1.63l.06-.05.18-.11 1.35-.77.8-.46a6.61 6.61 0 0 0 4.12.22c.2-.06.4-.16.57-.31.33-.29.5-.72.45-1.15l-.26-1.85a1.22 1.22 0 0 1 .91-1.36 6.79 6.79 0 0 1 6.13.91 1.22 1.22 0 0 1 .32 1.63l-.06.05-.18.12-1.34.76-.8.46a6.57 6.57 0 0 0-2.23-3.48 1.58 1.58 0 0 1-.35-.53 1.22 1.22 0 0 1 .16-1.2l1.32-1.33a1.22 1.22 0 0 1 1.84.13 6.77 6.77 0 0 1 1.09 3.86 6.83 6.83 0 0 1-3.86 3.09 1.21 1.21 0 0 1-1.57-.4l-.06-.06-.11-.18-.77-1.33-.46-.8a6.59 6.59 0 0 0-4.06-.6 1.45 1.45 0 0 1-1.78.22l-1.34-1.34a1.22 1.22 0 0 1-.15-1.84Z" /></svg>}
+                    />
+                    <IntegrationTab
+                        active={activeTab === 'gmail'}
+                        label="Gmail"
+                        onClick={() => setActiveTab('gmail')}
+                        icon={<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 13.065 0 4.5V19a2 2 0 0 0 2 2h20a2 2 0 0 0 2-2V4.5l-12 8.565Zm12-10.065A2 2 0 0 0 22 1H2a2 2 0 0 0-2 2l12 8.565L24 3Z" /></svg>}
                     />
                     <IntegrationTab
                         active={activeTab === 'chatbot'}
@@ -323,6 +337,127 @@ const IntegrationsConfig = () => {
                                     <option value="gpt-4-turbo">GPT-4 Turbo</option>
                                     <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
                                 </select>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'gmail' && (
+                        <div className="space-y-6 fade-in">
+                            <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                Usa una aplicacion OAuth de Google Cloud para Gmail. Para analisis de correos,
+                                lo normal es trabajar con alcance de solo lectura y guardar aqui el refresh token.
+                            </div>
+                            <h2 className="text-xl font-bold text-slate-800 border-b pb-2">Configuracion de Gmail</h2>
+
+                            <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                <input
+                                    type="checkbox"
+                                    name="gmail_enabled"
+                                    checked={Boolean(settings.gmail_enabled)}
+                                    onChange={handleChange}
+                                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <div>
+                                    <p className="font-medium text-slate-800">Habilitar lectura y analisis de Gmail</p>
+                                    <p className="text-xs text-slate-500">Activa esta integracion para esta empresa.</p>
+                                </div>
+                            </label>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-600 mb-1">Google OAuth Client ID</label>
+                                <input
+                                    type="text"
+                                    name="gmail_client_id"
+                                    value={settings.gmail_client_id || ''}
+                                    onChange={handleChange}
+                                    placeholder="1234567890-abc123.apps.googleusercontent.com"
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-600 mb-1">Google OAuth Client Secret</label>
+                                <input
+                                    type="password"
+                                    name="gmail_client_secret"
+                                    value={settings.gmail_client_secret || ''}
+                                    onChange={handleChange}
+                                    placeholder="GOCSPX-..."
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-600 mb-1">Redirect URI</label>
+                                <input
+                                    type="text"
+                                    name="gmail_redirect_uri"
+                                    value={settings.gmail_redirect_uri || ''}
+                                    onChange={handleChange}
+                                    placeholder="https://autosqp.co/api/gmail/oauth/callback"
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                                <p className="text-xs text-slate-400 mt-1">
+                                    Debe coincidir exactamente con la URI autorizada en Google Cloud.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-600 mb-1">Refresh Token</label>
+                                <textarea
+                                    rows="3"
+                                    name="gmail_refresh_token"
+                                    value={settings.gmail_refresh_token || ''}
+                                    onChange={handleChange}
+                                    placeholder="1//0g..."
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                                <p className="text-xs text-slate-400 mt-1">
+                                    Es el token recomendado para mantener acceso sin pedir login en cada lectura.
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Remitente a monitorear</label>
+                                    <input
+                                        type="text"
+                                        name="gmail_monitored_sender"
+                                        value={settings.gmail_monitored_sender || ''}
+                                        onChange={handleChange}
+                                        placeholder="cliente@dominio.com"
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    />
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        Opcional. Sirve para enfocar el analisis en un remitente especifico.
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Label de Gmail</label>
+                                    <input
+                                        type="text"
+                                        name="gmail_label"
+                                        value={settings.gmail_label || ''}
+                                        onChange={handleChange}
+                                        placeholder="AutosQP / Analizar"
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    />
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        Opcional. Si luego filtramos por etiqueta, esta sera la referencia.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+                                <p className="font-semibold text-slate-800 mb-2">Variables minimas para Gmail</p>
+                                <ul className="list-disc pl-5 space-y-1">
+                                    <li><span className="font-medium">Client ID</span>: credencial OAuth del proyecto de Google Cloud.</li>
+                                    <li><span className="font-medium">Client Secret</span>: secreto del mismo cliente OAuth.</li>
+                                    <li><span className="font-medium">Redirect URI</span>: URL autorizada para devolver el flujo OAuth.</li>
+                                    <li><span className="font-medium">Refresh Token</span>: token persistente para consultar correos.</li>
+                                    <li><span className="font-medium">Remitente a monitorear</span>: opcional si quieres analizar un correo puntual.</li>
+                                </ul>
                             </div>
                         </div>
                     )}

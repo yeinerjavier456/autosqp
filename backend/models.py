@@ -392,6 +392,15 @@ class IntegrationSettings(Base):
     chatbot_typing_min_ms = Column(Integer, default=7000)
     chatbot_typing_max_ms = Column(Integer, default=18000)
 
+    # Gmail
+    gmail_enabled = Column(Boolean, default=False)
+    gmail_client_id = Column(Text, nullable=True)
+    gmail_client_secret = Column(Text, nullable=True)
+    gmail_redirect_uri = Column(String(500), nullable=True)
+    gmail_refresh_token = Column(Text, nullable=True)
+    gmail_monitored_sender = Column(String(255), nullable=True)
+    gmail_label = Column(String(120), nullable=True)
+
     company = relationship("Company", back_populates="integration_settings")
 
 
