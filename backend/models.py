@@ -452,7 +452,7 @@ class Vehicle(Base):
     tecno = Column(DateTime, nullable=True) # Tecno (Vencimiento)
     internal_code = Column(String(50), nullable=True) # Cod
     location = Column(String(100), nullable=True) # Ubicación
-    description = Column(String(500), nullable=True)
+    description = Column(Text, nullable=True)
     status = Column(String(50), default="available") # available, reserved, sold
     photos = Column(JSON, nullable=True) # List of image URLs
     
