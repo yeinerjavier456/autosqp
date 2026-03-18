@@ -300,6 +300,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
     const [newStatus, setNewStatus] = useState(lead?.status || 'new');
     const [loading, setLoading] = useState(false);
     const [savingSupervisors, setSavingSupervisors] = useState(false);
+    const [isSupervisionSelectorOpen, setIsSupervisionSelectorOpen] = useState(false);
 
     // Process Detail States
     const [hasVehicle, setHasVehicle] = useState(lead?.process_detail?.has_vehicle ?? true);
@@ -331,6 +332,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
     useEffect(() => {
         setAssignedAdvisor(lead?.assigned_to?.id || '');
         setSelectedSupervisors(getLeadSupervisorIds(lead));
+        setIsSupervisionSelectorOpen(false);
     }, [lead?.id, lead?.assigned_to?.id]);
 
     useEffect(() => {
@@ -587,6 +589,14 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
         ? advisors.filter((adv) => getEffectiveRoleName(adv.role) !== 'user')
         : [];
     const selectedSupervisorUsers = supervisorOptions.filter((person) => selectedSupervisors.includes(person.id));
+    const headerLeadName = lead?.name || 'Sin cliente';
+    const headerResponsibleName = lead?.assigned_to?.full_name || lead?.assigned_to?.email || 'Sin responsable';
+    const supervisionSummary = selectedSupervisorUsers.length > 0
+        ? `${selectedSupervisorUsers.length} supervisor(es) seleccionados`
+        : 'Sin supervisores';
+    const supervisionNames = selectedSupervisorUsers.length > 0
+        ? selectedSupervisorUsers.map((person) => person.full_name || person.email).join(', ')
+        : 'Aun no hay personas en supervision para este lead.';
 
     const showReadOnlyWarning = () => {
         Swal.fire('Solo lectura', 'Tienes este lead en supervisión. Puedes verlo, pero solo un administrador puede modificarlo.', 'info');
@@ -769,8 +779,14 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
             <div className="bg-white rounded-2xl p-5 md:p-6 w-[min(97vw,1700px)] shadow-2xl animate-fade-in-up border border-gray-100 h-[96vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-start mb-4 border-b border-gray-100 pb-4 gap-4">
                     <div className="flex-1 min-w-0">
-                        <h2 className="text-xl font-bold text-gray-800">Detalles del Lead</h2>
-                        <p className="text-sm text-gray-500">Cliente: <span className="font-semibold text-blue-600">{lead.name}</span></p>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <h2 className="text-xl font-bold text-gray-800">Detalles del Lead</h2>
+                            <p className="text-sm font-semibold text-slate-600">
+                                <span className="text-blue-600">{headerLeadName}</span>
+                                <span className="mx-2 text-slate-400">-</span>
+                                <span className="text-slate-700">{headerResponsibleName}</span>
+                            </p>
+                        </div>
                         <div className="mt-3 flex flex-wrap gap-2">
                             {lead.phone && (
                                 <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
@@ -794,7 +810,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                             <button
                                 type="button"
                                 onClick={() => setIsLeadHeaderCollapsed((prev) => !prev)}
-                                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+                                className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-100"
                             >
                                 <svg className={`h-4 w-4 transition-transform ${isLeadHeaderCollapsed ? '-rotate-90' : 'rotate-0'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
                                 {isLeadHeaderCollapsed ? 'Expandir cabecera' : 'Colapsar cabecera'}
@@ -943,29 +959,75 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                                         <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Supervision del lead</p>
                                         <span className="text-[11px] text-slate-400">{selectedSupervisors.length} persona(s)</span>
                                     </div>
-                                    <select
-                                        multiple
-                                        value={selectedSupervisors.map(String)}
-                                        disabled={!canManageSupervision}
-                                        onChange={(e) => {
-                                            if (!canManageSupervision) return;
-                                            const values = Array.from(e.target.selectedOptions)
-                                                .map((option) => parseInt(option.value, 10))
-                                                .filter((id) => Number.isInteger(id));
-                                            setSelectedSupervisors(values);
-                                        }}
-                                        className="mt-2 h-36 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                                    >
-                                        {supervisorOptions.map((person) => (
-                                            <option key={person.id} value={person.id}>
-                                                {person.full_name || person.email} - {getDisplayRoleName(person.role)}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <div className="relative mt-2">
+                                        <button
+                                            type="button"
+                                            disabled={!canManageSupervision}
+                                            onClick={() => {
+                                                if (!canManageSupervision) return;
+                                                setIsSupervisionSelectorOpen((prev) => !prev);
+                                            }}
+                                            className="flex w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-left text-sm outline-none transition focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-slate-50"
+                                        >
+                                            <div className="min-w-0">
+                                                <p className="truncate font-semibold text-indigo-600">{supervisionSummary}</p>
+                                                <p className="truncate text-xs text-slate-500">{supervisionNames}</p>
+                                            </div>
+                                            <svg className={`ml-3 h-4 w-4 shrink-0 text-slate-500 transition-transform ${isSupervisionSelectorOpen ? 'rotate-180' : 'rotate-0'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </button>
+                                        {isSupervisionSelectorOpen && canManageSupervision && (
+                                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+                                                <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
+                                                    {supervisorOptions.map((person) => {
+                                                        const personId = Number(person.id);
+                                                        const isSelected = selectedSupervisors.includes(personId);
+                                                        return (
+                                                            <label
+                                                                key={person.id}
+                                                                className={`flex cursor-pointer items-start gap-3 rounded-lg px-3 py-2 text-sm transition ${isSelected ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+                                                            >
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isSelected}
+                                                                    onChange={() => {
+                                                                        setSelectedSupervisors((currentSupervisors) => (
+                                                                            isSelected
+                                                                                ? currentSupervisors.filter((id) => id !== personId)
+                                                                                : [...currentSupervisors, personId]
+                                                                        ));
+                                                                    }}
+                                                                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                                                />
+                                                                <span className="min-w-0">
+                                                                    <span className="block truncate font-semibold text-slate-700">
+                                                                        {person.full_name || person.email}
+                                                                    </span>
+                                                                    <span className="block truncate text-xs text-slate-500">
+                                                                        {getDisplayRoleName(person.role)}
+                                                                    </span>
+                                                                </span>
+                                                            </label>
+                                                        );
+                                                    })}
+                                                </div>
+                                                <div className="mt-2 flex justify-end border-t border-slate-100 pt-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsSupervisionSelectorOpen(false)}
+                                                        className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 transition hover:bg-slate-200"
+                                                    >
+                                                        Listo
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                     <div className="mt-3 flex flex-col gap-3">
                                         <p className="text-xs text-slate-500">
                                             {canManageSupervision
-                                                ? 'Usa Ctrl o Cmd para elegir varias personas o quitalas desde las etiquetas de abajo.'
+                                                ? 'Selecciona las personas desde el selector compacto y luego guarda la supervision.'
                                                 : 'Solo un administrador puede agregar o quitar personas en supervisión.'}
                                         </p>
                                         <button
