@@ -36,6 +36,7 @@ def ensure_role_configuration_columns():
             "is_system": "ALTER TABLE roles ADD COLUMN is_system BOOLEAN NOT NULL DEFAULT 0",
             "base_role_name": "ALTER TABLE roles ADD COLUMN base_role_name VARCHAR(50) NULL",
             "auto_assign_leads": "ALTER TABLE roles ADD COLUMN auto_assign_leads BOOLEAN NOT NULL DEFAULT 0",
+            "assignable_role_ids_json": "ALTER TABLE roles ADD COLUMN assignable_role_ids_json TEXT NULL",
         }
 
         for column_name, ddl in role_columns.items():
@@ -446,6 +447,79 @@ def get_role_permissions(role: Optional[models.Role]) -> List[str]:
     return sanitize_view_ids(parse_json_list(getattr(role, "permissions_json", None), fallback), getattr(role, "company_id", None))
 
 
+def parse_json_int_list(value: Optional[str], fallback: Optional[List[int]] = None) -> List[int]:
+    if not value:
+        return fallback[:] if fallback else []
+    try:
+        parsed = json.loads(value)
+        if isinstance(parsed, list):
+            normalized = []
+            for item in parsed:
+                try:
+                    parsed_id = int(item)
+                except (TypeError, ValueError):
+                    continue
+                if parsed_id not in normalized:
+                    normalized.append(parsed_id)
+            return normalized
+    except Exception:
+        pass
+    return fallback[:] if fallback else []
+
+
+def sanitize_assignable_role_ids(
+    db: Session,
+    role_ids: Optional[List[int]],
+    company_id: Optional[int]
+) -> List[int]:
+    if not role_ids:
+        return []
+
+    normalized_ids = []
+    for role_id in role_ids:
+        try:
+            parsed_id = int(role_id)
+        except (TypeError, ValueError):
+            continue
+        if parsed_id not in normalized_ids:
+            normalized_ids.append(parsed_id)
+
+    if not normalized_ids:
+        return []
+
+    allowed_roles = db.query(models.Role).filter(models.Role.id.in_(normalized_ids))
+    if company_id:
+        allowed_roles = allowed_roles.filter(
+            or_(
+                models.Role.company_id == company_id,
+                and_(models.Role.company_id.is_(None), models.Role.is_system == True)
+            )
+        )
+
+    allowed_ids = {role.id for role in allowed_roles.all()}
+    return [role_id for role_id in normalized_ids if role_id in allowed_ids]
+
+
+def get_role_assignable_role_ids(role: Optional[models.Role]) -> List[int]:
+    if not role:
+        return []
+    return parse_json_int_list(getattr(role, "assignable_role_ids_json", None), [])
+
+
+def can_assign_lead_to_user(
+    current_user: models.User,
+    target_user: Optional[models.User]
+) -> bool:
+    if not target_user or not target_user.role:
+        return False
+
+    configured_role_ids = get_role_assignable_role_ids(getattr(current_user, "role", None))
+    if configured_role_ids:
+        return target_user.role.id in configured_role_ids
+
+    return can_manually_assign_to_any_role(current_user) or is_advisor_role(target_user.role)
+
+
 def get_company_ally_user_ids(db: Session, company_id: Optional[int]) -> List[int]:
     if not company_id:
         return []
@@ -811,6 +885,7 @@ def serialize_role(role: models.Role) -> schemas.Role:
         permissions=permissions,
         menu_order=menu_order,
         auto_assign_leads=bool(getattr(role, "auto_assign_leads", False) or effective_role_name == "asesor"),
+        assignable_role_ids=get_role_assignable_role_ids(role),
         company_id=getattr(role, "company_id", None),
         is_system=bool(getattr(role, "is_system", False)),
         base_role_name=getattr(role, "base_role_name", None)
@@ -1332,6 +1407,7 @@ def create_role(
 
     sanitized_permissions = sanitize_view_ids(role.permissions, current_user.company_id)
     sanitized_menu_order = sanitize_view_ids(role.menu_order, current_user.company_id)
+    sanitized_assignable_role_ids = sanitize_assignable_role_ids(db, role.assignable_role_ids, current_user.company_id)
     for view_id in sanitized_permissions:
         if view_id not in sanitized_menu_order:
             sanitized_menu_order.append(view_id)
@@ -1346,6 +1422,7 @@ def create_role(
         permissions_json=json.dumps(sanitized_permissions),
         menu_order_json=json.dumps(sanitized_menu_order),
         auto_assign_leads=bool(role.auto_assign_leads),
+        assignable_role_ids_json=json.dumps(sanitized_assignable_role_ids),
         is_system=False,
         base_role_name=None
     )
@@ -1372,6 +1449,12 @@ def update_role(
     if current_user.company_id and db_role.is_system and db_role.company_id is None:
         sanitized_permissions = sanitize_view_ids(role_update.permissions, current_user.company_id) if role_update.permissions is not None else sanitize_view_ids(DEFAULT_ROLE_VIEW_ACCESS.get(db_role.name, []), current_user.company_id)
         sanitized_menu_order = sanitize_view_ids(role_update.menu_order, current_user.company_id) if role_update.menu_order is not None else sanitize_view_ids(DEFAULT_ROLE_MENU_ORDER.get(db_role.name, sanitized_permissions), current_user.company_id)
+        current_assignable_role_ids = get_role_assignable_role_ids(db_role)
+        sanitized_assignable_role_ids = sanitize_assignable_role_ids(
+            db,
+            role_update.assignable_role_ids if role_update.assignable_role_ids is not None else current_assignable_role_ids,
+            current_user.company_id
+        )
         for view_id in sanitized_permissions:
             if view_id not in sanitized_menu_order:
                 sanitized_menu_order.append(view_id)
@@ -1385,6 +1468,7 @@ def update_role(
                 permissions_json=json.dumps(sanitized_permissions),
                 menu_order_json=json.dumps(sanitize_view_ids(sanitized_menu_order, current_user.company_id)),
                 auto_assign_leads=bool(role_update.auto_assign_leads if role_update.auto_assign_leads is not None else getattr(db_role, "auto_assign_leads", False)),
+                assignable_role_ids_json=json.dumps(sanitized_assignable_role_ids),
                 is_system=False,
                 base_role_name=db_role.name
             )
@@ -1398,6 +1482,8 @@ def update_role(
             override_role.menu_order_json = json.dumps(sanitize_view_ids(sanitized_menu_order, current_user.company_id))
             if role_update.auto_assign_leads is not None:
                 override_role.auto_assign_leads = bool(role_update.auto_assign_leads)
+            if role_update.assignable_role_ids is not None:
+                override_role.assignable_role_ids_json = json.dumps(sanitized_assignable_role_ids)
             db.commit()
             db.refresh(override_role)
 
@@ -1416,6 +1502,14 @@ def update_role(
         db_role.label = role_update.label.strip()
     if role_update.auto_assign_leads is not None:
         db_role.auto_assign_leads = bool(role_update.auto_assign_leads)
+    if role_update.assignable_role_ids is not None:
+        db_role.assignable_role_ids_json = json.dumps(
+            sanitize_assignable_role_ids(
+                db,
+                role_update.assignable_role_ids,
+                current_user.company_id or db_role.company_id
+            )
+        )
     if role_update.permissions is not None:
         sanitized_permissions = sanitize_view_ids(role_update.permissions, current_user.company_id or db_role.company_id)
         db_role.permissions_json = json.dumps(sanitized_permissions)
@@ -1696,8 +1790,8 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
         target_user = db.query(models.User).join(models.Role, isouter=True).filter(models.User.id == assigned_user_id).first()
         if not target_user or target_user.company_id != company_id:
             raise HTTPException(status_code=400, detail="Invalid assigned user (not in company)")
-        if not can_manually_assign_to_any_role(current_user) and not is_advisor_role(target_user.role):
-            raise HTTPException(status_code=400, detail="Solo se pueden asignar leads a usuarios con rol asesor")
+        if not can_assign_lead_to_user(current_user, target_user):
+            raise HTTPException(status_code=400, detail="Tu rol no tiene permitido reasignar leads a este rol")
     
     effective_status = enforce_ally_managed_status(
         db=db,
@@ -3079,8 +3173,8 @@ def update_lead(
             ).first()
             if not target_user or target_user.company_id != lead.company_id:
                 raise HTTPException(status_code=400, detail="Invalid assigned user (not in company)")
-            if not can_manually_assign_to_any_role(current_user) and not is_advisor_role(target_user.role):
-                raise HTTPException(status_code=400, detail="Solo se pueden asignar leads a usuarios con rol asesor")
+            if not can_assign_lead_to_user(current_user, target_user):
+                raise HTTPException(status_code=400, detail="Tu rol no tiene permitido reasignar leads a este rol")
             target_assigned_user = target_user
         else:
             target_assigned_user = None

@@ -206,6 +206,15 @@ const getLeadSupervisorUsers = (lead) => (
     Array.isArray(lead?.supervisors) ? lead.supervisors.filter(Boolean) : []
 );
 
+const getAssignableRoleIds = (role) => {
+    if (!role || typeof role !== 'object' || !Array.isArray(role.assignable_role_ids)) {
+        return [];
+    }
+    return role.assignable_role_ids
+        .map((id) => parseInt(id, 10))
+        .filter((id) => Number.isInteger(id));
+};
+
 const parseUserId = (value) => {
     const parsedValue = parseInt(value, 10);
     return Number.isInteger(parsedValue) ? parsedValue : null;
@@ -545,6 +554,8 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
 
     const normalizedCurrentUserRole = normalizeRoleKey(user?.role) || normalizeRoleKey(currentUserRole);
     const canAssignToAnyRole = normalizedCurrentUserRole === 'admin' || normalizedCurrentUserRole === 'super_admin' || normalizedCurrentUserRole === 'aliado';
+    const configuredAssignableRoleIds = getAssignableRoleIds(user?.role);
+    const hasConfiguredAssignableRoles = configuredAssignableRoleIds.length > 0;
     const isCompanyAdmin = normalizedCurrentUserRole === 'admin' || normalizedCurrentUserRole === 'super_admin';
     const currentUserId = user?.id ? parseInt(user.id, 10) : null;
     const leadSupervisorIds = getLeadSupervisorIds(lead);
@@ -554,6 +565,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
     const canManageSupervision = isCompanyAdmin;
     const assignableUsers = Array.isArray(advisors)
         ? advisors.filter((adv) => {
+            const advisorRoleId = parseUserId(adv?.role?.id);
+            if (hasConfiguredAssignableRoles) {
+                return advisorRoleId !== null && configuredAssignableRoleIds.includes(advisorRoleId);
+            }
             const roleName = getEffectiveRoleName(adv.role);
             if (canAssignToAnyRole && boardMode === 'ally') {
                 return roleName !== 'user';

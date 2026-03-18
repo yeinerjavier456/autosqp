@@ -22,7 +22,8 @@ const RolesConfig = () => {
         label: '',
         permissions: [],
         menu_order: [],
-        auto_assign_leads: false
+        auto_assign_leads: false,
+        assignable_role_ids: []
     });
 
     const selectedRole = useMemo(
@@ -97,16 +98,22 @@ const RolesConfig = () => {
 
     useEffect(() => {
         if (!selectedRole) {
-            setForm({ label: '', permissions: [], menu_order: [], auto_assign_leads: false });
+            setForm({ label: '', permissions: [], menu_order: [], auto_assign_leads: false, assignable_role_ids: [] });
             return;
         }
         setForm({
             label: selectedRole.label || '',
             permissions: Array.isArray(selectedRole.permissions) ? selectedRole.permissions : [],
             menu_order: Array.isArray(selectedRole.menu_order) ? selectedRole.menu_order : [],
-            auto_assign_leads: Boolean(selectedRole.auto_assign_leads)
+            auto_assign_leads: Boolean(selectedRole.auto_assign_leads),
+            assignable_role_ids: Array.isArray(selectedRole.assignable_role_ids) ? selectedRole.assignable_role_ids.map((id) => Number(id)).filter((id) => Number.isInteger(id)) : []
         });
     }, [selectedRole]);
+
+    const roleOptionsForAssignment = useMemo(
+        () => roles.filter((role) => role.id !== selectedRoleId),
+        [roles, selectedRoleId]
+    );
 
     const syncMenuOrder = (permissions, currentOrder) => {
         const nextOrder = currentOrder.filter((viewId) => permissions.includes(viewId));
@@ -143,7 +150,7 @@ const RolesConfig = () => {
 
     const handleNewRole = () => {
         setSelectedRoleId(null);
-        setForm({ label: '', permissions: [], menu_order: [], auto_assign_leads: false });
+        setForm({ label: '', permissions: [], menu_order: [], auto_assign_leads: false, assignable_role_ids: [] });
     };
 
     const handleSave = async (e) => {
@@ -160,7 +167,8 @@ const RolesConfig = () => {
                 label: form.label.trim(),
                 permissions: form.permissions,
                 menu_order: syncMenuOrder(form.permissions, form.menu_order),
-                auto_assign_leads: Boolean(form.auto_assign_leads)
+                auto_assign_leads: Boolean(form.auto_assign_leads),
+                assignable_role_ids: form.assignable_role_ids
             };
 
             if (selectedRoleId) {
@@ -290,6 +298,35 @@ const RolesConfig = () => {
                                     </p>
                                 </div>
                             </label>
+                        </div>
+
+                        <div>
+                            <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500 mb-3">Reasignacion de leads</h3>
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-800 mb-2">Roles a los que puede reasignar leads</label>
+                                    <select
+                                        multiple
+                                        value={form.assignable_role_ids.map(String)}
+                                        onChange={(e) => setForm((prev) => ({
+                                            ...prev,
+                                            assignable_role_ids: Array.from(e.target.selectedOptions)
+                                                .map((option) => Number(option.value))
+                                                .filter((id) => Number.isInteger(id))
+                                        }))}
+                                        className="h-40 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    >
+                                        {roleOptionsForAssignment.map((role) => (
+                                            <option key={role.id} value={role.id}>
+                                                {role.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                    Lo que selecciones aqui sera lo que aparezca en la lista de usuarios al reasignar un lead para las personas que tengan este rol.
+                                </p>
+                            </div>
                         </div>
 
                         <div>
