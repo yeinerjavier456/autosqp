@@ -24,6 +24,9 @@ const IntegrationsConfig = () => {
     const [loading, setLoading] = useState(true);
     const [uploadFile, setUploadFile] = useState(null);
     const [uploading, setUploading] = useState(false);
+    const [gmailConnecting, setGmailConnecting] = useState(false);
+    const [gmailTesting, setGmailTesting] = useState(false);
+    const [gmailPreview, setGmailPreview] = useState([]);
 
     // Initial state matching backend schema
     const [settings, setSettings] = useState({
@@ -71,6 +74,19 @@ const IntegrationsConfig = () => {
             fetchSettings();
         }
     }, [user]);
+
+    useEffect(() => {
+        const handleMessage = (event) => {
+            if (event?.data?.type === 'gmail-connected') {
+                setStatus({ type: 'success', message: 'Gmail conectado correctamente. Ya puedes probar la lectura.' });
+                setGmailConnecting(false);
+                setTimeout(() => setStatus({ type: '', message: '' }), 4000);
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, []);
 
     const handleChange = (e) => {
         const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
@@ -135,6 +151,61 @@ const IntegrationsConfig = () => {
         } finally {
             setUploading(false);
             setUploadFile(null);
+        }
+    };
+
+    const handleConnectGmail = async () => {
+        if (!user?.company_id) return;
+        setGmailConnecting(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.get(
+                `https://autosqp.co/api/gmail/oauth/start`,
+                {
+                    params: { company_id: user.company_id },
+                    headers: { Authorization: `Bearer ${token}` }
+                }
+            );
+
+            const authUrl = response.data?.authorization_url;
+            if (!authUrl) {
+                throw new Error('No se pudo generar la URL de autorizacion');
+            }
+
+            const popup = window.open(authUrl, 'gmail-oauth', 'width=720,height=760');
+            if (!popup) {
+                throw new Error('El navegador bloqueo la ventana emergente');
+            }
+
+            setStatus({ type: 'success', message: 'Se abrio la ventana de Google para conectar Gmail.' });
+        } catch (error) {
+            console.error(error);
+            setStatus({ type: 'error', message: error.response?.data?.detail || error.message || 'No se pudo iniciar la conexion con Gmail.' });
+            setGmailConnecting(false);
+        }
+    };
+
+    const handleTestGmail = async () => {
+        if (!user?.company_id) return;
+        setGmailTesting(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.get(
+                `https://autosqp.co/api/gmail/messages/preview`,
+                {
+                    params: { company_id: user.company_id, max_results: 10 },
+                    headers: { Authorization: `Bearer ${token}` }
+                }
+            );
+            setGmailPreview(response.data?.items || []);
+            setStatus({ type: 'success', message: `Lectura Gmail correcta. ${response.data?.items?.length || 0} correo(s) encontrados.` });
+            setTimeout(() => setStatus({ type: '', message: '' }), 4000);
+        } catch (error) {
+            console.error(error);
+            setGmailPreview([]);
+            setStatus({ type: 'error', message: error.response?.data?.detail || 'No se pudo leer Gmail con esta configuracion.' });
+        } finally {
+            setGmailTesting(false);
         }
     };
 
@@ -458,6 +529,53 @@ const IntegrationsConfig = () => {
                                     <li><span className="font-medium">Refresh Token</span>: token persistente para consultar correos.</li>
                                     <li><span className="font-medium">Remitente a monitorear</span>: opcional si quieres analizar un correo puntual.</li>
                                 </ul>
+                            </div>
+
+                            <div className="flex flex-wrap gap-3">
+                                <button
+                                    type="button"
+                                    onClick={handleConnectGmail}
+                                    disabled={gmailConnecting}
+                                    className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-xl shadow-md transition-all disabled:opacity-60"
+                                >
+                                    {gmailConnecting ? 'Abriendo Google...' : 'Conectar Gmail con Google'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleTestGmail}
+                                    disabled={gmailTesting}
+                                    className="bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 px-6 rounded-xl shadow-md transition-all disabled:opacity-60"
+                                >
+                                    {gmailTesting ? 'Leyendo correos...' : 'Probar lectura'}
+                                </button>
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+                                <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-slate-800">Vista previa de correos</h3>
+                                        <p className="text-xs text-slate-500">Se filtra con el remitente y/o label que configuraste arriba.</p>
+                                    </div>
+                                    <span className="text-xs font-semibold text-slate-500">{gmailPreview.length} correo(s)</span>
+                                </div>
+                                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                                    {gmailPreview.length === 0 ? (
+                                        <div className="px-4 py-6 text-sm text-slate-500">
+                                            Aun no hay correos cargados. Guarda la configuracion, conecta Gmail y luego usa "Probar lectura".
+                                        </div>
+                                    ) : gmailPreview.map((mail) => (
+                                        <div key={mail.id} className="px-4 py-4">
+                                            <div className="flex flex-wrap items-start justify-between gap-2">
+                                                <div>
+                                                    <p className="font-semibold text-slate-800">{mail.subject || 'Sin asunto'}</p>
+                                                    <p className="text-sm text-slate-500">{mail.from || 'Remitente sin nombre'}</p>
+                                                </div>
+                                                <span className="text-xs text-slate-400">{mail.date || ''}</span>
+                                            </div>
+                                            <p className="mt-2 text-sm text-slate-600">{mail.snippet || 'Sin resumen disponible.'}</p>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     )}

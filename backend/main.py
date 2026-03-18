@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, get_db
 import models, schemas, auth_utils
 from models import LeadNote, LeadFile # Explicitly for create_all to see them
-from routers import whatsapp, credits, purchases, notifications, rules, vehicles, meta, tiktok # Import the new routers
+from routers import whatsapp, credits, purchases, notifications, rules, vehicles, meta, tiktok, gmail # Import the new routers
 from jose import JWTError, jwt
 import datetime
 import os
@@ -296,6 +296,7 @@ app.include_router(rules.router)
 app.include_router(vehicles.router)
 app.include_router(meta.router)
 app.include_router(tiktok.router)
+app.include_router(gmail.router)
 
 
 # Configure CORS
