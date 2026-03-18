@@ -14,7 +14,6 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from jose import JWTError, jwt
-from pypdf import PdfReader
 from sqlalchemy.orm import Session
 
 import auth_utils
@@ -177,6 +176,7 @@ def _extract_pdf_text(pdf_bytes: bytes) -> str:
     if not pdf_bytes:
         return ""
     try:
+        from pypdf import PdfReader
         reader = PdfReader(BytesIO(pdf_bytes))
         pages_text = []
         for page in reader.pages:
