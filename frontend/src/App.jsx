@@ -28,6 +28,7 @@ import InstagramLeads from './pages/leads/InstagramLeads';
 import Reports from './pages/Reports';
 import WhatsAppDashboard from './pages/WhatsAppDashboard';
 import CreditBoard from './pages/CreditBoard';
+import GmailCreditAudit from './pages/GmailCreditAudit';
 import PurchaseBoard from './pages/PurchaseBoard';
 import InternalChat from './pages/InternalChat';
 import SystemLogs from './pages/SystemLogs';
@@ -140,6 +141,10 @@ function App() {
 
               <Route element={<PrivateRoute requiredView="credits" />}>
                 <Route path="/admin/credits" element={<CreditBoard />} />
+              </Route>
+
+              <Route element={<PrivateRoute requiredView="gmail_credit_audit" />}>
+                <Route path="/admin/gmail-credit-audit" element={<GmailCreditAudit />} />
               </Route>
 
               <Route element={<PrivateRoute requiredView="purchase_board" />}>

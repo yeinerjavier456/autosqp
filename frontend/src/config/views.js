@@ -12,6 +12,7 @@ export const SYSTEM_VIEWS = [
     { id: 'sales', label: 'Finanzas y ventas', path: '/admin/sales', menuLabel: 'Finanzas y Ventas', section: 'crm', scope: 'company' },
     { id: 'my_sales', label: 'Mis ventas', path: '/admin/my-sales', menuLabel: 'Mis Ventas', section: 'crm', scope: 'company' },
     { id: 'credits', label: 'Tablero de solicitudes de credito', path: '/admin/credits', menuLabel: 'Solicitudes de Credito', section: 'crm', scope: 'company' },
+    { id: 'gmail_credit_audit', label: 'Correos verificados de credito', path: '/admin/gmail-credit-audit', menuLabel: 'Correos de Credito', section: 'crm', scope: 'company' },
     { id: 'purchase_board', label: 'Tablero de compras y busquedas', path: '/admin/purchases', menuLabel: 'Solicitudes de Compra', section: 'crm', scope: 'company' },
     { id: 'facebook_leads', label: 'Facebook leads', path: '/admin/leads/facebook', menuLabel: 'Facebook Leads', section: 'channels', scope: 'company' },
     { id: 'tiktok_leads', label: 'TikTok leads', path: '/admin/leads/tiktok', menuLabel: 'TikTok Leads', section: 'channels', scope: 'company' },
@@ -39,14 +40,15 @@ export const DEFAULT_ROLE_VIEW_ACCESS = {
     admin: [
         'dashboard', 'users', 'roles', 'integrations', 'logs', 'inventory',
         'leads_board', 'ally_board', 'alerts', 'sales', 'credits', 'purchase_board',
+        'gmail_credit_audit',
         'facebook_leads', 'tiktok_leads', 'whatsapp_leads', 'instagram_leads',
         'internal_chat', 'whatsapp_dashboard'
     ],
     asesor: [
-        'dashboard', 'inventory', 'leads_board', 'my_sales', 'credits', 'internal_chat'
+        'dashboard', 'inventory', 'leads_board', 'my_sales', 'credits', 'gmail_credit_audit', 'internal_chat'
     ],
     aliado: [
-        'dashboard', 'ally_board', 'credits', 'internal_chat', 'inventory'
+        'dashboard', 'ally_board', 'credits', 'gmail_credit_audit', 'internal_chat', 'inventory'
     ],
     inventario: [
         'inventory', 'internal_chat'

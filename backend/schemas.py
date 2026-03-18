@@ -211,6 +211,26 @@ class IntegrationSettings(IntegrationSettingsBase):
     company_id: int
     model_config = ConfigDict(from_attributes=True)
 
+
+class GmailProcessedMessageItem(BaseModel):
+    id: int
+    company_id: int
+    gmail_message_id: str
+    gmail_thread_id: Optional[str] = None
+    lead_id: Optional[int] = None
+    credit_application_id: Optional[int] = None
+    sender: Optional[str] = None
+    subject: Optional[str] = None
+    summary: Optional[str] = None
+    processed_at: datetime
+    lead_name: Optional[str] = None
+    credit_client_name: Optional[str] = None
+
+
+class GmailProcessedMessageList(BaseModel):
+    items: List[GmailProcessedMessageItem]
+    total: int
+
 # --- MESSAGES & CONVERSATIONS ---
 
 class MessageBase(BaseModel):

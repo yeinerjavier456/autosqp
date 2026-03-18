@@ -14,10 +14,11 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from jose import JWTError, jwt
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 import auth_utils
 import models
+import schemas
 from database import get_db
 from dependencies import get_current_user, get_effective_role_name
 
@@ -656,3 +657,52 @@ def analyze_credit_related_emails(
         "gmail_sync_max_results": effective_max_results,
         "force_reprocess": force_reprocess,
     }
+
+
+@router.get("/credits/processed", response_model=schemas.GmailProcessedMessageList)
+def list_processed_credit_emails(
+    company_id: int = Query(...),
+    q: Optional[str] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    _ensure_company_admin_access(current_user, company_id)
+
+    query = db.query(models.GmailProcessedMessage).options(
+        joinedload(models.GmailProcessedMessage.lead),
+        joinedload(models.GmailProcessedMessage.credit_application),
+    ).filter(
+        models.GmailProcessedMessage.company_id == company_id
+    )
+
+    if q:
+        normalized_q = f"%{q.strip()}%"
+        query = query.filter(
+            (models.GmailProcessedMessage.sender.ilike(normalized_q)) |
+            (models.GmailProcessedMessage.subject.ilike(normalized_q)) |
+            (models.GmailProcessedMessage.summary.ilike(normalized_q))
+        )
+
+    total = query.count()
+    rows = query.order_by(models.GmailProcessedMessage.processed_at.desc()).offset(skip).limit(limit).all()
+
+    items = []
+    for row in rows:
+        items.append({
+            "id": row.id,
+            "company_id": row.company_id,
+            "gmail_message_id": row.gmail_message_id,
+            "gmail_thread_id": row.gmail_thread_id,
+            "lead_id": row.lead_id,
+            "credit_application_id": row.credit_application_id,
+            "sender": row.sender,
+            "subject": row.subject,
+            "summary": row.summary,
+            "processed_at": row.processed_at,
+            "lead_name": row.lead.name if row.lead else None,
+            "credit_client_name": row.credit_application.client_name if row.credit_application else None,
+        })
+
+    return {"items": items, "total": total}
