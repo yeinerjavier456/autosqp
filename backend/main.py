@@ -912,6 +912,50 @@ def sanitize_view_ids(view_ids: Optional[List[str]], company_id: Optional[int] =
     return sanitized
 
 
+def ensure_role_view_defaults_synced():
+    """
+    Keep existing admin/super-admin roles aligned with newly introduced views.
+    """
+    try:
+        with Session(engine) as db:
+            roles = db.query(models.Role).all()
+            updated = False
+
+            for role in roles:
+                effective_role_name = getattr(role, "base_role_name", None) or getattr(role, "name", None)
+                if effective_role_name not in {"admin", "super_admin"}:
+                    continue
+
+                default_permissions = DEFAULT_ROLE_VIEW_ACCESS.get(effective_role_name, [])
+                permissions = sanitize_view_ids(
+                    parse_json_list(getattr(role, "permissions_json", None), default_permissions),
+                    getattr(role, "company_id", None)
+                )
+                menu_order = sanitize_view_ids(
+                    parse_json_list(getattr(role, "menu_order_json", None), DEFAULT_ROLE_MENU_ORDER.get(effective_role_name, permissions)),
+                    getattr(role, "company_id", None)
+                )
+
+                role_changed = False
+                for view_id in default_permissions:
+                    if view_id not in permissions:
+                        permissions.append(view_id)
+                        role_changed = True
+                    if view_id not in menu_order:
+                        menu_order.append(view_id)
+                        role_changed = True
+
+                if role_changed:
+                    role.permissions_json = json.dumps(permissions)
+                    role.menu_order_json = json.dumps(menu_order)
+                    updated = True
+
+            if updated:
+                db.commit()
+    except Exception as exc:
+        print(f"Warning: could not sync role view defaults: {exc}", flush=True)
+
+
 def serialize_role(role: models.Role) -> schemas.Role:
     default_permissions = DEFAULT_ROLE_VIEW_ACCESS.get(role.name, [])
     permissions = sanitize_view_ids(parse_json_list(getattr(role, "permissions_json", None), default_permissions), getattr(role, "company_id", None))
@@ -940,6 +984,9 @@ def ensure_role_management_permissions(current_user: models.User):
     role_name = current_user.role.name if current_user.role else ""
     if role_name not in {"admin", "super_admin"}:
         raise HTTPException(status_code=403, detail="Not authorized")
+
+
+ensure_role_view_defaults_synced()
 
 
 def get_company_role_override(db: Session, company_id: Optional[int], base_role_name: Optional[str]) -> Optional[models.Role]:
