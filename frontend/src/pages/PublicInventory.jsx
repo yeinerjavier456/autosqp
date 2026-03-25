@@ -20,7 +20,8 @@ const PublicInventory = () => {
         model: '',
         mileage_min: '',
         mileage_max: '',
-        color: ''
+        color: '',
+        sort_by: ''
     });
 
     const [showFilters, setShowFilters] = useState(false); // Mobile toggle
@@ -61,6 +62,7 @@ const PublicInventory = () => {
             if (filters.mileage_min) params.mileage_min = filters.mileage_min;
             if (filters.mileage_max) params.mileage_max = filters.mileage_max;
             if (filters.color) params.color = filters.color;
+            if (filters.sort_by) params.sort_by = filters.sort_by;
 
             const res = await axios.get('https://autosqp.co/api/vehicles/public', { params });
             setVehicles(res.data);
@@ -160,6 +162,7 @@ const PublicInventory = () => {
                                     placeholder="Mín"
                                     className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                                     onChange={handleFilterChange}
+                                    value={filters.price_min}
                                 />
                                 <span className="text-slate-500">-</span>
                                 <input
@@ -168,8 +171,25 @@ const PublicInventory = () => {
                                     placeholder="Máx"
                                     className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                                     onChange={handleFilterChange}
+                                    value={filters.price_max}
                                 />
                             </div>
+                        </div>
+
+                        <div className="mb-6">
+                            <h4 className="font-semibold text-sm mb-2 text-slate-300">Ordenar por</h4>
+                            <select
+                                name="sort_by"
+                                className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                onChange={handleFilterChange}
+                                value={filters.sort_by}
+                            >
+                                <option value="">Más recientes</option>
+                                <option value="price_desc">Precio: mayor a menor</option>
+                                <option value="price_asc">Precio: menor a mayor</option>
+                                <option value="mileage_desc">Kilometraje: mayor a menor</option>
+                                <option value="mileage_asc">Kilometraje: menor a mayor</option>
+                            </select>
                         </div>
 
                         {/* Brand Filter */}
@@ -271,7 +291,8 @@ const PublicInventory = () => {
                                 price_max: '',
                                 mileage_min: '',
                                 mileage_max: '',
-                                color: ''
+                                color: '',
+                                sort_by: ''
                             })}
                             className="text-blue-400 text-sm font-medium hover:text-blue-300 w-full text-center transition-colors pb-10"
                         >
@@ -296,13 +317,27 @@ const PublicInventory = () => {
                             {filters.make ? `${filters.make}` : 'Carros y Camionetas'}
                             <span className="text-gray-500 font-normal text-base ml-2 bg-white px-2 py-1 rounded-full shadow-sm">{vehicles.length} resultados</span>
                         </h1>
-                        <button
-                            className="md:hidden flex items-center gap-2 text-slate-700 font-bold bg-white px-4 py-2 rounded-lg shadow-sm"
-                            onClick={() => setShowFilters(!showFilters)}
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
-                            Filtros
-                        </button>
+                        <div className="flex items-center gap-3">
+                            <select
+                                name="sort_by"
+                                value={filters.sort_by}
+                                onChange={handleFilterChange}
+                                className="hidden md:block rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                            >
+                                <option value="">Más recientes</option>
+                                <option value="price_desc">Precio: mayor a menor</option>
+                                <option value="price_asc">Precio: menor a mayor</option>
+                                <option value="mileage_desc">Kilometraje: mayor a menor</option>
+                                <option value="mileage_asc">Kilometraje: menor a mayor</option>
+                            </select>
+                            <button
+                                className="md:hidden flex items-center gap-2 text-slate-700 font-bold bg-white px-4 py-2 rounded-lg shadow-sm"
+                                onClick={() => setShowFilters(!showFilters)}
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
+                                Filtros
+                            </button>
+                        </div>
                     </div >
 
                     {/* Grid */}

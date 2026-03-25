@@ -79,6 +79,7 @@ def get_public_vehicles(
     mileage_min: Optional[int] = None,
     mileage_max: Optional[int] = None,
     color: Optional[str] = None,
+    sort_by: Optional[str] = None,
     company_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
@@ -91,7 +92,7 @@ def get_public_vehicles(
             models.Vehicle.status == "available",
             models.Vehicle.status == "sold"
         )
-    ).order_by(models.Vehicle.status.asc()) # 'available' comes before 'sold' alphabetically
+    )
 
     if company_id:
         query = query.filter(models.Vehicle.company_id == company_id)
@@ -133,7 +134,19 @@ def get_public_vehicles(
     if color:
         query = query.filter(models.Vehicle.color.ilike(f"%{color}%"))
 
-    return query.order_by(models.Vehicle.created_at.desc() if hasattr(models.Vehicle, 'created_at') else models.Vehicle.id.desc()).offset(skip).limit(limit).all()
+    if sort_by == "price_desc":
+        query = query.order_by(models.Vehicle.price.desc(), models.Vehicle.id.desc())
+    elif sort_by == "price_asc":
+        query = query.order_by(models.Vehicle.price.asc(), models.Vehicle.id.desc())
+    elif sort_by == "mileage_desc":
+        query = query.order_by(models.Vehicle.mileage.desc(), models.Vehicle.id.desc())
+    elif sort_by == "mileage_asc":
+        query = query.order_by(models.Vehicle.mileage.asc(), models.Vehicle.id.desc())
+    else:
+        query = query.order_by(models.Vehicle.status.asc())
+        query = query.order_by(models.Vehicle.created_at.desc() if hasattr(models.Vehicle, 'created_at') else models.Vehicle.id.desc())
+
+    return query.offset(skip).limit(limit).all()
 
 @router.get("/public/{vehicle_id}", response_model=schemas.Vehicle)
 def get_public_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
