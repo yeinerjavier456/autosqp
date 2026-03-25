@@ -8,6 +8,7 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     const login = async (token) => {
+        setLoading(true);
         localStorage.setItem('token', token);
         return await fetchUser();
     };
@@ -25,8 +26,10 @@ export const AuthProvider = ({ children }) => {
         }
 
         try {
+            setLoading(true);
             const response = await axios.get('https://autosqp.co/api/users/me', {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
+                timeout: 15000
             });
             setUser(response.data);
             return response.data;

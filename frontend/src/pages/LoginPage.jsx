@@ -8,12 +8,14 @@ const LoginPage = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [submitting, setSubmitting] = useState(false);
     const navigate = useNavigate();
     const { login } = useAuth();
 
     const handleLogin = async (e) => {
         e.preventDefault();
         setError('');
+        setSubmitting(true);
 
         try {
             const formData = new URLSearchParams();
@@ -23,30 +25,42 @@ const LoginPage = () => {
             const response = await axios.post('https://autosqp.co/api/token', formData, {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
-                }
+                },
+                timeout: 15000
             });
 
             // Use context login which sets token and fetches user
             const loggedUser = await login(response.data.access_token);
+            if (!loggedUser) {
+                throw new Error('No se pudo cargar la sesion del usuario despues de autenticar.');
+            }
 
             const roleName = getRoleName(loggedUser);
             const orderedViews = getOrderedMenuViews(loggedUser);
+            const destination = hasViewAccess(loggedUser, 'dashboard')
+                ? '/admin/dashboard'
+                : orderedViews.length > 0
+                    ? orderedViews[0].path
+                    : roleName === 'inventario'
+                        ? '/admin/inventory'
+                        : roleName === 'compras'
+                            ? '/admin/purchases'
+                            : '/autos';
 
-            if (hasViewAccess(loggedUser, 'dashboard')) {
-                navigate('/admin/dashboard');
-            } else if (orderedViews.length > 0) {
-                navigate(orderedViews[0].path);
-            } else if (roleName === 'inventario') {
-                navigate('/admin/inventory');
-            } else if (roleName === 'compras') {
-                navigate('/admin/purchases');
-            } else {
-                navigate('/autos');
-            }
+            navigate(destination, { replace: true });
 
         } catch (err) {
             console.error(err);
-            setError('Credenciales inválidas. Por favor intenta de nuevo.');
+            const statusCode = err?.response?.status;
+            if (statusCode === 401) {
+                setError('Credenciales invalidas. Por favor intenta de nuevo.');
+            } else if (err?.code === 'ECONNABORTED') {
+                setError('La solicitud de inicio de sesion tardo demasiado. Intenta nuevamente.');
+            } else {
+                setError(err?.response?.data?.detail || 'No se pudo iniciar sesion. Revisa si el backend esta respondiendo correctamente.');
+            }
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -90,9 +104,10 @@ const LoginPage = () => {
 
                     <button
                         type="submit"
-                        className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition shadow-lg"
+                        disabled={submitting}
+                        className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-lg transition shadow-lg"
                     >
-                        Ingresar
+                        {submitting ? 'Ingresando...' : 'Ingresar'}
                     </button>
                 </form>
             </div>
