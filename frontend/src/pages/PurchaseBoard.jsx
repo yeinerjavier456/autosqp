@@ -75,6 +75,15 @@ const PurchaseBoard = () => {
     const [purchaseLeadNotes, setPurchaseLeadNotes] = useState([]);
     const [purchaseLeadFiles, setPurchaseLeadFiles] = useState([]);
     const [purchaseOptions, setPurchaseOptions] = useState([]);
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [creatingManualPurchase, setCreatingManualPurchase] = useState(false);
+    const [manualPurchaseForm, setManualPurchaseForm] = useState({
+        client_name: '',
+        phone: '',
+        email: '',
+        desired_vehicle: '',
+        notes: ''
+    });
     const [purchaseNoteInput, setPurchaseNoteInput] = useState('');
     const [purchaseSelectedFiles, setPurchaseSelectedFiles] = useState([]);
     const [optionTitle, setOptionTitle] = useState('');
@@ -227,6 +236,52 @@ const PurchaseBoard = () => {
         }
     };
 
+    const handleCreateManualPurchase = async (e) => {
+        e.preventDefault();
+        if (!manualPurchaseForm.client_name.trim() || !manualPurchaseForm.phone.trim() || !manualPurchaseForm.desired_vehicle.trim()) {
+            Swal.fire('Error', 'Nombre, teléfono y vehículo buscado son obligatorios', 'warning');
+            return;
+        }
+
+        setCreatingManualPurchase(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post(
+                'https://autosqp.co/api/purchases/manual',
+                {
+                    client_name: manualPurchaseForm.client_name.trim(),
+                    phone: manualPurchaseForm.phone.trim(),
+                    email: manualPurchaseForm.email.trim(),
+                    desired_vehicle: manualPurchaseForm.desired_vehicle.trim(),
+                    notes: manualPurchaseForm.notes.trim()
+                },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            const createdPurchase = {
+                ...response.data,
+                status: VALID_PURCHASE_STATUSES.includes(response.data?.status) ? response.data.status : 'pending'
+            };
+            setPurchases((prev) => [createdPurchase, ...prev]);
+            setSelectedPurchase(createdPurchase);
+            setShowCreateModal(false);
+            setManualPurchaseForm({
+                client_name: '',
+                phone: '',
+                email: '',
+                desired_vehicle: '',
+                notes: ''
+            });
+            await fetchPurchases();
+            Swal.fire('Éxito', 'Solicitud de compra creada correctamente', 'success');
+        } catch (error) {
+            console.error('Error creating manual purchase request', error);
+            Swal.fire('Error', getApiErrorMessage(error, 'No se pudo crear la solicitud manual'), 'error');
+        } finally {
+            setCreatingManualPurchase(false);
+        }
+    };
+
     const handlePurchaseNoteSubmit = async () => {
         if (!selectedPurchase?.id || !purchaseNoteInput.trim()) return;
         setSavingPurchaseNote(true);
@@ -370,15 +425,26 @@ const PurchaseBoard = () => {
                     <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Gestión de Compras y Búsquedas</h1>
                     <p className="text-slate-500 mt-1 font-medium">Administra los vehículos que los clientes están buscando cuando no están en inventario.</p>
                 </div>
-                <button
-                    onClick={handleSyncPurchases}
-                    className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100"
-                >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v6h6M20 20v-6h-6M5.64 18.36A9 9 0 0018.36 18.36M18.36 5.64A9 9 0 005.64 5.64" />
-                    </svg>
-                    Traer solicitudes de compra
-                </button>
+                <div className="flex flex-wrap gap-3">
+                    <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 transition hover:bg-blue-100"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        Nueva solicitud manual
+                    </button>
+                    <button
+                        onClick={handleSyncPurchases}
+                        className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v6h6M20 20v-6h-6M5.64 18.36A9 9 0 0018.36 18.36M18.36 5.64A9 9 0 005.64 5.64" />
+                        </svg>
+                        Traer solicitudes de compra
+                    </button>
+                </div>
             </div>
 
             <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -641,6 +707,91 @@ const PurchaseBoard = () => {
                                 Cerrar
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {showCreateModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowCreateModal(false)}>
+                    <div className="w-full max-w-2xl rounded-2xl border border-slate-100 bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="mb-6 flex items-start justify-between gap-4">
+                            <div>
+                                <h2 className="text-2xl font-bold text-slate-800">Nueva solicitud de compra</h2>
+                                <p className="mt-1 text-sm text-slate-500">Crea una búsqueda manual desde compras y quedará ligada a un lead interno.</p>
+                            </div>
+                            <button onClick={() => setShowCreateModal(false)} className="text-2xl text-slate-400 hover:text-slate-600">&times;</button>
+                        </div>
+
+                        <form onSubmit={handleCreateManualPurchase} className="space-y-4">
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                <div>
+                                    <label className="mb-1 block text-sm font-bold text-slate-700">Nombre del cliente</label>
+                                    <input
+                                        type="text"
+                                        className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                        value={manualPurchaseForm.client_name}
+                                        onChange={(e) => setManualPurchaseForm((prev) => ({ ...prev, client_name: e.target.value }))}
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-sm font-bold text-slate-700">Teléfono</label>
+                                    <input
+                                        type="text"
+                                        className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                        value={manualPurchaseForm.phone}
+                                        onChange={(e) => setManualPurchaseForm((prev) => ({ ...prev, phone: e.target.value }))}
+                                        required
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-sm font-bold text-slate-700">Email</label>
+                                <input
+                                    type="email"
+                                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                    value={manualPurchaseForm.email}
+                                    onChange={(e) => setManualPurchaseForm((prev) => ({ ...prev, email: e.target.value }))}
+                                />
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-sm font-bold text-slate-700">Vehículo buscado</label>
+                                <input
+                                    type="text"
+                                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Ej: Mazda CX-30 Touring 2023 gris"
+                                    value={manualPurchaseForm.desired_vehicle}
+                                    onChange={(e) => setManualPurchaseForm((prev) => ({ ...prev, desired_vehicle: e.target.value }))}
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-sm font-bold text-slate-700">Notas iniciales</label>
+                                <textarea
+                                    rows="4"
+                                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Escribe contexto, presupuesto, ciudad o cualquier dato útil para la búsqueda..."
+                                    value={manualPurchaseForm.notes}
+                                    onChange={(e) => setManualPurchaseForm((prev) => ({ ...prev, notes: e.target.value }))}
+                                />
+                            </div>
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCreateModal(false)}
+                                    className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={creatingManualPurchase}
+                                    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                                >
+                                    {creatingManualPurchase ? 'Creando...' : 'Crear solicitud'}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

@@ -111,6 +111,13 @@ def _choose_purchase_manager(db: Session, company_id: int) -> Optional[models.Us
         return None
     return random.choice(candidates)
 
+
+def _can_manage_purchase_board(current_user: models.User) -> bool:
+    role = getattr(current_user, "role", None)
+    role_name = getattr(role, "base_role_name", None) or getattr(role, "name", None) or ""
+    permissions = _parse_role_permissions(role)
+    return role_name in {"admin", "super_admin"} or "purchase_board" in permissions or _is_purchase_manager_role(role)
+
 VALID_PURCHASE_STATUSES = {
     models.CreditStatus.PENDING.value,
     models.CreditStatus.IN_REVIEW.value,
@@ -356,6 +363,86 @@ def sync_purchase_board(
         "items": feed["items"],
         "total": feed["total"],
     }
+
+
+@router.post("/manual", response_model=schemas.CreditApplication)
+def create_manual_purchase_request(
+    payload: schemas.ManualPurchaseRequestCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if not current_user.company_id:
+        raise HTTPException(status_code=400, detail="Company ID required")
+    if not _can_manage_purchase_board(current_user):
+        raise HTTPException(status_code=403, detail="No tienes permisos para crear solicitudes de compra")
+
+    client_name = (payload.client_name or "").strip()
+    phone = (payload.phone or "").strip()
+    email = (payload.email or "").strip() or None
+    desired_vehicle = (payload.desired_vehicle or "").strip()
+    notes = (payload.notes or "").strip()
+
+    if not client_name:
+        raise HTTPException(status_code=400, detail="Debes indicar el nombre del cliente")
+    if not phone:
+        raise HTTPException(status_code=400, detail="Debes indicar el telefono del cliente")
+    if not desired_vehicle:
+        raise HTTPException(status_code=400, detail="Debes indicar el vehiculo que se esta buscando")
+
+    lead = models.Lead(
+        name=client_name,
+        email=email,
+        phone=phone,
+        source="other",
+        status=models.LeadStatus.INTERESTED.value,
+        message=notes or f"Solicitud manual de compra para buscar: {desired_vehicle}",
+        company_id=current_user.company_id,
+        assigned_to_id=current_user.id,
+        created_by_id=current_user.id,
+        created_at=datetime.datetime.utcnow()
+    )
+    db.add(lead)
+    db.flush()
+
+    db.add(models.LeadProcessDetail(
+        lead_id=lead.id,
+        has_vehicle=False,
+        desired_vehicle=desired_vehicle
+    ))
+    db.add(models.LeadHistory(
+        lead_id=lead.id,
+        user_id=current_user.id,
+        previous_status=None,
+        new_status=models.LeadStatus.INTERESTED.value,
+        comment=notes or f"Solicitud manual creada desde compras. Vehiculo buscado: {desired_vehicle}"
+    ))
+    if notes:
+        db.add(models.LeadNote(
+            lead_id=lead.id,
+            user_id=current_user.id,
+            content=f"Nota inicial desde compras: {notes}"
+        ))
+
+    purchase = models.CreditApplication(
+        lead_id=lead.id,
+        client_name=client_name,
+        phone=phone,
+        email=email,
+        desired_vehicle=desired_vehicle,
+        monthly_income=0,
+        other_income=0,
+        occupation="employee",
+        application_mode="individual",
+        down_payment=0,
+        status=models.CreditStatus.PENDING.value,
+        notes=notes or f"Solicitud manual creada desde compras para buscar: {desired_vehicle}",
+        company_id=current_user.company_id,
+        assigned_to_id=current_user.id
+    )
+    db.add(purchase)
+    db.commit()
+    db.refresh(purchase)
+    return purchase
 
 
 @router.put("/{purchase_id}", response_model=schemas.CreditApplication)

@@ -631,6 +631,13 @@ class CreditApplicationCreate(CreditApplicationBase):
     assigned_to_id: Optional[int] = None
     lead_id: Optional[int] = None
 
+class ManualPurchaseRequestCreate(BaseModel):
+    client_name: str
+    phone: str
+    email: Optional[str] = None
+    desired_vehicle: str
+    notes: Optional[str] = None
+
 class CreditApplicationUpdate(BaseModel):
     lead_id: Optional[int] = None
     client_name: Optional[str] = None
