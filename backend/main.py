@@ -221,6 +221,41 @@ def ensure_lead_reply_columns():
 ensure_lead_reply_columns()
 
 
+def ensure_lead_soft_delete_columns():
+    """
+    Backward-compatible bootstrap for soft-delete metadata on leads.
+    """
+    try:
+        with engine.connect() as conn:
+            existing_cols_result = conn.execute(text(
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'leads'"
+            ))
+            existing_cols = {row[0] for row in existing_cols_result.fetchall()}
+
+            if "deleted_at" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE leads "
+                    "ADD COLUMN deleted_at DATETIME NULL"
+                ))
+            if "deleted_reason" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE leads "
+                    "ADD COLUMN deleted_reason TEXT NULL"
+                ))
+            if "deleted_by_id" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE leads "
+                    "ADD COLUMN deleted_by_id INT NULL"
+                ))
+            conn.commit()
+    except Exception as exc:
+        print(f"Warning: could not ensure lead soft delete columns: {exc}", flush=True)
+
+
+ensure_lead_soft_delete_columns()
+
+
 def ensure_credit_application_link_column():
     """
     Backward-compatible bootstrap so credit applications can be tied to a lead.
@@ -715,6 +750,15 @@ def choose_auto_assign_user(db: Session, company_id: Optional[int]) -> Optional[
     if not candidates:
         return None
     return random.choice(candidates)
+
+
+def should_self_assign_manual_lead(current_user: models.User) -> bool:
+    role_name = get_user_role_name(current_user)
+    if role_name == "aliado":
+        return True
+    if is_advisor_role(getattr(current_user, "role", None)):
+        return True
+    return is_purchase_manager_role(getattr(current_user, "role", None))
 
 
 def normalize_supervisor_ids(supervisor_ids: Optional[List[int]]) -> List[int]:
@@ -1598,6 +1642,7 @@ def read_leads(
 ):
     query = db.query(models.Lead).options(
         joinedload(models.Lead.assigned_to),
+        joinedload(models.Lead.deleted_by),
         joinedload(models.Lead.supervisors),
         joinedload(models.Lead.history),
         joinedload(models.Lead.conversation).joinedload(models.Conversation.messages),
@@ -1605,6 +1650,7 @@ def read_leads(
         joinedload(models.Lead.files),
         joinedload(models.Lead.purchase_options)
     )
+    query = query.filter(models.Lead.deleted_at.is_(None))
     
     # Filter by user company
     if current_user.company_id:
@@ -1704,6 +1750,42 @@ def read_leads(
 
     return {"items": leads, "total": total}
 
+
+@app.get("/leads/deleted", response_model=schemas.LeadList)
+def read_deleted_leads(
+    skip: int = 0,
+    limit: int = 500,
+    q: str = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden ver leads eliminados")
+
+    query = db.query(models.Lead).options(
+        joinedload(models.Lead.assigned_to),
+        joinedload(models.Lead.deleted_by),
+        joinedload(models.Lead.supervisors)
+    ).filter(models.Lead.deleted_at.is_not(None))
+
+    if current_user.company_id:
+        query = query.filter(models.Lead.company_id == current_user.company_id)
+
+    if q:
+        search = f"%{q}%"
+        query = query.filter(
+            or_(
+                models.Lead.name.ilike(search),
+                models.Lead.email.ilike(search),
+                models.Lead.phone.ilike(search),
+                models.Lead.deleted_reason.ilike(search)
+            )
+        )
+
+    total = query.count()
+    items = query.order_by(models.Lead.deleted_at.desc(), models.Lead.id.desc()).offset(skip).limit(limit).all()
+    return {"items": items, "total": total}
+
 @app.put("/leads/bulk-assign", status_code=200)
 def bulk_assign_leads(
     payload: schemas.LeadBulkAssign, 
@@ -1779,7 +1861,7 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
     
     # Automatic Assignment if not provided
     if not assigned_user_id:
-        if current_user.role and current_user.role.name == "aliado":
+        if should_self_assign_manual_lead(current_user):
             assigned_user_id = current_user.id
 
         if not assigned_user_id:
@@ -3081,7 +3163,7 @@ def create_lead(
     
     # Automatic Assignment Logic (Fallback if not manually assigned)
     if not assigned_to_id:
-        if current_user.role and current_user.role.name == "aliado":
+        if should_self_assign_manual_lead(current_user):
             assigned_to_id = current_user.id
 
         if not assigned_to_id:
@@ -3142,6 +3224,57 @@ def create_lead(
         db.commit()
         
     return db_lead
+
+
+@app.delete("/leads/{lead_id}", status_code=200)
+def delete_lead(
+    lead_id: int,
+    payload: schemas.LeadDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    reason = (payload.reason or "").strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="Debes indicar el motivo de eliminación")
+
+    lead = db.query(models.Lead).options(
+        joinedload(models.Lead.assigned_to),
+        joinedload(models.Lead.supervisors)
+    ).filter(models.Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    if current_user.company_id and lead.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    ensure_can_modify_lead(current_user, lead)
+
+    if lead.deleted_at:
+        raise HTTPException(status_code=400, detail="El lead ya fue eliminado")
+
+    lead.deleted_at = datetime.datetime.utcnow()
+    lead.deleted_reason = reason
+    lead.deleted_by_id = current_user.id
+
+    db.add(models.LeadHistory(
+        lead_id=lead.id,
+        user_id=current_user.id,
+        previous_status=lead.status,
+        new_status=lead.status,
+        comment=f"Lead eliminado del tablero. Motivo: {reason}"
+    ))
+
+    log_action_to_db(
+        db,
+        current_user.id,
+        "DELETE",
+        "Lead",
+        lead.id,
+        f"Lead ocultado de tableros. Motivo: {reason}"
+    )
+
+    db.commit()
+    return {"message": "Lead eliminado correctamente"}
 
 @app.put("/leads/{lead_id}", response_model=schemas.Lead)
 def update_lead(

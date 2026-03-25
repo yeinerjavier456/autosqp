@@ -276,7 +276,7 @@ const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragS
 };
 
 // History Modal Component
-const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, onAssign, onRefreshLeadBoard, availableVehicles, currentUserRole, boardMode = 'general' }) => {
+const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, onDeleteLead, advisors, onAssign, onRefreshLeadBoard, availableVehicles, currentUserRole, boardMode = 'general' }) => {
     const { user } = useAuth();
     const [assignedAdvisor, setAssignedAdvisor] = useState(lead?.assigned_to?.id || '');
     const [selectedSupervisors, setSelectedSupervisors] = useState(getLeadSupervisorIds(lead));
@@ -670,6 +670,36 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
     const handleRemoveSupervisor = (supervisorId) => {
         if (!canManageSupervision) return;
         setSelectedSupervisors((currentSupervisors) => currentSupervisors.filter((id) => id !== supervisorId));
+    };
+
+    const handleDeleteLead = async () => {
+        if (!canModifyLead) {
+            showReadOnlyWarning();
+            return;
+        }
+        if (!onDeleteLead) return;
+
+        const { value: reason } = await Swal.fire({
+            title: 'Eliminar lead',
+            input: 'textarea',
+            inputLabel: 'Motivo obligatorio',
+            inputPlaceholder: 'Explica por qué se elimina este lead del tablero',
+            inputAttributes: { 'aria-label': 'Motivo obligatorio' },
+            showCancelButton: true,
+            confirmButtonText: 'Eliminar lead',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#dc2626',
+            inputValidator: (value) => {
+                if (!value || !value.trim()) {
+                    return 'Debes indicar el motivo de eliminación';
+                }
+                return null;
+            }
+        });
+
+        if (!reason) return;
+        await onDeleteLead(lead.id, reason.trim());
+        onClose();
     };
 
     const handleCopyPurchaseOptionText = async (option) => {
@@ -1123,6 +1153,16 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, advisors, on
                             Este lead está en modo solo lectura para ti por estar en supervisión. Solo un administrador puede modificarlo.
                         </div>
                     )}
+                    <div className="flex justify-end">
+                        <button
+                            type="button"
+                            onClick={handleDeleteLead}
+                            disabled={!canModifyLead}
+                            className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            Eliminar lead
+                        </button>
+                    </div>
 
                     {/* Reminder Section */}
                     <div className="bg-indigo-50/60 p-4 rounded-xl border border-indigo-100">
@@ -1876,6 +1916,37 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         }
     };
 
+    const handleDeleteLead = async (leadId, reason) => {
+        try {
+            const token = localStorage.getItem('token');
+            await axios.delete(`https://autosqp.co/api/leads/${leadId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+                data: { reason }
+            });
+
+            setLeads((prev) => prev.filter((lead) => lead.id !== leadId));
+            setSelectedLeadForHistory((prev) => (prev && prev.id === leadId ? null : prev));
+            setShowHistoryModal(false);
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Lead eliminado',
+                text: 'El lead se ocultó del tablero correctamente.',
+                timer: 1800,
+                showConfirmButton: false,
+                confirmButtonColor: '#2563eb'
+            });
+        } catch (error) {
+            console.error('Error deleting lead', error);
+            Swal.fire(
+                'Error',
+                error.response?.data?.detail || 'No se pudo eliminar el lead',
+                'error'
+            );
+            throw error;
+        }
+    };
+
     const handleConfirmSale = async (e) => {
         e.preventDefault();
         try {
@@ -2349,6 +2420,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     onClose={() => setShowHistoryModal(false)}
                     onUpdate={handleUpdateHistory}
                     onSaveSupervisors={handleSaveSupervisors}
+                    onDeleteLead={handleDeleteLead}
                     advisors={advisors}
                     onAssign={handleAssignLead}
                     onRefreshLeadBoard={fetchLeads}

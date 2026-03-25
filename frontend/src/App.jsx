@@ -18,6 +18,7 @@ import UserForm from './pages/UserForm';
 import InventoryList from './pages/InventoryList';
 import VehicleForm from './pages/VehicleForm';
 import LeadsBoard from './pages/LeadsBoard';
+import DeletedLeads from './pages/DeletedLeads';
 import SalesDashboard from './pages/SalesDashboard'; // Admin Sales Dashboard
 import MySales from './pages/MySales'; // Advisor My Sales
 import IntegrationsConfig from './pages/IntegrationsConfig';
@@ -116,6 +117,9 @@ function App() {
 
               <Route element={<PrivateRoute requiredView="leads_board" />}>
                 <Route path="/admin/leads" element={<LeadsBoard key="general-leads-board" boardMode="general" />} />
+              </Route>
+              <Route element={<PrivateRoute requiredView="deleted_leads" />}>
+                <Route path="/admin/leads/deleted" element={<DeletedLeads />} />
               </Route>
               <Route element={<PrivateRoute requiredView="sales" />}>
                 <Route path="/admin/sales" element={<SalesDashboard />} />

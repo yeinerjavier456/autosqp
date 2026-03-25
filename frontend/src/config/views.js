@@ -7,6 +7,7 @@ export const SYSTEM_VIEWS = [
     { id: 'companies', label: 'Empresas globales', path: '/admin/companies-list', menuLabel: 'Empresas Globales', section: 'global', scope: 'global' },
     { id: 'inventory', label: 'Inventario', path: '/admin/inventory', menuLabel: 'Inventario', section: 'crm', scope: 'company' },
     { id: 'leads_board', label: 'Tablero de leads', path: '/admin/leads', menuLabel: 'Tablero de Leads', section: 'crm', scope: 'company' },
+    { id: 'deleted_leads', label: 'Leads eliminados', path: '/admin/leads/deleted', menuLabel: 'Leads Eliminados', section: 'crm', scope: 'company' },
     { id: 'ally_board', label: 'Tablero de aliados', path: '/aliado/dashboard', menuLabel: 'Tablero Aliados', section: 'crm', scope: 'company' },
     { id: 'alerts', label: 'Alertas automaticas', path: '/admin/alerts', menuLabel: 'Alertas Auto', section: 'crm', scope: 'company' },
     { id: 'sales', label: 'Finanzas y ventas', path: '/admin/sales', menuLabel: 'Finanzas y Ventas', section: 'crm', scope: 'company' },
@@ -39,7 +40,7 @@ export const DEFAULT_ROLE_VIEW_ACCESS = {
     super_admin: SYSTEM_VIEWS.map((view) => view.id),
     admin: [
         'dashboard', 'users', 'roles', 'integrations', 'logs', 'inventory',
-        'leads_board', 'ally_board', 'alerts', 'sales', 'credits', 'purchase_board',
+        'leads_board', 'deleted_leads', 'ally_board', 'alerts', 'sales', 'credits', 'purchase_board',
         'gmail_credit_audit',
         'facebook_leads', 'tiktok_leads', 'whatsapp_leads', 'instagram_leads',
         'internal_chat', 'whatsapp_dashboard'

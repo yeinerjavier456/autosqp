@@ -383,6 +383,9 @@ class LeadUpdate(BaseModel):
     supervisor_ids: Optional[List[int]] = None
     comment: Optional[str] = None # Virtual field for history
     process_detail: Optional[LeadProcessDetailCreate] = None # Para recibir los detalles de proceso
+
+class LeadDeleteRequest(BaseModel):
+    reason: str
     
 class LeadBulkAssign(BaseModel):
     lead_ids: List[int]
@@ -392,7 +395,11 @@ class Lead(LeadBase):
     id: int
     created_at: datetime
     created_by_id: Optional[int] = None
+    deleted_at: Optional[datetime] = None
+    deleted_reason: Optional[str] = None
+    deleted_by_id: Optional[int] = None
     assigned_to: Optional[User] = None
+    deleted_by: Optional[User] = None
     supervisors: List[User] = []
     credit_application_id: Optional[int] = None
     credit_application_status: Optional[str] = None

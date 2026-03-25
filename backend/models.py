@@ -96,6 +96,9 @@ class Lead(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     has_unread_reply = Column(Integer, default=0)
     last_reply_at = Column(DateTime, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)
+    deleted_reason = Column(Text, nullable=True)
+    deleted_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     
     company_id = Column(Integer, ForeignKey("companies.id"))
     company = relationship("Company", back_populates="leads")
@@ -105,6 +108,7 @@ class Lead(Base):
     
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_by = relationship("User", foreign_keys=[created_by_id], back_populates="leads_created")
+    deleted_by = relationship("User", foreign_keys=[deleted_by_id])
 
     history = relationship("LeadHistory", back_populates="lead")
     conversation = relationship("Conversation", back_populates="lead", uselist=False)
