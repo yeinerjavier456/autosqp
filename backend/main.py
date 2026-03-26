@@ -1938,6 +1938,20 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
         else:
              raise HTTPException(status_code=400, detail="Company ID required for assignment")
 
+    existing_lead = find_existing_active_lead(db, company_id, lead.phone, lead.email)
+    if existing_lead:
+        if lead.name and not existing_lead.name:
+            existing_lead.name = lead.name
+        if lead.email and not existing_lead.email:
+            existing_lead.email = lead.email
+        if lead.phone and not existing_lead.phone:
+            existing_lead.phone = lead.phone
+        if lead.message:
+            existing_lead.message = lead.message
+        db.commit()
+        db.refresh(existing_lead)
+        return existing_lead
+
     # 2. Assignment Logic
     assigned_user_id = lead.assigned_to_id
     supervisor_ids = normalize_supervisor_ids(getattr(lead, "supervisor_ids", []))
@@ -2805,6 +2819,34 @@ def phone_variants_for_lookup(phone: Optional[str]) -> List[str]:
         variants.add(f"+{digits[2:]}")
     return list(variants)
 
+
+def find_existing_active_lead(
+    db: Session,
+    company_id: int,
+    phone: Optional[str],
+    email: Optional[str]
+) -> Optional[models.Lead]:
+    phone_variants = phone_variants_for_lookup(phone)
+    normalized_email = (email or "").strip().lower() or None
+
+    filters = []
+    if phone_variants:
+        filters.append(models.Lead.phone.in_(phone_variants))
+    if normalized_email:
+        filters.append(func.lower(models.Lead.email) == normalized_email)
+
+    if not filters:
+        return None
+
+    return db.query(models.Lead).options(
+        joinedload(models.Lead.assigned_to),
+        selectinload(models.Lead.supervisors)
+    ).filter(
+        models.Lead.company_id == company_id,
+        models.Lead.deleted_at.is_(None),
+        or_(*filters)
+    ).order_by(models.Lead.created_at.desc(), models.Lead.id.desc()).first()
+
 def upsert_lead_process_detail(db: Session, lead_id: int, interested_vehicle: str):
     detail = db.query(models.LeadProcessDetail).filter(models.LeadProcessDetail.lead_id == lead_id).first()
     if detail:
@@ -3236,6 +3278,20 @@ def create_lead(
     
     if not company_id:
         raise HTTPException(status_code=400, detail="Company ID required for assignment")
+
+    existing_lead = find_existing_active_lead(db, company_id, lead.phone, lead.email)
+    if existing_lead:
+        if lead.name and not existing_lead.name:
+            existing_lead.name = lead.name
+        if lead.email and not existing_lead.email:
+            existing_lead.email = lead.email
+        if lead.phone and not existing_lead.phone:
+            existing_lead.phone = lead.phone
+        if lead.message:
+            existing_lead.message = lead.message
+        db.commit()
+        db.refresh(existing_lead)
+        return existing_lead
     
     # Exclude company_id because we pass it manually
     lead_data = lead.dict(exclude={'company_id'})
@@ -4482,7 +4538,10 @@ def get_internal_messages(
     current_user: models.User = Depends(get_current_user)
 ):
     # Filter by company
-    query = db.query(models.InternalMessage).filter(models.InternalMessage.company_id == current_user.company_id)
+    query = db.query(models.InternalMessage).options(
+        joinedload(models.InternalMessage.sender),
+        joinedload(models.InternalMessage.recipient)
+    ).filter(models.InternalMessage.company_id == current_user.company_id)
     
     # Filter Permissions: 
     # Show message IF:
@@ -4538,8 +4597,10 @@ def create_internal_message(
     )
     db.add(db_message)
     db.commit()
-    db.refresh(db_message)
-    return db_message
+    return db.query(models.InternalMessage).options(
+        joinedload(models.InternalMessage.sender),
+        joinedload(models.InternalMessage.recipient)
+    ).filter(models.InternalMessage.id == db_message.id).first()
 
 @app.post("/internal-messages/upload", response_model=schemas.InternalMessage)
 async def upload_internal_message_file(
@@ -4590,7 +4651,9 @@ async def upload_internal_message_file(
     )
     db.add(db_message)
     db.commit()
-    db.refresh(db_message)
-    return db_message
+    return db.query(models.InternalMessage).options(
+        joinedload(models.InternalMessage.sender),
+        joinedload(models.InternalMessage.recipient)
+    ).filter(models.InternalMessage.id == db_message.id).first()
 
 
