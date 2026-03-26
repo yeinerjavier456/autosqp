@@ -342,6 +342,27 @@ def ensure_credit_notes_text_column():
 
 ensure_credit_notes_text_column()
 
+def ensure_sent_alert_logs_indexes():
+    try:
+        with engine.connect() as conn:
+            index_exists = conn.execute(text(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sent_alert_logs' "
+                "AND INDEX_NAME = 'ix_sent_alert_logs_rule_lead_sent_at'"
+            )).scalar()
+
+            if not index_exists:
+                conn.execute(text(
+                    "CREATE INDEX ix_sent_alert_logs_rule_lead_sent_at "
+                    "ON sent_alert_logs (rule_id, lead_id, sent_at)"
+                ))
+                conn.commit()
+    except Exception as exc:
+        print(f"Warning: could not ensure sent_alert_logs indexes: {exc}", flush=True)
+
+
+ensure_sent_alert_logs_indexes()
+
 app = FastAPI(title="AutosQP API", description="API para gestión de compra venta de carros")
 
 @app.exception_handler(Exception)

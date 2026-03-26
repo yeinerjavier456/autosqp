@@ -129,19 +129,36 @@ def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
         models.Lead.status == rule.condition_value,
         models.Lead.status_updated_at <= threshold_time
     ).all()
-    
+
+    if not leads:
+        return
+
+    lead_ids = [lead.id for lead in leads]
+    latest_log_rows = db.query(
+        models.SentAlertLog.lead_id,
+        func.max(models.SentAlertLog.sent_at).label("last_sent_at")
+    ).filter(
+        models.SentAlertLog.rule_id == rule.id,
+        models.SentAlertLog.lead_id.in_(lead_ids)
+    ).group_by(models.SentAlertLog.lead_id).all()
+    last_sent_by_lead = {lead_id: last_sent_at for lead_id, last_sent_at in latest_log_rows}
+
+    admin_recipient_ids = []
+    if rule.recipient_type == 'all_admins':
+        admins = db.query(models.User).join(models.Role).filter(
+            models.User.company_id == rule.company_id,
+            models.Role.name.in_(['admin', 'super_admin'])
+        ).all()
+        admin_recipient_ids = [u.id for u in admins]
+
     for lead in leads:
-        # Check if already sent
-        last_sent = db.query(models.SentAlertLog).filter(
-            models.SentAlertLog.rule_id == rule.id,
-            models.SentAlertLog.lead_id == lead.id
-        ).order_by(models.SentAlertLog.sent_at.desc()).first()
+        last_sent_at = last_sent_by_lead.get(lead.id)
         
-        if last_sent:
+        if last_sent_at:
             if not rule.is_repeating:
                 continue
             # If repeating, check interval
-            time_since_last = now_utc_naive_from_bogota() - last_sent.sent_at
+            time_since_last = now - last_sent_at
             if time_since_last < timedelta(minutes=rule.repeat_interval):
                 continue
             
@@ -155,11 +172,7 @@ def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
         # If 'all_admins', we might need to loop 
         recipients = []
         if rule.recipient_type == 'all_admins':
-            admins = db.query(models.User).join(models.Role).filter(
-                models.User.company_id == rule.company_id,
-                models.Role.name.in_(['admin', 'super_admin'])
-            ).all()
-            recipients = [u.id for u in admins]
+            recipients = admin_recipient_ids
         elif recipient_id:
             recipients = [recipient_id]
             
