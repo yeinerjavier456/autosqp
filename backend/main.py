@@ -754,8 +754,6 @@ def choose_auto_assign_user(db: Session, company_id: Optional[int]) -> Optional[
 
 def should_self_assign_manual_lead(current_user: models.User) -> bool:
     role_name = get_user_role_name(current_user)
-    if role_name == "aliado":
-        return True
     if is_advisor_role(getattr(current_user, "role", None)):
         return True
     return is_purchase_manager_role(getattr(current_user, "role", None))
