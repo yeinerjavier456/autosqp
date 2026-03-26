@@ -3260,8 +3260,7 @@ def public_chat_message(payload: schemas.PublicChatMessageCreate, db: Session = 
 # Remove duplicate read_leads
 
 
-@app.post("/leads", response_model=schemas.Lead)
-def create_lead(
+def _legacy_create_lead_unused(
     lead: schemas.LeadCreate, 
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
