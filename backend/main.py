@@ -363,6 +363,68 @@ def ensure_sent_alert_logs_indexes():
 
 ensure_sent_alert_logs_indexes()
 
+def ensure_lead_query_indexes():
+    try:
+        with engine.connect() as conn:
+            desired_indexes = [
+                (
+                    "leads",
+                    "ix_leads_company_deleted_id",
+                    "CREATE INDEX ix_leads_company_deleted_id "
+                    "ON leads (company_id, deleted_at, id)"
+                ),
+                (
+                    "leads",
+                    "ix_leads_company_deleted_status_id",
+                    "CREATE INDEX ix_leads_company_deleted_status_id "
+                    "ON leads (company_id, deleted_at, status, id)"
+                ),
+                (
+                    "leads",
+                    "ix_leads_company_assigned_deleted_id",
+                    "CREATE INDEX ix_leads_company_assigned_deleted_id "
+                    "ON leads (company_id, assigned_to_id, deleted_at, id)"
+                ),
+                (
+                    "leads",
+                    "ix_leads_company_source_deleted_id",
+                    "CREATE INDEX ix_leads_company_source_deleted_id "
+                    "ON leads (company_id, source, deleted_at, id)"
+                ),
+                (
+                    "lead_supervisors",
+                    "ix_lead_supervisors_user_lead",
+                    "CREATE INDEX ix_lead_supervisors_user_lead "
+                    "ON lead_supervisors (user_id, lead_id)"
+                ),
+                (
+                    "notifications",
+                    "ix_notifications_user_read_created",
+                    "CREATE INDEX ix_notifications_user_read_created "
+                    "ON notifications (user_id, is_read, created_at)"
+                ),
+            ]
+
+            for table_name, index_name, ddl in desired_indexes:
+                index_exists = conn.execute(text(
+                    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS "
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name "
+                    "AND INDEX_NAME = :index_name"
+                ), {
+                    "table_name": table_name,
+                    "index_name": index_name,
+                }).scalar()
+
+                if not index_exists:
+                    conn.execute(text(ddl))
+
+            conn.commit()
+    except Exception as exc:
+        print(f"Warning: could not ensure lead query indexes: {exc}", flush=True)
+
+
+ensure_lead_query_indexes()
+
 app = FastAPI(title="AutosQP API", description="API para gestión de compra venta de carros")
 
 @app.exception_handler(Exception)
