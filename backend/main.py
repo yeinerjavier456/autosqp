@@ -1687,6 +1687,9 @@ def read_leads(
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(get_current_user)
 ):
+    role_name = get_user_role_name(current_user)
+    can_view_all_company_leads = role_name in {"admin", "super_admin"}
+
     query = db.query(models.Lead).options(
         joinedload(models.Lead.assigned_to),
         joinedload(models.Lead.deleted_by),
@@ -1716,7 +1719,7 @@ def read_leads(
         aliado_user_ids = [row[0] for row in db.query(models.User.id).filter(models.User.role_id.in_(aliado_role_ids)).all()]
 
     if board_scope == "ally":
-        if get_user_role_name(current_user) == "aliado":
+        if not can_view_all_company_leads:
             query = query.filter(
                 or_(
                     models.Lead.assigned_to_id == current_user.id,
@@ -1740,17 +1743,7 @@ def read_leads(
             )
         )
 
-    # Filter by Advisor (Asesor) - Only see assigned leads
-    if get_user_role_name(current_user) in ['asesor', 'vendedor']:
-        query = query.filter(
-            or_(
-                models.Lead.assigned_to_id == current_user.id,
-                models.Lead.supervisors.any(models.User.id == current_user.id)
-            )
-        )
-    
-    # Filter by Aliado - Only see their own queue
-    if get_user_role_name(current_user) == 'aliado':
+    if not can_view_all_company_leads:
         query = query.filter(
             or_(
                 models.Lead.assigned_to_id == current_user.id,
