@@ -1,3 +1,25 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  .swal2-actions {
+    @apply gap-3;
+  }
+
+  .swal2-confirm {
+    @apply rounded-lg bg-blue-600 px-5 py-2.5 font-bold text-white;
+  }
+
+  .swal2-confirm:hover {
+    @apply bg-blue-700;
+  }
+
+  .swal2-cancel {
+    @apply rounded-lg bg-slate-600 px-5 py-2.5 font-bold text-white;
+  }
+
+  .swal2-cancel:hover {
+    @apply bg-slate-700;
+  }
+}
