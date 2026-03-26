@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Query, Query
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import Optional, List, Dict, Any
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload, noload
 from sqlalchemy import or_, and_, func, text, false
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, get_db
@@ -1690,12 +1690,13 @@ def read_leads(
     query = db.query(models.Lead).options(
         joinedload(models.Lead.assigned_to),
         joinedload(models.Lead.deleted_by),
-        joinedload(models.Lead.supervisors),
-        joinedload(models.Lead.history),
-        joinedload(models.Lead.conversation).joinedload(models.Conversation.messages),
-        joinedload(models.Lead.notes),
-        joinedload(models.Lead.files),
-        joinedload(models.Lead.purchase_options)
+        selectinload(models.Lead.supervisors),
+        selectinload(models.Lead.process_detail),
+        selectinload(models.Lead.purchase_options),
+        noload(models.Lead.history),
+        noload(models.Lead.conversation),
+        noload(models.Lead.notes),
+        noload(models.Lead.files),
     )
     query = query.filter(models.Lead.deleted_at.is_(None))
     
@@ -1796,6 +1797,43 @@ def read_leads(
             lead.credit_application_updated_at = related_credit.updated_at
 
     return {"items": leads, "total": total}
+
+
+@app.get("/leads/{lead_id}", response_model=schemas.Lead)
+def get_lead_detail(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    lead = db.query(models.Lead).options(
+        joinedload(models.Lead.assigned_to),
+        joinedload(models.Lead.deleted_by),
+        selectinload(models.Lead.supervisors),
+        selectinload(models.Lead.history).joinedload(models.LeadHistory.user),
+        joinedload(models.Lead.process_detail),
+        selectinload(models.Lead.notes).joinedload(models.LeadNote.user),
+        selectinload(models.Lead.files).joinedload(models.LeadFile.user),
+        selectinload(models.Lead.purchase_options).joinedload(models.PurchaseOption.user),
+        selectinload(models.Lead.purchase_options).joinedload(models.PurchaseOption.decision_user),
+    ).filter(models.Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    if current_user.company_id and lead.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    related_credit = db.query(models.CreditApplication).filter(
+        models.CreditApplication.lead_id == lead.id
+    ).order_by(
+        models.CreditApplication.updated_at.desc(),
+        models.CreditApplication.created_at.desc()
+    ).first()
+    if related_credit:
+        lead.credit_application_id = related_credit.id
+        lead.credit_application_status = related_credit.status
+        lead.credit_application_updated_at = related_credit.updated_at
+
+    return lead
 
 
 @app.get("/leads/deleted", response_model=schemas.LeadList)

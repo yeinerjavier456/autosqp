@@ -276,7 +276,7 @@ const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragS
 };
 
 // History Modal Component
-const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, onDeleteLead, advisors, onAssign, onRefreshLeadBoard, availableVehicles, currentUserRole, boardMode = 'general' }) => {
+const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, onDeleteLead, advisors, onAssign, onRefreshLeadBoard, availableVehicles, currentUserRole, boardMode = 'general', loadingDetail = false }) => {
     const { user } = useAuth();
     const [assignedAdvisor, setAssignedAdvisor] = useState(lead?.assigned_to?.id || '');
     const [selectedSupervisors, setSelectedSupervisors] = useState(getLeadSupervisorIds(lead));
@@ -838,6 +838,11 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, onDeleteLead
                                 {isLeadHeaderCollapsed ? 'Expandir cabecera' : 'Colapsar cabecera'}
                             </button>
                         </div>
+                        {loadingDetail && (
+                            <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700">
+                                Cargando detalle completo del lead...
+                            </div>
+                        )}
                         {!isLeadHeaderCollapsed && (lead.message || lead.created_at) && (
                             <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1473,6 +1478,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     // Modal State - History View
     const [selectedLeadForHistory, setSelectedLeadForHistory] = useState(null);
     const [showHistoryModal, setShowHistoryModal] = useState(false);
+    const [loadingLeadDetail, setLoadingLeadDetail] = useState(false);
     const [highlightedLeadId, setHighlightedLeadId] = useState(null);
 
     // Modal State - New Lead
@@ -1540,10 +1546,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         const targetLead = leads.find(lead => lead.id === leadIdFromQuery);
         if (!targetLead) return;
 
-        setLeads(prev => prev.map(item => item.id === leadIdFromQuery ? { ...item, has_unread_reply: 0 } : item));
-        setSelectedLeadForHistory({ ...targetLead, has_unread_reply: 0 });
-        setHighlightedLeadId(leadIdFromQuery);
-        setShowHistoryModal(true);
+        handleViewHistory(targetLead);
         navigate(isAllyBoard ? '/aliado/dashboard' : '/admin/leads', { replace: true });
     }, [searchParams, leads, showHistoryModal, navigate, isAllyBoard]);
 
@@ -1632,6 +1635,14 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         }
     };
 
+    const fetchLeadDetail = async (leadId) => {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`https://autosqp.co/api/leads/${leadId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        return response.data;
+    };
+
     const fetchAvailableVehicles = async () => {
         try {
             const token = localStorage.getItem('token');
@@ -1657,12 +1668,25 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         }
     };
 
-    const handleViewHistory = (lead) => {
+    const handleViewHistory = async (lead) => {
         const updatedLead = { ...lead, has_unread_reply: 0 };
         setLeads(prev => prev.map(item => item.id === lead.id ? { ...item, has_unread_reply: 0 } : item));
         setSelectedLeadForHistory(updatedLead);
         setHighlightedLeadId(lead.id);
         setShowHistoryModal(true);
+        setLoadingLeadDetail(true);
+        try {
+            const detailedLead = await fetchLeadDetail(lead.id);
+            setSelectedLeadForHistory({
+                ...detailedLead,
+                has_unread_reply: 0
+            });
+        } catch (error) {
+            console.error('Error fetching lead detail', error);
+            Swal.fire('Error', 'No se pudo cargar el detalle del lead', 'error');
+        } finally {
+            setLoadingLeadDetail(false);
+        }
     };
 
     // --- Drag and Drop Logic ---
@@ -1927,6 +1951,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             setLeads((prev) => prev.filter((lead) => lead.id !== leadId));
             setSelectedLeadForHistory((prev) => (prev && prev.id === leadId ? null : prev));
             setShowHistoryModal(false);
+            fetchLeads();
 
             Swal.fire({
                 icon: 'success',
@@ -2427,6 +2452,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     availableVehicles={availableVehicles}
                     currentUserRole={currentRoleName}
                     boardMode={boardMode}
+                    loadingDetail={loadingLeadDetail}
                 />
             )}
 
