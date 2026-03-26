@@ -595,6 +595,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, onDeleteLead
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (loading) return;
         if (!canModifyLead) {
             showReadOnlyWarning();
             return;
@@ -1378,7 +1379,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, onDeleteLead
                             <button
                                 type="submit"
                                 disabled={loading || !canModifyLead}
-                                className="w-full bg-blue-600 text-white text-sm font-bold py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+                                className="w-full bg-blue-600 text-white text-sm font-bold py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {loading ? 'Guardando...' : 'Guardar Nota y Actualizar'}
                             </button>
