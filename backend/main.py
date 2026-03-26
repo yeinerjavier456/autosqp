@@ -1873,7 +1873,7 @@ def read_leads(
     return {"items": leads, "total": total}
 
 
-@app.get("/leads/{lead_id}", response_model=schemas.Lead)
+@app.get("/leads/{lead_id:int}", response_model=schemas.Lead)
 def get_lead_detail(
     lead_id: int,
     db: Session = Depends(get_db),
