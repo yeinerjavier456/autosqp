@@ -1931,16 +1931,22 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
 
     existing_lead = find_existing_active_lead(db, company_id, lead.phone, lead.email)
     if existing_lead:
+        has_changes = False
         if lead.name and not existing_lead.name:
             existing_lead.name = lead.name
+            has_changes = True
         if lead.email and not existing_lead.email:
             existing_lead.email = lead.email
+            has_changes = True
         if lead.phone and not existing_lead.phone:
             existing_lead.phone = lead.phone
+            has_changes = True
         if lead.message:
             existing_lead.message = lead.message
-        db.commit()
-        db.refresh(existing_lead)
+            has_changes = True
+        if has_changes:
+            db.commit()
+            db.refresh(existing_lead)
         return existing_lead
 
     # 2. Assignment Logic
@@ -1994,8 +2000,7 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
         created_by_id=current_user.id
     )
     db.add(new_lead)
-    db.commit()
-    db.refresh(new_lead)
+    db.flush()
     sync_lead_supervisors(db, new_lead, supervisor_ids, current_user.id)
 
     initial_history = models.LeadHistory(
