@@ -97,6 +97,7 @@ const DashboardMetric = ({ title, value, helper, className = 'border-slate-200 b
 const AdvisorDashboard = () => {
     const { user } = useAuth();
     const [stats, setStats] = useState(null);
+    const [period, setPeriod] = useState('month');
 
     const roleName = getRoleName(user);
     const roleLabel = user?.role?.label || roleName || 'Usuario';
@@ -114,7 +115,8 @@ const AdvisorDashboard = () => {
             try {
                 const token = localStorage.getItem('token');
                 const response = await axios.get('https://autosqp.co/api/stats/advisor', {
-                    headers: { Authorization: `Bearer ${token}` }
+                    headers: { Authorization: `Bearer ${token}` },
+                    params: { period }
                 });
                 setStats(response.data);
             } catch (error) {
@@ -123,7 +125,7 @@ const AdvisorDashboard = () => {
         };
 
         if (user?.company_id) fetchStats();
-    }, [user]);
+    }, [user, period]);
 
     if (!stats) {
         return <div className="p-8 text-center text-gray-500">Cargando tablero...</div>;
@@ -195,32 +197,64 @@ const AdvisorDashboard = () => {
         ],
     };
 
+    const periodLabel = period === 'day'
+        ? 'hoy'
+        : period === 'year'
+            ? 'este año'
+            : 'este mes';
+    const trendTitle = period === 'day'
+        ? 'Ritmo de gestión del día'
+        : period === 'year'
+            ? 'Ritmo de gestión del año'
+            : 'Ritmo de gestión del mes';
+    const trendDescription = period === 'day'
+        ? 'Leads creados hoy distribuidos por hora.'
+        : period === 'year'
+            ? 'Leads creados durante el año actual distribuidos por mes.'
+            : 'Leads creados durante el mes actual distribuidos por día.';
+
     return (
         <div className="space-y-6">
             <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-blue-950 to-cyan-900 px-6 py-7 text-white shadow-xl">
-                <h1 className="text-3xl font-bold">Dashboard de {roleLabel}</h1>
-                <p className="mt-2 max-w-3xl text-sm text-slate-200">
-                    Vista operativa de tu gestión actual: leads, cierres, estados y colas relacionadas según el rol que tienes dentro de la empresa.
-                </p>
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                    <div>
+                        <h1 className="text-3xl font-bold">Dashboard de {roleLabel}</h1>
+                        <p className="mt-2 max-w-3xl text-sm text-slate-200">
+                            Vista operativa de tu gestión actual: leads, cierres, estados y colas relacionadas según el rol que tienes dentro de la empresa.
+                        </p>
+                    </div>
+                    <div className="w-full max-w-xs">
+                        <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-cyan-100">Periodo de métricas</label>
+                        <select
+                            value={period}
+                            onChange={(e) => setPeriod(e.target.value)}
+                            className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white outline-none backdrop-blur-sm transition focus:border-cyan-200"
+                        >
+                            <option value="day" className="text-slate-900">Día</option>
+                            <option value="month" className="text-slate-900">Mes</option>
+                            <option value="year" className="text-slate-900">Año</option>
+                        </select>
+                    </div>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <DashboardMetric
                     title="Leads a cargo"
                     value={stats.total_leads}
-                    helper="Incluye asignados y leads donde quedaste en supervision."
+                    helper={`Incluye asignados y leads donde quedaste en supervision durante ${periodLabel}.`}
                 />
                 <DashboardMetric
                     title="Conversion"
                     value={`${stats.conversion_rate}%`}
-                    helper={`${stats.leads_sold} cierres sobre tu base actual.`}
+                    helper={`${stats.leads_sold} cierres sobre tu base de ${periodLabel}.`}
                     className="border-emerald-200 bg-emerald-50 text-emerald-900"
                     helperClassName="text-emerald-700"
                 />
                 <DashboardMetric
                     title="Pipeline activo"
                     value={stats.active_pipeline_count}
-                    helper={`${stats.leads_new} leads siguen en estado nuevo.`}
+                    helper={`${stats.leads_new} leads siguen en estado nuevo en ${periodLabel}.`}
                     className="border-amber-200 bg-amber-50 text-amber-900"
                     helperClassName="text-amber-700"
                 />
@@ -285,8 +319,8 @@ const AdvisorDashboard = () => {
                 <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
                         <div className="mb-4">
-                            <h3 className="text-lg font-bold text-slate-800">Ritmo de gestión en los ultimos 7 dias</h3>
-                            <p className="text-sm text-slate-500">Leads recientes que están entrando en tu radar operativo.</p>
+                            <h3 className="text-lg font-bold text-slate-800">{trendTitle}</h3>
+                            <p className="text-sm text-slate-500">{trendDescription}</p>
                         </div>
                         <div className="h-80">
                             <Line
