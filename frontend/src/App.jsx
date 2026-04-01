@@ -6,6 +6,7 @@ import { NotificationsProvider } from './context/NotificationsContext';
 import AdminCompanySettings from './pages/AdminCompanySettings';
 import AdminAlerts from './pages/AdminAlerts'; // Import AdminAlerts
 import PublicInventory from './pages/PublicInventory';
+import TikTokLanding from './pages/TikTokLanding';
 import VehicleDetail from './pages/VehicleDetail'; // Import VehicleDetail
 import LoginPage from './pages/LoginPage';
 import Layout from './components/Layout';
@@ -79,6 +80,7 @@ function App() {
         <Routes>
           {/* Public Routes */}
           <Route path="/autos" element={<PublicInventory />} />
+          <Route path="/tiktok" element={<TikTokLanding />} />
           <Route path="/autos/:id" element={<VehicleDetail />} /> {/* New Route */}
 
           <Route path="/" element={<Navigate to="/autos" replace />} />

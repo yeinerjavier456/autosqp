@@ -3402,8 +3402,13 @@ def maybe_create_public_chat_lead(
             models.Lead.created_at >= recent_threshold
         ).order_by(models.Lead.created_at.desc()).first()
 
+    normalized_source_page = (session.source_page or "").lower()
+    is_tiktok_landing = "tiktok" in normalized_source_page
+    lead_source = models.LeadSource.TIKTOK.value if is_tiktok_landing else models.LeadSource.WEB.value
+    lead_channel_label = "chatbot TikTok" if is_tiktok_landing else "chatbot web"
+
     lead_message = (
-        f"Interes detectado por chatbot web: {interested_vehicle} | "
+        f"Interes detectado por {lead_channel_label}: {interested_vehicle} | "
         f"Pago: {payment_type} | Cuota inicial: {down_payment_amount} | "
         f"Ingresos: {monthly_income} | Ocupacion: {occupation_type} | "
         f"Residencia: {residence_city} | Reportado: {has_credit_report} | "
@@ -3427,7 +3432,7 @@ def maybe_create_public_chat_lead(
             assigned_user_id = auto_assigned_user.id
 
     new_lead = models.Lead(
-        source=models.LeadSource.WEB.value,
+        source=lead_source,
         name=first_name,
         phone=phone,
         email=email,

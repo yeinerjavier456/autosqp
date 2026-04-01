@@ -3,7 +3,15 @@ import axios from 'axios';
 
 const SESSION_STORAGE_KEY = 'autosqp_public_chat_session';
 
-const PublicSalesChatbot = ({ vehicleId = null }) => {
+const PublicSalesChatbot = ({
+    vehicleId = null,
+    sourcePage = null,
+    sessionStorageKey = SESSION_STORAGE_KEY,
+    autoOpen = false,
+    initialAssistantMessage = '',
+    hideLauncher = false,
+    embedded = false
+}) => {
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
@@ -18,15 +26,21 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
     const endRef = useRef(null);
 
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    const resolvedSourcePage = sourcePage || window.location.pathname;
+    const visibleMessages = messages.length > 0
+        ? messages
+        : (initialAssistantMessage
+            ? [{ role: 'assistant', content: initialAssistantMessage }]
+            : []);
 
     const ensureSession = async () => {
-        let token = localStorage.getItem(SESSION_STORAGE_KEY) || '';
+        let token = localStorage.getItem(sessionStorageKey) || '';
         if (!token) {
             const res = await axios.post('https://autosqp.co/api/public-chat/session', {
-                source_page: window.location.pathname
+                source_page: resolvedSourcePage
             });
             token = res.data.session_token;
-            localStorage.setItem(SESSION_STORAGE_KEY, token);
+            localStorage.setItem(sessionStorageKey, token);
         }
         setSessionToken(token);
         return token;
@@ -58,6 +72,12 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
             // Keep defaults if config cannot be loaded
         }
     };
+
+    useEffect(() => {
+        if (autoOpen) {
+            setOpen(true);
+        }
+    }, [autoOpen]);
 
     useEffect(() => {
         if (!open) return;
@@ -120,7 +140,7 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
                 session_token: token,
                 message: text,
                 vehicle_id: vehicleId || undefined,
-                source_page: window.location.pathname
+                source_page: resolvedSourcePage
             });
             assistantReply = res.data.reply || assistantReply;
         } catch (error) {
@@ -134,7 +154,7 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
     return (
         <>
             {open && (
-                <div className="fixed bottom-24 right-4 md:right-6 z-50 w-[360px] max-w-[calc(100vw-2rem)] h-[560px] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+                <div className={`${embedded ? 'relative w-full h-[620px] max-w-none' : 'fixed bottom-24 right-4 md:right-6 z-50 w-[360px] max-w-[calc(100vw-2rem)] h-[560px]'} bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col`}>
                     <div className="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
                         <div>
                             <h3 className="font-bold">Autos QP</h3>
@@ -149,7 +169,7 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
                         <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-3 py-2 text-xs">
                             Para iniciar la conversación con una asesora, escribe tu mensaje.
                         </div>
-                        {messages.map((m, idx) => (
+                        {visibleMessages.map((m, idx) => (
                             <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${m.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none'}`}>
                                     {m.content}
@@ -201,17 +221,18 @@ const PublicSalesChatbot = ({ vehicleId = null }) => {
                     </form>
                 </div>
             )}
-
-            <button
-                type="button"
-                onClick={() => setOpen(prev => !prev)}
-                className="fixed bottom-4 right-4 md:right-6 z-50 w-14 h-14 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xl flex items-center justify-center"
-                title="Hablar con un asesor"
-            >
-                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                </svg>
-            </button>
+            {!hideLauncher && (
+                <button
+                    type="button"
+                    onClick={() => setOpen(prev => !prev)}
+                    className="fixed bottom-4 right-4 md:right-6 z-50 w-14 h-14 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xl flex items-center justify-center"
+                    title="Hablar con un asesor"
+                >
+                    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                    </svg>
+                </button>
+            )}
         </>
     );
 };
