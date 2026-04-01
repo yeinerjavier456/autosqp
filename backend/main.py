@@ -2610,11 +2610,13 @@ def read_advisor_stats(
             models.LeadHistory.created_at >= period_start,
             models.LeadHistory.created_at < period_end
         ).all()
-    status_changes_in_range = sum(
-        1 for entry in history_entries
+    status_change_entries = [
+        entry for entry in history_entries
         if (entry.previous_status or "") != (entry.new_status or "")
-    )
+    ]
+    status_changes_in_range = len(status_change_entries)
     manager_activity_map: Dict[int, Dict[str, Any]] = {}
+    status_mover_map: Dict[int, Dict[str, Any]] = {}
     for entry in history_entries:
         if not entry.user_id:
             continue
@@ -2632,8 +2634,29 @@ def read_advisor_stats(
             current_item["full_name"] = getattr(getattr(entry, "user", None), "full_name", None)
         if not current_item.get("email"):
             current_item["email"] = getattr(getattr(entry, "user", None), "email", None)
+    for entry in status_change_entries:
+        if not entry.user_id:
+            continue
+        current_item = status_mover_map.setdefault(
+            entry.user_id,
+            {
+                "user_id": entry.user_id,
+                "full_name": getattr(getattr(entry, "user", None), "full_name", None),
+                "email": getattr(getattr(entry, "user", None), "email", None),
+                "count": 0,
+            }
+        )
+        current_item["count"] += 1
+        if not current_item.get("full_name"):
+            current_item["full_name"] = getattr(getattr(entry, "user", None), "full_name", None)
+        if not current_item.get("email"):
+            current_item["email"] = getattr(getattr(entry, "user", None), "email", None)
     top_managers = sorted(
         manager_activity_map.values(),
+        key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
+    )[:5]
+    top_status_movers = sorted(
+        status_mover_map.values(),
         key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
     )[:5]
 
@@ -2748,6 +2771,7 @@ def read_advisor_stats(
         "inventory_total": inventory_total,
         "inventory_status_distribution": inventory_status_distribution,
         "top_managers": top_managers,
+        "top_status_movers": top_status_movers,
     }
 
 @app.post("/seed/brands")

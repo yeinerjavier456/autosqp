@@ -229,7 +229,8 @@ const AdvisorDashboard = () => {
         ],
     };
     const topManagers = Array.isArray(stats.top_managers) ? stats.top_managers : [];
-    const topManager = topManagers[0] || null;
+    const topStatusMovers = Array.isArray(stats.top_status_movers) ? stats.top_status_movers : [];
+    const topManager = topStatusMovers[0] || topManagers[0] || null;
 
     const rangeLabel = `del ${startDate} al ${endDate}`;
     const trendTitle = 'Ritmo de gestión del rango elegido';
@@ -333,7 +334,7 @@ const AdvisorDashboard = () => {
                 <DashboardMetric
                     title="Usuario que más gestiona"
                     value={topManager ? (topManager.full_name || topManager.email || 'Usuario') : 'Sin datos'}
-                    helper={topManager ? `${topManager.count} gestiones registradas en el rango.` : 'Aun no hay gestiones registradas en el rango.'}
+                    helper={topManager ? `${topManager.count} cambios de estado registrados en el rango.` : 'Aun no hay cambios de estado registrados en el rango.'}
                     className="border-fuchsia-200 bg-fuchsia-50 text-fuchsia-900"
                     helperClassName="text-fuchsia-700"
                 />
