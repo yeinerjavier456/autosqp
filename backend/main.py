@@ -1019,6 +1019,29 @@ def validate_interested_process_detail(
         raise HTTPException(status_code=400, detail="Debes indicar qué vehículo busca el cliente.")
 
 
+def normalize_interested_process_detail(
+    target_status: Optional[str],
+    process_detail_data: Optional[schemas.LeadProcessDetailCreate],
+    existing_detail: Optional[models.LeadProcessDetail],
+    lead: Optional[models.Lead],
+) -> Optional[schemas.LeadProcessDetailCreate]:
+    if target_status != models.LeadStatus.INTERESTED.value or process_detail_data is None:
+        return process_detail_data
+
+    if process_detail_data.has_vehicle is True and not process_detail_data.vehicle_id:
+        fallback_desired_vehicle = (
+            (process_detail_data.desired_vehicle or "").strip()
+            or (getattr(existing_detail, "desired_vehicle", None) or "").strip()
+            or (getattr(lead, "message", None) or "").strip()
+            or "Por definir"
+        )
+        process_detail_data.has_vehicle = False
+        process_detail_data.vehicle_id = None
+        process_detail_data.desired_vehicle = fallback_desired_vehicle
+
+    return process_detail_data
+
+
 def build_lead_board_link(target_user: Optional[models.User], lead_id: int) -> str:
     target_role_name = get_user_role_name(target_user)
     base_path = "/aliado/dashboard" if target_role_name == "aliado" else "/admin/leads"
@@ -3991,6 +4014,12 @@ def update_lead(
     process_detail_data = lead_update.process_detail
     previous_process_detail = db.query(models.LeadProcessDetail).filter(models.LeadProcessDetail.lead_id == lead.id).first()
     previous_vehicle_id = previous_process_detail.vehicle_id if previous_process_detail else None
+    process_detail_data = normalize_interested_process_detail(
+        effective_status,
+        process_detail_data,
+        previous_process_detail,
+        lead
+    )
     if not is_contact_only_update:
         validate_interested_process_detail(effective_status, process_detail_data, previous_process_detail)
 

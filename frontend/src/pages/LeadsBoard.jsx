@@ -626,11 +626,8 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                 Swal.fire('Atención', 'Debes indicar si el vehículo está disponible en inventario o si toca conseguirlo.', 'warning');
                 return;
             }
-            if (hasVehicle && !selectedVehicleId) {
-                Swal.fire('Atención', 'Debes seleccionar un vehículo disponible del inventario.', 'warning');
-                return;
-            }
-            if (!hasVehicle && !desiredVehicle.trim()) {
+            const desiredVehicleFallback = desiredVehicle.trim() || lead?.process_detail?.desired_vehicle?.trim() || lead?.message?.trim() || 'Por definir';
+            if (!hasVehicle && !desiredVehicleFallback) {
                 Swal.fire('Atención', 'Debes indicar qué vehículo busca el cliente.', 'warning');
                 return;
             }
@@ -640,10 +637,12 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         try {
             let processDetail = null;
             if (newStatus === 'interested') {
+                const desiredVehicleFallback = desiredVehicle.trim() || lead?.process_detail?.desired_vehicle?.trim() || lead?.message?.trim() || 'Por definir';
+                const shouldMoveToPurchaseSearch = hasVehicle === true && !selectedVehicleId;
                 processDetail = {
-                    has_vehicle: hasVehicle,
-                    vehicle_id: hasVehicle ? parseInt(selectedVehicleId) : null,
-                    desired_vehicle: !hasVehicle ? desiredVehicle.trim() : null
+                    has_vehicle: shouldMoveToPurchaseSearch ? false : hasVehicle,
+                    vehicle_id: hasVehicle && selectedVehicleId ? parseInt(selectedVehicleId) : null,
+                    desired_vehicle: (!hasVehicle || shouldMoveToPurchaseSearch) ? desiredVehicleFallback : null
                 };
             }
             await onUpdate(lead.id, newStatus, newComment, processDetail, canManageSupervision ? selectedSupervisors : null);
@@ -1369,6 +1368,9 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                                     <option key={v.id} value={v.id}>{v.make} {v.model} - Placa: {v.plate}</option>
                                                 ))}
                                             </select>
+                                            <p className="mt-2 text-xs text-gray-500">
+                                                Si no seleccionas un carro del inventario, el lead pasará automáticamente a solicitud de búsqueda.
+                                            </p>
                                         </div>
                                     ) : (
                                         <div>
