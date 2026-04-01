@@ -5,8 +5,8 @@ import PublicSalesChatbot from '../components/PublicSalesChatbot';
 const TikTokLanding = () => {
     return (
         <div className="min-h-screen bg-[radial-gradient(circle_at_top,#fff6e8_0%,#f7fafc_45%,#e2e8f0_100%)] text-slate-900">
-            <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-6 py-8 lg:px-10">
-                <header className="flex items-center justify-between">
+            <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-5 sm:px-6 sm:py-7 lg:px-10">
+                <header className="flex flex-wrap items-center justify-between gap-3">
                     <Link to="/autos" className="text-2xl font-extrabold tracking-tight text-slate-900">
                         <span className="text-orange-500">Autos</span>QP
                     </Link>
@@ -18,15 +18,19 @@ const TikTokLanding = () => {
                     </Link>
                 </header>
 
-                <main className="grid flex-1 items-center gap-10 py-10 lg:grid-cols-[1.05fr_0.95fr]">
-                    <section>
+                <main className="grid flex-1 items-start gap-8 py-6 lg:gap-10 xl:grid-cols-[minmax(0,1fr)_minmax(430px,520px)] xl:items-center xl:py-10">
+                    <section className="max-w-3xl">
                         <span className="inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-orange-700">
                             Atención inmediata desde TikTok
                         </span>
-                        <h3 className="mt-5 max-w-3xl font-serif text-4xl font-black leading-tight text-slate-900 md:text-6xl">
+                        <h3 className="mt-4 max-w-2xl font-serif text-4xl font-black leading-[0.95] text-slate-900 sm:text-5xl xl:text-6xl">
                             Bienvenido a Autos QP.
                         </h3>
-                        <div className="mt-8 grid gap-4 md:grid-cols-3">
+                        <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
+                            Déjanos tus datos desde aquí y nuestro chatbot comercial seguirá el mismo proceso de perfilamiento
+                            que ya usamos en Autos QP para crear tu lead con fuente TikTok.
+                        </p>
+                        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                             <div className="rounded-2xl border border-white/70 bg-white/80 p-5 shadow-sm backdrop-blur">
                                 <p className="text-sm font-bold uppercase tracking-wide text-slate-400">Paso 1</p>
                                 <p className="mt-2 text-sm font-semibold text-slate-700">Cuéntanos qué vehículo te interesa.</p>
@@ -41,7 +45,7 @@ const TikTokLanding = () => {
                             </div>
                         </div>
 
-                        <div className="mt-10 rounded-3xl border border-orange-200 bg-orange-50 p-6 shadow-sm">
+                        <div className="mt-8 max-w-2xl rounded-3xl border border-orange-200 bg-orange-50 p-5 shadow-sm sm:p-6">
                             <p className="text-sm font-bold uppercase tracking-wide text-orange-700">Importante</p>
                             <p className="mt-2 text-sm leading-7 text-slate-700">
                                 Nuestros asesores están listos para atenderte.
@@ -49,11 +53,11 @@ const TikTokLanding = () => {
                         </div>
                     </section>
 
-                    <section className="relative">
-                        <div className="absolute -left-8 top-8 hidden h-40 w-40 rounded-full bg-orange-200/40 blur-3xl lg:block" />
-                        <div className="absolute -right-8 bottom-8 hidden h-48 w-48 rounded-full bg-blue-200/40 blur-3xl lg:block" />
-                        <div className="relative rounded-[32px] border border-white/70 bg-white/85 p-4 shadow-2xl backdrop-blur md:p-5">
-                            <div className="mb-4 flex items-center justify-between rounded-2xl bg-slate-950 px-4 py-3 text-white">
+                    <section className="relative mx-auto w-full max-w-xl xl:max-w-none">
+                        <div className="absolute -left-8 top-8 hidden h-40 w-40 rounded-full bg-orange-200/40 blur-3xl xl:block" />
+                        <div className="absolute -right-8 bottom-8 hidden h-48 w-48 rounded-full bg-blue-200/40 blur-3xl xl:block" />
+                        <div className="relative rounded-[28px] border border-white/70 bg-white/85 p-3 shadow-2xl backdrop-blur sm:p-4">
+                            <div className="mb-3 flex items-center justify-between rounded-2xl bg-slate-950 px-4 py-3 text-white">
                                 <div>
                                     <p className="text-sm font-bold">Chat comercial Autos QP</p>
                                   
@@ -62,7 +66,7 @@ const TikTokLanding = () => {
                                     En línea
                                 </span>
                             </div>
-                            <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-2">
+                            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-2">
                                 <PublicSalesChatbot
                                     autoOpen={true}
                                     hideLauncher={true}

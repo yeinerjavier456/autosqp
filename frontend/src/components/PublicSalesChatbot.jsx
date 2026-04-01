@@ -154,18 +154,18 @@ const PublicSalesChatbot = ({
     return (
         <>
             {open && (
-                <div className={`${embedded ? 'relative w-full h-[620px] max-w-none' : 'fixed bottom-24 right-4 md:right-6 z-50 w-[360px] max-w-[calc(100vw-2rem)] h-[560px]'} bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col`}>
+                <div className={`${embedded ? 'relative w-full max-w-none h-[440px] sm:h-[500px] lg:h-[540px]' : 'fixed bottom-24 right-4 md:right-6 z-50 w-[360px] max-w-[calc(100vw-2rem)] h-[560px]'} bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col`}>
                     <div className="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
                         <div>
                             <h3 className="font-bold">Autos QP</h3>
                             <p className="text-xs text-slate-300">Atención comercial en línea</p>
                         </div>
-                        <button onClick={() => setOpen(false)} className="text-slate-300 hover:text-white">
+                        <button onClick={() => setOpen(false)} className={`text-slate-300 hover:text-white ${hideLauncher ? 'hidden' : ''}`}>
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50">
+                    <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50 min-h-0">
                         <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-3 py-2 text-xs">
                             Para iniciar la conversación con una asesora, escribe tu mensaje.
                         </div>
@@ -209,7 +209,7 @@ const PublicSalesChatbot = ({
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             placeholder="Escribe tu mensaje..."
-                            className="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="flex-1 min-w-0 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         <button
                             type="submit"
