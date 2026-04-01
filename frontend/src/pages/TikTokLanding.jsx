@@ -23,9 +23,9 @@ const TikTokLanding = () => {
                         <span className="inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-orange-700">
                             Atención inmediata desde TikTok
                         </span>
-                        <h3 className="mt-3 max-w-2xl font-serif text-3xl font-black leading-[0.95] text-slate-900 sm:text-4xl lg:text-[4rem]">
+                        <p className="mt-3 max-w-2xl font-serif text-3xl font-black leading-[0.95] text-slate-900 sm:text-4xl lg:text-[4rem]">
                             Bienvenido a Autos QP.
-                        </h3>
+                        </p>
                         <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600 lg:text-[1.05rem]">
                             Déjanos tus datos desde aquí y nuestro chatbot comercial seguirá el mismo proceso de perfilamiento
                             que ya usamos en Autos QP para crear tu lead con fuente TikTok.
