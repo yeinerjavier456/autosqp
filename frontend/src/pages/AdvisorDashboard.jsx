@@ -75,6 +75,19 @@ const OPTION_DECISION_LABELS = {
 
 const formatLabel = (key, labelMap) => labelMap[key] || key || 'Sin dato';
 
+const getLast7DaysRange = () => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - 6);
+
+    const formatDate = (date) => date.toISOString().slice(0, 10);
+
+    return {
+        start: formatDate(start),
+        end: formatDate(end)
+    };
+};
+
 const buildBarData = (entries, label, color) => ({
     labels: entries.map(([entryLabel]) => entryLabel),
     datasets: [
@@ -111,9 +124,9 @@ const AdvisorDashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const [stats, setStats] = useState(null);
-    const [period, setPeriod] = useState('month');
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
+    const defaultRange = getLast7DaysRange();
+    const [startDate, setStartDate] = useState(defaultRange.start);
+    const [endDate, setEndDate] = useState(defaultRange.end);
 
     const roleName = getRoleName(user);
     const roleLabel = user?.role?.label || roleName || 'Usuario';
@@ -133,8 +146,8 @@ const AdvisorDashboard = () => {
                 const response = await axios.get('https://autosqp.co/api/stats/advisor', {
                     headers: { Authorization: `Bearer ${token}` },
                     params: {
-                        period,
-                        ...(startDate && endDate ? { start_date: startDate, end_date: endDate } : {})
+                        start_date: startDate,
+                        end_date: endDate
                     }
                 });
                 setStats(response.data);
@@ -143,8 +156,8 @@ const AdvisorDashboard = () => {
             }
         };
 
-        if (user?.company_id) fetchStats();
-    }, [user, period, startDate, endDate]);
+        if (user?.company_id && startDate && endDate) fetchStats();
+    }, [user, startDate, endDate]);
 
     if (!stats) {
         return <div className="p-8 text-center text-gray-500">Cargando tablero...</div>;
@@ -218,28 +231,9 @@ const AdvisorDashboard = () => {
     const topManagers = Array.isArray(stats.top_managers) ? stats.top_managers : [];
     const topManager = topManagers[0] || null;
 
-    const isCustomRange = Boolean(startDate && endDate);
-    const rangeLabel = isCustomRange
-        ? `del ${startDate} al ${endDate}`
-        : period === 'day'
-        ? 'hoy'
-        : period === 'year'
-            ? 'este año'
-            : 'este mes';
-    const trendTitle = isCustomRange
-        ? 'Ritmo de gestión del rango elegido'
-        : period === 'day'
-        ? 'Ritmo de gestión del día'
-        : period === 'year'
-            ? 'Ritmo de gestión del año'
-            : 'Ritmo de gestión del mes';
-    const trendDescription = isCustomRange
-        ? 'Leads gestionados dentro del rango manual seleccionado.'
-        : period === 'day'
-        ? 'Leads creados hoy distribuidos por hora.'
-        : period === 'year'
-            ? 'Leads creados durante el año actual distribuidos por mes.'
-            : 'Leads creados durante el mes actual distribuidos por día.';
+    const rangeLabel = `del ${startDate} al ${endDate}`;
+    const trendTitle = 'Ritmo de gestión del rango elegido';
+    const trendDescription = 'Leads gestionados dentro del rango manual seleccionado.';
     const leadBoardPath = permissions.has('ally_board') && !permissions.has('leads_board')
         ? '/aliado/dashboard'
         : '/admin/leads';
@@ -255,17 +249,8 @@ const AdvisorDashboard = () => {
                         </p>
                     </div>
                     <div className="w-full max-w-3xl">
-                        <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-cyan-100">Periodo de métricas</label>
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,180px)_minmax(0,1fr)_minmax(0,1fr)_auto]">
-                            <select
-                                value={period}
-                                onChange={(e) => setPeriod(e.target.value)}
-                                className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white outline-none backdrop-blur-sm transition focus:border-cyan-200"
-                            >
-                                <option value="day" className="text-slate-900">Día</option>
-                                <option value="month" className="text-slate-900">Mes</option>
-                                <option value="year" className="text-slate-900">Año</option>
-                            </select>
+                        <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-cyan-100">Rango de fechas</label>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
                             <input
                                 type="date"
                                 value={startDate}
@@ -282,12 +267,13 @@ const AdvisorDashboard = () => {
                             <button
                                 type="button"
                                 onClick={() => {
-                                    setStartDate('');
-                                    setEndDate('');
+                                    const range = getLast7DaysRange();
+                                    setStartDate(range.start);
+                                    setEndDate(range.end);
                                 }}
                                 className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-cyan-50 transition hover:bg-white/20"
                             >
-                                Limpiar
+                                Últimos 7 días
                             </button>
                         </div>
                     </div>
