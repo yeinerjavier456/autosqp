@@ -112,6 +112,8 @@ const AdvisorDashboard = () => {
     const navigate = useNavigate();
     const [stats, setStats] = useState(null);
     const [period, setPeriod] = useState('month');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
 
     const roleName = getRoleName(user);
     const roleLabel = user?.role?.label || roleName || 'Usuario';
@@ -130,7 +132,10 @@ const AdvisorDashboard = () => {
                 const token = localStorage.getItem('token');
                 const response = await axios.get('https://autosqp.co/api/stats/advisor', {
                     headers: { Authorization: `Bearer ${token}` },
-                    params: { period }
+                    params: {
+                        period,
+                        ...(startDate && endDate ? { start_date: startDate, end_date: endDate } : {})
+                    }
                 });
                 setStats(response.data);
             } catch (error) {
@@ -139,7 +144,7 @@ const AdvisorDashboard = () => {
         };
 
         if (user?.company_id) fetchStats();
-    }, [user, period]);
+    }, [user, period, startDate, endDate]);
 
     if (!stats) {
         return <div className="p-8 text-center text-gray-500">Cargando tablero...</div>;
@@ -211,17 +216,24 @@ const AdvisorDashboard = () => {
         ],
     };
 
-    const periodLabel = period === 'day'
+    const isCustomRange = Boolean(startDate && endDate);
+    const rangeLabel = isCustomRange
+        ? `del ${startDate} al ${endDate}`
+        : period === 'day'
         ? 'hoy'
         : period === 'year'
             ? 'este año'
             : 'este mes';
-    const trendTitle = period === 'day'
+    const trendTitle = isCustomRange
+        ? 'Ritmo de gestión del rango elegido'
+        : period === 'day'
         ? 'Ritmo de gestión del día'
         : period === 'year'
             ? 'Ritmo de gestión del año'
             : 'Ritmo de gestión del mes';
-    const trendDescription = period === 'day'
+    const trendDescription = isCustomRange
+        ? 'Leads gestionados dentro del rango manual seleccionado.'
+        : period === 'day'
         ? 'Leads creados hoy distribuidos por hora.'
         : period === 'year'
             ? 'Leads creados durante el año actual distribuidos por mes.'
@@ -240,17 +252,42 @@ const AdvisorDashboard = () => {
                             Vista operativa de tu gestión actual: leads, cierres, estados y colas relacionadas según el rol que tienes dentro de la empresa.
                         </p>
                     </div>
-                    <div className="w-full max-w-xs">
+                    <div className="w-full max-w-3xl">
                         <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-cyan-100">Periodo de métricas</label>
-                        <select
-                            value={period}
-                            onChange={(e) => setPeriod(e.target.value)}
-                            className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white outline-none backdrop-blur-sm transition focus:border-cyan-200"
-                        >
-                            <option value="day" className="text-slate-900">Día</option>
-                            <option value="month" className="text-slate-900">Mes</option>
-                            <option value="year" className="text-slate-900">Año</option>
-                        </select>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,180px)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+                            <select
+                                value={period}
+                                onChange={(e) => setPeriod(e.target.value)}
+                                className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white outline-none backdrop-blur-sm transition focus:border-cyan-200"
+                            >
+                                <option value="day" className="text-slate-900">Día</option>
+                                <option value="month" className="text-slate-900">Mes</option>
+                                <option value="year" className="text-slate-900">Año</option>
+                            </select>
+                            <input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white outline-none backdrop-blur-sm transition focus:border-cyan-200"
+                            />
+                            <input
+                                type="date"
+                                value={endDate}
+                                min={startDate || undefined}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white outline-none backdrop-blur-sm transition focus:border-cyan-200"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setStartDate('');
+                                    setEndDate('');
+                                }}
+                                className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-cyan-50 transition hover:bg-white/20"
+                            >
+                                Limpiar
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -259,13 +296,13 @@ const AdvisorDashboard = () => {
                 <DashboardMetric
                     title="Leads a cargo"
                     value={stats.total_leads}
-                    helper={`Incluye asignados y leads donde quedaste en supervision durante ${periodLabel}.`}
+                    helper={`Incluye asignados y leads donde quedaste en supervision ${rangeLabel}.`}
                     onClick={hasLeadsSection ? () => navigate(leadBoardPath) : undefined}
                 />
                 <DashboardMetric
                     title="Conversion"
                     value={`${stats.conversion_rate}%`}
-                    helper={`${stats.leads_sold} cierres sobre tu base de ${periodLabel}.`}
+                    helper={`${stats.leads_sold} cierres sobre tu base ${rangeLabel}.`}
                     onClick={hasSalesSection ? () => navigate(permissions.has('my_sales') && !permissions.has('sales') ? '/admin/my-sales' : '/admin/sales') : undefined}
                     className="border-emerald-200 bg-emerald-50 text-emerald-900"
                     helperClassName="text-emerald-700"
@@ -273,7 +310,7 @@ const AdvisorDashboard = () => {
                 <DashboardMetric
                     title="Pipeline activo"
                     value={stats.active_pipeline_count}
-                    helper={`${stats.leads_new} leads siguen en estado nuevo en ${periodLabel}.`}
+                    helper={`${stats.leads_new} leads siguen en estado nuevo ${rangeLabel}.`}
                     onClick={hasLeadsSection ? () => navigate(leadBoardPath) : undefined}
                     className="border-amber-200 bg-amber-50 text-amber-900"
                     helperClassName="text-amber-700"

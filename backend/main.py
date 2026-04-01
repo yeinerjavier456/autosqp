@@ -2343,9 +2343,49 @@ def upsert_brand_model(db: Session, make: Optional[str], model: Optional[str]):
             db.add(models.CarModel(name=model_name, brand_id=brand.id))
 
 
-def get_dashboard_period_bounds(period: Optional[str]):
+def get_dashboard_period_bounds(period: Optional[str], start_date: Optional[str] = None, end_date: Optional[str] = None):
     normalized_period = (period or "month").strip().lower()
     now = datetime.datetime.utcnow()
+
+    if start_date and end_date:
+        try:
+            start_day = datetime.date.fromisoformat(start_date)
+            end_day = datetime.date.fromisoformat(end_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Las fechas del dashboard deben usar formato YYYY-MM-DD")
+
+        if end_day < start_day:
+            raise HTTPException(status_code=400, detail="La fecha final no puede ser menor a la inicial")
+
+        start = datetime.datetime.combine(start_day, datetime.time.min)
+        end = datetime.datetime.combine(end_day + datetime.timedelta(days=1), datetime.time.min)
+        total_days = (end_day - start_day).days + 1
+
+        if total_days <= 31:
+            bucket_labels = [
+                (start_day + datetime.timedelta(days=offset)).strftime("%d/%m")
+                for offset in range(total_days)
+            ]
+
+            def bucket_label(dt_value: datetime.datetime):
+                return dt_value.strftime("%d/%m")
+
+            return "custom", start, end, bucket_labels, bucket_label
+
+        month_cursor = datetime.date(start_day.year, start_day.month, 1)
+        month_end = datetime.date(end_day.year, end_day.month, 1)
+        bucket_labels = []
+        while month_cursor <= month_end:
+            bucket_labels.append(month_cursor.strftime("%m/%Y"))
+            if month_cursor.month == 12:
+                month_cursor = datetime.date(month_cursor.year + 1, 1, 1)
+            else:
+                month_cursor = datetime.date(month_cursor.year, month_cursor.month + 1, 1)
+
+        def bucket_label(dt_value: datetime.datetime):
+            return dt_value.strftime("%m/%Y")
+
+        return "custom", start, end, bucket_labels, bucket_label
 
     if normalized_period == "day":
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -2384,6 +2424,8 @@ def get_dashboard_period_bounds(period: Optional[str]):
 @app.get("/stats/advisor", response_model=schemas.RoleDashboardStats)
 def read_advisor_stats(
     period: str = Query("month"),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -2394,15 +2436,13 @@ def read_advisor_stats(
     permissions = set(get_role_permissions(current_user.role))
     company_scope = role_name in {"admin", "super_admin"}
     ally_user_ids = set(get_company_ally_user_ids(db, current_user.company_id))
-    _, period_start, period_end, trend_labels, get_trend_bucket = get_dashboard_period_bounds(period)
+    normalized_period, period_start, period_end, trend_labels, get_trend_bucket = get_dashboard_period_bounds(period, start_date, end_date)
 
     leads_query = db.query(models.Lead).options(
         joinedload(models.Lead.supervisors),
         joinedload(models.Lead.purchase_options)
     ).filter(
-        models.Lead.company_id == current_user.company_id,
-        models.Lead.created_at >= period_start,
-        models.Lead.created_at < period_end
+        models.Lead.company_id == current_user.company_id
     )
     if not company_scope:
         leads_query = leads_query.filter(
@@ -2411,7 +2451,16 @@ def read_advisor_stats(
                 models.Lead.supervisors.any(models.User.id == current_user.id)
             )
         )
-    leads = leads_query.all()
+    all_leads = leads_query.all()
+
+    def is_within_dashboard_range(dt_value: Optional[datetime.datetime]) -> bool:
+        return bool(dt_value and period_start <= dt_value < period_end)
+
+    def lead_activity_at(lead: models.Lead) -> Optional[datetime.datetime]:
+        activity_candidates = [lead.last_reply_at, lead.status_updated_at, lead.created_at]
+        return max((candidate for candidate in activity_candidates if candidate is not None), default=None)
+
+    leads = [lead for lead in all_leads if is_within_dashboard_range(lead_activity_at(lead))]
 
     status_distribution = {}
     ally_status_distribution = {}
@@ -2430,8 +2479,9 @@ def read_advisor_stats(
             active_pipeline_count += 1
         if lead.has_unread_reply:
             unread_replies_count += 1
-        if lead.created_at:
-            trend_bucket = get_trend_bucket(lead.created_at)
+        lead_reference_date = lead_activity_at(lead)
+        if lead_reference_date and period_start <= lead_reference_date < period_end:
+            trend_bucket = get_trend_bucket(lead_reference_date)
             if trend_bucket in recent_leads_by_day:
                 recent_leads_by_day[trend_bucket] += 1
         for option in lead.purchase_options or []:
@@ -2460,9 +2510,7 @@ def read_advisor_stats(
     credit_total = 0
     if "credits" in permissions:
         credits_query = db.query(models.CreditApplication).filter(
-            models.CreditApplication.company_id == current_user.company_id,
-            models.CreditApplication.created_at >= period_start,
-            models.CreditApplication.created_at < period_end
+            models.CreditApplication.company_id == current_user.company_id
         )
         if not company_scope:
             credits_query = credits_query.filter(
@@ -2471,7 +2519,10 @@ def read_advisor_stats(
                     models.CreditApplication.lead_id.in_(relevant_lead_ids or [-1])
                 )
             )
-        credits = credits_query.all()
+        credits = [
+            credit for credit in credits_query.all()
+            if is_within_dashboard_range(getattr(credit, "updated_at", None) or getattr(credit, "created_at", None))
+        ]
         credit_total = len(credits)
         for credit in credits:
             status_key = credit.status or "pending"
@@ -2483,8 +2534,6 @@ def read_advisor_stats(
         purchase_lead_ids = [
             lead_id for (lead_id,) in db.query(models.Lead.id).filter(
                 models.Lead.company_id == current_user.company_id,
-                models.Lead.created_at >= period_start,
-                models.Lead.created_at < period_end,
                 models.Lead.status == models.LeadStatus.INTERESTED.value,
                 models.Lead.process_detail.has(models.LeadProcessDetail.has_vehicle == False),  # noqa: E712
                 models.Lead.process_detail.has(models.LeadProcessDetail.desired_vehicle.isnot(None))
@@ -2492,8 +2541,6 @@ def read_advisor_stats(
         ]
         purchases_query = db.query(models.CreditApplication).filter(
             models.CreditApplication.company_id == current_user.company_id,
-            models.CreditApplication.created_at >= period_start,
-            models.CreditApplication.created_at < period_end,
             models.CreditApplication.lead_id.in_(purchase_lead_ids or [-1])
         )
         if not company_scope:
@@ -2503,7 +2550,10 @@ def read_advisor_stats(
                     models.CreditApplication.lead_id.in_(relevant_lead_ids or [-1])
                 )
             )
-        purchases = purchases_query.all()
+        purchases = [
+            purchase for purchase in purchases_query.all()
+            if is_within_dashboard_range(getattr(purchase, "updated_at", None) or getattr(purchase, "created_at", None))
+        ]
         purchase_total = len(purchases)
         for purchase in purchases:
             status_key = purchase.status or "pending"
@@ -2515,13 +2565,14 @@ def read_advisor_stats(
     sales_pending = 0
     if "sales" in permissions or "my_sales" in permissions:
         sales_query = db.query(models.Sale).filter(
-            models.Sale.company_id == current_user.company_id,
-            models.Sale.sale_date >= period_start,
-            models.Sale.sale_date < period_end
+            models.Sale.company_id == current_user.company_id
         )
         if "my_sales" in permissions and not company_scope:
             sales_query = sales_query.filter(models.Sale.seller_id == current_user.id)
-        sales = sales_query.all()
+        sales = [
+            sale for sale in sales_query.all()
+            if is_within_dashboard_range(getattr(sale, "sale_date", None) or getattr(sale, "created_at", None))
+        ]
         sales_total = len(sales)
         for sale in sales:
             status_key = sale.status or "pending"
