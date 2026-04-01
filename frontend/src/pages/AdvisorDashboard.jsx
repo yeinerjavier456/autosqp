@@ -15,6 +15,7 @@ import {
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import { useAuth } from '../context/AuthContext';
 import { getRoleName, getRolePermissions } from '../config/views';
+import { useNavigate } from 'react-router-dom';
 
 ChartJS.register(
     CategoryScale,
@@ -86,16 +87,29 @@ const buildBarData = (entries, label, color) => ({
     ],
 });
 
-const DashboardMetric = ({ title, value, helper, className = 'border-slate-200 bg-white text-slate-900', helperClassName = 'text-slate-500' }) => (
-    <div className={`rounded-2xl border p-5 shadow-sm ${className}`}>
-        <p className="text-sm font-medium opacity-80">{title}</p>
-        <p className="mt-2 text-3xl font-bold">{value}</p>
-        <p className={`mt-2 text-xs ${helperClassName}`}>{helper}</p>
-    </div>
-);
+const DashboardMetric = ({ title, value, helper, onClick, className = 'border-slate-200 bg-white text-slate-900', helperClassName = 'text-slate-500' }) => {
+    const sharedClassName = `rounded-2xl border p-5 shadow-sm text-left transition ${className}`;
+    if (onClick) {
+        return (
+            <button type="button" onClick={onClick} className={`${sharedClassName} hover:-translate-y-0.5 hover:shadow-md cursor-pointer`}>
+                <p className="text-sm font-medium opacity-80">{title}</p>
+                <p className="mt-2 text-3xl font-bold">{value}</p>
+                <p className={`mt-2 text-xs ${helperClassName}`}>{helper}</p>
+            </button>
+        );
+    }
+    return (
+        <div className={sharedClassName}>
+            <p className="text-sm font-medium opacity-80">{title}</p>
+            <p className="mt-2 text-3xl font-bold">{value}</p>
+            <p className={`mt-2 text-xs ${helperClassName}`}>{helper}</p>
+        </div>
+    );
+};
 
 const AdvisorDashboard = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [stats, setStats] = useState(null);
     const [period, setPeriod] = useState('month');
 
@@ -212,6 +226,9 @@ const AdvisorDashboard = () => {
         : period === 'year'
             ? 'Leads creados durante el año actual distribuidos por mes.'
             : 'Leads creados durante el mes actual distribuidos por día.';
+    const leadBoardPath = permissions.has('ally_board') && !permissions.has('leads_board')
+        ? '/aliado/dashboard'
+        : '/admin/leads';
 
     return (
         <div className="space-y-6">
@@ -243,11 +260,13 @@ const AdvisorDashboard = () => {
                     title="Leads a cargo"
                     value={stats.total_leads}
                     helper={`Incluye asignados y leads donde quedaste en supervision durante ${periodLabel}.`}
+                    onClick={hasLeadsSection ? () => navigate(leadBoardPath) : undefined}
                 />
                 <DashboardMetric
                     title="Conversion"
                     value={`${stats.conversion_rate}%`}
                     helper={`${stats.leads_sold} cierres sobre tu base de ${periodLabel}.`}
+                    onClick={hasSalesSection ? () => navigate(permissions.has('my_sales') && !permissions.has('sales') ? '/admin/my-sales' : '/admin/sales') : undefined}
                     className="border-emerald-200 bg-emerald-50 text-emerald-900"
                     helperClassName="text-emerald-700"
                 />
@@ -255,6 +274,7 @@ const AdvisorDashboard = () => {
                     title="Pipeline activo"
                     value={stats.active_pipeline_count}
                     helper={`${stats.leads_new} leads siguen en estado nuevo en ${periodLabel}.`}
+                    onClick={hasLeadsSection ? () => navigate(leadBoardPath) : undefined}
                     className="border-amber-200 bg-amber-50 text-amber-900"
                     helperClassName="text-amber-700"
                 />
@@ -262,6 +282,7 @@ const AdvisorDashboard = () => {
                     title="Pendientes por revisar"
                     value={stats.unread_replies_count}
                     helper={`Tiempo medio de respuesta visible: ${stats.response_time_min} min.`}
+                    onClick={hasLeadsSection ? () => navigate(leadBoardPath) : undefined}
                     className="border-orange-200 bg-orange-50 text-orange-900"
                     helperClassName="text-orange-700"
                 />
@@ -273,6 +294,7 @@ const AdvisorDashboard = () => {
                         title="Gestion de aliados"
                         value={stats.ally_total}
                         helper="Leads donde un aliado esta asignado o en supervision."
+                        onClick={() => navigate('/aliado/dashboard')}
                         className="border-cyan-200 bg-cyan-50 text-cyan-900"
                         helperClassName="text-cyan-700"
                     />
@@ -282,6 +304,7 @@ const AdvisorDashboard = () => {
                         title="Solicitudes de credito"
                         value={stats.credit_total}
                         helper="Casos donde hoy participas o haces seguimiento."
+                        onClick={() => navigate('/admin/credits')}
                         className="border-violet-200 bg-violet-50 text-violet-900"
                         helperClassName="text-violet-700"
                     />
@@ -291,6 +314,7 @@ const AdvisorDashboard = () => {
                         title="Solicitudes de compra"
                         value={stats.purchase_total}
                         helper="Busquedas de vehiculo ligadas a tu gestión."
+                        onClick={() => navigate('/admin/purchases')}
                         className="border-pink-200 bg-pink-50 text-pink-900"
                         helperClassName="text-pink-700"
                     />
@@ -300,6 +324,7 @@ const AdvisorDashboard = () => {
                         title="Ventas"
                         value={stats.sales_total}
                         helper={`${stats.sales_approved} aprobadas y ${stats.sales_pending} pendientes.`}
+                        onClick={() => navigate(permissions.has('my_sales') && !permissions.has('sales') ? '/admin/my-sales' : '/admin/sales')}
                         className="border-emerald-200 bg-emerald-50 text-emerald-900"
                         helperClassName="text-emerald-700"
                     />
@@ -309,6 +334,7 @@ const AdvisorDashboard = () => {
                         title="Inventario"
                         value={stats.inventory_total}
                         helper="Total de vehiculos visibles para tu operación."
+                        onClick={() => navigate('/admin/inventory')}
                         className="border-sky-200 bg-sky-50 text-sky-900"
                         helperClassName="text-sky-700"
                     />

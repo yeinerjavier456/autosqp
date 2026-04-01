@@ -537,6 +537,11 @@ def add_purchase_note(
     db.refresh(purchase)
     if lead_note:
         db.refresh(lead_note)
+        lead_note = db.query(models.LeadNote).options(
+            joinedload(models.LeadNote.user)
+        ).filter(
+            models.LeadNote.id == lead_note.id
+        ).first()
 
     return {"purchase": purchase, "lead_note": lead_note}
 

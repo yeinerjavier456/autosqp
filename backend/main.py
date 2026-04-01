@@ -3736,6 +3736,11 @@ def create_lead_note(
     db.add(db_note)
     db.commit()
     db.refresh(db_note)
+    db_note = db.query(models.LeadNote).options(
+        joinedload(models.LeadNote.user)
+    ).filter(
+        models.LeadNote.id == db_note.id
+    ).first()
     
     log_action_to_db(db, current_user.id, "CREATE", "LeadNote", db_note.id, f"Nota agregada al lead {lead.name}")
     

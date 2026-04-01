@@ -469,6 +469,11 @@ def add_credit_note(
     db.refresh(credit)
     if lead_note:
         db.refresh(lead_note)
+        lead_note = db.query(models.LeadNote).options(
+            joinedload(models.LeadNote.user)
+        ).filter(
+            models.LeadNote.id == lead_note.id
+        ).first()
 
     return {"credit": credit, "lead_note": lead_note}
 

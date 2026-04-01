@@ -1314,12 +1314,15 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, onDeleteLead
                                 {leadNotes.length > 0 && (
                                     <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
                                         {leadNotes.map((note) => (
-                                            <div key={note.id} className="bg-white p-2 rounded border border-gray-100 shadow-sm text-sm">
-                                                <p className="text-gray-800">{note.content}</p>
-                                                <span className="text-[10px] text-gray-400">
-                                                    {new Date(note.created_at).toLocaleString()}
-                                                </span>
-                                            </div>
+                                              <div key={note.id} className="bg-white p-2 rounded border border-gray-100 shadow-sm text-sm">
+                                                  <p className="text-[11px] font-semibold text-slate-500">
+                                                      {note.user?.full_name || note.user?.email || 'Usuario'}
+                                                  </p>
+                                                  <p className="text-gray-800">{note.content}</p>
+                                                  <span className="text-[10px] text-gray-400">
+                                                      {new Date(note.created_at).toLocaleString()}
+                                                  </span>
+                                              </div>
                                         ))}
                                     </div>
                                 )}
