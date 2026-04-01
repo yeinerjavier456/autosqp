@@ -2555,7 +2555,6 @@ def read_advisor_stats(
         return max((candidate for candidate in activity_candidates if candidate is not None), default=None)
 
     leads = [lead for lead in all_leads if is_within_dashboard_range(lead_activity_at(lead))]
-    new_leads_in_range = sum(1 for lead in all_leads if is_within_dashboard_range(getattr(lead, "created_at", None)))
 
     status_distribution = {}
     ally_status_distribution = {}
@@ -2567,33 +2566,22 @@ def read_advisor_stats(
 
     relevant_lead_ids = []
     ally_lead_ids = []
+    autos_lead_ids = []
     ally_total = 0
     ally_new_leads_in_range = 0
+    autos_new_leads_in_range = 0
     for lead in leads:
         relevant_lead_ids.append(lead.id)
         status_key = lead.status or "new"
-        status_distribution[status_key] = status_distribution.get(status_key, 0) + 1
-        if status_key not in {"sold", "lost"}:
-            active_pipeline_count += 1
-        if lead.has_unread_reply:
-            unread_replies_count += 1
         lead_reference_date = lead_activity_at(lead)
-        if lead_reference_date and period_start <= lead_reference_date < period_end:
-            trend_bucket = get_trend_bucket(lead_reference_date)
-            if trend_bucket in recent_leads_by_day:
-                recent_leads_by_day[trend_bucket] += 1
-        for option in lead.purchase_options or []:
-            decision_status = (getattr(option, "decision_status", None) or "pending").lower()
-            if decision_status not in purchase_option_decision_distribution:
-                purchase_option_decision_distribution[decision_status] = 0
-            purchase_option_decision_distribution[decision_status] += 1
 
         supervisor_ids = {supervisor.id for supervisor in (lead.supervisors or []) if supervisor and supervisor.id}
         touches_ally_board = bool(
+            status_key == models.LeadStatus.ALLY_MANAGED.value or (
             ally_user_ids and (
                 (lead.assigned_to_id in ally_user_ids) or
                 bool(supervisor_ids & ally_user_ids)
-            )
+            ))
         )
         if touches_ally_board:
             ally_total += 1
@@ -2605,8 +2593,27 @@ def read_advisor_stats(
                 trend_bucket = get_trend_bucket(lead_reference_date)
                 if trend_bucket in ally_recent_leads_by_day:
                     ally_recent_leads_by_day[trend_bucket] += 1
+            continue
 
-    total_leads = len(leads)
+        autos_lead_ids.append(lead.id)
+        status_distribution[status_key] = status_distribution.get(status_key, 0) + 1
+        if status_key not in {"sold", "lost"}:
+            active_pipeline_count += 1
+        if lead.has_unread_reply:
+            unread_replies_count += 1
+        if is_within_dashboard_range(getattr(lead, "created_at", None)):
+            autos_new_leads_in_range += 1
+        if lead_reference_date and period_start <= lead_reference_date < period_end:
+            trend_bucket = get_trend_bucket(lead_reference_date)
+            if trend_bucket in recent_leads_by_day:
+                recent_leads_by_day[trend_bucket] += 1
+        for option in lead.purchase_options or []:
+            decision_status = (getattr(option, "decision_status", None) or "pending").lower()
+            if decision_status not in purchase_option_decision_distribution:
+                purchase_option_decision_distribution[decision_status] = 0
+            purchase_option_decision_distribution[decision_status] += 1
+
+    total_leads = len(autos_lead_ids)
     leads_sold = status_distribution.get("sold", 0)
     leads_new = status_distribution.get("new", 0)
     conversion_rate = (leads_sold / total_leads * 100) if total_leads else 0
@@ -2628,7 +2635,11 @@ def read_advisor_stats(
         entry for entry in status_change_entries
         if entry.lead_id in ally_lead_ids
     ]
-    status_changes_in_range = len(status_change_entries)
+    autos_status_change_entries = [
+        entry for entry in status_change_entries
+        if entry.lead_id in autos_lead_ids
+    ]
+    status_changes_in_range = len(autos_status_change_entries)
     ally_status_changes_in_range = len(ally_status_change_entries)
     manager_activity_map: Dict[int, Dict[str, Any]] = {}
     status_mover_map: Dict[int, Dict[str, Any]] = {}
@@ -2651,7 +2662,7 @@ def read_advisor_stats(
             current_item["full_name"] = getattr(getattr(entry, "user", None), "full_name", None)
         if not current_item.get("email"):
             current_item["email"] = getattr(getattr(entry, "user", None), "email", None)
-    for entry in status_change_entries:
+    for entry in autos_status_change_entries:
         if not entry.user_id:
             continue
         current_item = status_mover_map.setdefault(
@@ -2814,7 +2825,7 @@ def read_advisor_stats(
         "ally_total": ally_total,
         "ally_new_leads_in_range": ally_new_leads_in_range,
         "ally_status_changes_in_range": ally_status_changes_in_range,
-        "new_leads_in_range": new_leads_in_range,
+        "new_leads_in_range": autos_new_leads_in_range,
         "status_changes_in_range": status_changes_in_range,
         "conversion_rate": round(conversion_rate, 2),
         "response_time_min": 37,
