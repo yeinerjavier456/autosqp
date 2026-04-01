@@ -10,7 +10,8 @@ const PublicSalesChatbot = ({
     autoOpen = false,
     initialAssistantMessage = '',
     hideLauncher = false,
-    embedded = false
+    embedded = false,
+    forceFreshSession = false
 }) => {
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -27,6 +28,7 @@ const PublicSalesChatbot = ({
 
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
     const resolvedSourcePage = sourcePage || window.location.pathname;
+    const browserStorage = forceFreshSession ? window.sessionStorage : window.localStorage;
     const visibleMessages = messages.length > 0
         ? messages
         : (initialAssistantMessage
@@ -34,13 +36,13 @@ const PublicSalesChatbot = ({
             : []);
 
     const ensureSession = async () => {
-        let token = localStorage.getItem(sessionStorageKey) || '';
+        let token = forceFreshSession ? '' : (browserStorage.getItem(sessionStorageKey) || '');
         if (!token) {
             const res = await axios.post('https://autosqp.co/api/public-chat/session', {
                 source_page: resolvedSourcePage
             });
             token = res.data.session_token;
-            localStorage.setItem(sessionStorageKey, token);
+            browserStorage.setItem(sessionStorageKey, token);
         }
         setSessionToken(token);
         return token;
