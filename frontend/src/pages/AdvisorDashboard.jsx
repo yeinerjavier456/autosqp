@@ -232,6 +232,13 @@ const AdvisorDashboard = () => {
     const topManagers = Array.isArray(stats.top_managers) ? stats.top_managers : [];
     const topStatusMovers = Array.isArray(stats.top_status_movers) ? stats.top_status_movers : [];
     const allyTopManagers = Array.isArray(stats.ally_top_managers) ? stats.ally_top_managers : [];
+
+    const rangeLabel = `del ${startDate} al ${endDate}`;
+    const trendTitle = 'Ritmo de gestión del rango elegido';
+    const trendDescription = 'Leads gestionados dentro del rango manual seleccionado.';
+    const leadBoardPath = permissions.has('ally_board') && !permissions.has('leads_board')
+        ? '/aliado/dashboard'
+        : '/admin/leads';
     const isAllyDashboard = dashboardView === 'allies';
     const topManager = isAllyDashboard
         ? (allyTopManagers[0] || null)
@@ -256,13 +263,6 @@ const AdvisorDashboard = () => {
         ? 'Leads donde un aliado participa dentro del rango seleccionado.'
         : trendDescription;
     const currentRanking = isAllyDashboard ? allyTopManagers : topManagers;
-
-    const rangeLabel = `del ${startDate} al ${endDate}`;
-    const trendTitle = 'Ritmo de gestión del rango elegido';
-    const trendDescription = 'Leads gestionados dentro del rango manual seleccionado.';
-    const leadBoardPath = permissions.has('ally_board') && !permissions.has('leads_board')
-        ? '/aliado/dashboard'
-        : '/admin/leads';
 
     return (
         <div className="space-y-6">
