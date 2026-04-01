@@ -261,8 +261,10 @@ class Sale(Base):
     id = Column(Integer, primary_key=True, index=True)
     vehicle_id = Column(Integer, ForeignKey("vehicles.id"), unique=True)
     lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
-    seller_id = Column(Integer, ForeignKey("users.id"))
+    seller_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"))
+    seller_type = Column(String(20), default="internal")
+    external_seller_name = Column(String(150), nullable=True)
     
     sale_price = Column(Integer) # Final price sold
     commission_percentage = Column(Integer) # Snapshot of % at time of sale

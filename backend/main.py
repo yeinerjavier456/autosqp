@@ -95,6 +95,34 @@ def ensure_payment_receipts_columns():
 ensure_role_configuration_columns()
 ensure_payment_receipts_columns()
 
+def ensure_sales_metadata_columns():
+    try:
+        with engine.begin() as conn:
+            sales_columns = {
+                "seller_type": "ALTER TABLE sales ADD COLUMN seller_type VARCHAR(20) NOT NULL DEFAULT 'internal'",
+                "external_seller_name": "ALTER TABLE sales ADD COLUMN external_seller_name VARCHAR(150) NULL",
+            }
+            for column_name, ddl in sales_columns.items():
+                exists = conn.execute(text(
+                    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sales' "
+                    "AND COLUMN_NAME = :column_name"
+                ), {"column_name": column_name}).scalar()
+                if not exists:
+                    conn.execute(text(ddl))
+
+            seller_is_nullable = conn.execute(text(
+                "SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sales' "
+                "AND COLUMN_NAME = 'seller_id'"
+            )).scalar()
+            if seller_is_nullable == "NO":
+                conn.execute(text("ALTER TABLE sales MODIFY COLUMN seller_id INTEGER NULL"))
+    except Exception as exc:
+        print(f"Warning: could not ensure sales metadata columns: {exc}", flush=True)
+
+ensure_sales_metadata_columns()
+
 def ensure_gmail_settings_columns():
     """
     Backward-compatible bootstrap for Gmail integration settings.
@@ -2952,6 +2980,67 @@ def get_company_chatbot_settings(db: Session, company_id: Optional[int]) -> tupl
     typing_max_ms = max(typing_min_ms, typing_max_ms)
     return bot_name, typing_min_ms, typing_max_ms
 
+
+def is_company_admin_user(user: models.User) -> bool:
+    return get_user_role_name(user) in ["admin", "super_admin"]
+
+
+def resolve_sale_seller(
+    db: Session,
+    current_user: models.User,
+    seller_type: Optional[str],
+    seller_id: Optional[int],
+    external_seller_name: Optional[str]
+) -> tuple[str, Optional[models.User], Optional[str]]:
+    normalized_type = (seller_type or "internal").strip().lower()
+    if normalized_type not in {"internal", "external"}:
+        raise HTTPException(status_code=400, detail="Tipo de vendedor invalido")
+
+    if normalized_type == "external":
+        cleaned_name = (external_seller_name or "").strip()
+        if not cleaned_name:
+            raise HTTPException(status_code=400, detail="Debes indicar el asesor externo")
+        return "external", None, cleaned_name
+
+    target_seller = current_user
+    if seller_id and seller_id != current_user.id:
+        if not is_company_admin_user(current_user):
+            raise HTTPException(status_code=403, detail="No puedes cambiar el asesor interno de la venta")
+        target_seller = db.query(models.User).options(joinedload(models.User.role)).filter(
+            models.User.id == seller_id
+        ).first()
+        if not target_seller:
+            raise HTTPException(status_code=404, detail="Asesor interno no encontrado")
+        if current_user.company_id and target_seller.company_id != current_user.company_id:
+            raise HTTPException(status_code=400, detail="El asesor interno pertenece a otra empresa")
+    return "internal", target_seller, None
+
+
+def compute_sale_numbers(sale_price: int, seller: Optional[models.User]) -> tuple[int, int, int]:
+    safe_price = int(sale_price or 0)
+    commission_pct = int(getattr(seller, "commission_percentage", 0) or 0)
+    commission_amount = int(safe_price * commission_pct / 100)
+    net_revenue = safe_price - commission_amount
+    return commission_pct, commission_amount, net_revenue
+
+
+def get_sale_display_name(sale: Optional[models.Sale]) -> Optional[str]:
+    if not sale:
+        return None
+    if (sale.seller_type or "internal") == "external":
+        return (sale.external_seller_name or "").strip() or "Asesor externo"
+    if sale.seller:
+        return sale.seller.full_name or sale.seller.email
+    return None
+
+
+def attach_sale_metadata_to_vehicle(vehicle: models.Vehicle, sale: Optional[models.Sale]) -> models.Vehicle:
+    setattr(vehicle, "sold_price", getattr(sale, "sale_price", None))
+    setattr(vehicle, "sold_by_type", getattr(sale, "seller_type", None))
+    setattr(vehicle, "sold_by_name", get_sale_display_name(sale))
+    setattr(vehicle, "sold_by_user", getattr(sale, "seller", None))
+    return vehicle
+
 def call_openai_chat(api_key: str, model_name: str, messages: List[Dict[str, str]]) -> str:
     url = "https://api.openai.com/v1/chat/completions"
     payload = {
@@ -4157,6 +4246,17 @@ def read_vehicles(
         
     total = query.count()
     vehicles = query.order_by(models.Vehicle.id.desc()).offset(skip).limit(limit).all()
+    if vehicles:
+        vehicle_ids = [vehicle.id for vehicle in vehicles]
+        sales_query = db.query(models.Sale).options(joinedload(models.Sale.seller)).filter(
+            models.Sale.vehicle_id.in_(vehicle_ids)
+        )
+        if current_user.company_id:
+            sales_query = sales_query.filter(models.Sale.company_id == current_user.company_id)
+        sales = sales_query.all()
+        sales_by_vehicle_id = {sale.vehicle_id: sale for sale in sales}
+        for vehicle in vehicles:
+            attach_sale_metadata_to_vehicle(vehicle, sales_by_vehicle_id.get(vehicle.id))
     return {"items": vehicles, "total": total}
 
 @app.post("/vehicles/", response_model=schemas.Vehicle)
@@ -4198,27 +4298,56 @@ def update_vehicle(
     if current_user.company_id and vehicle.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Not authorized")
     
-    # Check if status is changing to 'sold'
-    if vehicle_update.status == 'sold' and vehicle.status != 'sold':
-        # Create a Sale record automatically to track who sold it
-        # Check if sale already exists
-        existing_sale = db.query(models.Sale).filter(models.Sale.vehicle_id == vehicle.id).first()
-        if not existing_sale:
-            new_sale = models.Sale(
+    update_payload = vehicle_update.dict(exclude_unset=True)
+    manual_sold_sale = None
+    if update_payload.get("status") == "sold":
+        seller_type = update_payload.get("sold_by_type")
+        internal_user_id = update_payload.get("sold_by_internal_user_id")
+        external_name = update_payload.get("sold_by_external_name")
+        sold_price = int(update_payload.get("sold_price") or update_payload.get("price") or vehicle.price or 0)
+        if sold_price <= 0:
+            raise HTTPException(status_code=400, detail="Debes indicar un valor de venta valido")
+
+        normalized_seller_type, seller_user, external_seller_name = resolve_sale_seller(
+            db,
+            current_user,
+            seller_type,
+            internal_user_id,
+            external_name
+        )
+        commission_pct, commission_amount, net_revenue = compute_sale_numbers(sold_price, seller_user)
+        manual_sold_sale = db.query(models.Sale).filter(models.Sale.vehicle_id == vehicle.id).first()
+        if manual_sold_sale:
+            manual_sold_sale.seller_type = normalized_seller_type
+            manual_sold_sale.external_seller_name = external_seller_name
+            manual_sold_sale.seller_id = seller_user.id if seller_user else None
+            manual_sold_sale.company_id = vehicle.company_id
+            manual_sold_sale.sale_price = sold_price
+            manual_sold_sale.commission_percentage = commission_pct
+            manual_sold_sale.commission_amount = commission_amount
+            manual_sold_sale.net_revenue = net_revenue
+            manual_sold_sale.status = models.SaleStatus.APPROVED.value
+            manual_sold_sale.sale_date = datetime.datetime.utcnow()
+        else:
+            manual_sold_sale = models.Sale(
                 vehicle_id=vehicle.id,
-                seller_id=current_user.id,
-                company_id=current_user.company_id,
-                sale_price=vehicle.price, # Default to listing price
-                status=models.SaleStatus.APPROVED,
-                commission_percentage=current_user.commission_percentage or 0,
-                commission_amount=int(vehicle.price * (current_user.commission_percentage or 0) / 100),
-                net_revenue=vehicle.price - int(vehicle.price * (current_user.commission_percentage or 0) / 100),
+                seller_id=seller_user.id if seller_user else None,
+                seller_type=normalized_seller_type,
+                external_seller_name=external_seller_name,
+                company_id=vehicle.company_id,
+                sale_price=sold_price,
+                status=models.SaleStatus.APPROVED.value,
+                commission_percentage=commission_pct,
+                commission_amount=commission_amount,
+                net_revenue=net_revenue,
                 sale_date=datetime.datetime.utcnow()
             )
-            db.add(new_sale)
-            # db.commit() will happen below
-        
-    for field, value in vehicle_update.dict(exclude_unset=True).items():
+            db.add(manual_sold_sale)
+        update_payload["price"] = sold_price
+
+    for field, value in update_payload.items():
+        if field in {"sold_price", "sold_by_type", "sold_by_internal_user_id", "sold_by_external_name"}:
+            continue
         setattr(vehicle, field, value)
 
     target_make = vehicle_update.make if vehicle_update.make is not None else vehicle.make
@@ -4227,6 +4356,7 @@ def update_vehicle(
         
     db.commit()
     db.refresh(vehicle)
+    attach_sale_metadata_to_vehicle(vehicle, manual_sold_sale)
     return vehicle
 
 @app.delete("/vehicles/{vehicle_id}", response_model=dict)
@@ -4264,39 +4394,26 @@ def create_sale(
     if vehicle.status == "sold":
         raise HTTPException(status_code=400, detail="Vehicle is already sold")
     
-    # 2. Get Seller 
-    # Logic: Admin can assign a specific seller (e.g. the lead's owner). Default is current user.
-    seller = current_user
-    
-    # Check if admin is overriding seller
-    if sale.seller_id:
-        # Verify permissions: Only Admin/SuperAdmin can override seller
-        if current_user.role.name in ["admin", "super_admin"]:
-             target_seller = db.query(models.User).filter(models.User.id == sale.seller_id).first()
-             if target_seller:
-                 # Verify company match
-                 if current_user.company_id and target_seller.company_id != current_user.company_id:
-                     raise HTTPException(status_code=400, detail="Target seller is in different company")
-                 seller = target_seller
-             else:
-                 raise HTTPException(status_code=404, detail="Target seller not found")
-        else:
-             # Regular user tried to override - ignore or error? 
-             # Let's ignore it to be safe and enforce 'me', or raise error
-             pass 
+    # 2. Resolve who sold it
+    seller_type, seller, external_seller_name = resolve_sale_seller(
+        db,
+        current_user,
+        sale.seller_type,
+        sale.seller_id,
+        sale.external_seller_name
+    )
     
     # 3. Calculate Commission
-    # Snapshot at time of creation, though approval locks it
-    commission_pct = seller.commission_percentage or 0.0
-    commission_amount = (sale.sale_price * commission_pct) / 100
-    net_revenue = sale.sale_price - commission_amount
+    commission_pct, commission_amount, net_revenue = compute_sale_numbers(sale.sale_price, seller)
     
     # 4. Create Sale Record
     new_sale = models.Sale(
         vehicle_id=sale.vehicle_id,
         lead_id=sale.lead_id,
-        seller_id=seller.id,
-        company_id=seller.company_id,
+        seller_id=seller.id if seller else None,
+        seller_type=seller_type,
+        external_seller_name=external_seller_name,
+        company_id=current_user.company_id or vehicle.company_id,
         sale_price=sale.sale_price,
         commission_percentage=commission_pct,
         commission_amount=commission_amount,
@@ -4371,6 +4488,44 @@ def read_sales(
     sales = query.order_by(models.Sale.sale_date.desc()).offset(skip).limit(limit).all()
     return {"items": sales, "total": total}
 
+@app.put("/sales/{sale_id}", response_model=schemas.Sale)
+def update_sale(
+    sale_id: int,
+    sale_update: schemas.SaleUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    sale = db.query(models.Sale).options(
+        joinedload(models.Sale.vehicle),
+        joinedload(models.Sale.seller)
+    ).filter(models.Sale.id == sale_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+
+    if current_user.company_id and sale.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    can_edit = is_company_admin_user(current_user) or (
+        sale.status == models.SaleStatus.PENDING.value and sale.seller_id == current_user.id
+    )
+    if not can_edit:
+        raise HTTPException(status_code=403, detail="No tienes permisos para editar esta venta")
+
+    if int(sale_update.sale_price or 0) <= 0:
+        raise HTTPException(status_code=400, detail="Debes indicar un valor de venta valido")
+
+    commission_pct, commission_amount, net_revenue = compute_sale_numbers(sale_update.sale_price, sale.seller)
+    sale.sale_price = int(sale_update.sale_price)
+    sale.commission_percentage = commission_pct
+    sale.commission_amount = commission_amount
+    sale.net_revenue = net_revenue
+    if sale.vehicle:
+        sale.vehicle.price = int(sale_update.sale_price)
+
+    db.commit()
+    db.refresh(sale)
+    return sale
+
 @app.put("/sales/{sale_id}/approve", response_model=schemas.Sale)
 def approve_sale(
     sale_id: int, 
@@ -4397,6 +4552,7 @@ def approve_sale(
     vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == sale.vehicle_id).first()
     if vehicle:
         vehicle.status = "sold"
+        vehicle.price = sale.sale_price
         
     db.commit()
     db.refresh(sale)

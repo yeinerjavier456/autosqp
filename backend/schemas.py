@@ -465,10 +465,18 @@ class VehicleUpdate(BaseModel):
     description: Optional[str] = None
     status: Optional[str] = None
     photos: Optional[List[str]] = None
+    sold_price: Optional[int] = None
+    sold_by_type: Optional[str] = None
+    sold_by_internal_user_id: Optional[int] = None
+    sold_by_external_name: Optional[str] = None
 
 class Vehicle(VehicleBase):
     id: int
     company_id: int
+    sold_price: Optional[int] = None
+    sold_by_type: Optional[str] = None
+    sold_by_name: Optional[str] = None
+    sold_by_user: Optional[User] = None
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -499,9 +507,14 @@ class SaleBase(BaseModel):
     lead_id: Optional[int] = None
     seller_id: Optional[int] = None # Optional override by admin
     sale_price: int
+    seller_type: Optional[str] = "internal"
+    external_seller_name: Optional[str] = None
     
 class SaleCreate(SaleBase):
     pass
+
+class SaleUpdate(BaseModel):
+    sale_price: int
 
 class Sale(SaleBase):
     id: int

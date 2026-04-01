@@ -128,6 +128,56 @@ const SalesDashboard = () => {
         }
     };
 
+    const getSellerLabel = (sale) => {
+        if (sale?.seller_type === 'external') {
+            return sale?.external_seller_name || 'Asesor externo';
+        }
+        return sale?.seller?.full_name || sale?.seller?.email || 'Sin asesor';
+    };
+
+    const handleEditSalePrice = async (sale) => {
+        const { value: salePrice } = await Swal.fire({
+            title: 'Editar valor de venta',
+            input: 'number',
+            inputLabel: `${sale.vehicle?.make || ''} ${sale.vehicle?.model || ''}`.trim(),
+            inputValue: sale.sale_price || sale.vehicle?.price || '',
+            inputAttributes: {
+                min: 1,
+                step: 1
+            },
+            showCancelButton: true,
+            confirmButtonText: 'Guardar',
+            cancelButtonText: 'Cancelar',
+            inputValidator: (value) => {
+                if (!value || Number(value) <= 0) {
+                    return 'Debes ingresar un valor valido';
+                }
+                return undefined;
+            },
+            customClass: {
+                confirmButton: 'bg-blue-600 text-white px-4 py-2 rounded-lg ml-2',
+                cancelButton: 'bg-gray-400 text-white px-4 py-2 rounded-lg'
+            },
+            buttonsStyling: false
+        });
+
+        if (!salePrice) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            await axios.put(`https://autosqp.co/api/sales/${sale.id}`, {
+                sale_price: Number(salePrice)
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            await fetchData();
+            Swal.fire('Exito', 'El valor de la venta fue actualizado.', 'success');
+        } catch (error) {
+            console.error('Error updating sale price', error);
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo actualizar el valor de la venta.', 'error');
+        }
+    };
+
     const handleCreateReceipt = async (e) => {
         e.preventDefault();
         if ((!receiptForm.sale_id && !receiptForm.concept.trim()) || !receiptForm.amount || Number(receiptForm.amount) <= 0) {
@@ -305,6 +355,7 @@ const SalesDashboard = () => {
                                         <th className="border-b p-4">Comision (%)</th>
                                         <th className="border-b p-4">Comision ($)</th>
                                         <th className="border-b p-4">Ingreso Neto</th>
+                                        <th className="border-b p-4 text-right">Editar</th>
                                         {filterStatus === 'pending' && <th className="border-b p-4 text-right">Accion</th>}
                                     </tr>
                                 </thead>
@@ -320,11 +371,19 @@ const SalesDashboard = () => {
                                                 </div>
                                                 <div className="text-xs text-gray-500">{sale.vehicle?.plate}</div>
                                             </td>
-                                            <td className="p-4 text-sm text-gray-600">{sale.seller?.email}</td>
+                                            <td className="p-4 text-sm text-gray-600">{getSellerLabel(sale)}</td>
                                             <td className="p-4 font-bold text-gray-800">${sale.sale_price?.toLocaleString()}</td>
                                             <td className="p-4 text-sm text-gray-600">{sale.commission_percentage}%</td>
                                             <td className="p-4 font-medium text-blue-600">${sale.commission_amount?.toLocaleString()}</td>
                                             <td className="p-4 font-medium text-green-600">${sale.net_revenue?.toLocaleString()}</td>
+                                            <td className="p-4 text-right">
+                                                <button
+                                                    onClick={() => handleEditSalePrice(sale)}
+                                                    className="rounded bg-blue-100 px-3 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-200"
+                                                >
+                                                    Editar valor
+                                                </button>
+                                            </td>
                                             {filterStatus === 'pending' && (
                                                 <td className="p-4 text-right">
                                                     <div className="flex justify-end gap-2">
@@ -347,7 +406,7 @@ const SalesDashboard = () => {
                                     ))}
                                     {sales.length === 0 && (
                                         <tr>
-                                            <td colSpan="8" className="p-8 text-center italic text-gray-400">
+                                            <td colSpan={filterStatus === 'pending' ? 9 : 8} className="p-8 text-center italic text-gray-400">
                                                 No hay ventas en esta seccion.
                                             </td>
                                         </tr>

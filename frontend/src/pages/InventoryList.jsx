@@ -18,6 +18,7 @@ const InventoryList = () => {
     const [activeTab, setActiveTab] = useState('available'); // 'available' or 'sold'
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(false);
+    const [internalSellers, setInternalSellers] = useState([]);
 
     const fetchVehicles = async () => {
         setLoading(true);
@@ -44,6 +45,29 @@ const InventoryList = () => {
     useEffect(() => {
         fetchVehicles();
     }, [page, search, activeTab]);
+
+    useEffect(() => {
+        const fetchInternalSellers = async () => {
+            if (!canEditInventory) return;
+            try {
+                const token = localStorage.getItem('token');
+                const response = await axios.get('https://autosqp.co/api/users/', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const items = Array.isArray(response.data?.items) ? response.data.items : [];
+                setInternalSellers(
+                    items.filter((item) => {
+                        const roleBaseName = (item?.role?.base_role_name || item?.role?.name || '').toLowerCase();
+                        return roleBaseName !== 'aliado';
+                    })
+                );
+            } catch (error) {
+                console.error('Error fetching internal sellers', error);
+            }
+        };
+
+        fetchInternalSellers();
+    }, [canEditInventory]);
 
     const handleSearch = (e) => {
         setSearch(e.target.value);
@@ -83,8 +107,91 @@ const InventoryList = () => {
         if (newStatus && newStatus !== vehicle.status) {
             try {
                 const token = localStorage.getItem('token');
+                let payload = { status: newStatus };
+                if (newStatus === 'sold') {
+                    const internalSellerOptions = internalSellers.reduce((acc, seller) => {
+                        acc[seller.id] = seller.full_name || seller.email;
+                        return acc;
+                    }, {});
+                    const { value: soldData } = await Swal.fire({
+                        title: 'Registrar venta manual',
+                        html: `
+                            <div class="space-y-3 text-left">
+                                <div>
+                                    <label class="mb-1 block text-sm font-semibold text-gray-700">Valor de venta</label>
+                                    <input id="sold-price" type="number" min="1" class="swal2-input" value="${vehicle.price || ''}" placeholder="Valor de venta" />
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-sm font-semibold text-gray-700">Vendido por</label>
+                                    <select id="sold-by-type" class="swal2-select">
+                                        <option value="internal">Asesor interno</option>
+                                        <option value="external">Asesor externo</option>
+                                    </select>
+                                </div>
+                                <div id="internal-seller-wrapper">
+                                    <label class="mb-1 block text-sm font-semibold text-gray-700">Asesor interno</label>
+                                    <select id="internal-seller-id" class="swal2-select">
+                                        <option value="">Selecciona un asesor</option>
+                                        ${Object.entries(internalSellerOptions).map(([id, label]) => `<option value="${id}">${label}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div id="external-seller-wrapper" style="display:none;">
+                                    <label class="mb-1 block text-sm font-semibold text-gray-700">Asesor externo</label>
+                                    <input id="external-seller-name" type="text" class="swal2-input" placeholder="Nombre del asesor externo" />
+                                </div>
+                            </div>
+                        `,
+                        showCancelButton: true,
+                        confirmButtonText: 'Guardar',
+                        cancelButtonText: 'Cancelar',
+                        focusConfirm: false,
+                        didOpen: () => {
+                            const typeSelect = document.getElementById('sold-by-type');
+                            const internalWrapper = document.getElementById('internal-seller-wrapper');
+                            const externalWrapper = document.getElementById('external-seller-wrapper');
+                            const toggleSellerInputs = () => {
+                                const isExternal = typeSelect?.value === 'external';
+                                if (internalWrapper) internalWrapper.style.display = isExternal ? 'none' : 'block';
+                                if (externalWrapper) externalWrapper.style.display = isExternal ? 'block' : 'none';
+                            };
+                            typeSelect?.addEventListener('change', toggleSellerInputs);
+                            toggleSellerInputs();
+                        },
+                        preConfirm: () => {
+                            const soldPrice = Number(document.getElementById('sold-price')?.value || 0);
+                            const soldByType = document.getElementById('sold-by-type')?.value || 'internal';
+                            const soldByInternalUserId = document.getElementById('internal-seller-id')?.value || '';
+                            const soldByExternalName = (document.getElementById('external-seller-name')?.value || '').trim();
+                            if (!soldPrice || soldPrice <= 0) {
+                                Swal.showValidationMessage('Debes indicar un valor de venta valido');
+                                return false;
+                            }
+                            if (soldByType === 'internal' && !soldByInternalUserId) {
+                                Swal.showValidationMessage('Debes seleccionar el asesor interno');
+                                return false;
+                            }
+                            if (soldByType === 'external' && !soldByExternalName) {
+                                Swal.showValidationMessage('Debes indicar el asesor externo');
+                                return false;
+                            }
+                            return {
+                                sold_price: soldPrice,
+                                sold_by_type: soldByType,
+                                sold_by_internal_user_id: soldByType === 'internal' ? Number(soldByInternalUserId) : null,
+                                sold_by_external_name: soldByType === 'external' ? soldByExternalName : null
+                            };
+                        },
+                        customClass: {
+                            confirmButton: 'bg-blue-600 text-white px-4 py-2 rounded-lg ml-2',
+                            cancelButton: 'bg-gray-400 text-white px-4 py-2 rounded-lg'
+                        },
+                        buttonsStyling: false
+                    });
+                    if (!soldData) return;
+                    payload = { ...payload, ...soldData };
+                }
                 await axios.put(`https://autosqp.co/api/vehicles/${vehicle.id}`,
-                    { status: newStatus },
+                    payload,
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
                 Swal.fire({
@@ -255,6 +362,9 @@ const InventoryList = () => {
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ano</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Placa</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio (COP) *</th>
+                                {activeTab === 'sold' && (
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendido Por</th>
+                                )}
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
                                 <th scope="col" className="relative px-6 py-3"><span className="sr-only">Acciones</span></th>
                             </tr>
@@ -262,11 +372,11 @@ const InventoryList = () => {
                         <tbody className="bg-white divide-y divide-gray-200">
                             {loading ? (
                                 <tr>
-                                    <td colSpan="7" className="px-6 py-10 text-center text-gray-500">Cargando...</td>
+                                    <td colSpan={activeTab === 'sold' ? 8 : 7} className="px-6 py-10 text-center text-gray-500">Cargando...</td>
                                 </tr>
                             ) : vehicles.length === 0 ? (
                                 <tr>
-                                    <td colSpan="7" className="px-6 py-10 text-center text-gray-500">No se encontraron vehiculos.</td>
+                                    <td colSpan={activeTab === 'sold' ? 8 : 7} className="px-6 py-10 text-center text-gray-500">No se encontraron vehiculos.</td>
                                 </tr>
                             ) : (
                                 vehicles.map((vehicle) => (
@@ -295,6 +405,16 @@ const InventoryList = () => {
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                                             {formatPrice(vehicle.price)}
                                         </td>
+                                        {activeTab === 'sold' && (
+                                            <td className="px-6 py-4 whitespace-normal min-w-[220px]">
+                                                <div className="text-sm font-medium text-gray-900">
+                                                    {vehicle.sold_by_name || 'Sin registro'}
+                                                </div>
+                                                <div className="text-xs text-gray-500 mt-1">
+                                                    {vehicle.sold_by_type === 'external' ? 'Asesor externo' : 'Asesor interno'}
+                                                </div>
+                                            </td>
+                                        )}
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
                                                         ${vehicle.status === 'available' ? 'bg-green-100 text-green-800' :
