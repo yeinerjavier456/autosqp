@@ -8,7 +8,7 @@ const TikTokLanding = () => {
             <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6">
                 <header className="flex flex-wrap items-center justify-between gap-3">
                     <Link to="/autos" className="text-2xl font-extrabold tracking-tight text-slate-900">
-                        <span className="text-orange-500">Autos</span>QP
+                        <span className="text-green-500">Autos</span>QP
                     </Link>
                     <Link
                         to="/autos"
