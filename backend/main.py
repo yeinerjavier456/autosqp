@@ -3580,6 +3580,8 @@ def public_chat_message(payload: schemas.PublicChatMessageCreate, db: Session = 
         "Nunca ofrezcas opciones de financiacion, planes de credito ni preguntes si deseas compartir opciones de financiacion. "
         "Tampoco uses frases como '¿Te gustaria que te compartiera opciones de financiacion?'. "
         "Si necesitas perfilar la forma de pago, pregunta solo si la compra seria de contado o por credito, sin ofrecer productos financieros. "
+        "Si el cliente responde que la compra es de contado, no preguntes nada sobre centrales de riesgo, reportes, entidades, acuerdos de pago, paz y salvo, ingresos ni perfil crediticio. "
+        "Si es de contado, despues de confirmar vehiculo, nombre, telefono y correo, cierra indicando que la informacion sera analizada y que nos contactaremos tan pronto tengamos informacion. "
         "Nunca pidas documentos, soportes, cedula, certificaciones, extractos ni facturas. "
         "Cuando ya tengas todos los datos base obligatorios, no solicites nada adicional: responde unicamente que la informacion sera analizada "
         "y que tan pronto tengamos informacion nos contactaremos. "
@@ -3590,6 +3592,7 @@ def public_chat_message(payload: schemas.PublicChatMessageCreate, db: Session = 
         "8) si esta reportado: entidad y si tiene acuerdo de pago o paz y salvo, "
         "9) ocupacion (empleado, independiente u otro), "
         "10) lugar de residencia, 11) ingresos mensuales. "
+        "Ese orden aplica solo para escenarios de credito. Si es contado, detente despues del paso 5 y no hagas las preguntas 6 a 11. "
         "No inventes informacion ni cierres perfilado hasta tener todo lo obligatorio. "
         f"{vehicle_hint}"
     )
