@@ -4720,6 +4720,59 @@ def _get_receipt_with_access(
     return receipt
 
 
+@app.put("/finance/receipts/{receipt_id}", response_model=schemas.PaymentReceipt)
+def update_payment_receipt(
+    receipt_id: int,
+    receipt_update: schemas.PaymentReceiptUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Solo un administrador puede editar recibos")
+
+    receipt = _get_receipt_with_access(db, receipt_id, current_user)
+    movement_type_value = (receipt_update.movement_type or "income").strip().lower()
+    if movement_type_value not in {"income", "expense"}:
+        raise HTTPException(status_code=400, detail="movement_type must be income or expense")
+    if int(receipt_update.amount or 0) <= 0:
+        raise HTTPException(status_code=400, detail="Debes indicar un valor valido")
+
+    sale = None
+    company_id = current_user.company_id or receipt.company_id
+    if receipt_update.sale_id:
+        sale = db.query(models.Sale).options(
+            joinedload(models.Sale.vehicle),
+            joinedload(models.Sale.seller)
+        ).filter(models.Sale.id == receipt_update.sale_id).first()
+        if not sale:
+            raise HTTPException(status_code=404, detail="Sale not found")
+        if current_user.company_id and sale.company_id != current_user.company_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        company_id = sale.company_id
+
+    concept_value = (receipt_update.concept or "").strip() or None
+    if not sale and not concept_value:
+        raise HTTPException(status_code=400, detail="Debes indicar una venta o un concepto contable")
+
+    receipt.sale_id = sale.id if sale else None
+    receipt.company_id = company_id
+    receipt.concept = concept_value
+    receipt.movement_type = movement_type_value
+    receipt.receipt_number = (receipt_update.receipt_number or "").strip() or None
+    receipt.payment_date = receipt_update.payment_date or receipt.payment_date
+    receipt.amount = int(receipt_update.amount)
+    receipt.category = (receipt_update.category or "sale_payment").strip() or "sale_payment"
+    receipt.notes = (receipt_update.notes or "").strip() or None
+
+    db.commit()
+    db.refresh(receipt)
+    return db.query(models.PaymentReceipt).options(
+        joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.vehicle),
+        joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.seller),
+        joinedload(models.PaymentReceipt.user)
+    ).filter(models.PaymentReceipt.id == receipt.id).first()
+
+
 @app.post("/finance/receipts", response_model=schemas.PaymentReceipt)
 async def create_payment_receipt(
     request: Request,

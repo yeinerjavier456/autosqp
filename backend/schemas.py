@@ -553,6 +553,17 @@ class PaymentReceiptCreate(PaymentReceiptBase):
     pass
 
 
+class PaymentReceiptUpdate(BaseModel):
+    sale_id: Optional[int] = None
+    concept: Optional[str] = None
+    movement_type: Optional[str] = "income"
+    receipt_number: Optional[str] = None
+    payment_date: Optional[datetime] = None
+    amount: int
+    category: Optional[str] = "sale_payment"
+    notes: Optional[str] = None
+
+
 class PaymentReceipt(PaymentReceiptBase):
     id: int
     company_id: int

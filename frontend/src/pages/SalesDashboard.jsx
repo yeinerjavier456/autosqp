@@ -128,6 +128,13 @@ const SalesDashboard = () => {
         }
     };
 
+    const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
     const getSellerLabel = (sale) => {
         if (sale?.seller_type === 'external') {
             return sale?.external_seller_name || 'Asesor externo';
@@ -258,6 +265,124 @@ const SalesDashboard = () => {
         } catch (error) {
             console.error('Error deleting receipt', error);
             Swal.fire('Error', error.response?.data?.detail || 'No se pudo eliminar el recibo.', 'error');
+        }
+    };
+
+    const handleEditReceipt = async (receipt) => {
+        const { value: updatedData } = await Swal.fire({
+            title: 'Editar registro contable',
+            html: `
+                <div class="space-y-3 text-left">
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Venta aprobada</label>
+                        <select id="edit-receipt-sale-id" class="swal2-select">
+                            <option value="">Sin venta asociada</option>
+                            ${approvedSales.map((sale) => `
+                                <option value="${sale.id}" ${Number(receipt.sale?.id) === Number(sale.id) ? 'selected' : ''}>
+                                    #${sale.id} - ${sale.vehicle?.make || ''} ${sale.vehicle?.model || ''} - ${sale.vehicle?.plate || ''}
+                                </option>
+                            `).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Concepto</label>
+                            <input id="edit-receipt-concept" type="text" class="swal2-input" value="${escapeHtml(receipt.concept || '')}" placeholder="Concepto contable" />
+                    </div>
+                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Tipo</label>
+                            <select id="edit-receipt-movement-type" class="swal2-select">
+                                <option value="income" ${(receipt.movement_type || 'income') === 'income' ? 'selected' : ''}>Ingreso</option>
+                                <option value="expense" ${(receipt.movement_type || 'income') === 'expense' ? 'selected' : ''}>Egreso</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Valor</label>
+                            <input id="edit-receipt-amount" type="number" min="1" class="swal2-input" value="${Number(receipt.amount || 0)}" placeholder="Valor" />
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Fecha</label>
+                            <input id="edit-receipt-payment-date" type="date" class="swal2-input" value="${receipt.payment_date ? new Date(receipt.payment_date).toISOString().slice(0, 10) : ''}" />
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Numero de recibo</label>
+                            <input id="edit-receipt-number" type="text" class="swal2-input" value="${escapeHtml(receipt.receipt_number || '')}" placeholder="Consecutivo" />
+                        </div>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Categoria</label>
+                        <select id="edit-receipt-category" class="swal2-select">
+                            <option value="sale_payment" ${(receipt.category || 'sale_payment') === 'sale_payment' ? 'selected' : ''}>Pago de venta</option>
+                            <option value="other_income" ${(receipt.category || '') === 'other_income' ? 'selected' : ''}>Otro ingreso</option>
+                            <option value="commission_payment" ${(receipt.category || '') === 'commission_payment' ? 'selected' : ''}>Pago de comision</option>
+                            <option value="expense" ${(receipt.category || '') === 'expense' ? 'selected' : ''}>Egreso</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Nota contable</label>
+                        <textarea id="edit-receipt-notes" class="swal2-textarea" placeholder="Observaciones">${escapeHtml(receipt.notes || '')}</textarea>
+                    </div>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Guardar cambios',
+            cancelButtonText: 'Cancelar',
+            focusConfirm: false,
+            preConfirm: () => {
+                const saleId = document.getElementById('edit-receipt-sale-id')?.value || '';
+                const concept = (document.getElementById('edit-receipt-concept')?.value || '').trim();
+                const movementType = document.getElementById('edit-receipt-movement-type')?.value || 'income';
+                const amount = Number(document.getElementById('edit-receipt-amount')?.value || 0);
+                const paymentDate = document.getElementById('edit-receipt-payment-date')?.value || '';
+                const receiptNumber = (document.getElementById('edit-receipt-number')?.value || '').trim();
+                const category = document.getElementById('edit-receipt-category')?.value || 'sale_payment';
+                const notes = (document.getElementById('edit-receipt-notes')?.value || '').trim();
+
+                if (!amount || amount <= 0) {
+                    Swal.showValidationMessage('Debes ingresar un valor valido');
+                    return false;
+                }
+                if (!saleId && !concept) {
+                    Swal.showValidationMessage('Debes asociar una venta o escribir un concepto');
+                    return false;
+                }
+                if (!paymentDate) {
+                    Swal.showValidationMessage('Debes indicar la fecha del registro');
+                    return false;
+                }
+
+                return {
+                    sale_id: saleId ? Number(saleId) : null,
+                    concept,
+                    movement_type: movementType,
+                    amount,
+                    payment_date: paymentDate,
+                    receipt_number: receiptNumber || null,
+                    category,
+                    notes: notes || null
+                };
+            },
+            customClass: {
+                confirmButton: 'bg-blue-600 text-white px-4 py-2 rounded-lg ml-2',
+                cancelButton: 'bg-gray-400 text-white px-4 py-2 rounded-lg'
+            },
+            buttonsStyling: false
+        });
+
+        if (!updatedData) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            await axios.put(`https://autosqp.co/api/finance/receipts/${receipt.id}`, updatedData, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            await fetchData();
+            Swal.fire('Exito', 'El registro contable fue actualizado.', 'success');
+        } catch (error) {
+            console.error('Error updating receipt', error);
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo actualizar el registro contable.', 'error');
         }
     };
 
@@ -649,6 +774,12 @@ const SalesDashboard = () => {
                                                 </td>
                                                 <td className="p-4">
                                                     <div className="flex justify-end gap-2">
+                                                        <button
+                                                            onClick={() => handleEditReceipt(receipt)}
+                                                            className="inline-flex items-center rounded-lg bg-blue-50 px-3 py-1.5 font-medium text-blue-700 hover:bg-blue-100"
+                                                        >
+                                                            Editar
+                                                        </button>
                                                         <a
                                                             href={`https://autosqp.co/api/finance/receipts/${receipt.id}/pdf`}
                                                             target="_blank"
