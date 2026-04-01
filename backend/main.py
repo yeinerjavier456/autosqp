@@ -2559,7 +2559,9 @@ def read_advisor_stats(
     status_distribution = {}
     ally_status_distribution = {}
     unread_replies_count = 0
+    ally_unread_replies_count = 0
     active_pipeline_count = 0
+    ally_active_pipeline_count = 0
     purchase_option_decision_distribution = {"pending": 0, "accepted": 0, "rejected": 0}
     recent_leads_by_day = {label: 0 for label in trend_labels}
     ally_recent_leads_by_day = {label: 0 for label in trend_labels}
@@ -2568,6 +2570,8 @@ def read_advisor_stats(
     ally_lead_ids = []
     autos_lead_ids = []
     ally_total = 0
+    ally_leads_new = 0
+    ally_leads_sold = 0
     ally_new_leads_in_range = 0
     autos_new_leads_in_range = 0
     for lead in leads:
@@ -2587,6 +2591,14 @@ def read_advisor_stats(
             ally_total += 1
             ally_lead_ids.append(lead.id)
             ally_status_distribution[status_key] = ally_status_distribution.get(status_key, 0) + 1
+            if status_key == "new":
+                ally_leads_new += 1
+            if status_key == "sold":
+                ally_leads_sold += 1
+            if status_key not in {"sold", "lost"}:
+                ally_active_pipeline_count += 1
+            if lead.has_unread_reply:
+                ally_unread_replies_count += 1
             if is_within_dashboard_range(getattr(lead, "created_at", None)):
                 ally_new_leads_in_range += 1
             if lead_reference_date and period_start <= lead_reference_date < period_end:
@@ -2617,6 +2629,7 @@ def read_advisor_stats(
     leads_sold = status_distribution.get("sold", 0)
     leads_new = status_distribution.get("new", 0)
     conversion_rate = (leads_sold / total_leads * 100) if total_leads else 0
+    ally_conversion_rate = (ally_leads_sold / ally_total * 100) if ally_total else 0
     visible_lead_ids = [lead.id for lead in all_leads]
     history_entries = []
     if visible_lead_ids:
@@ -2644,7 +2657,6 @@ def read_advisor_stats(
     manager_activity_map: Dict[int, Dict[str, Any]] = {}
     status_mover_map: Dict[int, Dict[str, Any]] = {}
     ally_manager_activity_map: Dict[int, Dict[str, Any]] = {}
-    ally_assigner_map: Dict[int, Dict[str, Any]] = {}
     for entry in history_entries:
         if not entry.user_id:
             continue
@@ -2696,26 +2708,6 @@ def read_advisor_stats(
             current_item["full_name"] = getattr(getattr(entry, "user", None), "full_name", None)
         if not current_item.get("email"):
             current_item["email"] = getattr(getattr(entry, "user", None), "email", None)
-    for entry in history_entries:
-        if not entry.user_id or entry.lead_id not in ally_lead_ids:
-            continue
-        comment_text = (entry.comment or "").strip().lower()
-        if "tablero de aliados" not in comment_text and "lead asignado a" not in comment_text:
-            continue
-        current_item = ally_assigner_map.setdefault(
-            entry.user_id,
-            {
-                "user_id": entry.user_id,
-                "full_name": getattr(getattr(entry, "user", None), "full_name", None),
-                "email": getattr(getattr(entry, "user", None), "email", None),
-                "count": 0,
-            }
-        )
-        current_item["count"] += 1
-        if not current_item.get("full_name"):
-            current_item["full_name"] = getattr(getattr(entry, "user", None), "full_name", None)
-        if not current_item.get("email"):
-            current_item["email"] = getattr(getattr(entry, "user", None), "email", None)
     top_managers = sorted(
         manager_activity_map.values(),
         key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
@@ -2726,10 +2718,6 @@ def read_advisor_stats(
     )[:5]
     ally_top_managers = sorted(
         ally_manager_activity_map.values(),
-        key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
-    )[:5]
-    ally_top_assigners = sorted(
-        ally_assigner_map.values(),
         key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
     )[:5]
 
@@ -2823,14 +2811,19 @@ def read_advisor_stats(
         "leads_new": leads_new,
         "leads_sold": leads_sold,
         "ally_total": ally_total,
+        "ally_leads_new": ally_leads_new,
+        "ally_leads_sold": ally_leads_sold,
         "ally_new_leads_in_range": ally_new_leads_in_range,
         "ally_status_changes_in_range": ally_status_changes_in_range,
         "new_leads_in_range": autos_new_leads_in_range,
         "status_changes_in_range": status_changes_in_range,
         "conversion_rate": round(conversion_rate, 2),
+        "ally_conversion_rate": round(ally_conversion_rate, 2),
         "response_time_min": 37,
         "active_pipeline_count": active_pipeline_count,
+        "ally_active_pipeline_count": ally_active_pipeline_count,
         "unread_replies_count": unread_replies_count,
+        "ally_unread_replies_count": ally_unread_replies_count,
         "status_distribution": status_distribution,
         "ally_status_distribution": ally_status_distribution,
         "recent_leads_by_day": recent_leads_by_day,
@@ -2849,7 +2842,6 @@ def read_advisor_stats(
         "top_managers": top_managers,
         "top_status_movers": top_status_movers,
         "ally_top_managers": ally_top_managers,
-        "ally_top_assigners": ally_top_assigners,
     }
 
 @app.post("/seed/brands")

@@ -597,14 +597,19 @@ class RoleDashboardStats(BaseModel):
     leads_new: int
     leads_sold: int
     ally_total: int
+    ally_leads_new: int
+    ally_leads_sold: int
     ally_new_leads_in_range: int
     ally_status_changes_in_range: int
     new_leads_in_range: int
     status_changes_in_range: int
     conversion_rate: float
+    ally_conversion_rate: float
     response_time_min: int
     active_pipeline_count: int
+    ally_active_pipeline_count: int
     unread_replies_count: int
+    ally_unread_replies_count: int
     status_distribution: Dict[str, int]
     ally_status_distribution: Dict[str, int]
     recent_leads_by_day: Dict[str, int]
@@ -623,7 +628,6 @@ class RoleDashboardStats(BaseModel):
     top_managers: List[Dict[str, Any]] = []
     top_status_movers: List[Dict[str, Any]] = []
     ally_top_managers: List[Dict[str, Any]] = []
-    ally_top_assigners: List[Dict[str, Any]] = []
 
 class ReportsStats(BaseModel):
     total_leads: int
