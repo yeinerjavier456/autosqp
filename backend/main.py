@@ -2563,9 +2563,12 @@ def read_advisor_stats(
     active_pipeline_count = 0
     purchase_option_decision_distribution = {"pending": 0, "accepted": 0, "rejected": 0}
     recent_leads_by_day = {label: 0 for label in trend_labels}
+    ally_recent_leads_by_day = {label: 0 for label in trend_labels}
 
     relevant_lead_ids = []
+    ally_lead_ids = []
     ally_total = 0
+    ally_new_leads_in_range = 0
     for lead in leads:
         relevant_lead_ids.append(lead.id)
         status_key = lead.status or "new"
@@ -2594,7 +2597,14 @@ def read_advisor_stats(
         )
         if touches_ally_board:
             ally_total += 1
+            ally_lead_ids.append(lead.id)
             ally_status_distribution[status_key] = ally_status_distribution.get(status_key, 0) + 1
+            if is_within_dashboard_range(getattr(lead, "created_at", None)):
+                ally_new_leads_in_range += 1
+            if lead_reference_date and period_start <= lead_reference_date < period_end:
+                trend_bucket = get_trend_bucket(lead_reference_date)
+                if trend_bucket in ally_recent_leads_by_day:
+                    ally_recent_leads_by_day[trend_bucket] += 1
 
     total_leads = len(leads)
     leads_sold = status_distribution.get("sold", 0)
@@ -2614,9 +2624,15 @@ def read_advisor_stats(
         entry for entry in history_entries
         if (entry.previous_status or "") != (entry.new_status or "")
     ]
+    ally_status_change_entries = [
+        entry for entry in status_change_entries
+        if entry.lead_id in ally_lead_ids
+    ]
     status_changes_in_range = len(status_change_entries)
+    ally_status_changes_in_range = len(ally_status_change_entries)
     manager_activity_map: Dict[int, Dict[str, Any]] = {}
     status_mover_map: Dict[int, Dict[str, Any]] = {}
+    ally_manager_activity_map: Dict[int, Dict[str, Any]] = {}
     for entry in history_entries:
         if not entry.user_id:
             continue
@@ -2651,12 +2667,33 @@ def read_advisor_stats(
             current_item["full_name"] = getattr(getattr(entry, "user", None), "full_name", None)
         if not current_item.get("email"):
             current_item["email"] = getattr(getattr(entry, "user", None), "email", None)
+    for entry in ally_status_change_entries:
+        if not entry.user_id:
+            continue
+        current_item = ally_manager_activity_map.setdefault(
+            entry.user_id,
+            {
+                "user_id": entry.user_id,
+                "full_name": getattr(getattr(entry, "user", None), "full_name", None),
+                "email": getattr(getattr(entry, "user", None), "email", None),
+                "count": 0,
+            }
+        )
+        current_item["count"] += 1
+        if not current_item.get("full_name"):
+            current_item["full_name"] = getattr(getattr(entry, "user", None), "full_name", None)
+        if not current_item.get("email"):
+            current_item["email"] = getattr(getattr(entry, "user", None), "email", None)
     top_managers = sorted(
         manager_activity_map.values(),
         key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
     )[:5]
     top_status_movers = sorted(
         status_mover_map.values(),
+        key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
+    )[:5]
+    ally_top_managers = sorted(
+        ally_manager_activity_map.values(),
         key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
     )[:5]
 
@@ -2750,6 +2787,8 @@ def read_advisor_stats(
         "leads_new": leads_new,
         "leads_sold": leads_sold,
         "ally_total": ally_total,
+        "ally_new_leads_in_range": ally_new_leads_in_range,
+        "ally_status_changes_in_range": ally_status_changes_in_range,
         "new_leads_in_range": new_leads_in_range,
         "status_changes_in_range": status_changes_in_range,
         "conversion_rate": round(conversion_rate, 2),
@@ -2759,6 +2798,7 @@ def read_advisor_stats(
         "status_distribution": status_distribution,
         "ally_status_distribution": ally_status_distribution,
         "recent_leads_by_day": recent_leads_by_day,
+        "ally_recent_leads_by_day": ally_recent_leads_by_day,
         "credit_total": credit_total,
         "credit_status_distribution": credit_status_distribution,
         "purchase_total": purchase_total,
@@ -2772,6 +2812,7 @@ def read_advisor_stats(
         "inventory_status_distribution": inventory_status_distribution,
         "top_managers": top_managers,
         "top_status_movers": top_status_movers,
+        "ally_top_managers": ally_top_managers,
     }
 
 @app.post("/seed/brands")

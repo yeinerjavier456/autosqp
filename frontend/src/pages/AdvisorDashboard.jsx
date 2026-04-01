@@ -124,6 +124,7 @@ const AdvisorDashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const [stats, setStats] = useState(null);
+    const [dashboardView, setDashboardView] = useState('autosqp');
     const defaultRange = getLast7DaysRange();
     const [startDate, setStartDate] = useState(defaultRange.start);
     const [endDate, setEndDate] = useState(defaultRange.end);
@@ -230,7 +231,31 @@ const AdvisorDashboard = () => {
     };
     const topManagers = Array.isArray(stats.top_managers) ? stats.top_managers : [];
     const topStatusMovers = Array.isArray(stats.top_status_movers) ? stats.top_status_movers : [];
-    const topManager = topStatusMovers[0] || topManagers[0] || null;
+    const allyTopManagers = Array.isArray(stats.ally_top_managers) ? stats.ally_top_managers : [];
+    const isAllyDashboard = dashboardView === 'allies';
+    const topManager = isAllyDashboard
+        ? (allyTopManagers[0] || null)
+        : (topStatusMovers[0] || topManagers[0] || null);
+    const currentTrendData = isAllyDashboard
+        ? {
+            labels: Object.entries(stats.ally_recent_leads_by_day || {}).map(([label]) => label),
+            datasets: [
+                {
+                    label: 'Leads de aliados',
+                    data: Object.entries(stats.ally_recent_leads_by_day || {}).map(([, value]) => value),
+                    borderColor: '#14b8a6',
+                    backgroundColor: 'rgba(20, 184, 166, 0.16)',
+                    fill: true,
+                    tension: 0.35,
+                },
+            ],
+        }
+        : leadTrendData;
+    const currentTrendTitle = isAllyDashboard ? 'Ritmo de gestión de aliados' : trendTitle;
+    const currentTrendDescription = isAllyDashboard
+        ? 'Leads donde un aliado participa dentro del rango seleccionado.'
+        : trendDescription;
+    const currentRanking = isAllyDashboard ? allyTopManagers : topManagers;
 
     const rangeLabel = `del ${startDate} al ${endDate}`;
     const trendTitle = 'Ritmo de gestión del rango elegido';
@@ -248,6 +273,24 @@ const AdvisorDashboard = () => {
                         <p className="mt-2 max-w-3xl text-sm text-slate-200">
                             Vista operativa de tu gestión actual: leads, cierres, estados y colas relacionadas según el rol que tienes dentro de la empresa.
                         </p>
+                        {hasAllySection && (
+                            <div className="mt-4 flex flex-wrap gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setDashboardView('autosqp')}
+                                    className={`rounded-xl px-4 py-2 text-sm font-bold transition ${!isAllyDashboard ? 'bg-white text-slate-900 shadow-md' : 'border border-white/20 bg-white/10 text-cyan-50 hover:bg-white/20'}`}
+                                >
+                                    AutosQP
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setDashboardView('allies')}
+                                    className={`rounded-xl px-4 py-2 text-sm font-bold transition ${isAllyDashboard ? 'bg-white text-slate-900 shadow-md' : 'border border-white/20 bg-white/10 text-cyan-50 hover:bg-white/20'}`}
+                                >
+                                    Aliados
+                                </button>
+                            </div>
+                        )}
                     </div>
                     <div className="w-full max-w-3xl">
                         <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-cyan-100">Rango de fechas</label>
@@ -281,53 +324,82 @@ const AdvisorDashboard = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <DashboardMetric
-                    title="Leads a cargo"
-                    value={stats.total_leads}
-                    helper={`Incluye asignados y leads donde quedaste en supervision ${rangeLabel}.`}
-                    onClick={hasLeadsSection ? () => navigate(leadBoardPath) : undefined}
-                />
-                <DashboardMetric
-                    title="Conversion"
-                    value={`${stats.conversion_rate}%`}
-                    helper={`${stats.leads_sold} cierres sobre tu base ${rangeLabel}.`}
-                    onClick={hasSalesSection ? () => navigate(permissions.has('my_sales') && !permissions.has('sales') ? '/admin/my-sales' : '/admin/sales') : undefined}
-                    className="border-emerald-200 bg-emerald-50 text-emerald-900"
-                    helperClassName="text-emerald-700"
-                />
-                <DashboardMetric
-                    title="Pipeline activo"
-                    value={stats.active_pipeline_count}
-                    helper={`${stats.leads_new} leads siguen en estado nuevo ${rangeLabel}.`}
-                    onClick={hasLeadsSection ? () => navigate(leadBoardPath) : undefined}
-                    className="border-amber-200 bg-amber-50 text-amber-900"
-                    helperClassName="text-amber-700"
-                />
-                <DashboardMetric
-                    title="Pendientes por revisar"
-                    value={stats.unread_replies_count}
-                    helper={`Tiempo medio de respuesta visible: ${stats.response_time_min} min.`}
-                    onClick={hasLeadsSection ? () => navigate(leadBoardPath) : undefined}
-                    className="border-orange-200 bg-orange-50 text-orange-900"
-                    helperClassName="text-orange-700"
-                />
-            </div>
+            {!isAllyDashboard ? (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <DashboardMetric
+                        title="Leads a cargo"
+                        value={stats.total_leads}
+                        helper={`Incluye asignados y leads donde quedaste en supervision ${rangeLabel}.`}
+                        onClick={hasLeadsSection ? () => navigate(leadBoardPath) : undefined}
+                    />
+                    <DashboardMetric
+                        title="Conversion"
+                        value={`${stats.conversion_rate}%`}
+                        helper={`${stats.leads_sold} cierres sobre tu base ${rangeLabel}.`}
+                        onClick={hasSalesSection ? () => navigate(permissions.has('my_sales') && !permissions.has('sales') ? '/admin/my-sales' : '/admin/sales') : undefined}
+                        className="border-emerald-200 bg-emerald-50 text-emerald-900"
+                        helperClassName="text-emerald-700"
+                    />
+                    <DashboardMetric
+                        title="Pipeline activo"
+                        value={stats.active_pipeline_count}
+                        helper={`${stats.leads_new} leads siguen en estado nuevo ${rangeLabel}.`}
+                        onClick={hasLeadsSection ? () => navigate(leadBoardPath) : undefined}
+                        className="border-amber-200 bg-amber-50 text-amber-900"
+                        helperClassName="text-amber-700"
+                    />
+                    <DashboardMetric
+                        title="Pendientes por revisar"
+                        value={stats.unread_replies_count}
+                        helper={`Tiempo medio de respuesta visible: ${stats.response_time_min} min.`}
+                        onClick={hasLeadsSection ? () => navigate(leadBoardPath) : undefined}
+                        className="border-orange-200 bg-orange-50 text-orange-900"
+                        helperClassName="text-orange-700"
+                    />
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <DashboardMetric
+                        title="Leads de aliados"
+                        value={stats.ally_total}
+                        helper={`Leads donde un aliado está asignado o en supervision ${rangeLabel}.`}
+                        onClick={hasAllySection ? () => navigate('/aliado/dashboard') : undefined}
+                        className="border-cyan-200 bg-cyan-50 text-cyan-900"
+                        helperClassName="text-cyan-700"
+                    />
+                    <DashboardMetric
+                        title="Nuevos en aliados"
+                        value={stats.ally_new_leads_in_range}
+                        helper="Leads de aliados creados dentro del rango."
+                        onClick={hasAllySection ? () => navigate('/aliado/dashboard') : undefined}
+                        className="border-sky-200 bg-sky-50 text-sky-900"
+                        helperClassName="text-sky-700"
+                    />
+                    <DashboardMetric
+                        title="Cambios de estado aliados"
+                        value={stats.ally_status_changes_in_range}
+                        helper="Movimientos de estado sobre leads de aliados."
+                        onClick={hasAllySection ? () => navigate('/aliado/dashboard') : undefined}
+                        className="border-teal-200 bg-teal-50 text-teal-900"
+                        helperClassName="text-teal-700"
+                    />
+                </div>
+            )}
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <DashboardMetric
                     title="Nuevos del rango"
-                    value={stats.new_leads_in_range}
+                    value={isAllyDashboard ? stats.ally_new_leads_in_range : stats.new_leads_in_range}
                     helper="Leads creados dentro del rango seleccionado."
-                    onClick={hasLeadsSection ? () => navigate(leadBoardPath) : undefined}
+                    onClick={(isAllyDashboard ? hasAllySection : hasLeadsSection) ? () => navigate(isAllyDashboard ? '/aliado/dashboard' : leadBoardPath) : undefined}
                     className="border-blue-200 bg-blue-50 text-blue-900"
                     helperClassName="text-blue-700"
                 />
                 <DashboardMetric
                     title="Cambios de estado"
-                    value={stats.status_changes_in_range}
+                    value={isAllyDashboard ? stats.ally_status_changes_in_range : stats.status_changes_in_range}
                     helper="Movimientos de estado registrados en el periodo."
-                    onClick={hasLeadsSection ? () => navigate(leadBoardPath) : undefined}
+                    onClick={(isAllyDashboard ? hasAllySection : hasLeadsSection) ? () => navigate(isAllyDashboard ? '/aliado/dashboard' : leadBoardPath) : undefined}
                     className="border-indigo-200 bg-indigo-50 text-indigo-900"
                     helperClassName="text-indigo-700"
                 />
@@ -340,6 +412,7 @@ const AdvisorDashboard = () => {
                 />
             </div>
 
+            {!isAllyDashboard && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {hasAllySection && (
                     <DashboardMetric
@@ -392,17 +465,18 @@ const AdvisorDashboard = () => {
                     />
                 )}
             </div>
+            )}
 
-            {hasLeadsSection && (
+            {(isAllyDashboard ? hasAllySection : hasLeadsSection) && (
                 <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
                         <div className="mb-4">
-                            <h3 className="text-lg font-bold text-slate-800">{trendTitle}</h3>
-                            <p className="text-sm text-slate-500">{trendDescription}</p>
+                            <h3 className="text-lg font-bold text-slate-800">{currentTrendTitle}</h3>
+                            <p className="text-sm text-slate-500">{currentTrendDescription}</p>
                         </div>
                         <div className="h-80">
                             <Line
-                                data={leadTrendData}
+                                data={currentTrendData}
                                 options={{
                                     maintainAspectRatio: false,
                                     responsive: true,
@@ -415,23 +489,42 @@ const AdvisorDashboard = () => {
 
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                         <div className="mb-4">
-                            <h3 className="text-lg font-bold text-slate-800">Estado de tus leads</h3>
-                            <p className="text-sm text-slate-500">Distribución actual de tu gestión comercial.</p>
+                            <h3 className="text-lg font-bold text-slate-800">{isAllyDashboard ? 'Estado de leads de aliados' : 'Estado de tus leads'}</h3>
+                            <p className="text-sm text-slate-500">{isAllyDashboard ? 'Distribución actual de la gestión donde participan aliados.' : 'Distribución actual de tu gestión comercial.'}</p>
                         </div>
                         <div className="h-80">
-                            <Doughnut
-                                data={leadStatusData}
-                                options={{
-                                    maintainAspectRatio: false,
-                                    plugins: { legend: { position: 'bottom' } },
-                                }}
-                            />
+                            {isAllyDashboard ? (
+                                allyEntries.length > 0 ? (
+                                    <Bar
+                                        data={allyData}
+                                        options={{
+                                            indexAxis: 'y',
+                                            maintainAspectRatio: false,
+                                            responsive: true,
+                                            plugins: { legend: { display: false } },
+                                            scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+                                        }}
+                                    />
+                                ) : (
+                                    <div className="flex h-full items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
+                                        Aun no hay actividad de aliados visible.
+                                    </div>
+                                )
+                            ) : (
+                                <Doughnut
+                                    data={leadStatusData}
+                                    options={{
+                                        maintainAspectRatio: false,
+                                        plugins: { legend: { position: 'bottom' } },
+                                    }}
+                                />
+                            )}
                         </div>
                     </div>
                 </div>
             )}
 
-            {hasAllySection && (
+            {!isAllyDashboard && hasAllySection && (
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div className="mb-4">
                         <h3 className="text-lg font-bold text-slate-800">Gestion de aliados</h3>
@@ -461,11 +554,11 @@ const AdvisorDashboard = () => {
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="mb-4">
                     <h3 className="text-lg font-bold text-slate-800">Ranking de gestión por usuario</h3>
-                    <p className="text-sm text-slate-500">Acciones registradas en historial dentro del rango seleccionado.</p>
+                    <p className="text-sm text-slate-500">{isAllyDashboard ? 'Cambios de estado registrados sobre leads de aliados dentro del rango seleccionado.' : 'Acciones registradas en historial dentro del rango seleccionado.'}</p>
                 </div>
-                {topManagers.length > 0 ? (
+                {currentRanking.length > 0 ? (
                     <div className="space-y-3">
-                        {topManagers.map((manager, index) => (
+                        {currentRanking.map((manager, index) => (
                             <div key={`${manager.user_id}-${index}`} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
                                 <div>
                                     <p className="text-sm font-semibold text-slate-800">{manager.full_name || manager.email || `Usuario ${manager.user_id}`}</p>
