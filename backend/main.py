@@ -3146,9 +3146,10 @@ def extract_prospect_data_with_ai(api_key: str, model_name: str, full_conversati
                 "name, phone, email, interested_vehicle, payment_type, down_payment_amount, has_credit_report, "
                 "report_entity, has_payment_agreement, occupation_type, residence_city, monthly_income, is_ready_to_create_lead. "
                 "Si falta un dato usa null. "
-                "is_ready_to_create_lead=true solo si hay name, phone, email, interested_vehicle, payment_type, down_payment_amount, "
-                "occupation_type, residence_city y monthly_income. "
-                "Si has_credit_report=true tambien deben venir report_entity y has_payment_agreement."
+                "is_ready_to_create_lead=true si ya hay datos base suficientes para crear el lead: "
+                "name, phone e interested_vehicle. "
+                "El email, payment_type, down_payment_amount, occupation_type, residence_city, monthly_income, "
+                "report_entity y has_payment_agreement son deseables pero no obligatorios para crear el lead."
             )
         },
         {
@@ -3371,23 +3372,14 @@ def maybe_create_public_chat_lead(
     monthly_income = extracted_data.get("monthly_income")
     is_ready = bool(extracted_data.get("is_ready_to_create_lead"))
 
-    required_core = all([
-        is_ready,
+    has_minimum_lead_data = all([
         name,
         first_name,
         phone,
-        email,
-        interested_vehicle,
-        payment_type,
-        down_payment_amount is not None,
-        occupation_type,
-        residence_city,
-        monthly_income is not None
+        interested_vehicle
     ])
-    if not required_core:
-        return None
-
-    if has_credit_report is True and not (report_entity and has_payment_agreement is not None):
+    should_create_lead = has_minimum_lead_data
+    if not should_create_lead:
         return None
 
     lookup_phones = phone_variants_for_lookup(phone)
@@ -3416,7 +3408,7 @@ def maybe_create_public_chat_lead(
     )
 
     if existing_lead:
-        existing_lead.name = first_name or existing_lead.name
+        existing_lead.name = name or existing_lead.name
         existing_lead.email = email or existing_lead.email
         existing_lead.message = lead_message
         upsert_lead_process_detail(db, existing_lead.id, interested_vehicle)
@@ -3433,7 +3425,7 @@ def maybe_create_public_chat_lead(
 
     new_lead = models.Lead(
         source=lead_source,
-        name=first_name,
+        name=name,
         phone=phone,
         email=email,
         message=lead_message,
