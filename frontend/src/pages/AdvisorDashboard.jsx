@@ -215,6 +215,8 @@ const AdvisorDashboard = () => {
             },
         ],
     };
+    const topManagers = Array.isArray(stats.top_managers) ? stats.top_managers : [];
+    const topManager = topManagers[0] || null;
 
     const isCustomRange = Boolean(startDate && endDate);
     const rangeLabel = isCustomRange
@@ -322,6 +324,32 @@ const AdvisorDashboard = () => {
                     onClick={hasLeadsSection ? () => navigate(leadBoardPath) : undefined}
                     className="border-orange-200 bg-orange-50 text-orange-900"
                     helperClassName="text-orange-700"
+                />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <DashboardMetric
+                    title="Nuevos del rango"
+                    value={stats.new_leads_in_range}
+                    helper="Leads creados dentro del rango seleccionado."
+                    onClick={hasLeadsSection ? () => navigate(leadBoardPath) : undefined}
+                    className="border-blue-200 bg-blue-50 text-blue-900"
+                    helperClassName="text-blue-700"
+                />
+                <DashboardMetric
+                    title="Cambios de estado"
+                    value={stats.status_changes_in_range}
+                    helper="Movimientos de estado registrados en el periodo."
+                    onClick={hasLeadsSection ? () => navigate(leadBoardPath) : undefined}
+                    className="border-indigo-200 bg-indigo-50 text-indigo-900"
+                    helperClassName="text-indigo-700"
+                />
+                <DashboardMetric
+                    title="Usuario que más gestiona"
+                    value={topManager ? (topManager.full_name || topManager.email || 'Usuario') : 'Sin datos'}
+                    helper={topManager ? `${topManager.count} gestiones registradas en el rango.` : 'Aun no hay gestiones registradas en el rango.'}
+                    className="border-fuchsia-200 bg-fuchsia-50 text-fuchsia-900"
+                    helperClassName="text-fuchsia-700"
                 />
             </div>
 
@@ -442,6 +470,32 @@ const AdvisorDashboard = () => {
                     </div>
                 </div>
             )}
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="mb-4">
+                    <h3 className="text-lg font-bold text-slate-800">Ranking de gestión por usuario</h3>
+                    <p className="text-sm text-slate-500">Acciones registradas en historial dentro del rango seleccionado.</p>
+                </div>
+                {topManagers.length > 0 ? (
+                    <div className="space-y-3">
+                        {topManagers.map((manager, index) => (
+                            <div key={`${manager.user_id}-${index}`} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                                <div>
+                                    <p className="text-sm font-semibold text-slate-800">{manager.full_name || manager.email || `Usuario ${manager.user_id}`}</p>
+                                    <p className="text-xs text-slate-500">{manager.email || 'Sin correo visible'}</p>
+                                </div>
+                                <span className="rounded-full bg-blue-100 px-3 py-1 text-sm font-bold text-blue-700">
+                                    {manager.count}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="flex h-32 items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
+                        Aun no hay gestiones registradas para este rango.
+                    </div>
+                )}
+            </div>
 
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                 {hasCreditsSection && (

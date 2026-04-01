@@ -399,6 +399,7 @@ class Lead(LeadBase):
     deleted_reason: Optional[str] = None
     deleted_by_id: Optional[int] = None
     assigned_to: Optional[User] = None
+    created_by: Optional[User] = None
     deleted_by: Optional[User] = None
     supervisors: List[User] = []
     credit_application_id: Optional[int] = None
@@ -568,6 +569,8 @@ class RoleDashboardStats(BaseModel):
     leads_new: int
     leads_sold: int
     ally_total: int
+    new_leads_in_range: int
+    status_changes_in_range: int
     conversion_rate: float
     response_time_min: int
     active_pipeline_count: int
@@ -586,6 +589,7 @@ class RoleDashboardStats(BaseModel):
     sales_status_distribution: Dict[str, int]
     inventory_total: int
     inventory_status_distribution: Dict[str, int]
+    top_managers: List[Dict[str, Any]] = []
 
 class ReportsStats(BaseModel):
     total_leads: int

@@ -1881,6 +1881,7 @@ def get_lead_detail(
 ):
     lead = db.query(models.Lead).options(
         joinedload(models.Lead.assigned_to),
+        joinedload(models.Lead.created_by),
         joinedload(models.Lead.deleted_by),
         selectinload(models.Lead.supervisors),
         selectinload(models.Lead.history).joinedload(models.LeadHistory.user),
@@ -2461,6 +2462,7 @@ def read_advisor_stats(
         return max((candidate for candidate in activity_candidates if candidate is not None), default=None)
 
     leads = [lead for lead in all_leads if is_within_dashboard_range(lead_activity_at(lead))]
+    new_leads_in_range = sum(1 for lead in all_leads if is_within_dashboard_range(getattr(lead, "created_at", None)))
 
     status_distribution = {}
     ally_status_distribution = {}
@@ -2505,6 +2507,42 @@ def read_advisor_stats(
     leads_sold = status_distribution.get("sold", 0)
     leads_new = status_distribution.get("new", 0)
     conversion_rate = (leads_sold / total_leads * 100) if total_leads else 0
+    visible_lead_ids = [lead.id for lead in all_leads]
+    history_entries = []
+    if visible_lead_ids:
+        history_entries = db.query(models.LeadHistory).options(
+            joinedload(models.LeadHistory.user)
+        ).filter(
+            models.LeadHistory.lead_id.in_(visible_lead_ids),
+            models.LeadHistory.created_at >= period_start,
+            models.LeadHistory.created_at < period_end
+        ).all()
+    status_changes_in_range = sum(
+        1 for entry in history_entries
+        if (entry.previous_status or "") != (entry.new_status or "")
+    )
+    manager_activity_map: Dict[int, Dict[str, Any]] = {}
+    for entry in history_entries:
+        if not entry.user_id:
+            continue
+        current_item = manager_activity_map.setdefault(
+            entry.user_id,
+            {
+                "user_id": entry.user_id,
+                "full_name": getattr(getattr(entry, "user", None), "full_name", None),
+                "email": getattr(getattr(entry, "user", None), "email", None),
+                "count": 0,
+            }
+        )
+        current_item["count"] += 1
+        if not current_item.get("full_name"):
+            current_item["full_name"] = getattr(getattr(entry, "user", None), "full_name", None)
+        if not current_item.get("email"):
+            current_item["email"] = getattr(getattr(entry, "user", None), "email", None)
+    top_managers = sorted(
+        manager_activity_map.values(),
+        key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
+    )[:5]
 
     credit_status_distribution = {}
     credit_total = 0
@@ -2596,6 +2634,8 @@ def read_advisor_stats(
         "leads_new": leads_new,
         "leads_sold": leads_sold,
         "ally_total": ally_total,
+        "new_leads_in_range": new_leads_in_range,
+        "status_changes_in_range": status_changes_in_range,
         "conversion_rate": round(conversion_rate, 2),
         "response_time_min": 37,
         "active_pipeline_count": active_pipeline_count,
@@ -2614,6 +2654,7 @@ def read_advisor_stats(
         "sales_status_distribution": sales_status_distribution,
         "inventory_total": inventory_total,
         "inventory_status_distribution": inventory_status_distribution,
+        "top_managers": top_managers,
     }
 
 @app.post("/seed/brands")
@@ -3784,7 +3825,15 @@ def create_lead_note(
         user_id=current_user.id,
         content=note.content
     )
+    db_history = models.LeadHistory(
+        lead_id=lead_id,
+        user_id=current_user.id,
+        previous_status=lead.status,
+        new_status=lead.status,
+        comment=f"Nota agregada: {note.content}"
+    )
     db.add(db_note)
+    db.add(db_history)
     db.commit()
     db.refresh(db_note)
     db_note = db.query(models.LeadNote).options(

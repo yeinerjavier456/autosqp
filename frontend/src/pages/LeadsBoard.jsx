@@ -547,6 +547,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, onDeleteLead
             new_status: lead.status || 'new',
             comment: lead.message,
             created_at: lead.created_at,
+            user: lead.created_by || null,
             isInitialDescription: true
         }] : []),
         ...(Array.isArray(lead.history) ? lead.history : [])
@@ -1406,13 +1407,14 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, onDeleteLead
                                         </div>
                                         <div className="flex-1 pb-6">
                                             <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 group-hover:border-blue-100 transition shadow-sm">
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded text-white ${record.isInitialDescription ? 'bg-slate-500' : 'bg-gray-400'}`}>
-                                                            {record.isInitialDescription ? 'creacion' : (record.previous_status || 'N/A')}
-                                                        </span>
-                                                        {!record.isInitialDescription && (
-                                                            <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                                                  <div className="flex justify-between items-start mb-2">
+                                                      <div className="flex flex-col gap-2">
+                                                          <div className="flex items-center gap-2">
+                                                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded text-white ${record.isInitialDescription ? 'bg-slate-500' : 'bg-gray-400'}`}>
+                                                              {record.isInitialDescription ? 'creacion' : (record.previous_status || 'N/A')}
+                                                          </span>
+                                                          {!record.isInitialDescription && (
+                                                              <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                                                         )}
                                                         <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded text-white 
                                                                 ${record.isInitialDescription ? 'bg-indigo-500' :
@@ -1420,18 +1422,22 @@ const HistoryModal = ({ lead, onClose, onUpdate, onSaveSupervisors, onDeleteLead
                                                                     record.new_status === 'credit_application' ? 'bg-teal-500' :
                                                                 record.new_status === 'ally_managed' ? 'bg-purple-500' :
                                                                     record.new_status === 'lost' ? 'bg-gray-500' : 'bg-blue-500'}`}>
-                                                            {record.isInitialDescription
-                                                                ? 'lead creado'
-                                                                : record.new_status === 'ally_managed'
-                                                                ? 'gestionado por aliado'
-                                                                : record.new_status === 'credit_application'
-                                                                    ? 'solicitud de crédito'
-                                                                    : record.new_status}
-                                                        </span>
-                                                    </div>
-                                                    <span className="text-[10px] text-gray-400 font-mono">
-                                                        {record.created_at ? new Date(record.created_at).toLocaleString() : 'Reciente'}
-                                                    </span>
+                                                              {record.isInitialDescription
+                                                                  ? 'lead creado'
+                                                                  : record.new_status === 'ally_managed'
+                                                                  ? 'gestionado por aliado'
+                                                                  : record.new_status === 'credit_application'
+                                                                      ? 'solicitud de crédito'
+                                                                      : record.new_status}
+                                                          </span>
+                                                          </div>
+                                                          <p className="text-[11px] font-semibold text-slate-500">
+                                                              {record.user?.full_name || record.user?.email || 'Sistema'}
+                                                          </p>
+                                                      </div>
+                                                      <span className="text-[10px] text-gray-400 font-mono">
+                                                          {record.created_at ? new Date(record.created_at).toLocaleString() : 'Reciente'}
+                                                      </span>
                                                 </div>
                                                 <p className="text-sm text-gray-700 italic">"{record.comment || 'Sin comentario'}"</p>
                                             </div>
