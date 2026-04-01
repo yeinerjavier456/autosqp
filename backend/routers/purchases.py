@@ -288,17 +288,10 @@ def _build_purchase_feed(
         return {"items": [], "total": 0}
 
     _sync_purchase_requests_for_company(db, current_user.company_id)
-    eligible_leads = _eligible_purchase_leads(db, current_user.company_id)
-    eligible_lead_ids = [lead.id for lead in eligible_leads]
-
-    if not eligible_lead_ids:
-        return {"items": [], "total": 0}
-
     purchases = db.query(models.CreditApplication).options(
         joinedload(models.CreditApplication.assigned_to)
     ).filter(
-        models.CreditApplication.company_id == current_user.company_id,
-        models.CreditApplication.lead_id.in_(eligible_lead_ids)
+        models.CreditApplication.company_id == current_user.company_id
     ).order_by(models.CreditApplication.created_at.desc()).all()
 
     role_name = getattr(getattr(current_user, "role", None), "base_role_name", None) or getattr(getattr(current_user, "role", None), "name", None)
