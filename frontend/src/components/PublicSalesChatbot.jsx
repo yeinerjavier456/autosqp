@@ -156,7 +156,7 @@ const PublicSalesChatbot = ({
     return (
         <>
             {open && (
-                <div className={`${embedded ? 'relative flex h-[420px] w-full max-w-none flex-col sm:h-[450px] lg:h-full lg:min-h-0 lg:max-h-[calc(100vh-170px)]' : 'fixed bottom-24 right-4 md:right-6 z-50 w-[360px] max-w-[calc(100vw-2rem)] h-[560px]'} bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden`}>
+                <div className={`${embedded ? 'relative flex h-[420px] w-full max-w-none flex-col sm:h-[500px] lg:h-full lg:min-h-[580px] lg:max-h-[calc(100vh-140px)]' : 'fixed bottom-24 right-4 md:right-6 z-50 w-[360px] max-w-[calc(100vw-2rem)] h-[560px]'} bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden`}>
                     <div className="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
                         <div>
                             <h3 className="font-bold">Autos QP</h3>
