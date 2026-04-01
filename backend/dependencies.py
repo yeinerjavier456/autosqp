@@ -28,6 +28,12 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     
     if user is None:
         raise credentials_exception
+    if not getattr(user, "is_active", True):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario inhabilitado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return user
 
 

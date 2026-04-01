@@ -18,6 +18,7 @@ const UserForm = () => {
     });
     const [companies, setCompanies] = useState([]);
     const [roles, setRoles] = useState([]);
+    const [availableUsers, setAvailableUsers] = useState([]);
     const [isEditing, setIsEditing] = useState(false);
     const [status, setStatus] = useState({ type: '', message: '' });
 
@@ -31,7 +32,8 @@ const UserForm = () => {
         user: 'Usuario Básico',
     };
     const selectedRole = roles.find(r => String(r.id) === String(user.role_id));
-    const isInventarioRoleSelected = selectedRole?.name === 'inventario';
+    const isInventarioRoleSelected = (selectedRole?.base_role_name || selectedRole?.name) === 'inventario';
+    const currentRoleName = currentUser?.role?.base_role_name || currentUser?.role?.name;
 
     useEffect(() => {
         const fetchDependencies = async () => {
@@ -42,6 +44,11 @@ const UserForm = () => {
                 // Fetch Roles
                 const rolesRes = await axios.get('https://autosqp.co/api/roles/', { headers });
                 setRoles(rolesRes.data);
+
+                if (id) {
+                    const usersRes = await axios.get('https://autosqp.co/api/users/?limit=500', { headers });
+                    setAvailableUsers(Array.isArray(usersRes.data?.items) ? usersRes.data.items : []);
+                }
 
                 // Fetch Companies if Super Admin
                 if (!currentUser?.company_id) {
@@ -120,7 +127,7 @@ const UserForm = () => {
 
             // Inventory role must not persist payroll/commission fields
             const selectedRoleForSave = roles.find(r => r.id === payload.role_id);
-            if (selectedRoleForSave?.name === 'inventario') {
+            if ((selectedRoleForSave?.base_role_name || selectedRoleForSave?.name) === 'inventario') {
                 payload.commission_percentage = 0;
                 payload.base_salary = null;
                 payload.payment_dates = null;
@@ -146,29 +153,56 @@ const UserForm = () => {
     };
 
     const handleDelete = async () => {
+        const reassignmentOptions = availableUsers
+            .filter((candidate) => String(candidate.id) !== String(id))
+            .map((candidate) => `
+                <option value="${candidate.id}">
+                    ${(candidate.full_name || candidate.email)}${candidate.role?.label ? ` - ${candidate.role.label}` : ''}
+                </option>
+            `)
+            .join('');
+
         const result = await Swal.fire({
-            title: '¿Estás seguro?',
-            text: "Cuidado: Esto eliminará al usuario permanentemente y reasignará o dejará huérfanos sus leads/ventas.",
+            title: 'Inhabilitar usuario',
+            html: `
+                <div style="text-align:left">
+                    <p style="margin-bottom:12px;">El usuario no se eliminará físicamente. Se inhabilitará para conservar métricas e historial.</p>
+                    <label for="reassign-user-select" style="display:block;margin-bottom:6px;font-weight:600;">Reasignar todos sus leads a:</label>
+                    <select id="reassign-user-select" class="swal2-select" style="display:flex;width:100%;margin:0;">
+                        <option value="">Sin reasignación</option>
+                        ${reassignmentOptions}
+                    </select>
+                    <p style="margin-top:10px;font-size:12px;color:#64748b;">Si el usuario tiene leads asignados, debes escoger aquí el nuevo responsable.</p>
+                </div>
+            `,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#d33',
             cancelButtonColor: '#3085d6',
-            confirmButtonText: 'Sí, eliminar',
-            cancelButtonText: 'Cancelar'
+            confirmButtonText: 'Sí, inhabilitar',
+            cancelButtonText: 'Cancelar',
+            focusConfirm: false,
+            preConfirm: () => {
+                const select = document.getElementById('reassign-user-select');
+                return {
+                    reassign_leads_to_user_id: select?.value ? parseInt(select.value, 10) : null
+                };
+            }
         });
 
         if (result.isConfirmed) {
-            setStatus({ type: 'loading', message: 'Eliminando...' });
+            setStatus({ type: 'loading', message: 'Inhabilitando...' });
             try {
                 const token = localStorage.getItem('token');
                 await axios.delete(`https://autosqp.co/api/users/${id}`, {
-                    headers: { Authorization: `Bearer ${token}` }
+                    headers: { Authorization: `Bearer ${token}` },
+                    data: result.value || {}
                 });
-                Swal.fire('¡Eliminado!', 'El usuario ha sido eliminado.', 'success');
+                Swal.fire('Usuario inhabilitado', 'El usuario ya no estará visible ni podrá iniciar sesión.', 'success');
                 navigate('/admin/users');
             } catch (error) {
                 console.error("Error deleting user", error);
-                const errorMsg = error.response?.data?.detail || 'No se pudo eliminar el usuario';
+                const errorMsg = error.response?.data?.detail || 'No se pudo inhabilitar el usuario';
                 setStatus({ type: 'error', message: `Error: ${errorMsg}` });
                 Swal.fire('Error', errorMsg, 'error');
             }
@@ -330,14 +364,14 @@ const UserForm = () => {
                             {status.type === 'loading' ? 'Guardando...' : 'Guardar Usuario'}
                         </button>
 
-                        {isEditing && (currentUser?.role?.name === 'super_admin' || currentUser?.role?.name === 'admin') && (
+                        {isEditing && (currentRoleName === 'super_admin' || currentRoleName === 'admin') && (
                             <button
                                 type="button"
                                 onClick={handleDelete}
                                 disabled={status.type === 'loading'}
                                 className="flex-1 py-3 px-6 bg-red-600 text-white font-bold rounded-lg shadow-lg hover:bg-red-700 transition transform hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed"
                             >
-                                Eliminar Usuario
+                                Inhabilitar Usuario
                             </button>
                         )}
                     </div>

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Query, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Query, Query, Body
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session, joinedload, selectinload, noload
@@ -94,6 +94,25 @@ def ensure_payment_receipts_columns():
 
 ensure_role_configuration_columns()
 ensure_payment_receipts_columns()
+
+def ensure_user_status_columns():
+    try:
+        with engine.begin() as conn:
+            user_columns = {
+                "is_active": "ALTER TABLE users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1",
+            }
+            for column_name, ddl in user_columns.items():
+                exists = conn.execute(text(
+                    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' "
+                    "AND COLUMN_NAME = :column_name"
+                ), {"column_name": column_name}).scalar()
+                if not exists:
+                    conn.execute(text(ddl))
+    except Exception as exc:
+        print(f"Warning: could not ensure user status columns: {exc}", flush=True)
+
+ensure_user_status_columns()
 
 def ensure_sales_metadata_columns():
     try:
@@ -518,6 +537,12 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not getattr(user, "is_active", True):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario inhabilitado",
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token = auth_utils.create_access_token(
@@ -1278,6 +1303,7 @@ def read_users(
     limit: int = 100, 
     q: str = None, 
     role_id: int = None,
+    include_inactive: bool = False,
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(get_current_user)
 ):
@@ -1293,6 +1319,9 @@ def read_users(
     # If user belongs to a company, limit scope to that company specific users
     if current_user.company_id:
         query = query.filter(models.User.company_id == current_user.company_id)
+
+    if not include_inactive:
+        query = query.filter(models.User.is_active == True)
 
     if q:
         query = query.filter(models.User.email.ilike(f"%{q}%"))
@@ -1415,10 +1444,16 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
     return serialize_user(db_user)
 
 @app.delete("/users/{user_id}")
-def delete_user(user_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+def delete_user(
+    user_id: int,
+    disable_request: Optional[schemas.UserDisableRequest] = Body(default=None),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     # 1. Check if the executing user has permission (Admin or Super Admin)
     role_obj = db.query(models.Role).filter(models.Role.id == current_user.role_id).first()
-    if not role_obj or role_obj.name not in ["super_admin", "admin"]:
+    effective_role_name = getattr(role_obj, "base_role_name", None) or getattr(role_obj, "name", None)
+    if not role_obj or effective_role_name not in ["super_admin", "admin"]:
         raise HTTPException(status_code=403, detail="No tienes permisos para eliminar usuarios")
         
     # 2. Prevent self-deletion
@@ -1429,37 +1464,67 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: model
     db_user = db.query(models.User).filter(models.User.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if not getattr(db_user, "is_active", True):
+        raise HTTPException(status_code=400, detail="El usuario ya está inhabilitado")
         
     # 4. If current user is just 'admin', they can only delete users in their same company
-    if role_obj.name == "admin":
+    if effective_role_name == "admin":
         if db_user.company_id != current_user.company_id:
             raise HTTPException(status_code=403, detail="No puedes eliminar usuarios de otra empresa")
             
         # Prevent 'admin' from deleting a 'super_admin'
         target_role = db.query(models.Role).filter(models.Role.id == db_user.role_id).first()
-        if target_role and target_role.name == "super_admin":
+        target_role_name = getattr(target_role, "base_role_name", None) or getattr(target_role, "name", None)
+        if target_role and target_role_name == "super_admin":
             raise HTTPException(status_code=403, detail="No puedes eliminar a un Súper Administrador")
             
+    reassignment_target_id = disable_request.reassign_leads_to_user_id if disable_request else None
+    assigned_leads_query = db.query(models.Lead).filter(
+        models.Lead.assigned_to_id == user_id,
+        models.Lead.deleted_at.is_(None)
+    )
+    assigned_leads_count = assigned_leads_query.count()
+
+    replacement_user = None
+    if reassignment_target_id is not None:
+        replacement_user = db.query(models.User).filter(models.User.id == reassignment_target_id).first()
+        if not replacement_user:
+            raise HTTPException(status_code=404, detail="El usuario destino para reasignación no existe")
+        if replacement_user.company_id != db_user.company_id:
+            raise HTTPException(status_code=400, detail="Solo puedes reasignar los leads a un usuario de la misma empresa")
+        if replacement_user.id == db_user.id:
+            raise HTTPException(status_code=400, detail="Debes escoger un usuario diferente para la reasignación")
+        if not getattr(replacement_user, "is_active", True):
+            raise HTTPException(status_code=400, detail="El usuario destino está inhabilitado")
+
+    if assigned_leads_count > 0 and replacement_user is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Este usuario tiene {assigned_leads_count} lead(s) asignado(s). Debes seleccionar un usuario para reasignarlos antes de inhabilitarlo."
+        )
+
     user_email_snapshot = db_user.email
             
     try:
-        # 5. Remove relationships before deleting to avoid MySQL Integrity Error 1451
-        db.query(models.LeadHistory).filter(models.LeadHistory.user_id == user_id).update({"user_id": None})
-        db.query(models.Lead).filter(models.Lead.assigned_to_id == user_id).update({"assigned_to_id": None})
-        db.query(models.Lead).filter(models.Lead.created_by_id == user_id).update({"created_by_id": None})
-        db.query(models.LeadSupervisor).filter(models.LeadSupervisor.user_id == user_id).delete(synchronize_session=False)
-        db.query(models.LeadSupervisor).filter(models.LeadSupervisor.assigned_by_id == user_id).update({"assigned_by_id": None}, synchronize_session=False)
-        db.query(models.Sale).filter(models.Sale.seller_id == user_id).update({"seller_id": None})
-        
-        db.delete(db_user)
+        if replacement_user is not None:
+            assigned_leads_query.update({"assigned_to_id": replacement_user.id}, synchronize_session=False)
+
+        db_user.is_active = False
         db.commit()
         
-        log_action_to_db(db, current_user.id, "DELETE", "User", user_id, f"Usuario eliminado: {user_email_snapshot}")
+        action_detail = f"Usuario inhabilitado: {user_email_snapshot}"
+        if replacement_user is not None and assigned_leads_count > 0:
+            action_detail += f". Leads reasignados a {replacement_user.full_name or replacement_user.email}"
+        log_action_to_db(db, current_user.id, "DISABLE", "User", user_id, action_detail)
         
-        return {"status": "success", "message": "Usuario eliminado correctamente"}
+        return {
+            "status": "success",
+            "message": "Usuario inhabilitado correctamente",
+            "reassigned_leads": assigned_leads_count if replacement_user is not None else 0,
+        }
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=f"No se pudo eliminar el usuario porque tiene registros dependientes (ej: ventas o leads asigandos). {str(e)}")
+        raise HTTPException(status_code=400, detail=f"No se pudo inhabilitar el usuario. {str(e)}")
 
 # --- SYSTEM LOGS ENDPOINTS ---
 
@@ -3743,7 +3808,14 @@ def update_lead(
         
     if current_user.company_id and lead.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Not authorized")
-    ensure_can_modify_lead(current_user, lead)
+
+    update_data = lead_update.dict(exclude_unset=True)
+    requested_fields = set(update_data.keys())
+    contact_edit_fields = {"name", "email", "phone"}
+    is_contact_only_update = bool(requested_fields) and requested_fields.issubset(contact_edit_fields)
+
+    if not is_contact_only_update:
+        ensure_can_modify_lead(current_user, lead)
     if lead_update.supervisor_ids is not None:
         ensure_can_manage_lead_supervision(current_user, lead)
 
@@ -3813,7 +3885,8 @@ def update_lead(
     process_detail_data = lead_update.process_detail
     previous_process_detail = db.query(models.LeadProcessDetail).filter(models.LeadProcessDetail.lead_id == lead.id).first()
     previous_vehicle_id = previous_process_detail.vehicle_id if previous_process_detail else None
-    validate_interested_process_detail(effective_status, process_detail_data, previous_process_detail)
+    if not is_contact_only_update:
+        validate_interested_process_detail(effective_status, process_detail_data, previous_process_detail)
 
     if has_status_change or has_comment:
         if has_status_change:

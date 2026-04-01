@@ -86,12 +86,16 @@ class UserUpdate(BaseModel):
     base_salary: Optional[int] = None
     payment_dates: Optional[str] = None
 
+class UserDisableRequest(BaseModel):
+    reassign_leads_to_user_id: Optional[int] = None
+
 class User(UserBase):
     id: int
     created_at: Optional[datetime] = None
     role: Optional[Role] = None
     last_active: Optional[datetime] = None
     is_online: Optional[bool] = False
+    is_active: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 
