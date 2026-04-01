@@ -279,7 +279,7 @@ const AdvisorDashboard = () => {
                     <div>
                         <h1 className="text-3xl font-bold">Dashboard de {roleLabel}</h1>
                         <p className="mt-2 max-w-3xl text-sm text-slate-200">
-                            Vista operativa de tu gestión actual: leads, cierres, estados y colas relacionadas según el rol que tienes dentro de la empresa.
+                            Vista operativa general de la empresa: leads, cierres, estados y colas relacionadas según los accesos disponibles para tu rol.
                         </p>
                         {hasAllySection && (
                             <div className="mt-4 flex flex-wrap gap-3">
@@ -338,13 +338,13 @@ const AdvisorDashboard = () => {
                     value={dashboardLeadTotal}
                     helper={isAllyDashboard
                         ? `Incluye solo leads que están en gestión de aliados ${rangeLabel}.`
-                        : `Incluye asignados y leads donde quedaste en supervision ${rangeLabel}.`}
+                        : `Incluye el comportamiento general de leads de AutosQP ${rangeLabel}.`}
                     onClick={(isAllyDashboard ? hasAllySection : hasLeadsSection) ? () => navigate(isAllyDashboard ? '/aliado/dashboard' : leadBoardPath) : undefined}
                 />
                 <DashboardMetric
                     title="Conversion"
                     value={`${dashboardConversionRate}%`}
-                    helper={`${dashboardLeadsSold} cierres sobre tu base ${rangeLabel}.`}
+                    helper={`${dashboardLeadsSold} cierres registrados en el rango ${rangeLabel}.`}
                     onClick={hasSalesSection ? () => navigate(permissions.has('my_sales') && !permissions.has('sales') ? '/admin/my-sales' : '/admin/sales') : undefined}
                     className="border-emerald-200 bg-emerald-50 text-emerald-900"
                     helperClassName="text-emerald-700"
@@ -409,7 +409,7 @@ const AdvisorDashboard = () => {
                     <DashboardMetric
                         title="Solicitudes de credito"
                         value={stats.credit_total}
-                        helper="Casos donde hoy participas o haces seguimiento."
+                        helper="Solicitudes de crédito generales de la empresa dentro del rango."
                         onClick={() => navigate('/admin/credits')}
                         className="border-violet-200 bg-violet-50 text-violet-900"
                         helperClassName="text-violet-700"
@@ -419,7 +419,7 @@ const AdvisorDashboard = () => {
                     <DashboardMetric
                         title="Solicitudes de compra"
                         value={stats.purchase_total}
-                        helper="Busquedas de vehiculo ligadas a tu gestión."
+                        helper="Búsquedas de vehículo generales de la empresa dentro del rango."
                         onClick={() => navigate('/admin/purchases')}
                         className="border-pink-200 bg-pink-50 text-pink-900"
                         helperClassName="text-pink-700"
@@ -439,7 +439,7 @@ const AdvisorDashboard = () => {
                     <DashboardMetric
                         title="Inventario"
                         value={stats.inventory_total}
-                        helper="Total de vehiculos visibles para tu operación."
+                        helper="Total de vehículos visibles en la empresa."
                         onClick={() => navigate('/admin/inventory')}
                         className="border-sky-200 bg-sky-50 text-sky-900"
                         helperClassName="text-sky-700"
@@ -470,8 +470,8 @@ const AdvisorDashboard = () => {
 
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                         <div className="mb-4">
-                            <h3 className="text-lg font-bold text-slate-800">{isAllyDashboard ? 'Estado de leads de aliados' : 'Estado de tus leads'}</h3>
-                            <p className="text-sm text-slate-500">{isAllyDashboard ? 'Distribución actual de la gestión donde participan aliados.' : 'Distribución actual de tu gestión comercial.'}</p>
+                            <h3 className="text-lg font-bold text-slate-800">{isAllyDashboard ? 'Estado de leads de aliados' : 'Estado general de leads'}</h3>
+                            <p className="text-sm text-slate-500">{isAllyDashboard ? 'Distribución actual de la gestión donde participan aliados.' : 'Distribución actual de los leads de AutosQP en el rango seleccionado.'}</p>
                         </div>
                         <div className="h-80">
                             {isAllyDashboard ? (
@@ -509,7 +509,7 @@ const AdvisorDashboard = () => {
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div className="mb-4">
                         <h3 className="text-lg font-bold text-slate-800">Gestion de aliados</h3>
-                        <p className="text-sm text-slate-500">Estados actuales de la cola donde participan aliados en tu empresa.</p>
+                        <p className="text-sm text-slate-500">Estados actuales de la cola donde participan aliados en la empresa.</p>
                     </div>
                     <div className="h-72">
                         {allyEntries.length > 0 ? (
@@ -553,7 +553,7 @@ const AdvisorDashboard = () => {
                     </div>
                 ) : (
                     <div className="flex h-32 items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
-                        Aun no hay gestiones registradas para este rango.
+                        Aun no hay registros para este rango.
                     </div>
                 )}
             </div>
@@ -564,7 +564,7 @@ const AdvisorDashboard = () => {
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                         <div className="mb-4">
                             <h3 className="text-lg font-bold text-slate-800">Estado de creditos</h3>
-                            <p className="text-sm text-slate-500">Solicitudes de crédito que hoy pasan por tu gestión.</p>
+                            <p className="text-sm text-slate-500">Solicitudes de crédito generales de la empresa en el rango seleccionado.</p>
                         </div>
                         <div className="h-72">
                             {creditEntries.length > 0 ? (
@@ -579,7 +579,7 @@ const AdvisorDashboard = () => {
                                 />
                             ) : (
                                 <div className="flex h-full items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
-                                    No tienes solicitudes de credito visibles.
+                                    No hay solicitudes de crédito registradas en este rango.
                                 </div>
                             )}
                         </div>
@@ -590,7 +590,7 @@ const AdvisorDashboard = () => {
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                         <div className="mb-4">
                             <h3 className="text-lg font-bold text-slate-800">Estado de compras y busquedas</h3>
-                            <p className="text-sm text-slate-500">Solicitudes de compra y avance de las opciones encontradas.</p>
+                            <p className="text-sm text-slate-500">Solicitudes de compra generales de la empresa y avance de las opciones encontradas.</p>
                         </div>
                         <div className="h-72">
                             {purchaseEntries.length > 0 ? (
@@ -605,7 +605,7 @@ const AdvisorDashboard = () => {
                                 />
                             ) : (
                                 <div className="flex h-full items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
-                                    No tienes solicitudes de compra visibles.
+                                    No hay solicitudes de compra registradas en este rango.
                                 </div>
                             )}
                         </div>

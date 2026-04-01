@@ -2756,13 +2756,6 @@ def read_advisor_stats(
         credits_query = db.query(models.CreditApplication).filter(
             models.CreditApplication.company_id == current_user.company_id
         )
-        if not company_scope:
-            credits_query = credits_query.filter(
-                or_(
-                    models.CreditApplication.assigned_to_id == current_user.id,
-                    models.CreditApplication.lead_id.in_(relevant_lead_ids or [-1])
-                )
-            )
         credits = [
             credit for credit in credits_query.all()
             if is_within_dashboard_range(getattr(credit, "updated_at", None) or getattr(credit, "created_at", None))
@@ -2775,25 +2768,9 @@ def read_advisor_stats(
     purchase_status_distribution = {}
     purchase_total = 0
     if "purchase_board" in permissions:
-        purchase_lead_ids = [
-            lead_id for (lead_id,) in db.query(models.Lead.id).filter(
-                models.Lead.company_id == current_user.company_id,
-                models.Lead.status == models.LeadStatus.INTERESTED.value,
-                models.Lead.process_detail.has(models.LeadProcessDetail.has_vehicle == False),  # noqa: E712
-                models.Lead.process_detail.has(models.LeadProcessDetail.desired_vehicle.isnot(None))
-            ).all()
-        ]
         purchases_query = db.query(models.CreditApplication).filter(
-            models.CreditApplication.company_id == current_user.company_id,
-            models.CreditApplication.lead_id.in_(purchase_lead_ids or [-1])
+            models.CreditApplication.company_id == current_user.company_id
         )
-        if not company_scope:
-            purchases_query = purchases_query.filter(
-                or_(
-                    models.CreditApplication.assigned_to_id == current_user.id,
-                    models.CreditApplication.lead_id.in_(relevant_lead_ids or [-1])
-                )
-            )
         purchases = [
             purchase for purchase in purchases_query.all()
             if is_within_dashboard_range(getattr(purchase, "updated_at", None) or getattr(purchase, "created_at", None))
