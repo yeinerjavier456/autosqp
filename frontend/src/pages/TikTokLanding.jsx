@@ -23,16 +23,9 @@ const TikTokLanding = () => {
                         <span className="inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-orange-700">
                             Atención inmediata desde TikTok
                         </span>
-                        <h1 className="mt-5 max-w-3xl font-serif text-4xl font-black leading-tight text-slate-900 md:text-6xl">
+                        <h3 className="mt-5 max-w-3xl font-serif text-4xl font-black leading-tight text-slate-900 md:text-6xl">
                             Bienvenido a Autos QP.
-                            <span className="block text-orange-600">Tu asesoría empieza aquí.</span>
-                        </h1>
-                        <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
-                            Esta página recibe a los usuarios que llegan desde TikTok. Nuestro chatbot comercial te acompaña
-                            desde el primer mensaje, recopila tus datos y crea tu lead automáticamente para que el equipo de
-                            Autos QP continúe la gestión.
-                        </p>
-
+                        </h3>
                         <div className="mt-8 grid gap-4 md:grid-cols-3">
                             <div className="rounded-2xl border border-white/70 bg-white/80 p-5 shadow-sm backdrop-blur">
                                 <p className="text-sm font-bold uppercase tracking-wide text-slate-400">Paso 1</p>
@@ -51,8 +44,7 @@ const TikTokLanding = () => {
                         <div className="mt-10 rounded-3xl border border-orange-200 bg-orange-50 p-6 shadow-sm">
                             <p className="text-sm font-bold uppercase tracking-wide text-orange-700">Importante</p>
                             <p className="mt-2 text-sm leading-7 text-slate-700">
-                                El chat ya está listo para atenderte. Si llegaste desde TikTok, la solicitud quedará registrada
-                                con esa fuente para que el seguimiento comercial sea correcto.
+                                Nuestros asesores están listos para atenderte.
                             </p>
                         </div>
                     </section>
@@ -64,7 +56,7 @@ const TikTokLanding = () => {
                             <div className="mb-4 flex items-center justify-between rounded-2xl bg-slate-950 px-4 py-3 text-white">
                                 <div>
                                     <p className="text-sm font-bold">Chat comercial Autos QP</p>
-                                    <p className="text-xs text-slate-300">Atención para leads que vienen desde TikTok</p>
+                                  
                                 </div>
                                 <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-200">
                                     En línea
