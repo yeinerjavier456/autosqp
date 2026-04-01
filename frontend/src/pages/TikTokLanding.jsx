@@ -23,7 +23,7 @@ const TikTokLanding = () => {
                         <span className="inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-orange-700">
                             Atención inmediata desde TikTok
                         </span>
-                        <p className="mt-3 max-w-2xl font-serif text-3xl font-black leading-[0.95] text-slate-900 sm:text-4xl lg:text-[4rem]">
+                        <p className="mt-3 max-w-2xl font-serif text-[2rem] font-black leading-[0.95] text-slate-900">
                             Bienvenido a Autos QP.
                         </p>
                         <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600 lg:text-[1.05rem]">
