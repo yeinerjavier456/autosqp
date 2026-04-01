@@ -1001,10 +1001,16 @@ def validate_interested_process_detail(
     if target_status != models.LeadStatus.INTERESTED.value:
         return
 
-    has_vehicle = process_detail_data.has_vehicle if process_detail_data is not None else bool(getattr(existing_detail, "has_vehicle", False))
+    has_vehicle = process_detail_data.has_vehicle if process_detail_data is not None else getattr(existing_detail, "has_vehicle", None)
     vehicle_id = process_detail_data.vehicle_id if process_detail_data is not None else getattr(existing_detail, "vehicle_id", None)
     desired_vehicle = process_detail_data.desired_vehicle if process_detail_data is not None else getattr(existing_detail, "desired_vehicle", None)
     desired_vehicle = (desired_vehicle or "").strip()
+
+    if has_vehicle is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Debes indicar si el vehículo está disponible en inventario o si toca conseguirlo."
+        )
 
     if has_vehicle and not vehicle_id:
         raise HTTPException(status_code=400, detail="Debes seleccionar un vehículo disponible del inventario.")

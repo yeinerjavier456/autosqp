@@ -285,7 +285,7 @@ class LeadHistory(LeadHistoryBase):
     model_config = ConfigDict(from_attributes=True)
 
 class LeadProcessDetailBase(BaseModel):
-    has_vehicle: bool = False
+    has_vehicle: Optional[bool] = None
     vehicle_id: Optional[int] = None
     desired_vehicle: Optional[str] = None
     business_sheet_url: Optional[str] = None

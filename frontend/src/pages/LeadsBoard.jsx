@@ -288,7 +288,9 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     const [isSupervisionSelectorOpen, setIsSupervisionSelectorOpen] = useState(false);
 
     // Process Detail States
-    const [hasVehicle, setHasVehicle] = useState(lead?.process_detail?.has_vehicle ?? true);
+    const [hasVehicle, setHasVehicle] = useState(
+        typeof lead?.process_detail?.has_vehicle === 'boolean' ? lead.process_detail.has_vehicle : null
+    );
     const [selectedVehicleId, setSelectedVehicleId] = useState(lead?.process_detail?.vehicle_id || '');
     const [desiredVehicle, setDesiredVehicle] = useState(lead?.process_detail?.desired_vehicle || '');
 
@@ -325,6 +327,9 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         setEditableLeadName(lead?.name || '');
         setEditableLeadEmail(lead?.email || '');
         setEditableLeadPhone(lead?.phone || '');
+        setHasVehicle(typeof lead?.process_detail?.has_vehicle === 'boolean' ? lead.process_detail.has_vehicle : null);
+        setSelectedVehicleId(lead?.process_detail?.vehicle_id || '');
+        setDesiredVehicle(lead?.process_detail?.desired_vehicle || '');
     }, [lead?.id, lead?.assigned_to?.id]);
 
     useEffect(() => {
@@ -617,6 +622,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         }
 
         if (newStatus === 'interested') {
+            if (hasVehicle === null) {
+                Swal.fire('Atención', 'Debes indicar si el vehículo está disponible en inventario o si toca conseguirlo.', 'warning');
+                return;
+            }
             if (hasVehicle && !selectedVehicleId) {
                 Swal.fire('Atención', 'Debes seleccionar un vehículo disponible del inventario.', 'warning');
                 return;
@@ -634,7 +643,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                 processDetail = {
                     has_vehicle: hasVehicle,
                     vehicle_id: hasVehicle ? parseInt(selectedVehicleId) : null,
-                    desired_vehicle: !hasVehicle ? desiredVehicle : null
+                    desired_vehicle: !hasVehicle ? desiredVehicle.trim() : null
                 };
             }
             await onUpdate(lead.id, newStatus, newComment, processDetail, canManageSupervision ? selectedSupervisors : null);
@@ -1312,17 +1321,41 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                             {/* Process Detail conditional UI */}
                             {newStatus === 'interested' && (
                                 <div className="p-3 bg-orange-50 rounded-lg border border-orange-100 flex flex-col gap-3 animate-fade-in shadow-sm">
-                                    <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer w-fit">
-                                        <input
-                                            type="checkbox"
-                                            className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500 cursor-pointer"
-                                            checked={hasVehicle}
-                                            disabled={!canModifyLead}
-                                            onChange={(e) => setHasVehicle(e.target.checked)}
-                                        />
-                                        ¿Tenemos el vehículo deseado en inventario?
-                                    </label>
-                                    {hasVehicle ? (
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-700 mb-2">Disponibilidad del vehículo</p>
+                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                            <button
+                                                type="button"
+                                                disabled={!canModifyLead}
+                                                onClick={() => {
+                                                    setHasVehicle(true);
+                                                    setDesiredVehicle('');
+                                                }}
+                                                className={`rounded-lg border px-3 py-2 text-sm font-semibold text-left transition ${hasVehicle === true ? 'border-orange-500 bg-white text-orange-700 shadow-sm' : 'border-orange-200 bg-orange-50 text-gray-600 hover:bg-white'} disabled:cursor-not-allowed disabled:opacity-60`}
+                                            >
+                                                Lo tenemos en inventario
+                                            </button>
+                                            <button
+                                                type="button"
+                                                disabled={!canModifyLead}
+                                                onClick={() => {
+                                                    setHasVehicle(false);
+                                                    setSelectedVehicleId('');
+                                                }}
+                                                className={`rounded-lg border px-3 py-2 text-sm font-semibold text-left transition ${hasVehicle === false ? 'border-orange-500 bg-white text-orange-700 shadow-sm' : 'border-orange-200 bg-orange-50 text-gray-600 hover:bg-white'} disabled:cursor-not-allowed disabled:opacity-60`}
+                                            >
+                                                Toca conseguirlo
+                                            </button>
+                                        </div>
+                                        <p className="mt-2 text-xs text-gray-500">
+                                            Debes escoger una opción para poder guardar este lead en En proceso.
+                                        </p>
+                                    </div>
+                                    {hasVehicle === null ? (
+                                        <div className="rounded-lg border border-dashed border-orange-200 bg-white/70 px-3 py-3 text-sm text-gray-500">
+                                            Selecciona primero si el vehículo está en inventario o si debe entrar a búsqueda.
+                                        </div>
+                                    ) : hasVehicle === true ? (
                                         <div>
                                             <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Seleccionar Vehículo / Placa</label>
                                             <select
