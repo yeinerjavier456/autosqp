@@ -232,6 +232,7 @@ const AdvisorDashboard = () => {
     const topManagers = Array.isArray(stats.top_managers) ? stats.top_managers : [];
     const topStatusMovers = Array.isArray(stats.top_status_movers) ? stats.top_status_movers : [];
     const allyTopManagers = Array.isArray(stats.ally_top_managers) ? stats.ally_top_managers : [];
+    const allyTopAssigners = Array.isArray(stats.ally_top_assigners) ? stats.ally_top_assigners : [];
 
     const rangeLabel = `del ${startDate} al ${endDate}`;
     const trendTitle = 'Ritmo de gestión del rango elegido';
@@ -241,7 +242,7 @@ const AdvisorDashboard = () => {
         : '/admin/leads';
     const isAllyDashboard = dashboardView === 'allies';
     const topManager = isAllyDashboard
-        ? (allyTopManagers[0] || null)
+        ? (allyTopAssigners[0] || null)
         : (topStatusMovers[0] || topManagers[0] || null);
     const currentTrendData = isAllyDashboard
         ? {
@@ -262,7 +263,7 @@ const AdvisorDashboard = () => {
     const currentTrendDescription = isAllyDashboard
         ? 'Leads donde un aliado participa dentro del rango seleccionado.'
         : trendDescription;
-    const currentRanking = isAllyDashboard ? allyTopManagers : topManagers;
+    const currentRanking = isAllyDashboard ? allyTopAssigners : topManagers;
 
     return (
         <div className="space-y-6">
@@ -383,9 +384,17 @@ const AdvisorDashboard = () => {
                         className="border-teal-200 bg-teal-50 text-teal-900"
                         helperClassName="text-teal-700"
                     />
+                    <DashboardMetric
+                        title="Quién asigna a aliados"
+                        value={topManager ? (topManager.full_name || topManager.email || 'Usuario') : 'Sin datos'}
+                        helper={topManager ? `${topManager.count} asignaciones hacia aliados en el rango.` : 'Aun no hay asignaciones hacia aliados en el rango.'}
+                        className="border-fuchsia-200 bg-fuchsia-50 text-fuchsia-900"
+                        helperClassName="text-fuchsia-700"
+                    />
                 </div>
             )}
 
+            {!isAllyDashboard && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <DashboardMetric
                     title="Nuevos del rango"
@@ -411,6 +420,7 @@ const AdvisorDashboard = () => {
                     helperClassName="text-fuchsia-700"
                 />
             </div>
+            )}
 
             {!isAllyDashboard && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -553,8 +563,8 @@ const AdvisorDashboard = () => {
 
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="mb-4">
-                    <h3 className="text-lg font-bold text-slate-800">Ranking de gestión por usuario</h3>
-                    <p className="text-sm text-slate-500">{isAllyDashboard ? 'Cambios de estado registrados sobre leads de aliados dentro del rango seleccionado.' : 'Acciones registradas en historial dentro del rango seleccionado.'}</p>
+                    <h3 className="text-lg font-bold text-slate-800">{isAllyDashboard ? 'Quién asigna leads a aliados' : 'Ranking de gestión por usuario'}</h3>
+                    <p className="text-sm text-slate-500">{isAllyDashboard ? 'Usuarios que están enviando o asignando leads hacia el tablero de aliados dentro del rango seleccionado.' : 'Acciones registradas en historial dentro del rango seleccionado.'}</p>
                 </div>
                 {currentRanking.length > 0 ? (
                     <div className="space-y-3">
@@ -572,11 +582,12 @@ const AdvisorDashboard = () => {
                     </div>
                 ) : (
                     <div className="flex h-32 items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
-                        Aun no hay gestiones registradas para este rango.
+                        {isAllyDashboard ? 'Aun no hay asignaciones a aliados registradas para este rango.' : 'Aun no hay gestiones registradas para este rango.'}
                     </div>
                 )}
             </div>
 
+            {!isAllyDashboard && (
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                 {hasCreditsSection && (
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -706,6 +717,7 @@ const AdvisorDashboard = () => {
                     </div>
                 )}
             </div>
+            )}
         </div>
     );
 };

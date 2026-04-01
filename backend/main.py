@@ -2633,6 +2633,7 @@ def read_advisor_stats(
     manager_activity_map: Dict[int, Dict[str, Any]] = {}
     status_mover_map: Dict[int, Dict[str, Any]] = {}
     ally_manager_activity_map: Dict[int, Dict[str, Any]] = {}
+    ally_assigner_map: Dict[int, Dict[str, Any]] = {}
     for entry in history_entries:
         if not entry.user_id:
             continue
@@ -2684,6 +2685,26 @@ def read_advisor_stats(
             current_item["full_name"] = getattr(getattr(entry, "user", None), "full_name", None)
         if not current_item.get("email"):
             current_item["email"] = getattr(getattr(entry, "user", None), "email", None)
+    for entry in history_entries:
+        if not entry.user_id or entry.lead_id not in ally_lead_ids:
+            continue
+        comment_text = (entry.comment or "").strip().lower()
+        if "tablero de aliados" not in comment_text and "lead asignado a" not in comment_text:
+            continue
+        current_item = ally_assigner_map.setdefault(
+            entry.user_id,
+            {
+                "user_id": entry.user_id,
+                "full_name": getattr(getattr(entry, "user", None), "full_name", None),
+                "email": getattr(getattr(entry, "user", None), "email", None),
+                "count": 0,
+            }
+        )
+        current_item["count"] += 1
+        if not current_item.get("full_name"):
+            current_item["full_name"] = getattr(getattr(entry, "user", None), "full_name", None)
+        if not current_item.get("email"):
+            current_item["email"] = getattr(getattr(entry, "user", None), "email", None)
     top_managers = sorted(
         manager_activity_map.values(),
         key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
@@ -2694,6 +2715,10 @@ def read_advisor_stats(
     )[:5]
     ally_top_managers = sorted(
         ally_manager_activity_map.values(),
+        key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
+    )[:5]
+    ally_top_assigners = sorted(
+        ally_assigner_map.values(),
         key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
     )[:5]
 
@@ -2813,6 +2838,7 @@ def read_advisor_stats(
         "top_managers": top_managers,
         "top_status_movers": top_status_movers,
         "ally_top_managers": ally_top_managers,
+        "ally_top_assigners": ally_top_assigners,
     }
 
 @app.post("/seed/brands")
