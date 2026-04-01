@@ -611,6 +611,23 @@ def is_advisor_role(role: Optional[models.Role]) -> bool:
     return (getattr(role, "base_role_name", None) or getattr(role, "name", None)) == "asesor"
 
 
+def is_ally_role(role: Optional[models.Role]) -> bool:
+    if not role:
+        return False
+
+    role_names = {
+        normalize_role_text(getattr(role, "name", None)),
+        normalize_role_text(getattr(role, "base_role_name", None)),
+        normalize_role_text(getattr(role, "label", None)),
+    }
+    role_names.discard("")
+
+    if "aliado" in role_names:
+        return True
+
+    return any("aliad" in role_name for role_name in role_names)
+
+
 def get_role_permissions(role: Optional[models.Role]) -> List[str]:
     if not role:
         return []
@@ -863,6 +880,8 @@ def get_auto_assign_candidate_users(db: Session, company_id: Optional[int]) -> L
         role = getattr(user, "role", None)
         if not role:
             continue
+        if is_ally_role(role):
+            continue
         if bool(getattr(role, "auto_assign_leads", False)) and is_advisor_role(role):
             eligible_users.append(user)
 
@@ -872,7 +891,8 @@ def get_auto_assign_candidate_users(db: Session, company_id: Optional[int]) -> L
     # Backward-compatible fallback for companies that still rely on the default advisor role.
     fallback_users = []
     for user in candidates:
-        if is_advisor_role(getattr(user, "role", None)):
+        role = getattr(user, "role", None)
+        if role and not is_ally_role(role) and is_advisor_role(role):
             fallback_users.append(user)
 
     if fallback_users:
@@ -889,10 +909,12 @@ def choose_auto_assign_user(db: Session, company_id: Optional[int]) -> Optional[
 
 
 def should_self_assign_manual_lead(current_user: models.User) -> bool:
-    role_name = get_user_role_name(current_user)
-    if is_advisor_role(getattr(current_user, "role", None)):
+    current_role = getattr(current_user, "role", None)
+    if is_ally_role(current_role):
+        return False
+    if is_advisor_role(current_role):
         return True
-    return is_purchase_manager_role(getattr(current_user, "role", None))
+    return is_purchase_manager_role(current_role)
 
 
 def normalize_supervisor_ids(supervisor_ids: Optional[List[int]]) -> List[int]:
