@@ -946,6 +946,34 @@ def choose_auto_assign_user(db: Session, company_id: Optional[int]) -> Optional[
     return random.choice(candidates)
 
 
+def get_active_reassignment_candidates(
+    db: Session,
+    company_id: Optional[int],
+    current_user: models.User,
+    exclude_user_id: Optional[int] = None,
+) -> List[models.User]:
+    if not company_id:
+        return []
+
+    candidates = db.query(models.User).join(models.Role, isouter=True).filter(
+        models.User.company_id == company_id
+    ).all()
+
+    valid_users = []
+    for user in candidates:
+        if exclude_user_id and user.id == exclude_user_id:
+            continue
+        if not is_active_user(user):
+            continue
+        if not user.role:
+            continue
+        if not can_assign_lead_to_user(current_user, user):
+            continue
+        valid_users.append(user)
+
+    return valid_users
+
+
 def should_self_assign_manual_lead(current_user: models.User) -> bool:
     current_role = getattr(current_user, "role", None)
     if is_ally_role(current_role):
@@ -1616,6 +1644,103 @@ def delete_user(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=f"No se pudo inhabilitar el usuario. {str(e)}")
+
+
+@app.post("/users/{user_id}/redistribute-leads", response_model=schemas.UserLeadRedistributeResponse)
+def redistribute_user_leads(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    role_obj = db.query(models.Role).filter(models.Role.id == current_user.role_id).first()
+    effective_role_name = getattr(role_obj, "base_role_name", None) or getattr(role_obj, "name", None)
+    if not role_obj or effective_role_name not in ["super_admin", "admin"]:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden redistribuir leads")
+
+    source_user = db.query(models.User).join(models.Role, isouter=True).filter(
+        models.User.id == user_id
+    ).first()
+    if not source_user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    if current_user.company_id and source_user.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="No puedes redistribuir leads de otra empresa")
+
+    if source_user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="No puedes redistribuir tus propios leads desde esta accion")
+
+    recipient_users = get_active_reassignment_candidates(
+        db=db,
+        company_id=source_user.company_id,
+        current_user=current_user,
+        exclude_user_id=source_user.id,
+    )
+    if not recipient_users:
+        raise HTTPException(status_code=400, detail="No hay usuarios activos disponibles para redistribuir estos leads")
+
+    leads = db.query(models.Lead).options(
+        joinedload(models.Lead.supervisors)
+    ).filter(
+        models.Lead.assigned_to_id == source_user.id,
+        models.Lead.deleted_at.is_(None)
+    ).all()
+
+    if not leads:
+        return {
+            "status": "success",
+            "message": "El usuario no tiene leads asignados para redistribuir",
+            "redistributed_leads": 0,
+            "recipient_users": len(recipient_users),
+        }
+
+    redistributed = 0
+    for lead in leads:
+        target_user = random.choice(recipient_users)
+        previous_assigned_to_id = lead.assigned_to_id
+        lead.assigned_to_id = target_user.id
+
+        supervisor_ids = normalize_supervisor_ids(getattr(lead, "supervisor_ids", []))
+        if previous_assigned_to_id:
+            supervisor_ids = ensure_user_in_supervisors(supervisor_ids, previous_assigned_to_id)
+        if should_keep_assigner_as_supervisor(current_user.id, target_user.id):
+            supervisor_ids = ensure_user_in_supervisors(supervisor_ids, current_user.id)
+        sync_lead_supervisors(db, lead, supervisor_ids, current_user.id)
+
+        db.add(models.LeadHistory(
+            lead_id=lead.id,
+            user_id=current_user.id,
+            previous_status=lead.status,
+            new_status=lead.status,
+            comment=(
+                f"Lead redistribuido automaticamente desde "
+                f"{source_user.full_name or source_user.email} hacia {target_user.full_name or target_user.email}"
+            )
+        ))
+        db.add(models.Notification(
+            user_id=target_user.id,
+            title="Lead Reasignado",
+            message=f"Se te reasigno el lead: {lead.name}. Continúa con la gestión.",
+            type="info",
+            link=build_lead_board_link(target_user, lead.id)
+        ))
+        redistributed += 1
+
+    db.commit()
+    log_action_to_db(
+        db,
+        current_user.id,
+        "REDISTRIBUTE",
+        "User",
+        source_user.id,
+        f"Redistribuidos {redistributed} lead(s) asignados a {source_user.email}"
+    )
+
+    return {
+        "status": "success",
+        "message": "Leads redistribuidos correctamente",
+        "redistributed_leads": redistributed,
+        "recipient_users": len(recipient_users),
+    }
 
 # --- SYSTEM LOGS ENDPOINTS ---
 

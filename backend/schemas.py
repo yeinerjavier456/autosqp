@@ -90,6 +90,13 @@ class UserUpdate(BaseModel):
 class UserDisableRequest(BaseModel):
     reassign_leads_to_user_id: Optional[int] = None
 
+
+class UserLeadRedistributeResponse(BaseModel):
+    status: str
+    message: str
+    redistributed_leads: int
+    recipient_users: int
+
 class User(UserBase):
     id: int
     created_at: Optional[datetime] = None

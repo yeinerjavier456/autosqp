@@ -1,14 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
+import Swal from 'sweetalert2';
+import { useAuth } from '../context/AuthContext';
 
 const UsersList = () => {
+    const { user: currentUser } = useAuth();
     const [users, setUsers] = useState([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
     const [limit] = useState(20); // 20 users per page as requested
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(false);
+    const [redistributingUserId, setRedistributingUserId] = useState(null);
 
     const fetchUsers = async () => {
         setLoading(true);
@@ -39,6 +43,44 @@ const UsersList = () => {
     const handleSearch = (e) => {
         setSearch(e.target.value);
         setPage(1);
+    };
+
+    const currentRoleName = currentUser?.role?.base_role_name || currentUser?.role?.name || '';
+    const canRedistributeLeads = currentRoleName === 'admin' || currentRoleName === 'super_admin';
+
+    const handleRedistributeLeads = async (targetUser) => {
+        const result = await Swal.fire({
+            title: 'Redistribuir leads',
+            text: `Se redistribuirán aleatoriamente todos los leads asignados a ${targetUser.full_name || targetUser.email}.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Redistribuir',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (!result.isConfirmed) return;
+
+        setRedistributingUserId(targetUser.id);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post(
+                `https://autosqp.co/api/users/${targetUser.id}/redistribute-leads`,
+                {},
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            Swal.fire(
+                'Éxito',
+                `${response.data.redistributed_leads} lead(s) redistribuido(s) entre ${response.data.recipient_users} usuario(s).`,
+                'success'
+            );
+            fetchUsers();
+        } catch (error) {
+            console.error('Error redistributing leads', error);
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudieron redistribuir los leads', 'error');
+        } finally {
+            setRedistributingUserId(null);
+        }
     };
 
     const totalPages = Math.ceil(total / limit);
@@ -89,7 +131,7 @@ const UsersList = () => {
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registro</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Comisión %</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sueldo</th>
-                                <th scope="col" className="relative px-6 py-3"><span className="sr-only">Editar</span></th>
+                                <th scope="col" className="relative px-6 py-3"><span className="sr-only">Acciones</span></th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
@@ -146,7 +188,19 @@ const UsersList = () => {
                                                 {user.base_salary ? `$${user.base_salary.toLocaleString()}` : '-'}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                <Link to={`/admin/users/${user.id}`} className="text-blue-600 hover:text-blue-900 hover:underline">Editar</Link>
+                                                <div className="flex items-center justify-end gap-3">
+                                                    {canRedistributeLeads && user.id !== currentUser?.id && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRedistributeLeads(user)}
+                                                            disabled={redistributingUserId === user.id}
+                                                            className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                                        >
+                                                            {redistributingUserId === user.id ? 'Redistribuyendo...' : 'Redistribuir leads'}
+                                                        </button>
+                                                    )}
+                                                    <Link to={`/admin/users/${user.id}`} className="text-blue-600 hover:text-blue-900 hover:underline">Editar</Link>
+                                                </div>
                                             </td>
                                         </tr>
                                     );
