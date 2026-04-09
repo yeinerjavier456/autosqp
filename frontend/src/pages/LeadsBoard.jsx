@@ -243,6 +243,20 @@ const isUserActive = (user) => {
     return value === undefined || value === null || value === true || value === 1;
 };
 
+const sanitizeSupervisorIds = (supervisorIds, advisors) => {
+    if (!Array.isArray(supervisorIds)) return null;
+    const activeAdvisorIds = new Set(
+        (Array.isArray(advisors) ? advisors : [])
+            .filter((advisor) => isUserActive(advisor))
+            .map((advisor) => parseUserId(advisor?.id))
+            .filter((id) => id !== null)
+    );
+
+    return supervisorIds
+        .map((id) => parseUserId(id))
+        .filter((id) => id !== null && activeAdvisorIds.has(id));
+};
+
 const buildPurchaseOptionShareText = (lead, option) => {
     const lines = [
         `Lead: ${lead?.name || 'Cliente'}`,
@@ -2069,13 +2083,14 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const handleAssignLead = async (leadId, advisorId, supervisorIds = null) => {
         try {
             const token = localStorage.getItem('token');
+            const sanitizedSupervisorIds = sanitizeSupervisorIds(supervisorIds, advisors);
             // If empty string, send null
             const payload = {
                 assigned_to_id: advisorId ? parseInt(advisorId) : null,
                 comment: `Lead asignado a un nuevo responsable`
             };
-            if (Array.isArray(supervisorIds)) {
-                payload.supervisor_ids = supervisorIds;
+            if (Array.isArray(sanitizedSupervisorIds)) {
+                payload.supervisor_ids = sanitizedSupervisorIds;
             }
 
             await axios.put(`https://autosqp.co/api/leads/${leadId}`, payload, {
@@ -2094,8 +2109,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             const advisorData = parsedAdvisorId
                 ? advisors.find(adv => adv.id === parsedAdvisorId) || null
                 : null;
-            const supervisorUsers = Array.isArray(supervisorIds)
-                ? advisors.filter((adv) => supervisorIds.includes(adv.id))
+            const supervisorUsers = Array.isArray(sanitizedSupervisorIds)
+                ? advisors.filter((adv) => sanitizedSupervisorIds.includes(adv.id))
                 : null;
 
             setLeads(prev => prev.map(l => (
@@ -2104,8 +2119,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                         ...l,
                         assigned_to: advisorData,
                         assigned_to_id: parsedAdvisorId,
-                        supervisor_ids: Array.isArray(supervisorIds) ? supervisorIds : l.supervisor_ids,
-                        supervisors: Array.isArray(supervisorIds) ? supervisorUsers : l.supervisors
+                        supervisor_ids: Array.isArray(sanitizedSupervisorIds) ? sanitizedSupervisorIds : l.supervisor_ids,
+                        supervisors: Array.isArray(sanitizedSupervisorIds) ? supervisorUsers : l.supervisors
                     }
                     : l
             )));
@@ -2116,8 +2131,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                         ...prev,
                         assigned_to: advisorData,
                         assigned_to_id: parsedAdvisorId,
-                        supervisor_ids: Array.isArray(supervisorIds) ? supervisorIds : prev.supervisor_ids,
-                        supervisors: Array.isArray(supervisorIds) ? supervisorUsers : prev.supervisors
+                        supervisor_ids: Array.isArray(sanitizedSupervisorIds) ? sanitizedSupervisorIds : prev.supervisor_ids,
+                        supervisors: Array.isArray(sanitizedSupervisorIds) ? supervisorUsers : prev.supervisors
                     }
                     : prev
             ));
