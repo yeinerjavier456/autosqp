@@ -472,6 +472,30 @@ def ensure_lead_query_indexes():
 
 ensure_lead_query_indexes()
 
+def ensure_user_activity_column():
+    try:
+        with engine.connect() as conn:
+            existing_cols_result = conn.execute(text(
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'"
+            ))
+            existing_cols = {row[0] for row in existing_cols_result.fetchall()}
+
+            if "is_active" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE users "
+                    "ADD COLUMN is_active INT NULL DEFAULT 1"
+                ))
+                conn.execute(text(
+                    "UPDATE users SET is_active = 1 WHERE is_active IS NULL"
+                ))
+                conn.commit()
+    except Exception as exc:
+        print(f"Warning: could not ensure user activity column: {exc}", flush=True)
+
+
+ensure_user_activity_column()
+
 app = FastAPI(title="AutosQP API", description="API para gestión de compra venta de carros")
 
 @app.exception_handler(Exception)
@@ -796,6 +820,8 @@ def get_credit_coordinator_users(db: Session, company_id: Optional[int]) -> List
     coordinators = []
     credit_enabled_users = []
     for user in candidates:
+        if not is_active_user(user):
+            continue
         if "credits" not in get_role_permissions(user.role):
             continue
         credit_enabled_users.append(user)
@@ -810,6 +836,12 @@ def choose_credit_coordinator(db: Session, company_id: Optional[int]) -> Optiona
     if not coordinators:
         return None
     return random.choice(coordinators)
+
+
+def is_active_user(user: Optional[models.User]) -> bool:
+    if not user:
+        return False
+    return bool(getattr(user, "is_active", 1))
 
 
 def is_purchase_manager_role(role: Optional[models.Role]) -> bool:
@@ -848,6 +880,8 @@ def get_purchase_manager_users(db: Session, company_id: Optional[int]) -> List[m
     purchase_users = []
     purchase_enabled_users = []
     for user in candidates:
+        if not is_active_user(user):
+            continue
         role = getattr(user, "role", None)
         if not role:
             continue
@@ -877,6 +911,8 @@ def get_auto_assign_candidate_users(db: Session, company_id: Optional[int]) -> L
 
     eligible_users = []
     for user in candidates:
+        if not is_active_user(user):
+            continue
         role = getattr(user, "role", None)
         if not role:
             continue
@@ -891,6 +927,8 @@ def get_auto_assign_candidate_users(db: Session, company_id: Optional[int]) -> L
     # Backward-compatible fallback for companies that still rely on the default advisor role.
     fallback_users = []
     for user in candidates:
+        if not is_active_user(user):
+            continue
         role = getattr(user, "role", None)
         if role and not is_ally_role(role) and is_advisor_role(role):
             fallback_users.append(user)
@@ -945,6 +983,8 @@ def validate_supervisors(
     for supervisor in supervisors:
         if company_id and supervisor.company_id != company_id:
             raise HTTPException(status_code=400, detail="Todos los supervisores deben pertenecer a la misma empresa")
+        if not is_active_user(supervisor):
+            raise HTTPException(status_code=400, detail="No puedes agregar supervisores inactivos")
 
     supervisors_by_id = {user.id: user for user in supervisors}
     return [supervisors_by_id[user_id] for user_id in normalized_ids if user_id in supervisors_by_id]
@@ -2100,6 +2140,8 @@ def bulk_assign_leads(
     target_user = db.query(models.User).join(models.Role, isouter=True).filter(models.User.id == payload.assigned_to_id).first()
     if not target_user:
         raise HTTPException(status_code=404, detail="Target user not found")
+    if not is_active_user(target_user):
+        raise HTTPException(status_code=400, detail="No puedes asignar leads a un usuario inactivo")
         
     if current_user.company_id and target_user.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Target user is in a different company")
@@ -2196,6 +2238,8 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
         target_user = db.query(models.User).join(models.Role, isouter=True).filter(models.User.id == assigned_user_id).first()
         if not target_user or target_user.company_id != company_id:
             raise HTTPException(status_code=400, detail="Invalid assigned user (not in company)")
+        if not is_active_user(target_user):
+            raise HTTPException(status_code=400, detail="No puedes crear un lead asignado a un usuario inactivo")
         if not can_assign_lead_to_user(current_user, target_user):
             raise HTTPException(status_code=400, detail="Tu rol no tiene permitido reasignar leads a este rol")
     
@@ -3960,6 +4004,8 @@ def update_lead(
             ).first()
             if not target_user or target_user.company_id != lead.company_id:
                 raise HTTPException(status_code=400, detail="Invalid assigned user (not in company)")
+            if not is_active_user(target_user):
+                raise HTTPException(status_code=400, detail="No puedes reasignar el lead a un usuario inactivo")
             if not can_assign_lead_to_user(current_user, target_user):
                 raise HTTPException(status_code=400, detail="Tu rol no tiene permitido reasignar leads a este rol")
             target_assigned_user = target_user

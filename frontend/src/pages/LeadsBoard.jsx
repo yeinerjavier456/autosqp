@@ -578,6 +578,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     const canManageSupervision = isCompanyAdmin;
     const assignableUsers = Array.isArray(advisors)
         ? advisors.filter((adv) => {
+            if ((adv?.is_active ?? 1) !== 1) return false;
             const advisorRoleId = parseUserId(adv?.role?.id);
             if (hasConfiguredAssignableRoles) {
                 return advisorRoleId !== null && configuredAssignableRoleIds.includes(advisorRoleId);
@@ -590,7 +591,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         })
         : [];
     const supervisorOptions = Array.isArray(advisors)
-        ? advisors.filter((adv) => getEffectiveRoleName(adv.role) !== 'user')
+        ? advisors.filter((adv) => (adv?.is_active ?? 1) === 1 && getEffectiveRoleName(adv.role) !== 'user')
         : [];
     const selectedSupervisorUsers = supervisorOptions.filter((person) => selectedSupervisors.includes(person.id));
     const headerLeadName = lead?.name || 'Sin cliente';
@@ -1769,7 +1770,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             const response = await axios.get('https://autosqp.co/api/users/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            const users = response.data.items; // Permite todos los usuarios de la empresa
+            const users = (response.data.items || []).filter((user) => (user?.is_active ?? 1) === 1);
             setAdvisors(users);
         } catch (error) {
             console.error("Error fetching advisors", error);

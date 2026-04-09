@@ -229,6 +229,7 @@ class User(Base):
     # role = Column(String(50)) # Deprecated in favor of role_id
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
+    is_active = Column(Integer, default=1)
     commission_percentage = Column(Integer, default=0) # e.g. 5 for 5%
     
     # New fields

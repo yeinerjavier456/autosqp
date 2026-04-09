@@ -82,6 +82,7 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
     role_id: Optional[int] = None
     company_id: Optional[int] = None
+    is_active: Optional[int] = None
     commission_percentage: Optional[float] = None
     base_salary: Optional[int] = None
     payment_dates: Optional[str] = None
@@ -94,6 +95,7 @@ class User(UserBase):
     created_at: Optional[datetime] = None
     role: Optional[Role] = None
     last_active: Optional[datetime] = None
+    is_active: Optional[int] = 1
     is_online: Optional[bool] = False
     is_active: bool = True
 
