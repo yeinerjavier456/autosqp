@@ -172,6 +172,24 @@ const getEffectiveRoleName = (role) => {
 const normalizeRoleKey = (role) => {
     const directRoleName = getEffectiveRoleName(role);
     const normalizedDirectRoleName = String(directRoleName || '').trim().toLowerCase();
+    if (normalizedDirectRoleName.includes('super_admin') || normalizedDirectRoleName.includes('super admin')) {
+        return 'super_admin';
+    }
+    if (normalizedDirectRoleName.includes('admin')) {
+        return 'admin';
+    }
+    if (normalizedDirectRoleName.includes('asesor') || normalizedDirectRoleName.includes('vendedor')) {
+        return 'asesor';
+    }
+    if (normalizedDirectRoleName.includes('aliado')) {
+        return 'aliado';
+    }
+    if (normalizedDirectRoleName.includes('compra')) {
+        return 'compras';
+    }
+    if (normalizedDirectRoleName.includes('inventario')) {
+        return 'inventario';
+    }
     if (normalizedDirectRoleName) {
         return normalizedDirectRoleName;
     }
