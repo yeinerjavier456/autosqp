@@ -576,19 +576,25 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     const isSupervisorOnlyViewer = !isCompanyAdmin && leadSupervisorIds.includes(currentUserId) && !isAssignedLeadOwner;
     const canModifyLead = !isSupervisorOnlyViewer;
     const canManageSupervision = isCompanyAdmin;
-    const assignableUsers = Array.isArray(advisors)
+    const availableAssignableUsers = Array.isArray(advisors)
         ? advisors.filter((adv) => {
             if ((adv?.is_active ?? 1) !== 1) return false;
-            const advisorRoleId = parseUserId(adv?.role?.id);
-            if (hasConfiguredAssignableRoles) {
-                return advisorRoleId !== null && configuredAssignableRoleIds.includes(advisorRoleId);
-            }
             const roleName = getEffectiveRoleName(adv.role);
             if (canAssignToAnyRole && boardMode === 'ally') {
                 return roleName !== 'user';
             }
             return canAssignToAnyRole || roleName === 'asesor';
         })
+        : [];
+    const assignableUsers = Array.isArray(availableAssignableUsers)
+        ? (() => {
+            if (!hasConfiguredAssignableRoles) return availableAssignableUsers;
+            const configuredMatches = availableAssignableUsers.filter((adv) => {
+                const advisorRoleId = parseUserId(adv?.role?.id);
+                return advisorRoleId !== null && configuredAssignableRoleIds.includes(advisorRoleId);
+            });
+            return configuredMatches.length > 0 ? configuredMatches : availableAssignableUsers;
+        })()
         : [];
     const supervisorOptions = Array.isArray(advisors)
         ? advisors.filter((adv) => (adv?.is_active ?? 1) === 1 && getEffectiveRoleName(adv.role) !== 'user')
