@@ -1083,6 +1083,13 @@ def should_keep_assigner_as_supervisor(
     return bool(current_user_id and target_assigned_to_id and current_user_id != target_assigned_to_id)
 
 
+def should_supervise_manual_lead(
+    current_user_id: Optional[int],
+    target_assigned_to_id: Optional[int]
+) -> bool:
+    return bool(current_user_id and current_user_id != target_assigned_to_id)
+
+
 def should_reset_status_for_board_transfer(previous_role_name: Optional[str], target_role_name: Optional[str]) -> bool:
     return (previous_role_name == "aliado") != (target_role_name == "aliado")
 
@@ -2386,7 +2393,7 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
         assigned_to_id=assigned_user_id,
         supervisor_ids=supervisor_ids
     )
-    if should_keep_assigner_as_supervisor(current_user.id, assigned_user_id):
+    if should_supervise_manual_lead(current_user.id, assigned_user_id):
         supervisor_ids = ensure_user_in_supervisors(supervisor_ids, current_user.id)
 
     new_lead = models.Lead(
