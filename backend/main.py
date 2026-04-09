@@ -1057,11 +1057,15 @@ def ensure_user_in_supervisors(supervisor_ids: Optional[List[int]], user_id: Opt
 def maybe_assign_credit_coordinator(
     db: Session,
     lead_company_id: Optional[int],
+    previous_status: Optional[str],
     target_status: Optional[str],
     assigned_to_id: Optional[int],
     supervisor_ids: Optional[List[int]]
 ):
     if target_status != models.LeadStatus.CREDIT_APPLICATION.value:
+        return assigned_to_id, normalize_supervisor_ids(supervisor_ids), None
+
+    if previous_status == models.LeadStatus.CREDIT_APPLICATION.value:
         return assigned_to_id, normalize_supervisor_ids(supervisor_ids), None
 
     coordinator = choose_credit_coordinator(db, lead_company_id)
@@ -4143,6 +4147,7 @@ def update_lead(
     target_assigned_to_id, target_supervisor_ids, credit_coordinator = maybe_assign_credit_coordinator(
         db=db,
         lead_company_id=lead.company_id,
+        previous_status=lead.status,
         target_status=target_status,
         assigned_to_id=target_assigned_to_id,
         supervisor_ids=target_supervisor_ids
