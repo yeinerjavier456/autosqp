@@ -486,10 +486,10 @@ def ensure_user_activity_column():
                     "ALTER TABLE users "
                     "ADD COLUMN is_active INT NULL DEFAULT 1"
                 ))
-                conn.execute(text(
-                    "UPDATE users SET is_active = 1 WHERE is_active IS NULL"
-                ))
-                conn.commit()
+            conn.execute(text(
+                "UPDATE users SET is_active = 1 WHERE is_active IS NULL"
+            ))
+            conn.commit()
     except Exception as exc:
         print(f"Warning: could not ensure user activity column: {exc}", flush=True)
 
@@ -1440,7 +1440,7 @@ def read_users(
         query = query.filter(models.User.company_id == current_user.company_id)
 
     if not include_inactive:
-        query = query.filter(models.User.is_active == True)
+        query = query.filter(or_(models.User.is_active == True, models.User.is_active.is_(None)))
 
     if q:
         query = query.filter(models.User.email.ilike(f"%{q}%"))
