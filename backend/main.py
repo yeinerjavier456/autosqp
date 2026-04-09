@@ -2381,6 +2381,7 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
     assigned_user_id, supervisor_ids, credit_coordinator = maybe_assign_credit_coordinator(
         db=db,
         lead_company_id=company_id,
+        previous_status=None,
         target_status=effective_status,
         assigned_to_id=assigned_user_id,
         supervisor_ids=supervisor_ids
