@@ -238,6 +238,11 @@ const parseUserId = (value) => {
     return Number.isInteger(parsedValue) ? parsedValue : null;
 };
 
+const isUserActive = (user) => {
+    const value = user?.is_active;
+    return value === undefined || value === null || value === true || value === 1;
+};
+
 const buildPurchaseOptionShareText = (lead, option) => {
     const lines = [
         `Lead: ${lead?.name || 'Cliente'}`,
@@ -596,7 +601,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     const canManageSupervision = isCompanyAdmin;
     const availableAssignableUsers = Array.isArray(advisors)
         ? advisors.filter((adv) => {
-            if ((adv?.is_active ?? 1) !== 1) return false;
+            if (!isUserActive(adv)) return false;
             const roleName = normalizeRoleKey(adv.role);
             if (canAssignToAnyRole && boardMode === 'ally') {
                 return roleName !== 'user';
@@ -615,7 +620,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         })()
         : [];
     const supervisorOptions = Array.isArray(advisors)
-        ? advisors.filter((adv) => (adv?.is_active ?? 1) === 1 && normalizeRoleKey(adv.role) !== 'user')
+        ? advisors.filter((adv) => isUserActive(adv) && normalizeRoleKey(adv.role) !== 'user')
         : [];
     const selectedSupervisorUsers = supervisorOptions.filter((person) => selectedSupervisors.includes(person.id));
     const headerLeadName = lead?.name || 'Sin cliente';
@@ -1794,7 +1799,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             const response = await axios.get('https://autosqp.co/api/users/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            const users = (response.data.items || []).filter((user) => (user?.is_active ?? 1) === 1);
+            const users = (response.data.items || []).filter((user) => isUserActive(user));
             setAdvisors(users);
         } catch (error) {
             console.error("Error fetching advisors", error);
