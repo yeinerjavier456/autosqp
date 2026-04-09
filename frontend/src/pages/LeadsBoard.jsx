@@ -579,7 +579,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     const availableAssignableUsers = Array.isArray(advisors)
         ? advisors.filter((adv) => {
             if ((adv?.is_active ?? 1) !== 1) return false;
-            const roleName = getEffectiveRoleName(adv.role);
+            const roleName = normalizeRoleKey(adv.role);
             if (canAssignToAnyRole && boardMode === 'ally') {
                 return roleName !== 'user';
             }
@@ -597,7 +597,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         })()
         : [];
     const supervisorOptions = Array.isArray(advisors)
-        ? advisors.filter((adv) => (adv?.is_active ?? 1) === 1 && getEffectiveRoleName(adv.role) !== 'user')
+        ? advisors.filter((adv) => (adv?.is_active ?? 1) === 1 && normalizeRoleKey(adv.role) !== 'user')
         : [];
     const selectedSupervisorUsers = supervisorOptions.filter((person) => selectedSupervisors.includes(person.id));
     const headerLeadName = lead?.name || 'Sin cliente';
@@ -1618,10 +1618,10 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         : 'Arrastra y suelta para gestionar el ciclo de vida de tus clientes.';
     const createButtonLabel = isAllyBoard ? 'Nuevo Lead para Aliado' : 'Nuevo Lead Manual';
     const allyUsers = advisors.filter((adv) => {
-        const roleName = getEffectiveRoleName(adv.role);
+        const roleName = normalizeRoleKey(adv.role);
         return roleName === 'aliado';
     });
-    const supervisionUsers = advisors.filter((adv) => getEffectiveRoleName(adv.role) !== 'user');
+    const supervisionUsers = advisors.filter((adv) => normalizeRoleKey(adv.role) !== 'user');
 
     useEffect(() => {
         setLoading(true);
