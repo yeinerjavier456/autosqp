@@ -2335,26 +2335,6 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
         else:
              raise HTTPException(status_code=400, detail="Company ID required for assignment")
 
-    existing_lead = find_existing_active_lead(db, company_id, lead.phone, lead.email)
-    if existing_lead:
-        has_changes = False
-        if lead.name and not existing_lead.name:
-            existing_lead.name = lead.name
-            has_changes = True
-        if lead.email and not existing_lead.email:
-            existing_lead.email = lead.email
-            has_changes = True
-        if lead.phone and not existing_lead.phone:
-            existing_lead.phone = lead.phone
-            has_changes = True
-        if lead.message:
-            existing_lead.message = lead.message
-            has_changes = True
-        if has_changes:
-            db.commit()
-            db.refresh(existing_lead)
-        return existing_lead
-
     # 2. Assignment Logic
     assigned_user_id = lead.assigned_to_id
     supervisor_ids = normalize_supervisor_ids(getattr(lead, "supervisor_ids", []))
