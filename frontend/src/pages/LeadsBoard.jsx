@@ -13,6 +13,11 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
                 cardClassName: 'bg-white',
                 borderClassName: 'border-slate-200',
                 dividerClassName: 'border-slate-200',
+                titleClassName: 'text-slate-800',
+                metaClassName: 'text-slate-600',
+                mutedClassName: 'text-slate-500',
+                assignedLabelClassName: 'text-slate-400',
+                actionButtonClassName: 'text-blue-600 hover:text-blue-800 hover:bg-blue-50',
             };
         }
 
@@ -22,6 +27,11 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
                 cardClassName: 'bg-white',
                 borderClassName: 'border-slate-200',
                 dividerClassName: 'border-slate-200',
+                titleClassName: 'text-slate-800',
+                metaClassName: 'text-slate-600',
+                mutedClassName: 'text-slate-500',
+                assignedLabelClassName: 'text-slate-400',
+                actionButtonClassName: 'text-blue-600 hover:text-blue-800 hover:bg-blue-50',
             };
         }
 
@@ -29,17 +39,27 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
 
         if (ageInDays <= 3) {
             return {
-                cardClassName: 'bg-red-400/90',
+                cardClassName: 'bg-red-100',
                 borderClassName: 'border-red-300',
-                dividerClassName: 'border-red-200/70',
+                dividerClassName: 'border-red-200',
+                titleClassName: 'text-red-950',
+                metaClassName: 'text-red-900',
+                mutedClassName: 'text-red-800',
+                assignedLabelClassName: 'text-red-700',
+                actionButtonClassName: 'text-red-900 hover:text-red-950 hover:bg-red-200/70',
             };
         }
 
         if (ageInDays <= 6) {
             return {
-                cardClassName: 'bg-amber-200/80',
+                cardClassName: 'bg-amber-100',
                 borderClassName: 'border-amber-300',
-                dividerClassName: 'border-amber-300/80',
+                dividerClassName: 'border-amber-300',
+                titleClassName: 'text-amber-950',
+                metaClassName: 'text-amber-900',
+                mutedClassName: 'text-amber-800',
+                assignedLabelClassName: 'text-amber-700',
+                actionButtonClassName: 'text-amber-900 hover:text-amber-950 hover:bg-amber-200/70',
             };
         }
 
@@ -47,6 +67,11 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
             cardClassName: 'bg-white',
             borderClassName: 'border-slate-200',
             dividerClassName: 'border-slate-200',
+            titleClassName: 'text-slate-800',
+            metaClassName: 'text-slate-600',
+            mutedClassName: 'text-slate-500',
+            assignedLabelClassName: 'text-slate-400',
+            actionButtonClassName: 'text-blue-600 hover:text-blue-800 hover:bg-blue-50',
         };
     };
 
@@ -155,30 +180,30 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
                 </div>
             </div>
 
-            <h4 className="font-bold text-slate-800 text-base mb-1.5 leading-tight">{lead.name}</h4>
+            <h4 className={`font-bold text-base mb-1.5 leading-tight ${agePalette.titleClassName}`}>{lead.name}</h4>
 
             {lead.phone && (
-                <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mb-2 font-medium">
-                    <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                <div className={`flex items-center gap-1.5 text-[11px] mb-2 font-medium ${agePalette.mutedClassName}`}>
+                    <svg className={`w-3.5 h-3.5 ${agePalette.assignedLabelClassName}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
                     {lead.phone}
                 </div>
             )}
 
             {/* Actions Footer */}
             <div className={`flex items-center justify-between border-t pt-2 mt-auto ${agePalette.dividerClassName}`}>
-                <div className="min-w-0 flex items-center gap-1.5 text-[11px] text-slate-500">
+                <div className={`min-w-0 flex items-center gap-1.5 text-[11px] ${agePalette.metaClassName}`}>
                     <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold border border-indigo-200 text-[9px]">
                         {assignedPersonInitial}
                     </div>
                     <div className="min-w-0">
-                        <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Asignado a</p>
-                        <p className="truncate text-[11px] font-semibold text-slate-600">{assignedPersonName}</p>
+                        <p className={`text-[9px] font-bold uppercase tracking-wide ${agePalette.assignedLabelClassName}`}>Asignado a</p>
+                        <p className={`truncate text-[11px] font-semibold ${agePalette.metaClassName}`}>{assignedPersonName}</p>
                     </div>
                 </div>
 
                 <button
                     onClick={() => onViewHistory(lead)}
-                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded transition-colors flex items-center gap-1"
+                    className={`text-[11px] font-bold px-2 py-1 rounded transition-colors flex items-center gap-1 ${agePalette.actionButtonClassName}`}
                     title="Ver historial de seguimiento"
                 >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
