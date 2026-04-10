@@ -7,6 +7,49 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 
 // Draggable Lead Card Component
 const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = false, boardMode = 'general' }) => {
+    const getLeadAgePalette = (createdAt) => {
+        if (!createdAt) {
+            return {
+                cardClassName: 'bg-white',
+                borderClassName: 'border-slate-200',
+                dividerClassName: 'border-slate-200',
+            };
+        }
+
+        const createdDate = new Date(createdAt);
+        if (Number.isNaN(createdDate.getTime())) {
+            return {
+                cardClassName: 'bg-white',
+                borderClassName: 'border-slate-200',
+                dividerClassName: 'border-slate-200',
+            };
+        }
+
+        const ageInDays = (Date.now() - createdDate.getTime()) / (1000 * 60 * 60 * 24);
+
+        if (ageInDays <= 3) {
+            return {
+                cardClassName: 'bg-red-400/90',
+                borderClassName: 'border-red-300',
+                dividerClassName: 'border-red-200/70',
+            };
+        }
+
+        if (ageInDays <= 6) {
+            return {
+                cardClassName: 'bg-amber-200/80',
+                borderClassName: 'border-amber-300',
+                dividerClassName: 'border-amber-300/80',
+            };
+        }
+
+        return {
+            cardClassName: 'bg-white',
+            borderClassName: 'border-slate-200',
+            dividerClassName: 'border-slate-200',
+        };
+    };
+
     const getSourceColor = (source) => {
         switch (source?.toLowerCase()) {
             case 'facebook': return 'bg-blue-100 text-blue-700';
@@ -57,15 +100,16 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
     const purchaseOptionsMeta = getPurchaseOptionsMeta(lead);
     const assignedPersonName = lead?.assigned_to?.full_name || lead?.assigned_to?.email || 'Sin asignar';
     const assignedPersonInitial = assignedPersonName?.charAt(0)?.toUpperCase() || '?';
+    const agePalette = getLeadAgePalette(lead?.created_at);
 
     return (
         <div
             id={`lead-card-${lead.id}`}
             draggable="true"
             onDragStart={(e) => onDragStart(e, lead.id)}
-            className={`p-3 rounded-lg shadow-sm border-2 hover:shadow-md transition-all transform hover:-translate-y-0.5 cursor-grab active:cursor-grabbing group relative animate-fade-in ${boardMode === 'ally' ? 'bg-amber-50/90' : 'bg-white'}`}
+            className={`p-3 rounded-lg shadow-sm border-2 hover:shadow-md transition-all transform hover:-translate-y-0.5 cursor-grab active:cursor-grabbing group relative animate-fade-in ${agePalette.cardClassName} ${agePalette.borderClassName}`}
             style={{
-                borderColor: isHighlighted ? '#2563eb' : (boardMode === 'ally' ? '#f59e0b' : '#e5e7eb'),
+                borderColor: isHighlighted ? '#2563eb' : undefined,
                 borderLeftColor:
                     status === 'new' ? '#3b82f6' :
                         status === 'contacted' ? '#eab308' :
@@ -121,7 +165,7 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
             )}
 
             {/* Actions Footer */}
-            <div className="flex items-center justify-between border-t border-slate-100 pt-2 mt-auto">
+            <div className={`flex items-center justify-between border-t pt-2 mt-auto ${agePalette.dividerClassName}`}>
                 <div className="min-w-0 flex items-center gap-1.5 text-[11px] text-slate-500">
                     <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold border border-indigo-200 text-[9px]">
                         {assignedPersonInitial}
