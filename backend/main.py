@@ -626,7 +626,32 @@ def can_manually_assign_to_any_role(current_user: models.User) -> bool:
 def get_user_role_name(user: Optional[models.User]) -> Optional[str]:
     if not user or not user.role:
         return None
-    return getattr(user.role, "base_role_name", None) or user.role.name
+    base_role_name = getattr(user.role, "base_role_name", None)
+    if base_role_name:
+        return base_role_name
+
+    role_names = {
+        normalize_role_text(getattr(user.role, "name", None)),
+        normalize_role_text(getattr(user.role, "label", None)),
+    }
+    role_names.discard("")
+
+    if "super admin" in role_names or "super administrador" in role_names:
+        return "super_admin"
+    if "admin" in role_names or "administrador" in role_names or "administrador de empresa" in role_names:
+        return "admin"
+    if "aliado" in role_names or "aliado estrategico" in role_names:
+        return "aliado"
+    if "asesor" in role_names or "vendedor" in role_names or "asesor vendedor" in role_names:
+        return "asesor"
+    if any("coordinador" in role_name and "credit" in role_name for role_name in role_names):
+        return "coordinador_creditos"
+    if "compras" in role_names:
+        return "compras"
+    if "inventario" in role_names:
+        return "inventario"
+
+    return getattr(user.role, "name", None)
 
 
 def is_advisor_role(role: Optional[models.Role]) -> bool:
