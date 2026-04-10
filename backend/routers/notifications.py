@@ -37,10 +37,16 @@ def get_notifications(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    maybe_run_automation_rules(db, current_user.company_id)
+    try:
+        maybe_run_automation_rules(db, current_user.company_id)
+    except Exception as exc:
+        print(f"Notification rules check failed: {exc}")
 
     # Lazy check for reminders
-    check_due_reminders(db, current_user.id)
+    try:
+        check_due_reminders(db, current_user.id)
+    except Exception as exc:
+        print(f"Notification reminder check failed: {exc}")
 
     notifications = db.query(models.Notification).filter(
         models.Notification.user_id == current_user.id
