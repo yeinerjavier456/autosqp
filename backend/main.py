@@ -2108,21 +2108,13 @@ def read_leads(
     if current_user.company_id:
         query = query.filter(models.Lead.company_id == current_user.company_id)
     
-    aliado_roles = db.query(models.Role).filter(
-        or_(
-            models.Role.name == "aliado",
-            models.Role.base_role_name == "aliado"
-        )
-    ).all()
-    aliado_role_ids = [role.id for role in aliado_roles]
-    aliado_user_ids = []
-    if aliado_role_ids:
-        aliado_user_ids = [row[0] for row in db.query(models.User.id).filter(models.User.role_id.in_(aliado_role_ids)).all()]
+    aliado_user_ids = get_company_ally_user_ids(db, current_user.company_id)
 
     if board_scope == "ally":
         if not can_view_all_company_leads:
             query = query.filter(
                 or_(
+                    models.Lead.status == models.LeadStatus.ALLY_MANAGED.value,
                     models.Lead.assigned_to_id == current_user.id,
                     models.Lead.supervisors.any(models.User.id == current_user.id)
                 )
@@ -2130,12 +2122,13 @@ def read_leads(
         elif aliado_user_ids:
             query = query.filter(
                 or_(
+                    models.Lead.status == models.LeadStatus.ALLY_MANAGED.value,
                     models.Lead.assigned_to_id.in_(aliado_user_ids),
                     models.Lead.supervisors.any(models.User.id.in_(aliado_user_ids))
                 )
             )
         else:
-            query = query.filter(false())
+            query = query.filter(models.Lead.status == models.LeadStatus.ALLY_MANAGED.value)
     elif aliado_user_ids and not can_view_all_company_leads:
         query = query.filter(
             or_(
