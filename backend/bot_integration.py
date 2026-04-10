@@ -106,9 +106,10 @@ def extract_prospect_data_with_ai(api_key: str, model_name: str, full_conversati
                         "residence_city, monthly_income, is_ready_to_create_lead. "
                         "Si falta un dato usa null. "
                         "El correo es opcional y si el cliente no quiere compartirlo debe quedar en null. "
-                        "is_ready_to_create_lead=true solo si hay name, phone, interested_vehicle, "
-                        "payment_type, down_payment_amount, occupation_type, residence_city y monthly_income. "
-                        "Si has_credit_report=true tambien deben venir report_entity y has_payment_agreement."
+                        "is_ready_to_create_lead=true cuando ya existan name, phone e interested_vehicle. "
+                        "payment_type, down_payment_amount, occupation_type, residence_city, monthly_income, "
+                        "report_entity y has_payment_agreement ayudan al perfilamiento, pero no bloquean "
+                        "la creación del lead."
                     ),
                 },
                 {"role": "user", "content": full_conversation},
@@ -389,17 +390,9 @@ def maybe_create_channel_lead(
             first_name,
             phone,
             interested_vehicle,
-            payment_type,
-            down_payment_amount is not None,
-            occupation_type,
-            residence_city,
-            monthly_income is not None,
         ]
     )
     if not required_core:
-        return None
-
-    if has_credit_report is True and not (report_entity and has_payment_agreement is not None):
         return None
 
     duplicate_window_days = int(os.getenv("PUBLIC_CHAT_DUPLICATE_WINDOW_DAYS", "30") or "30")
@@ -416,9 +409,9 @@ def maybe_create_channel_lead(
 
     lead_message = (
         f"Interés detectado por chatbot {source_label}: {interested_vehicle} | "
-        f"Pago: {payment_type} | Cuota inicial: {down_payment_amount} | "
-        f"Ingresos: {monthly_income} | Ocupación: {occupation_type} | "
-        f"Residencia: {residence_city} | Reportado: {has_credit_report} | "
+        f"Pago: {payment_type or 'Por definir'} | Cuota inicial: {down_payment_amount if down_payment_amount is not None else 'Por definir'} | "
+        f"Ingresos: {monthly_income if monthly_income is not None else 'Por definir'} | Ocupación: {occupation_type or 'Por definir'} | "
+        f"Residencia: {residence_city or 'Por definir'} | Reportado: {has_credit_report} | "
         f"Entidad reporte: {report_entity or 'N/A'} | Acuerdo/Paz y salvo: {has_payment_agreement}"
     )
 
