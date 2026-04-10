@@ -2136,7 +2136,7 @@ def read_leads(
             )
         else:
             query = query.filter(false())
-    elif aliado_user_ids:
+    elif aliado_user_ids and not can_view_all_company_leads:
         query = query.filter(
             or_(
                 models.Lead.assigned_to_id.is_(None),
