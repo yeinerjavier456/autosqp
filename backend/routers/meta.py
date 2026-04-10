@@ -17,6 +17,58 @@ router = APIRouter(
 )
 
 
+def iter_meta_paged_results(initial_url: str, initial_params: Optional[dict] = None):
+    next_url = initial_url
+    next_params = initial_params.copy() if initial_params else None
+
+    while next_url:
+        response = requests.get(next_url, params=next_params)
+        data = response.json()
+
+        if response.status_code != 200 or "error" in data:
+            error_msg = data.get("error", {}).get("message", "Error from Meta API")
+            raise HTTPException(status_code=400, detail=error_msg)
+
+        yield data
+
+        paging = data.get("paging", {})
+        next_url = paging.get("next")
+        next_params = None
+
+
+def fetch_all_meta_conversation_messages(token: str, conversation_payload: dict) -> List[dict]:
+    messages_block = conversation_payload.get("messages", {}) or {}
+    messages = list(messages_block.get("data", []) or [])
+    next_url = (messages_block.get("paging") or {}).get("next")
+
+    while next_url:
+        response = requests.get(next_url)
+        data = response.json()
+
+        if response.status_code != 200 or "error" in data:
+            error_msg = data.get("error", {}).get("message", "Error from Meta API")
+            raise HTTPException(status_code=400, detail=error_msg)
+
+        messages.extend(data.get("data", []) or [])
+        next_url = (data.get("paging") or {}).get("next")
+
+    if not messages:
+        convo_id = conversation_payload.get("id")
+        if not convo_id:
+            return messages
+
+        message_url = f"https://graph.facebook.com/v18.0/{convo_id}/messages"
+        message_params = {
+            "fields": "id,message,created_time,from,to,attachments",
+            "access_token": token,
+            "limit": 200,
+        }
+        for page in iter_meta_paged_results(message_url, message_params):
+            messages.extend(page.get("data", []) or [])
+
+    return messages
+
+
 def get_verify_token() -> str:
     return os.getenv("META_VERIFY_TOKEN", "autosqp_meta_secret")
 
@@ -447,9 +499,9 @@ def sync_historical_messages(
 
     base_url = "https://graph.facebook.com/v18.0/me/conversations"
     params = {
-        "fields": "id,updated_time,participants,messages.limit(50){id,message,created_time,from,to,attachments}",
+        "fields": "id,updated_time,participants,messages.limit(200){id,message,created_time,from,to,attachments}",
         "access_token": token,
-        "limit": 50,
+        "limit": 200,
         "platform": "instagram" if source == "instagram" else "messenger"
     }
 
@@ -469,15 +521,7 @@ def sync_historical_messages(
         except Exception:
             own_account_id = None
 
-        has_next = True
-        while has_next and new_leads_count < 1000:
-            response = requests.get(base_url, params=params)
-            data = response.json()
-
-            if response.status_code != 200 or "error" in data:
-                error_msg = data.get("error", {}).get("message", "Error from Meta API")
-                raise HTTPException(status_code=400, detail=error_msg)
-
+        for data in iter_meta_paged_results(base_url, params):
             conversations_data = data.get("data", [])
             if not conversations_data:
                 break
@@ -545,7 +589,7 @@ def sync_historical_messages(
                     db.commit()
                     db.refresh(conversation)
 
-                messages_data = conv.get("messages", {}).get("data", [])
+                messages_data = fetch_all_meta_conversation_messages(token, conv)
                 for msg in reversed(messages_data):
                     meta_msg_id = msg.get("id")
                     if not meta_msg_id:
@@ -602,20 +646,6 @@ def sync_historical_messages(
                     conversation.last_message_at = datetime.datetime.utcnow()
 
             db.commit()
-
-            paging = data.get("paging", {})
-            next_url = paging.get("next")
-            if next_url:
-                import urllib.parse as urlparse
-                from urllib.parse import parse_qs
-                parsed = urlparse.urlparse(next_url)
-                qs = parse_qs(parsed.query)
-
-                for key, val in qs.items():
-                    if key not in ["access_token", "limit", "platform", "fields"]:
-                        params[key] = val[0]
-            else:
-                has_next = False
 
         return {"status": "success", "synced_messages": synced_count, "new_leads": new_leads_count}
 
