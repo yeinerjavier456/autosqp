@@ -1,5 +1,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session, joinedload
 from database import get_db
 import models, schemas_whatsapp, auth_utils
@@ -92,23 +93,7 @@ def send_whatsapp_text_reply(
     return resp_data.get("messages", [{}])[0].get("id"), "sent"
 
 # --- WEBHOOK VERIFICATION (GET) ---
-@router.get("/webhook")
-def verify_webhook(mode: str = None, token: str = None, challenge: str = None, 
-                  # hub.verify_token in query params
-                  ):
-    # The parameters come as hub.mode, hub.verify_token, hub.challenge
-    # But usually frameworks handle params. Let's inspect request directly or use alias if needed.
-    # Actually FastAPI handles query params nicely.
-    # Meta sends: hub.mode, hub.verify_token, hub.challenge
-    
-    # We'll use a hardcoded verify token for now or load from env/db
-    VERIFY_TOKEN = "autosqp_webhook_secret" 
-    
-    # NOTE: FastAPI parameter aliasing needed because of dot notation
-    pass 
-    # Proper verification below using Request to be safe with query params
-    
-@router.get("/webhook", include_in_schema=False)
+@router.get("/webhook", include_in_schema=False, response_class=PlainTextResponse)
 async def verify_webhook_raw(request: Request):
     params = request.query_params
     mode = params.get("hub.mode")
@@ -120,11 +105,11 @@ async def verify_webhook_raw(request: Request):
     if mode and token:
         if mode == "subscribe" and token == VERIFY_TOKEN:
             print("WEBHOOK_VERIFIED")
-            return int(challenge)
+            return challenge or ""
         else:
              raise HTTPException(status_code=403, detail="Verification failed")
     
-    return {"status": "ok"}
+    raise HTTPException(status_code=400, detail="Missing webhook verification params")
 
 # --- WEBHOOK EVENTS (POST) ---
 @router.post("/webhook")
