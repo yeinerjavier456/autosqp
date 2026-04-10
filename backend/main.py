@@ -2109,7 +2109,7 @@ def read_leads(
     board_scope: str = None,
     q: str = None,
     skip: int = 0, 
-    limit: int = 1000, 
+    limit: int = 5000, 
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(get_current_user)
 ):

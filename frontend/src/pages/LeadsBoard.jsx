@@ -1678,18 +1678,26 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             assigned_to_id: '',
             supervisor_ids: []
         });
-        fetchLeads();
+        fetchLeads('');
         fetchAdvisors();
         fetchAvailableVehicles();
     }, [boardMode]);
 
     useEffect(() => {
+        const searchTimer = setTimeout(() => {
+            fetchLeads(searchTerm);
+        }, 250);
+
+        return () => clearTimeout(searchTimer);
+    }, [searchTerm, boardMode]);
+
+    useEffect(() => {
         const intervalId = setInterval(() => {
-            fetchLeads();
+            fetchLeads(searchTerm);
         }, 15000);
 
         return () => clearInterval(intervalId);
-    }, [boardMode]);
+    }, [boardMode, searchTerm]);
 
     useEffect(() => {
         const leadIdFromQuery = parseInt(searchParams.get('leadId') || '', 10);
@@ -1767,12 +1775,16 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         }
     };
 
-    const fetchLeads = async () => {
+    const fetchLeads = async (term = '') => {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.get('https://autosqp.co/api/leads', {
                 headers: { Authorization: `Bearer ${token}` },
-                params: { board_scope: boardMode }
+                params: {
+                    board_scope: boardMode,
+                    limit: 5000,
+                    q: term?.trim() || undefined
+                }
             });
             const items = Array.isArray(response.data.items) ? response.data.items : [];
             setLeads(items.map((item) => (
