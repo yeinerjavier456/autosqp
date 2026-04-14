@@ -761,7 +761,7 @@ const SalesDashboard = () => {
                                                 <td className="p-4 text-sm">
                                                     {receipt.file_path ? (
                                                         <a
-                                                            href={`https://autosqp.co/api${receipt.file_path}`}
+                                                            href={`https://autosqp.com/api${receipt.file_path}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
                                                             className="inline-flex items-center rounded-lg bg-blue-50 px-3 py-1.5 font-medium text-blue-700 hover:bg-blue-100"
@@ -781,7 +781,7 @@ const SalesDashboard = () => {
                                                             Editar
                                                         </button>
                                                         <a
-                                                            href={`https://autosqp.co/api/finance/receipts/${receipt.id}/pdf`}
+                                                            href={`https://autosqp.com/api/finance/receipts/${receipt.id}/pdf`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
                                                             className="inline-flex items-center rounded-lg bg-emerald-50 px-3 py-1.5 font-medium text-emerald-700 hover:bg-emerald-100"

@@ -470,7 +470,7 @@ const IntegrationsConfig = () => {
                                     name="gmail_redirect_uri"
                                     value={settings.gmail_redirect_uri || ''}
                                     onChange={handleChange}
-                                    placeholder="https://autosqp.co/api/gmail/oauth/callback"
+                                    placeholder="https://autosqp.com/api/gmail/oauth/callback"
                                     className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                                 <p className="text-xs text-slate-400 mt-1">

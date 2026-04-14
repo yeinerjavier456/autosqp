@@ -340,7 +340,7 @@ const buildPurchaseOptionShareText = (lead, option) => {
     if (Array.isArray(option?.photos) && option.photos.length > 0) {
         lines.push('');
         lines.push('Fotos:');
-        option.photos.forEach((photo) => lines.push(`https://autosqp.co/api${photo}`));
+        option.photos.forEach((photo) => lines.push(`https://autosqp.com/api${photo}`));
     }
 
     return lines.join('\n');
@@ -876,7 +876,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
 
         option.photos.forEach((photo, index) => {
             const link = document.createElement('a');
-            link.href = `https://autosqp.co/api${photo}`;
+            link.href = `https://autosqp.com/api${photo}`;
             link.download = `${option.title || 'opcion'}-${index + 1}.jpg`;
             document.body.appendChild(link);
             link.click();
@@ -1093,8 +1093,8 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                             {Array.isArray(option.photos) && option.photos.length > 0 && (
                                                 <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3">
                                                     {option.photos.map((photo, index) => (
-                                                        <a key={`${option.id}-${index}`} href={`https://autosqp.co/api${photo}`} target="_blank" rel="noopener noreferrer" className="overflow-hidden rounded-lg border border-pink-100 bg-slate-50">
-                                                            <img src={`https://autosqp.co/api${photo}`} alt={option.title} className="h-24 w-full object-cover" />
+                                                        <a key={`${option.id}-${index}`} href={`https://autosqp.com/api${photo}`} target="_blank" rel="noopener noreferrer" className="overflow-hidden rounded-lg border border-pink-100 bg-slate-50">
+                                                            <img src={`https://autosqp.com/api${photo}`} alt={option.title} className="h-24 w-full object-cover" />
                                                         </a>
                                                     ))}
                                                 </div>
@@ -1567,10 +1567,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
                                         {leadFiles.map((file) => (
                                             <div key={file.id} className="bg-white p-2 rounded border border-gray-200 shadow-sm flex flex-col gap-2">
-                                                <a href={`https://autosqp.co/api${file.file_path}`} target="_blank" rel="noopener noreferrer" className="hover:border-orange-500 transition flex flex-col items-center gap-1 group">
+                                                <a href={`https://autosqp.com/api${file.file_path}`} target="_blank" rel="noopener noreferrer" className="hover:border-orange-500 transition flex flex-col items-center gap-1 group">
                                                     {file.file_type && file.file_type.includes('image') ? (
                                                         <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center overflow-hidden">
-                                                            <img src={`https://autosqp.co/api${file.file_path}`} alt="File" className="w-full h-full object-cover" />
+                                                            <img src={`https://autosqp.com/api${file.file_path}`} alt="File" className="w-full h-full object-cover" />
                                                         </div>
                                                     ) : (
                                                         <svg className="w-8 h-8 text-gray-400 group-hover:text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>

@@ -665,7 +665,7 @@ const HistoryModal = ({ lead, onClose, onAddNote }) => {
                                     <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
                                         {leadFiles.map((file) => (
                                             <div key={file.id} className="bg-white p-2 rounded border border-gray-200 shadow-sm flex flex-col gap-2">
-                                                <a href={`https://autosqp.co/api${file.file_path}`} target="_blank" rel="noopener noreferrer" className="hover:border-indigo-500 transition flex items-center gap-2 group">
+                                                <a href={`https://autosqp.com/api${file.file_path}`} target="_blank" rel="noopener noreferrer" className="hover:border-indigo-500 transition flex items-center gap-2 group">
                                                     <svg className="w-5 h-5 text-gray-400 group-hover:text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                                                     <span className="text-[10px] text-gray-600 truncate flex-1">{file.file_name}</span>
                                                 </a>

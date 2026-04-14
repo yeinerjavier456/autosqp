@@ -193,14 +193,14 @@ def build_inventory_response(db: Session, company_id: Optional[int]) -> str:
     if not vehicles:
         return (
             "En este momento no tengo vehículos disponibles para mostrarte en el chat. "
-            "Puedes revisar el inventario completo aquí: https://autosqp.co/autos"
+            "Puedes revisar el inventario completo aquí: https://autosqp.com/autos"
         )
 
     lines = ["Claro. Estos son 5 carros disponibles en este momento:"]
     for idx, vehicle in enumerate(vehicles, start=1):
         price = f"{vehicle.price:,}".replace(",", ".") if vehicle.price is not None else "N/A"
         lines.append(f"{idx}. {vehicle.make} {vehicle.model or ''} {vehicle.year} - COP {price}")
-    lines.append("Puedes ver más opciones aquí: https://autosqp.co/autos")
+    lines.append("Puedes ver más opciones aquí: https://autosqp.com/autos")
     return "\n".join(lines)
 
 
@@ -222,7 +222,7 @@ def build_channel_system_prompt(bot_name: str) -> str:
         "Si el cliente no desea dejar correo, continúa el proceso sin insistir. "
         f"Si te piden un número directo de contacto, comparte este: {DIRECT_CONTACT_NUMBER}. "
         "No inventes información ni cierres el perfilado hasta tener nombre y teléfono, y luego sigue pidiendo el resto de datos. "
-        "Cuando el cliente pregunte por carros disponibles, consulta el inventario y comparte hasta 5 opciones con el enlace https://autosqp.co/autos."
+        "Cuando el cliente pregunte por carros disponibles, consulta el inventario y comparte hasta 5 opciones con el enlace https://autosqp.com/autos."
     )
 
 

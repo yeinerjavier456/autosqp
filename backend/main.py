@@ -531,6 +531,10 @@ app.add_middleware(
         "http://3.234.117.124:3000", # New Elastic IP port
         "http://3.234.117.124",      # New Elastic IP
         "https://3.234.117.124",     # New Elastic IP HTTPS
+        "http://autosqp.com",        # Canonical Domain HTTP
+        "https://autosqp.com",       # Canonical Domain HTTPS
+        "http://www.autosqp.com",    # Canonical WWW Domain HTTP
+        "https://www.autosqp.com",   # Canonical WWW Domain HTTPS
         "http://autosqp.co",         # Domain HTTP
         "https://autosqp.co",        # Domain HTTPS
         "http://www.autosqp.co",     # WWW Domain HTTP
@@ -3640,14 +3644,14 @@ def build_inventory_response(db: Session, company_id: Optional[int]) -> str:
     if not vehicles:
         return (
             "En este momento no tengo vehículos disponibles para mostrarte en el chat. "
-            "Puedes revisar el inventario completo aquí: https://autosqp.co/autos"
+            "Puedes revisar el inventario completo aquí: https://autosqp.com/autos"
         )
 
     lines = ["Claro. Estos son 5 carros disponibles en este momento:"]
     for idx, v in enumerate(vehicles, start=1):
         price = f"{v.price:,}".replace(",", ".") if v.price is not None else "N/A"
         lines.append(f"{idx}. {v.make} {v.model or ''} {v.year} - COP {price}")
-    lines.append("Puedes ver más opciones aquí: https://autosqp.co/autos")
+    lines.append("Puedes ver más opciones aquí: https://autosqp.com/autos")
     return "\n".join(lines)
 
 def maybe_create_public_chat_lead(

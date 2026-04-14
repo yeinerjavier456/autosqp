@@ -21,7 +21,7 @@ const buildOptionShareText = (option) => {
     if (Array.isArray(option.photos) && option.photos.length > 0) {
         lines.push('');
         lines.push('Fotos:');
-        option.photos.forEach((photo) => lines.push(`https://autosqp.co/api${photo}`));
+        option.photos.forEach((photo) => lines.push(`https://autosqp.com/api${photo}`));
     }
     return lines.join('\n');
 };
@@ -388,7 +388,7 @@ const PurchaseBoard = () => {
         if (!Array.isArray(option.photos) || option.photos.length === 0) return;
         option.photos.forEach((photo, index) => {
             const link = document.createElement('a');
-            link.href = `https://autosqp.co/api${photo}`;
+            link.href = `https://autosqp.com/api${photo}`;
             link.download = `${option.title || 'opcion'}-${index + 1}.jpg`;
             document.body.appendChild(link);
             link.click();
@@ -573,8 +573,8 @@ const PurchaseBoard = () => {
                                             {Array.isArray(option.photos) && option.photos.length > 0 && (
                                                 <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3">
                                                     {option.photos.map((photo, index) => (
-                                                        <a key={`${option.id}-${index}`} href={`https://autosqp.co/api${photo}`} target="_blank" rel="noopener noreferrer" className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                                                            <img src={`https://autosqp.co/api${photo}`} alt={option.title} className="h-28 w-full object-cover" />
+                                                        <a key={`${option.id}-${index}`} href={`https://autosqp.com/api${photo}`} target="_blank" rel="noopener noreferrer" className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                                                            <img src={`https://autosqp.com/api${photo}`} alt={option.title} className="h-28 w-full object-cover" />
                                                         </a>
                                                     ))}
                                                 </div>
@@ -672,7 +672,7 @@ const PurchaseBoard = () => {
                                         {purchaseLeadFiles.length > 0 && (
                                             <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                                                 {purchaseLeadFiles.map((file) => (
-                                                    <a key={file.id} href={`https://autosqp.co/api${file.file_path}`} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 transition hover:border-blue-300 hover:bg-blue-50">
+                                                    <a key={file.id} href={`https://autosqp.com/api${file.file_path}`} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 transition hover:border-blue-300 hover:bg-blue-50">
                                                         {file.file_name}
                                                     </a>
                                                 ))}

@@ -790,7 +790,7 @@ const CreditBoard = () => {
                                                 {creditLeadFiles.map((file) => (
                                                     <a
                                                         key={file.id}
-                                                        href={`https://autosqp.co/api${file.file_path}`}
+                                                        href={`https://autosqp.com/api${file.file_path}`}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
                                                         className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 transition hover:border-blue-300 hover:bg-blue-50"

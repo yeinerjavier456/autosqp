@@ -9,7 +9,7 @@ import models
 from database import SessionLocal
 
 
-WP_LISTINGS_URL = "https://autosqp.co/web/wp-json/wp/v2/listings"
+WP_LISTINGS_URL = "https://autosqp.com/web/wp-json/wp/v2/listings"
 
 
 def first_text(value: Any) -> Optional[str]:
