@@ -40,6 +40,18 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 def get_effective_role_name(user: models.User | None) -> str:
     if not user or not user.role:
         return ""
+    raw_names = {
+        getattr(user.role, "base_role_name", None) or "",
+        getattr(user.role, "name", None) or "",
+        getattr(user.role, "label", None) or "",
+    }
+    normalized_names = {str(name).strip().lower() for name in raw_names if str(name).strip()}
+
+    if any("super" in name and ("admin" in name or "administrador" in name) for name in normalized_names):
+        return "super_admin"
+    if any("admin" in name or "administrador" in name for name in normalized_names):
+        return "admin"
+
     return getattr(user.role, "base_role_name", None) or getattr(user.role, "name", None) or ""
 
 

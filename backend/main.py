@@ -637,9 +637,20 @@ def get_user_role_name(user: Optional[models.User]) -> Optional[str]:
     }
     role_names.discard("")
 
-    if "super admin" in role_names or "super administrador" in role_names:
+    if (
+        "super admin" in role_names
+        or "super administrador" in role_names
+        or any("super" in role_name and "admin" in role_name for role_name in role_names)
+        or any("super" in role_name and "administrador" in role_name for role_name in role_names)
+    ):
         return "super_admin"
-    if "admin" in role_names or "administrador" in role_names or "administrador de empresa" in role_names:
+    if (
+        "admin" in role_names
+        or "administrador" in role_names
+        or "administrador de empresa" in role_names
+        or any("admin" in role_name for role_name in role_names)
+        or any("administrador" in role_name for role_name in role_names)
+    ):
         return "admin"
     if "aliado" in role_names or "aliado estrategico" in role_names:
         return "aliado"
