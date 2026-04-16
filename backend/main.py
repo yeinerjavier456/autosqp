@@ -630,11 +630,8 @@ def can_manually_assign_to_any_role(current_user: models.User) -> bool:
 def get_user_role_name(user: Optional[models.User]) -> Optional[str]:
     if not user or not user.role:
         return None
-    base_role_name = getattr(user.role, "base_role_name", None)
-    if base_role_name:
-        return base_role_name
-
     role_names = {
+        normalize_role_text(getattr(user.role, "base_role_name", None)),
         normalize_role_text(getattr(user.role, "name", None)),
         normalize_role_text(getattr(user.role, "label", None)),
     }
@@ -655,6 +652,9 @@ def get_user_role_name(user: Optional[models.User]) -> Optional[str]:
     if "inventario" in role_names:
         return "inventario"
 
+    base_role_name = getattr(user.role, "base_role_name", None)
+    if base_role_name:
+        return base_role_name
     return getattr(user.role, "name", None)
 
 
@@ -765,26 +765,14 @@ def get_company_ally_user_ids(db: Session, company_id: Optional[int]) -> List[in
     if not company_id:
         return []
 
-    aliado_roles = db.query(models.Role).filter(
-        or_(
-            models.Role.name == "aliado",
-            models.Role.base_role_name == "aliado"
-        ),
-        or_(
-            models.Role.company_id == company_id,
-            models.Role.company_id.is_(None)
-        )
+    company_users = db.query(models.User).join(models.Role, isouter=True).filter(
+        models.User.company_id == company_id
     ).all()
-    aliado_role_ids = [role.id for role in aliado_roles]
-    if not aliado_role_ids:
-        return []
 
     return [
-        row[0]
-        for row in db.query(models.User.id).filter(
-            models.User.company_id == company_id,
-            models.User.role_id.in_(aliado_role_ids)
-        ).all()
+        user.id
+        for user in company_users
+        if is_ally_role(getattr(user, "role", None))
     ]
 
 
