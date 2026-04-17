@@ -4974,8 +4974,7 @@ def read_sales(
             raise HTTPException(status_code=400, detail="Las fechas deben usar formato YYYY-MM-DD")
         if range_end <= range_start:
             raise HTTPException(status_code=400, detail="La fecha final debe ser mayor o igual a la inicial")
-        sale_date_field = func.coalesce(models.Sale.sale_date, models.Sale.created_at)
-        query = query.filter(sale_date_field >= range_start, sale_date_field < range_end)
+        query = query.filter(models.Sale.sale_date >= range_start, models.Sale.sale_date < range_end)
         
     if month and year:
         # Filter by specific month/year
@@ -5126,8 +5125,7 @@ def get_finance_stats(
     if current_user.company_id:
         query = query.filter(models.Sale.company_id == current_user.company_id)
     if range_start and range_end:
-        sale_date_field = func.coalesce(models.Sale.sale_date, models.Sale.created_at)
-        query = query.filter(sale_date_field >= range_start, sale_date_field < range_end)
+        query = query.filter(models.Sale.sale_date >= range_start, models.Sale.sale_date < range_end)
     sales = query.all()
     
     total_revenue = sum(s.net_revenue for s in sales)
@@ -5139,8 +5137,7 @@ def get_finance_stats(
     if current_user.company_id:
         pending_query = pending_query.filter(models.Sale.company_id == current_user.company_id)
     if range_start and range_end:
-        pending_date_field = func.coalesce(models.Sale.sale_date, models.Sale.created_at)
-        pending_query = pending_query.filter(pending_date_field >= range_start, pending_date_field < range_end)
+        pending_query = pending_query.filter(models.Sale.sale_date >= range_start, models.Sale.sale_date < range_end)
     pending_count = pending_query.count()
 
     # 3. Monthly Stats (Current Month)
