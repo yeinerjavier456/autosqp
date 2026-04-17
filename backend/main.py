@@ -2873,7 +2873,7 @@ def read_advisor_stats(
     history_entries = []
     if visible_lead_ids:
         history_entries = db.query(models.LeadHistory).options(
-            joinedload(models.LeadHistory.user)
+            joinedload(models.LeadHistory.user).joinedload(models.User.role)
         ).filter(
             models.LeadHistory.lead_id.in_(visible_lead_ids),
             models.LeadHistory.created_at >= period_start,
@@ -2905,6 +2905,8 @@ def read_advisor_stats(
                 "user_id": entry.user_id,
                 "full_name": getattr(getattr(entry, "user", None), "full_name", None),
                 "email": getattr(getattr(entry, "user", None), "email", None),
+                "role_name": get_user_role_name(getattr(entry, "user", None)),
+                "role_label": getattr(getattr(getattr(entry, "user", None), "role", None), "label", None),
                 "count": 0,
             }
         )
@@ -2913,6 +2915,10 @@ def read_advisor_stats(
             current_item["full_name"] = getattr(getattr(entry, "user", None), "full_name", None)
         if not current_item.get("email"):
             current_item["email"] = getattr(getattr(entry, "user", None), "email", None)
+        if not current_item.get("role_name"):
+            current_item["role_name"] = get_user_role_name(getattr(entry, "user", None))
+        if not current_item.get("role_label"):
+            current_item["role_label"] = getattr(getattr(getattr(entry, "user", None), "role", None), "label", None)
     for entry in autos_status_change_entries:
         if not entry.user_id:
             continue
@@ -2922,6 +2928,8 @@ def read_advisor_stats(
                 "user_id": entry.user_id,
                 "full_name": getattr(getattr(entry, "user", None), "full_name", None),
                 "email": getattr(getattr(entry, "user", None), "email", None),
+                "role_name": get_user_role_name(getattr(entry, "user", None)),
+                "role_label": getattr(getattr(getattr(entry, "user", None), "role", None), "label", None),
                 "count": 0,
             }
         )
@@ -2930,6 +2938,10 @@ def read_advisor_stats(
             current_item["full_name"] = getattr(getattr(entry, "user", None), "full_name", None)
         if not current_item.get("email"):
             current_item["email"] = getattr(getattr(entry, "user", None), "email", None)
+        if not current_item.get("role_name"):
+            current_item["role_name"] = get_user_role_name(getattr(entry, "user", None))
+        if not current_item.get("role_label"):
+            current_item["role_label"] = getattr(getattr(getattr(entry, "user", None), "role", None), "label", None)
     for entry in ally_status_change_entries:
         if not entry.user_id:
             continue
@@ -2939,6 +2951,8 @@ def read_advisor_stats(
                 "user_id": entry.user_id,
                 "full_name": getattr(getattr(entry, "user", None), "full_name", None),
                 "email": getattr(getattr(entry, "user", None), "email", None),
+                "role_name": get_user_role_name(getattr(entry, "user", None)),
+                "role_label": getattr(getattr(getattr(entry, "user", None), "role", None), "label", None),
                 "count": 0,
             }
         )
@@ -2947,6 +2961,10 @@ def read_advisor_stats(
             current_item["full_name"] = getattr(getattr(entry, "user", None), "full_name", None)
         if not current_item.get("email"):
             current_item["email"] = getattr(getattr(entry, "user", None), "email", None)
+        if not current_item.get("role_name"):
+            current_item["role_name"] = get_user_role_name(getattr(entry, "user", None))
+        if not current_item.get("role_label"):
+            current_item["role_label"] = getattr(getattr(getattr(entry, "user", None), "role", None), "label", None)
     top_managers = sorted(
         manager_activity_map.values(),
         key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")

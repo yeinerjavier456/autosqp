@@ -251,6 +251,7 @@ const AdvisorDashboard = () => {
     const topManagers = Array.isArray(stats.top_managers) ? stats.top_managers : [];
     const topStatusMovers = Array.isArray(stats.top_status_movers) ? stats.top_status_movers : [];
     const allyTopManagers = Array.isArray(stats.ally_top_managers) ? stats.ally_top_managers : [];
+    const advisorManagers = topManagers.filter((manager) => manager?.role_name === 'asesor');
 
     const rangeLabel = `del ${startDate} al ${endDate}`;
     const trendTitle = 'Ritmo de gestión del rango elegido';
@@ -267,6 +268,7 @@ const AdvisorDashboard = () => {
     const dashboardUnreadReplies = isAllyDashboard ? stats.ally_unread_replies_count : stats.unread_replies_count;
     const dashboardNewLeadsInRange = isAllyDashboard ? stats.ally_new_leads_in_range : stats.new_leads_in_range;
     const dashboardStatusChanges = isAllyDashboard ? stats.ally_status_changes_in_range : stats.status_changes_in_range;
+    const topAdvisorManager = advisorManagers[0] || null;
     const topManager = isAllyDashboard
         ? (allyTopManagers[0] || null)
         : (topStatusMovers[0] || topManagers[0] || null);
@@ -385,9 +387,15 @@ const AdvisorDashboard = () => {
                     helperClassName="text-emerald-700"
                 />
                 <DashboardMetric
-                    title="Pipeline activo"
-                    value={dashboardActivePipeline}
-                    helper={`${dashboardLeadsNew} leads siguen en estado nuevo ${rangeLabel}.`}
+                    title={isAllyDashboard ? 'Pipeline activo' : 'Asesor que más gestiona'}
+                    value={isAllyDashboard
+                        ? dashboardActivePipeline
+                        : (topAdvisorManager ? (topAdvisorManager.full_name || topAdvisorManager.email || 'Asesor') : 'Sin datos')}
+                    helper={isAllyDashboard
+                        ? `${dashboardLeadsNew} leads siguen en estado nuevo ${rangeLabel}.`
+                        : (topAdvisorManager
+                            ? `${topAdvisorManager.count} acciones registradas para ${topAdvisorManager.role_label || 'Asesor / Vendedor'} en el rango.`
+                            : 'Aun no hay acciones registradas por asesores o vendedores en el rango.')}
                     onClick={(isAllyDashboard ? hasAllySection : hasLeadsSection) ? () => navigate(isAllyDashboard ? '/aliado/dashboard' : leadBoardPath) : undefined}
                     className="border-amber-200 bg-amber-50 text-amber-900"
                     helperClassName="text-amber-700"
