@@ -48,7 +48,7 @@ const GlobalNotifications = () => {
     useEffect(() => {
         if (!user) return;
 
-        const intervalId = setInterval(fetchMessages, 5000);
+        const intervalId = setInterval(fetchMessages, 300000);
         return () => clearInterval(intervalId);
     }, [user]);
 

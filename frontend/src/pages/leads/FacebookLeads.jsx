@@ -16,10 +16,10 @@ const FacebookLeads = () => {
         backgroundSync();
 
         // Poll for new conversations every 10 seconds
-        const interval = setInterval(fetchConversations, 10000);
+        const interval = setInterval(fetchConversations, 300000);
 
         // Background sync meta historical every 5 seconds as requested
-        const syncInterval = setInterval(backgroundSync, 5000);
+        const syncInterval = setInterval(backgroundSync, 300000);
 
         return () => {
             clearInterval(interval);
@@ -30,7 +30,7 @@ const FacebookLeads = () => {
     useEffect(() => {
         if (selectedConversation) {
             fetchMessages(selectedConversation.id);
-            const msgInterval = setInterval(() => fetchMessages(selectedConversation.id), 5000);
+            const msgInterval = setInterval(() => fetchMessages(selectedConversation.id), 300000);
             return () => clearInterval(msgInterval);
         }
     }, [selectedConversation]);

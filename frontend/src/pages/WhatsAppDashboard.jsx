@@ -17,7 +17,7 @@ const WhatsAppDashboard = () => {
         fetchConversations();
 
         // Poll for new conversations every 10 seconds
-        const interval = setInterval(fetchConversations, 10000);
+        const interval = setInterval(fetchConversations, 300000);
         return () => clearInterval(interval);
     }, []);
 
@@ -25,7 +25,7 @@ const WhatsAppDashboard = () => {
         if (selectedConversation) {
             fetchMessages(selectedConversation.id);
             // Poll messages for active conversation
-            const msgInterval = setInterval(() => fetchMessages(selectedConversation.id), 5000);
+            const msgInterval = setInterval(() => fetchMessages(selectedConversation.id), 300000);
             return () => clearInterval(msgInterval);
         }
     }, [selectedConversation]);

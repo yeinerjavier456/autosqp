@@ -54,7 +54,7 @@ const FloatingChatButton = () => {
         fetchUsers();
         fetchMessages();
         resetUnreadCount();
-        const interval = setInterval(fetchMessages, 5000);
+        const interval = setInterval(fetchMessages, 300000);
         return () => clearInterval(interval);
     }, [open]);
 
