@@ -12,7 +12,7 @@ const LEGACY_ORIGINS = new Set([
   'https://www.autosqp.com',
 ])
 
-const API_BASE_PATH = '/api'
+const API_BASE_PATH = '/crm/api'
 const API_BASE_URL = `${window.location.origin}${API_BASE_PATH}`
 
 const normalizeApiUrl = (rawUrl) => {
