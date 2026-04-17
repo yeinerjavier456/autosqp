@@ -27,8 +27,14 @@ def maybe_run_automation_rules(db: Session, company_id: Optional[int]):
     if last_run and (now_local - last_run).total_seconds() < RULES_CHECK_INTERVAL_SECONDS:
         return
 
-    check_and_trigger_rules(db)
+    # Bloqueamos el tiempo de ejecución ANTES para que otras peticiones concurrentes reboten
     LAST_RULES_CHECK_BY_COMPANY[company_id] = now_local
+    
+    try:
+        check_and_trigger_rules(db)
+    except Exception as e:
+        LAST_RULES_CHECK_BY_COMPANY[company_id] = None
+        raise e
 
 @router.get("/", response_model=List[schemas.Notification])
 def get_notifications(
