@@ -7,6 +7,14 @@ function SystemLogs() {
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [userFilter, setUserFilter] = useState('');
+    const [moduleFilter, setModuleFilter] = useState('');
+    const [dateFilter, setDateFilter] = useState('');
+    const [appliedFilters, setAppliedFilters] = useState({
+        user: '',
+        module: '',
+        date: ''
+    });
 
     // Pagination
     const [page, setPage] = useState(1);
@@ -15,7 +23,7 @@ function SystemLogs() {
 
     useEffect(() => {
         fetchLogs();
-    }, [page]);
+    }, [page, appliedFilters]);
 
     const fetchLogs = async () => {
         setLoading(true);
@@ -24,8 +32,15 @@ function SystemLogs() {
             const token = localStorage.getItem('token');
             const skip = (page - 1) * limit;
 
-            const response = await axios.get(`https://autosqp.co/api/logs/?skip=${skip}&limit=${limit}`, {
-                headers: { Authorization: `Bearer ${token}` }
+            const response = await axios.get('https://autosqp.co/api/logs/', {
+                headers: { Authorization: `Bearer ${token}` },
+                params: {
+                    skip,
+                    limit,
+                    user_query: appliedFilters.user || undefined,
+                    module_query: appliedFilters.module || undefined,
+                    log_date: appliedFilters.date || undefined
+                }
             });
 
             setLogs(response.data.items);
@@ -36,6 +51,27 @@ function SystemLogs() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const applyFilters = () => {
+        setPage(1);
+        setAppliedFilters({
+            user: userFilter.trim(),
+            module: moduleFilter.trim(),
+            date: dateFilter
+        });
+    };
+
+    const clearFilters = () => {
+        setUserFilter('');
+        setModuleFilter('');
+        setDateFilter('');
+        setPage(1);
+        setAppliedFilters({
+            user: '',
+            module: '',
+            date: ''
+        });
     };
 
     const roleName = user?.role?.name;
@@ -68,6 +104,54 @@ function SystemLogs() {
                     <p className="text-sm text-red-700">{error}</p>
                 </div>
             )}
+
+            <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                    <div>
+                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Usuario</label>
+                        <input
+                            type="text"
+                            value={userFilter}
+                            onChange={(e) => setUserFilter(e.target.value)}
+                            placeholder="Nombre o correo"
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Módulo</label>
+                        <input
+                            type="text"
+                            value={moduleFilter}
+                            onChange={(e) => setModuleFilter(e.target.value)}
+                            placeholder="Lead, Vehículo, Auth..."
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Fecha</label>
+                        <input
+                            type="date"
+                            value={dateFilter}
+                            onChange={(e) => setDateFilter(e.target.value)}
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500"
+                        />
+                    </div>
+                    <div className="flex items-end gap-2">
+                        <button
+                            onClick={applyFilters}
+                            className="inline-flex flex-1 items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+                        >
+                            Buscar
+                        </button>
+                        <button
+                            onClick={clearFilters}
+                            className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                        >
+                            Limpiar
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             <div className="flex-1 bg-white shadow rounded-lg overflow-hidden flex flex-col">
                 <div className="overflow-x-auto flex-1">

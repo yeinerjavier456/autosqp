@@ -1787,6 +1787,9 @@ def redistribute_user_leads(
 def read_system_logs(
     skip: int = 0, 
     limit: int = 50, 
+    user_query: Optional[str] = Query(None),
+    module_query: Optional[str] = Query(None),
+    log_date: Optional[str] = Query(None),
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(get_current_user)
 ):
@@ -1798,10 +1801,41 @@ def read_system_logs(
     if not role_obj or role_obj.name not in ["super_admin", "admin"]:
         raise HTTPException(status_code=403, detail="No tienes permisos para ver auditoría")
 
-    query = db.query(models.SystemLog)
+    query = db.query(models.SystemLog).outerjoin(models.User, models.SystemLog.user_id == models.User.id)
+
+    if user_query:
+        like_value = f"%{user_query.strip()}%"
+        query = query.filter(
+            or_(
+                models.User.full_name.ilike(like_value),
+                models.User.email.ilike(like_value)
+            )
+        )
+
+    if module_query:
+        like_value = f"%{module_query.strip()}%"
+        query = query.filter(
+            or_(
+                models.SystemLog.entity_type.ilike(like_value),
+                models.SystemLog.action.ilike(like_value)
+            )
+        )
+
+    if log_date:
+        try:
+            target_day = datetime.date.fromisoformat(log_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="La fecha debe usar formato YYYY-MM-DD")
+
+        start = datetime.datetime.combine(target_day, datetime.time.min)
+        end = datetime.datetime.combine(target_day + datetime.timedelta(days=1), datetime.time.min)
+        query = query.filter(
+            models.SystemLog.created_at >= start,
+            models.SystemLog.created_at < end
+        )
     
     total = query.count()
-    items = query.order_by(models.SystemLog.created_at.desc()).offset(skip).limit(limit).all()
+    items = query.options(joinedload(models.SystemLog.user)).order_by(models.SystemLog.created_at.desc()).offset(skip).limit(limit).all()
     
     return {"items": items, "total": total}
 
