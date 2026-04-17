@@ -36,25 +36,29 @@ const normalizeApiUrl = (rawUrl) => {
         normalizedPath = normalizedPath.replace('/api/', '/')
       }
 
-      return `${normalizedPath}${parsedUrl.search}${parsedUrl.hash}`
+      return `${API_BASE_URL}${normalizedPath}${parsedUrl.search}${parsedUrl.hash}`
     } catch {
       return url
     }
   }
 
   if (url.startsWith('/crm/api/')) {
-    return url.replace('/crm/api/', '/')
+    return `${API_BASE_URL}${url.replace('/crm/api/', '/')}`
   }
 
   if (url.startsWith('/api/')) {
-    return url.replace('/api/', '/')
+    return `${API_BASE_URL}${url.replace('/api/', '/')}`
   }
 
   if (url.startsWith('api/')) {
-    return `/${url.slice(4)}`
+    return `${API_BASE_URL}/${url.slice(4)}`
   }
 
-  return url
+  if (url.startsWith('/')) {
+    return `${API_BASE_URL}${url}`
+  }
+
+  return `${API_BASE_URL}/${url}`
 }
 
 axios.defaults.baseURL = API_BASE_URL
