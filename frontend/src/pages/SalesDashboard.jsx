@@ -27,6 +27,12 @@ const SalesDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [filterStatus, setFilterStatus] = useState('pending');
     const [activeTab, setActiveTab] = useState('sales');
+    const [salesSearch, setSalesSearch] = useState('');
+    const [receiptSearch, setReceiptSearch] = useState('');
+    const [receiptCategory, setReceiptCategory] = useState('');
+    const [receiptMovementType, setReceiptMovementType] = useState('');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
     const [creatingReceipt, setCreatingReceipt] = useState(false);
     const [receiptForm, setReceiptForm] = useState({
         sale_id: '',
@@ -42,19 +48,40 @@ const SalesDashboard = () => {
 
     useEffect(() => {
         fetchData();
-    }, [filterStatus]);
+    }, [filterStatus, salesSearch, receiptSearch, receiptCategory, receiptMovementType, startDate, endDate]);
 
     const fetchData = async () => {
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
             const headers = { Authorization: `Bearer ${token}` };
+            const rangeParams = {
+                start_date: startDate || undefined,
+                end_date: endDate || undefined
+            };
 
             const [statsRes, salesRes, approvedSalesRes, receiptsRes] = await Promise.all([
-                axios.get('https://autosqp.co/api/finance/stats', { headers }),
-                axios.get(`https://autosqp.co/api/sales/?status=${filterStatus}`, { headers }),
+                axios.get('https://autosqp.co/api/finance/stats', { headers, params: rangeParams }),
+                axios.get('https://autosqp.co/api/sales/', {
+                    headers,
+                    params: {
+                        status: filterStatus,
+                        q: salesSearch || undefined,
+                        limit: 300,
+                        ...rangeParams
+                    }
+                }),
                 axios.get('https://autosqp.co/api/sales/?status=approved&limit=300', { headers }),
-                axios.get('https://autosqp.co/api/finance/receipts?limit=300', { headers })
+                axios.get('https://autosqp.co/api/finance/receipts', {
+                    headers,
+                    params: {
+                        q: receiptSearch || undefined,
+                        category: receiptCategory || undefined,
+                        movement_type: receiptMovementType || undefined,
+                        limit: 300,
+                        ...rangeParams
+                    }
+                })
             ]);
 
             setStats(statsRes.data || {});
@@ -390,12 +417,50 @@ const SalesDashboard = () => {
         return <div className="p-10 text-center">Cargando finanzas...</div>;
     }
 
+    const hasDateFilter = Boolean(startDate && endDate);
+
     return (
         <div className="animate-fade-in space-y-8">
             <header>
                 <h1 className="text-3xl font-bold text-gray-800">Finanzas y Comisiones</h1>
                 <p className="text-gray-500">Gestion de ventas, aprobaciones, contabilidad y control de ingresos.</p>
             </header>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                    <div>
+                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Fecha inicial</label>
+                        <input
+                            type="date"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            className="w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Fecha final</label>
+                        <input
+                            type="date"
+                            value={endDate}
+                            min={startDate || undefined}
+                            onChange={(e) => setEndDate(e.target.value)}
+                            className="w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                    <div className="flex items-end">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setStartDate('');
+                                setEndDate('');
+                            }}
+                            className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 md:w-auto"
+                        >
+                            Limpiar fechas
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             <div className="inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
                 <button
@@ -418,11 +483,11 @@ const SalesDashboard = () => {
                     <p className="mt-2 text-3xl font-bold text-slate-800">${stats.total_revenue?.toLocaleString() || '0'}</p>
                 </div>
                 <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                    <p className="text-sm font-medium uppercase text-gray-500">Ingresos del Mes</p>
+                    <p className="text-sm font-medium uppercase text-gray-500">{hasDateFilter ? 'Ingresos del periodo' : 'Ingresos del Mes'}</p>
                     <p className="mt-2 text-3xl font-bold text-green-600">${stats.monthly_revenue?.toLocaleString() || '0'}</p>
                 </div>
                 <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                    <p className="text-sm font-medium uppercase text-gray-500">Comisiones del Mes</p>
+                    <p className="text-sm font-medium uppercase text-gray-500">{hasDateFilter ? 'Comisiones del periodo' : 'Comisiones del Mes'}</p>
                     <p className="mt-2 text-3xl font-bold text-blue-600">${stats.monthly_commissions?.toLocaleString() || '0'}</p>
                 </div>
                 <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
@@ -450,22 +515,42 @@ const SalesDashboard = () => {
 
                     <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-lg">
                         <div className="flex items-center justify-between border-b bg-gray-50 p-6">
-                            <h3 className="text-lg font-bold text-gray-800">
-                                {filterStatus === 'pending' ? 'Solicitudes Pendientes' : 'Historial de Ventas'}
-                            </h3>
-                            <div className="flex gap-2 rounded-lg border border-gray-200 bg-white p-1">
-                                <button
-                                    onClick={() => setFilterStatus('pending')}
-                                    className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${filterStatus === 'pending' ? 'bg-orange-100 text-orange-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                                >
-                                    Pendientes
-                                </button>
-                                <button
-                                    onClick={() => setFilterStatus('approved')}
-                                    className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${filterStatus === 'approved' ? 'bg-blue-100 text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                                >
-                                    Aprobadas
-                                </button>
+                            <div className="w-full space-y-4">
+                                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                    <h3 className="text-lg font-bold text-gray-800">
+                                        {filterStatus === 'pending' ? 'Solicitudes Pendientes' : 'Historial de Ventas'}
+                                    </h3>
+                                    <div className="flex gap-2 rounded-lg border border-gray-200 bg-white p-1">
+                                        <button
+                                            onClick={() => setFilterStatus('pending')}
+                                            className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${filterStatus === 'pending' ? 'bg-orange-100 text-orange-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                        >
+                                            Pendientes
+                                        </button>
+                                        <button
+                                            onClick={() => setFilterStatus('approved')}
+                                            className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${filterStatus === 'approved' ? 'bg-blue-100 text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                        >
+                                            Aprobadas
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                                    <input
+                                        type="text"
+                                        value={salesSearch}
+                                        onChange={(e) => setSalesSearch(e.target.value)}
+                                        placeholder="Buscar por placa, marca o modelo..."
+                                        className="rounded-xl border border-gray-300 px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setSalesSearch('')}
+                                        className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                                    >
+                                        Limpiar filtro
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -570,12 +655,12 @@ const SalesDashboard = () => {
                         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                             <p className="text-sm font-medium uppercase text-gray-500">Ingresos del Mes</p>
                             <p className="mt-2 text-3xl font-bold text-emerald-600">${stats.accounting_income_monthly?.toLocaleString() || '0'}</p>
-                            <p className="mt-2 text-xs text-emerald-700">Ingresos contabilizados en el mes actual.</p>
+                            <p className="mt-2 text-xs text-emerald-700">{hasDateFilter ? 'Ingresos contabilizados dentro del rango seleccionado.' : 'Ingresos contabilizados en el mes actual.'}</p>
                         </div>
                         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                            <p className="text-sm font-medium uppercase text-gray-500">Balance del Mes</p>
+                            <p className="text-sm font-medium uppercase text-gray-500">{hasDateFilter ? 'Balance del periodo' : 'Balance del Mes'}</p>
                             <p className={`mt-2 text-3xl font-bold ${Number(stats.accounting_balance_monthly || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>${stats.accounting_balance_monthly?.toLocaleString() || '0'}</p>
-                            <p className="mt-2 text-xs text-blue-700">Resultado neto del mes actual.</p>
+                            <p className="mt-2 text-xs text-blue-700">{hasDateFilter ? 'Resultado neto dentro del rango seleccionado.' : 'Resultado neto del mes actual.'}</p>
                         </div>
                     </div>
 
@@ -710,6 +795,46 @@ const SalesDashboard = () => {
                             <div className="border-b border-gray-100 bg-gray-50 px-6 py-4">
                                 <h3 className="text-lg font-bold text-gray-800">Libro de recibos</h3>
                                 <p className="text-sm text-gray-500">Soportes cargados desde contabilidad.</p>
+                                <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_200px_200px_auto]">
+                                    <input
+                                        type="text"
+                                        value={receiptSearch}
+                                        onChange={(e) => setReceiptSearch(e.target.value)}
+                                        placeholder="Buscar por concepto, recibo, placa..."
+                                        className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <select
+                                        value={receiptCategory}
+                                        onChange={(e) => setReceiptCategory(e.target.value)}
+                                        className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        <option value="">Todas las categorías</option>
+                                        <option value="sale_payment">Pago de venta</option>
+                                        <option value="other_income">Otro ingreso</option>
+                                        <option value="commission_payment">Pago de comisión</option>
+                                        <option value="expense">Egreso</option>
+                                    </select>
+                                    <select
+                                        value={receiptMovementType}
+                                        onChange={(e) => setReceiptMovementType(e.target.value)}
+                                        className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        <option value="">Todos los movimientos</option>
+                                        <option value="income">Ingreso</option>
+                                        <option value="expense">Egreso</option>
+                                    </select>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setReceiptSearch('');
+                                            setReceiptCategory('');
+                                            setReceiptMovementType('');
+                                        }}
+                                        className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                                    >
+                                        Limpiar
+                                    </button>
+                                </div>
                             </div>
                             <div className="overflow-x-auto">
                                 <table className="w-full border-collapse text-left">

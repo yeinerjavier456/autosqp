@@ -4940,6 +4940,8 @@ def read_sales(
     month: int = None,
     year: int = None,
     q: str = None, # Search query
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
@@ -4963,6 +4965,17 @@ def read_sales(
     # Filters
     if status:
         query = query.filter(models.Sale.status == status)
+
+    if start_date and end_date:
+        try:
+            range_start = datetime.datetime.combine(datetime.date.fromisoformat(start_date), datetime.time.min)
+            range_end = datetime.datetime.combine(datetime.date.fromisoformat(end_date) + datetime.timedelta(days=1), datetime.time.min)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Las fechas deben usar formato YYYY-MM-DD")
+        if range_end <= range_start:
+            raise HTTPException(status_code=400, detail="La fecha final debe ser mayor o igual a la inicial")
+        sale_date_field = func.coalesce(models.Sale.sale_date, models.Sale.created_at)
+        query = query.filter(sale_date_field >= range_start, sale_date_field < range_end)
         
     if month and year:
         # Filter by specific month/year
@@ -5087,15 +5100,34 @@ def reject_sale(
     return sale
 
 @app.get("/finance/stats")
-def get_finance_stats(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+def get_finance_stats(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     # Only Admin/Super Admin
     if get_user_role_name(current_user) not in ["admin", "super_admin"]:
          raise HTTPException(status_code=403, detail="Not authorized")
+
+    range_start = None
+    range_end = None
+    if start_date and end_date:
+        try:
+            range_start = datetime.datetime.combine(datetime.date.fromisoformat(start_date), datetime.time.min)
+            range_end = datetime.datetime.combine(datetime.date.fromisoformat(end_date) + datetime.timedelta(days=1), datetime.time.min)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Las fechas deben usar formato YYYY-MM-DD")
+        if range_end <= range_start:
+            raise HTTPException(status_code=400, detail="La fecha final debe ser mayor o igual a la inicial")
          
     # 1. Total Stats (All time)
     query = db.query(models.Sale).filter(models.Sale.status == "approved")
     if current_user.company_id:
         query = query.filter(models.Sale.company_id == current_user.company_id)
+    if range_start and range_end:
+        sale_date_field = func.coalesce(models.Sale.sale_date, models.Sale.created_at)
+        query = query.filter(sale_date_field >= range_start, sale_date_field < range_end)
     sales = query.all()
     
     total_revenue = sum(s.net_revenue for s in sales)
@@ -5106,11 +5138,14 @@ def get_finance_stats(db: Session = Depends(get_db), current_user: models.User =
     pending_query = db.query(models.Sale).filter(models.Sale.status == "pending")
     if current_user.company_id:
         pending_query = pending_query.filter(models.Sale.company_id == current_user.company_id)
+    if range_start and range_end:
+        pending_date_field = func.coalesce(models.Sale.sale_date, models.Sale.created_at)
+        pending_query = pending_query.filter(pending_date_field >= range_start, pending_date_field < range_end)
     pending_count = pending_query.count()
 
     # 3. Monthly Stats (Current Month)
     now = datetime.datetime.utcnow()
-    current_month_sales = [s for s in sales if s.sale_date and s.sale_date.month == now.month and s.sale_date.year == now.year]
+    current_month_sales = sales if (range_start and range_end) else [s for s in sales if s.sale_date and s.sale_date.month == now.month and s.sale_date.year == now.year]
     
     monthly_revenue = sum(s.net_revenue for s in current_month_sales)
     monthly_commissions = sum(s.commission_amount for s in current_month_sales)
@@ -5127,8 +5162,11 @@ def get_finance_stats(db: Session = Depends(get_db), current_user: models.User =
     receipts_query = db.query(models.PaymentReceipt)
     if current_user.company_id:
         receipts_query = receipts_query.filter(models.PaymentReceipt.company_id == current_user.company_id)
+    if range_start and range_end:
+        receipt_date_field = func.coalesce(models.PaymentReceipt.payment_date, models.PaymentReceipt.created_at)
+        receipts_query = receipts_query.filter(receipt_date_field >= range_start, receipt_date_field < range_end)
     receipts = receipts_query.all()
-    current_month_receipts = [
+    current_month_receipts = receipts if (range_start and range_end) else [
         receipt for receipt in receipts
         if receipt.payment_date and receipt.payment_date.month == now.month and receipt.payment_date.year == now.year
     ]
@@ -5161,7 +5199,10 @@ def get_finance_stats(db: Session = Depends(get_db), current_user: models.User =
 def read_payment_receipts(
     sale_id: Optional[int] = None,
     category: Optional[str] = None,
+    movement_type: Optional[str] = None,
     q: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -5181,6 +5222,18 @@ def read_payment_receipts(
         query = query.filter(models.PaymentReceipt.sale_id == sale_id)
     if category:
         query = query.filter(models.PaymentReceipt.category == category)
+    if movement_type:
+        query = query.filter(models.PaymentReceipt.movement_type == movement_type)
+    if start_date and end_date:
+        try:
+            range_start = datetime.datetime.combine(datetime.date.fromisoformat(start_date), datetime.time.min)
+            range_end = datetime.datetime.combine(datetime.date.fromisoformat(end_date) + datetime.timedelta(days=1), datetime.time.min)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Las fechas deben usar formato YYYY-MM-DD")
+        if range_end <= range_start:
+            raise HTTPException(status_code=400, detail="La fecha final debe ser mayor o igual a la inicial")
+        receipt_date_field = func.coalesce(models.PaymentReceipt.payment_date, models.PaymentReceipt.created_at)
+        query = query.filter(receipt_date_field >= range_start, receipt_date_field < range_end)
     if q:
         search = f"%{q}%"
         query = query.join(models.Sale, models.PaymentReceipt.sale_id == models.Sale.id, isouter=True).join(
