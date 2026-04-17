@@ -52,3 +52,16 @@ class Conversation(ConversationBase):
 class WhatsAppWebhook(BaseModel):
     object: str
     entry: List[dict]
+
+
+class VehicleShareRequest(BaseModel):
+    vehicle_id: int
+    to_number: str
+    custom_message: Optional[str] = None
+
+
+class VehicleShareResponse(BaseModel):
+    to_number: str
+    sent_messages: int
+    text_message_id: Optional[str] = None
+    image_message_ids: List[str] = []

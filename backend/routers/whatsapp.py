@@ -9,7 +9,12 @@ import os
 import json
 import datetime
 import requests
-from bot_integration import process_channel_bot_message, store_conversation_message
+from bot_integration import (
+    process_channel_bot_message,
+    store_conversation_message,
+    normalize_phone,
+    phone_variants_for_lookup,
+)
 from dependencies import get_current_user
 
 router = APIRouter(
@@ -91,6 +96,182 @@ def send_whatsapp_text_reply(
         raise HTTPException(status_code=400, detail=resp_data.get("error", {}).get("message", "WhatsApp API Error"))
 
     return resp_data.get("messages", [{}])[0].get("id"), "sent"
+
+
+def get_whatsapp_credentials(db: Session, company_id: int) -> tuple[str, str]:
+    settings = db.query(models.IntegrationSettings).filter(
+        models.IntegrationSettings.company_id == company_id
+    ).first()
+
+    token = settings.whatsapp_api_key if settings and settings.whatsapp_api_key else os.getenv("WHATSAPP")
+    phone_number_id = settings.whatsapp_phone_number_id if settings and settings.whatsapp_phone_number_id else os.getenv("WHATSAPP_PHONE_ID")
+
+    if not token or not phone_number_id:
+        raise HTTPException(status_code=400, detail="WhatsApp no está configurado completamente")
+
+    return token, phone_number_id
+
+
+def send_whatsapp_payload(token: str, phone_number_id: str, payload: dict) -> str:
+    response = requests.post(
+        f"https://graph.facebook.com/v17.0/{phone_number_id}/messages",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        },
+        json=payload,
+        timeout=45
+    )
+    resp_data = response.json()
+    if response.status_code not in [200, 201]:
+        raise HTTPException(
+            status_code=400,
+            detail=resp_data.get("error", {}).get("message", "WhatsApp API Error")
+        )
+    return resp_data.get("messages", [{}])[0].get("id")
+
+
+def normalize_media_url(raw_url: Optional[str], request: Request) -> Optional[str]:
+    if not raw_url:
+        return None
+
+    raw = str(raw_url).strip()
+    if not raw:
+        return None
+
+    origin = request.headers.get("origin")
+    if not origin:
+        origin = f"{request.url.scheme}://{request.headers.get('host')}"
+
+    if raw.startswith("data:") or raw.startswith("blob:"):
+        return None
+
+    if raw.startswith("http://localhost") or raw.startswith("http://127.0.0.1"):
+        path = raw.split("/", 3)[-1] if "/" in raw else raw
+        raw = f"/{path}" if not str(path).startswith("/") else str(path)
+
+    if raw.startswith("http://") or raw.startswith("https://"):
+        if "/api/api/static/" in raw:
+            return raw.replace("/api/api/static/", "/api/static/")
+        if "/static/" in raw and "/api/static/" not in raw:
+            return raw.replace("/static/", "/api/static/")
+        return raw
+
+    if raw.startswith("/api/"):
+        return f"{origin}{raw.replace('/api/api/static/', '/api/static/')}"
+    if raw.startswith("api/"):
+        normalized = f"/{raw}".replace("/api/api/static/", "/api/static/")
+        return f"{origin}{normalized}"
+    if raw.startswith("/static/"):
+        return f"{origin}/api{raw}"
+    if raw.startswith("static/"):
+        return f"{origin}/api/{raw}"
+    if not "/" in raw:
+        return f"{origin}/api/static/{raw}"
+
+    return f"{origin}{raw if raw.startswith('/') else f'/{raw}'}"
+
+
+def build_public_vehicle_url(vehicle_id: int, request: Request) -> str:
+    origin = request.headers.get("origin")
+    if not origin:
+        origin = f"{request.url.scheme}://{request.headers.get('host')}"
+    return f"{origin}/crm/autos/{vehicle_id}"
+
+
+def build_vehicle_share_message(vehicle: models.Vehicle, request: Request, custom_message: Optional[str] = None) -> str:
+    masked_plate = f"***{str(vehicle.plate).strip()[-3:].upper()}" if vehicle.plate else "No especificada"
+    price_text = f"${vehicle.price:,.0f}".replace(",", ".") if vehicle.price else "$0"
+    mileage_text = f"{int(vehicle.mileage):,} km".replace(",", ".") if vehicle.mileage else "No especificado"
+
+    lines = []
+    if custom_message and custom_message.strip():
+        lines.extend([custom_message.strip(), ""])
+    else:
+        lines.extend(["Hola, te comparto este vehículo disponible en AutosQP:", ""])
+
+    lines.extend([
+        f"*{(vehicle.make or '').strip()} {(vehicle.model or '').strip()}*".strip(),
+        f"Precio: {price_text}",
+        f"Año: {vehicle.year or 'No especificado'}",
+        f"Kilometraje: {mileage_text}",
+        f"Color: {vehicle.color or 'No especificado'}",
+        f"Placa: {masked_plate}",
+    ])
+
+    if vehicle.description:
+        lines.extend(["", "Descripción:", vehicle.description.strip()])
+
+    lines.extend(["", f"Ficha web: {build_public_vehicle_url(vehicle.id, request)}"])
+    return "\n".join(lines)
+
+
+def find_or_create_outbound_session(
+    db: Session,
+    company_id: int,
+    to_number: str,
+    phone_number_id: str,
+):
+    normalized_number = normalize_phone(to_number)
+    variants = phone_variants_for_lookup(normalized_number) or [to_number]
+
+    session = db.query(models.ChannelChatSession).filter(
+        models.ChannelChatSession.company_id == company_id,
+        models.ChannelChatSession.source == "whatsapp",
+        models.ChannelChatSession.external_user_id.in_(variants)
+    ).first()
+
+    lead = db.query(models.Lead).filter(
+        models.Lead.company_id == company_id,
+        models.Lead.phone.in_(variants)
+    ).order_by(models.Lead.created_at.desc()).first()
+
+    now = datetime.datetime.utcnow()
+
+    if session and session.conversation_id:
+        conversation = db.query(models.Conversation).filter(
+            models.Conversation.id == session.conversation_id
+        ).first()
+        if conversation:
+            if lead and conversation.lead_id != lead.id:
+                conversation.lead_id = lead.id
+            if lead and session.lead_id != lead.id:
+                session.lead_id = lead.id
+            session.recipient_id = phone_number_id
+            session.last_message_at = now
+            conversation.last_message_at = now
+            db.commit()
+            return session, conversation
+
+    conversation = models.Conversation(
+        company_id=company_id,
+        lead_id=lead.id if lead else None,
+        last_message_at=now,
+    )
+    db.add(conversation)
+    db.flush()
+
+    if not session:
+        session = models.ChannelChatSession(
+            company_id=company_id,
+            source="whatsapp",
+            external_user_id=normalized_number or to_number,
+            recipient_id=phone_number_id,
+            lead_id=lead.id if lead else None,
+            conversation_id=conversation.id,
+            last_message_at=now,
+        )
+        db.add(session)
+    else:
+        session.recipient_id = phone_number_id
+        session.lead_id = lead.id if lead else session.lead_id
+        session.conversation_id = conversation.id
+        session.last_message_at = now
+
+    db.commit()
+    db.refresh(session)
+    db.refresh(conversation)
+    return session, conversation
 
 # --- WEBHOOK VERIFICATION (GET) ---
 @router.get("/webhook", include_in_schema=False, response_class=PlainTextResponse)
@@ -343,3 +524,93 @@ def send_message(
     db.refresh(new_msg)
     
     return new_msg
+
+
+@router.post("/send-vehicle", response_model=schemas_whatsapp.VehicleShareResponse)
+def send_vehicle_to_whatsapp(
+    payload: schemas_whatsapp.VehicleShareRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if not current_user.company_id:
+        raise HTTPException(status_code=400, detail="El usuario no tiene compañía asignada")
+
+    normalized_number = normalize_phone(payload.to_number)
+    if not normalized_number:
+        raise HTTPException(status_code=400, detail="Debes ingresar un número de WhatsApp válido")
+
+    vehicle = db.query(models.Vehicle).filter(
+        models.Vehicle.id == payload.vehicle_id,
+        models.Vehicle.company_id == current_user.company_id
+    ).first()
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="Vehículo no encontrado")
+
+    token, phone_number_id = get_whatsapp_credentials(db, current_user.company_id)
+    _, conversation = find_or_create_outbound_session(
+        db=db,
+        company_id=current_user.company_id,
+        to_number=normalized_number,
+        phone_number_id=phone_number_id,
+    )
+
+    message_body = build_vehicle_share_message(vehicle, request, payload.custom_message)
+    text_message_id = send_whatsapp_payload(
+        token,
+        phone_number_id,
+        {
+            "messaging_product": "whatsapp",
+            "to": normalized_number.replace("+", ""),
+            "type": "text",
+            "text": {"body": message_body},
+        }
+    )
+    store_conversation_message(
+        db=db,
+        conversation=conversation,
+        sender_type="user",
+        content=message_body,
+        message_type="text",
+        external_message_id=text_message_id,
+        status="sent",
+    )
+
+    image_message_ids: List[str] = []
+    photo_list = vehicle.photos if isinstance(vehicle.photos, list) else []
+    for photo in photo_list:
+        media_url = normalize_media_url(photo, request)
+        if not media_url:
+            continue
+
+        image_message_id = send_whatsapp_payload(
+            token,
+            phone_number_id,
+            {
+                "messaging_product": "whatsapp",
+                "to": normalized_number.replace("+", ""),
+                "type": "image",
+                "image": {"link": media_url},
+            }
+        )
+        image_message_ids.append(image_message_id)
+        store_conversation_message(
+            db=db,
+            conversation=conversation,
+            sender_type="user",
+            content=f"Foto de {(vehicle.make or '').strip()} {(vehicle.model or '').strip()}".strip(),
+            message_type="image",
+            media_url=media_url,
+            external_message_id=image_message_id,
+            status="sent",
+        )
+
+    conversation.last_message_at = datetime.datetime.utcnow()
+    db.commit()
+
+    return schemas_whatsapp.VehicleShareResponse(
+        to_number=normalized_number,
+        sent_messages=1 + len(image_message_ids),
+        text_message_id=text_message_id,
+        image_message_ids=image_message_ids,
+    )

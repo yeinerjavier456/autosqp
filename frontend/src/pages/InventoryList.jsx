@@ -3,7 +3,6 @@ import axios from 'axios';
 import { Link } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { useAuth } from '../context/AuthContext';
-import { normalizeMediaUrl } from '../utils/media';
 
 const InventoryList = () => {
     const { user } = useAuth();
@@ -242,48 +241,76 @@ const InventoryList = () => {
         return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(price);
     };
 
-const getPublicVehicleUrl = (vehicleId) => {
-  const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
-  const appPrefix = baseUrl && baseUrl !== '/' ? baseUrl : '';
-  return `${window.location.origin}${appPrefix}/autos/${vehicleId}`;
-};
+    const handleShareWhatsApp = async (vehicle) => {
+        const { value: formValues } = await Swal.fire({
+            title: 'Enviar vehículo por WhatsApp',
+            html: `
+                <div class="space-y-3 text-left">
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Número destino</label>
+                        <input id="whatsapp-destination-number" type="text" class="swal2-input" placeholder="Ej: 3212959493 o +573212959493" />
+                        <p class="mt-1 text-xs text-slate-500">Se enviará usando el número de WhatsApp configurado para tu empresa.</p>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Mensaje inicial opcional</label>
+                        <textarea id="whatsapp-custom-message" class="swal2-textarea" placeholder="Ej: Hola, te comparto este vehículo disponible."></textarea>
+                    </div>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Enviar',
+            cancelButtonText: 'Cancelar',
+            focusConfirm: false,
+            preConfirm: () => {
+                const toNumber = (document.getElementById('whatsapp-destination-number')?.value || '').trim();
+                const customMessage = (document.getElementById('whatsapp-custom-message')?.value || '').trim();
 
-    const buildWhatsAppVehicleMessage = (vehicle) => {
-        const photoLinks = Array.isArray(vehicle?.photos)
-            ? vehicle.photos.map((photo) => normalizeMediaUrl(photo)).filter(Boolean)
-            : [];
-        const maskedPlate = vehicle?.plate ? `***${String(vehicle.plate).slice(-3).toUpperCase()}` : 'No especificada';
-        const infoLines = [
-            'Hola, te comparto este vehículo disponible en AutosQP:',
-            '',
-            `*${vehicle?.make || ''} ${vehicle?.model || ''}*`.trim(),
-            `Precio: ${formatPrice(vehicle?.price || 0)}`,
-            `Año: ${vehicle?.year || 'No especificado'}`,
-            `Kilometraje: ${vehicle?.mileage ? `${Number(vehicle.mileage).toLocaleString('es-CO')} km` : 'No especificado'}`,
-            `Color: ${vehicle?.color || 'No especificado'}`,
-            `Placa: ${maskedPlate}`,
-        ];
+                if (!toNumber) {
+                    Swal.showValidationMessage('Debes ingresar el número de destino');
+                    return false;
+                }
 
-        if (vehicle?.description) {
-            infoLines.push('', 'Descripción:', vehicle.description);
+                return {
+                    to_number: toNumber,
+                    custom_message: customMessage || null,
+                };
+            },
+            customClass: {
+                confirmButton: 'bg-green-600 text-white px-4 py-2 rounded-lg ml-2',
+                cancelButton: 'bg-gray-400 text-white px-4 py-2 rounded-lg'
+            },
+            buttonsStyling: false
+        });
+
+        if (!formValues) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post(
+                'https://autosqp.co/api/whatsapp/send-vehicle',
+                {
+                    vehicle_id: vehicle.id,
+                    to_number: formValues.to_number,
+                    custom_message: formValues.custom_message,
+                },
+                {
+                    headers: { Authorization: `Bearer ${token}` }
+                }
+            );
+
+            Swal.fire(
+                'Enviado',
+                `Se enviaron ${response.data.sent_messages} mensaje(s) al número ${response.data.to_number}.`,
+                'success'
+            );
+        } catch (error) {
+            console.error('Error enviando vehículo por WhatsApp', error);
+            Swal.fire(
+                'Error',
+                error?.response?.data?.detail || 'No se pudo enviar la información del vehículo por WhatsApp.',
+                'error'
+            );
         }
-
-        infoLines.push('', `Ficha web: ${getPublicVehicleUrl(vehicle.id)}`);
-
-        if (photoLinks.length > 0) {
-            infoLines.push('', 'Fotos del vehículo:');
-            photoLinks.forEach((photo, index) => {
-                infoLines.push(`${index + 1}. ${photo}`);
-            });
-        }
-
-        return infoLines.join('\n');
-    };
-
-    const handleShareWhatsApp = (vehicle) => {
-        const message = buildWhatsAppVehicleMessage(vehicle);
-        const shareUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-        window.open(shareUrl, '_blank', 'noopener,noreferrer');
     };
 
     const totalPages = Math.ceil(total / limit);
