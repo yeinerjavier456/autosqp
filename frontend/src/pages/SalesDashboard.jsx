@@ -2,7 +2,21 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 
+const getLastMonthRange = () => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - 30);
+
+    const formatDate = (date) => date.toISOString().slice(0, 10);
+
+    return {
+        start: formatDate(start),
+        end: formatDate(end)
+    };
+};
+
 const SalesDashboard = () => {
+    const defaultRange = getLastMonthRange();
     const [stats, setStats] = useState({
         total_revenue: 0,
         total_commissions: 0,
@@ -31,8 +45,9 @@ const SalesDashboard = () => {
     const [receiptSearch, setReceiptSearch] = useState('');
     const [receiptCategory, setReceiptCategory] = useState('');
     const [receiptMovementType, setReceiptMovementType] = useState('');
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
+    const [periodPreset, setPeriodPreset] = useState('last_month');
+    const [startDate, setStartDate] = useState(defaultRange.start);
+    const [endDate, setEndDate] = useState(defaultRange.end);
     const [creatingReceipt, setCreatingReceipt] = useState(false);
     const [receiptForm, setReceiptForm] = useState({
         sale_id: '',
@@ -55,10 +70,12 @@ const SalesDashboard = () => {
         try {
             const token = localStorage.getItem('token');
             const headers = { Authorization: `Bearer ${token}` };
-            const rangeParams = {
-                start_date: startDate || undefined,
-                end_date: endDate || undefined
-            };
+            const rangeParams = periodPreset === 'all'
+                ? {}
+                : {
+                    start_date: startDate || undefined,
+                    end_date: endDate || undefined
+                };
 
             const [statsRes, salesRes, approvedSalesRes, receiptsRes] = await Promise.all([
                 axios.get('https://autosqp.co/api/finance/stats', { headers, params: rangeParams }),
@@ -417,7 +434,7 @@ const SalesDashboard = () => {
         return <div className="p-10 text-center">Cargando finanzas...</div>;
     }
 
-    const hasDateFilter = Boolean(startDate && endDate);
+    const hasDateFilter = periodPreset !== 'all' && Boolean(startDate && endDate);
 
     return (
         <div className="animate-fade-in space-y-8">
@@ -427,14 +444,41 @@ const SalesDashboard = () => {
             </header>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)_auto]">
+                    <div>
+                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Periodo</label>
+                        <select
+                            value={periodPreset}
+                            onChange={(e) => {
+                                const nextPreset = e.target.value;
+                                setPeriodPreset(nextPreset);
+
+                                if (nextPreset === 'last_month') {
+                                    const range = getLastMonthRange();
+                                    setStartDate(range.start);
+                                    setEndDate(range.end);
+                                    return;
+                                }
+
+                                if (nextPreset === 'all') {
+                                    return;
+                                }
+                            }}
+                            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="last_month">Último mes</option>
+                            <option value="all">Todo</option>
+                            <option value="custom">Personalizado</option>
+                        </select>
+                    </div>
                     <div>
                         <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Fecha inicial</label>
                         <input
                             type="date"
                             value={startDate}
+                            disabled={periodPreset === 'all'}
                             onChange={(e) => setStartDate(e.target.value)}
-                            className="w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
+                            className="w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                         />
                     </div>
                     <div>
@@ -442,21 +486,24 @@ const SalesDashboard = () => {
                         <input
                             type="date"
                             value={endDate}
+                            disabled={periodPreset === 'all'}
                             min={startDate || undefined}
                             onChange={(e) => setEndDate(e.target.value)}
-                            className="w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
+                            className="w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                         />
                     </div>
                     <div className="flex items-end">
                         <button
                             type="button"
                             onClick={() => {
-                                setStartDate('');
-                                setEndDate('');
+                                const range = getLastMonthRange();
+                                setPeriodPreset('last_month');
+                                setStartDate(range.start);
+                                setEndDate(range.end);
                             }}
                             className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 md:w-auto"
                         >
-                            Limpiar fechas
+                            Restablecer
                         </button>
                     </div>
                 </div>
