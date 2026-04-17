@@ -76,7 +76,7 @@ const AuthenticatedAppShell = () => (
 function App() {
   return (
     <AuthProvider>
-      <Router>
+      <Router basename="/crm">
         <Routes>
           {/* Public Routes */}
           <Route path="/autos" element={<PublicInventory />} />
