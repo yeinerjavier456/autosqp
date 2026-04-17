@@ -80,7 +80,7 @@ const CreditBoard = () => {
     const fetchCredits = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get(`${API_BASE_URL}/credits`, {
+            const response = await axios.get(`${API_BASE_URL}/credits/`, {
                 headers: { Authorization: `Bearer ${token}` },
                 params: { limit: 500 }
             });
@@ -194,7 +194,7 @@ const CreditBoard = () => {
                 status: 'pending'
             };
 
-            const response = await axios.post(`${API_BASE_URL}/credits`, payload, {
+            const response = await axios.post(`${API_BASE_URL}/credits/`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 

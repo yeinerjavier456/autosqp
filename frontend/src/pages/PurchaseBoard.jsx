@@ -124,7 +124,7 @@ const PurchaseBoard = () => {
                 setLoading(false);
                 return;
             }
-            const response = await axios.get(`${API_BASE_URL}/purchases`, {
+            const response = await axios.get(`${API_BASE_URL}/purchases/`, {
                 headers: { Authorization: `Bearer ${token}` },
                 params: { limit: 500 }
             });
