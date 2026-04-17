@@ -88,9 +88,18 @@ const PublicInventory = () => {
             <header className="bg-slate-900 shadow-lg sticky top-0 z-50 border-b border-slate-800">
                 <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
-                        <Link to="/autos" className="text-2xl font-extrabold text-white tracking-tight">
-                            <span className="text-blue-500">Autos</span>QP
-                        </Link>
+                        <a
+                            href="https://autosqp.com"
+                            title="AutosQP"
+                            className="flex items-center rounded-lg transition-opacity hover:opacity-90"
+                        >
+                            <img
+                                src="https://autosqp.com/wp-content/uploads/2025/12/Horizontal-Base_-v3-1.03.18-p.m.png"
+                                alt="AutosQP"
+                                className="h-11 w-auto object-contain md:h-12"
+                                style={{ aspectRatio: '512 / 300' }}
+                            />
+                        </a>
                     </div>
 
                     <div className="flex-1 max-w-2xl hidden md:block">
