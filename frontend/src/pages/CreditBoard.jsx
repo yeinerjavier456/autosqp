@@ -6,6 +6,7 @@ import Swal from 'sweetalert2';
 import { useNavigate } from 'react-router-dom';
 
 const VALID_CREDIT_STATUSES = ['pending', 'in_review', 'approved', 'rejected', 'completed'];
+const API_BASE_URL = `${window.location.origin}/crm/api`;
 
 const normalizeCreditItems = (responseData) => {
     if (Array.isArray(responseData?.items)) return responseData.items;
@@ -79,7 +80,7 @@ const CreditBoard = () => {
     const fetchCredits = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('/credits', {
+            const response = await axios.get(`${API_BASE_URL}/credits`, {
                 headers: { Authorization: `Bearer ${token}` },
                 params: { limit: 500 }
             });
@@ -87,7 +88,7 @@ const CreditBoard = () => {
 
             if (items.length === 0) {
                 const syncResponse = await axios.post(
-                    '/credits/sync',
+                    `${API_BASE_URL}/credits/sync`,
                     {},
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
@@ -110,7 +111,7 @@ const CreditBoard = () => {
     const fetchCreditUsers = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('/users/', {
+            const response = await axios.get(`${API_BASE_URL}/users/`, {
                 headers: { Authorization: `Bearer ${token}` },
                 params: { limit: 500 }
             });
@@ -125,10 +126,10 @@ const CreditBoard = () => {
         try {
             const token = localStorage.getItem('token');
             const [notesResponse, filesResponse] = await Promise.all([
-                axios.get(`/leads/${leadId}/notes`, {
+                axios.get(`${API_BASE_URL}/leads/${leadId}/notes`, {
                     headers: { Authorization: `Bearer ${token}` }
                 }),
-                axios.get(`/leads/${leadId}/files`, {
+                axios.get(`${API_BASE_URL}/leads/${leadId}/files`, {
                     headers: { Authorization: `Bearer ${token}` }
                 })
             ]);
@@ -164,7 +165,7 @@ const CreditBoard = () => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.put(`/credits/${creditId}`,
+            await axios.put(`${API_BASE_URL}/credits/${creditId}`,
                 { status: newStatus },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -193,7 +194,7 @@ const CreditBoard = () => {
                 status: 'pending'
             };
 
-            const response = await axios.post('/credits', payload, {
+            const response = await axios.post(`${API_BASE_URL}/credits`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -220,7 +221,7 @@ const CreditBoard = () => {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.post(
-                '/credits/sync',
+                `${API_BASE_URL}/credits/sync`,
                 {},
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -258,7 +259,7 @@ const CreditBoard = () => {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.post(
-                '/gmail/credits/analyze',
+                `${API_BASE_URL}/gmail/credits/analyze`,
                 {},
                 {
                     headers: { Authorization: `Bearer ${token}` },
@@ -302,7 +303,7 @@ const CreditBoard = () => {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.post(
-                `/credits/${selectedCredit.id}/notes`,
+                `${API_BASE_URL}/credits/${selectedCredit.id}/notes`,
                 { content: creditNoteInput.trim() },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -340,7 +341,7 @@ const CreditBoard = () => {
                 const formData = new FormData();
                 formData.append('file', file);
                 const response = await axios.post(
-                `/credits/${selectedCredit.id}/files`,
+                    `${API_BASE_URL}/credits/${selectedCredit.id}/files`,
                     formData,
                     {
                         headers: {
