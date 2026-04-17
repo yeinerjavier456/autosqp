@@ -86,6 +86,8 @@ def delete_rule(
     if not db_rule:
         raise HTTPException(status_code=404, detail="Rule not found")
     
+    db.query(models.SentAlertLog).filter(models.SentAlertLog.rule_id == rule_id).delete(synchronize_session=False)
+
     db.delete(db_rule)
     db.commit()
     return {"message": "Rule deleted"}
