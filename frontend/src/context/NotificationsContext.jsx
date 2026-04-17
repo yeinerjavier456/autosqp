@@ -163,7 +163,7 @@ export const NotificationsProvider = ({ children }) => {
     useEffect(() => {
         if (user) {
             fetchNotifications();
-            const interval = setInterval(fetchNotifications, 15000); // Poll every 15 seconds
+            // const interval = setInterval(fetchNotifications, 15000); // Poll every 15 seconds
             return () => clearInterval(interval);
         }
     }, [user]);
