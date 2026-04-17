@@ -1,15 +1,15 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { useAuth } from '../context/AuthContext';
+import { normalizeMediaUrl } from '../utils/media';
 
 const InventoryList = () => {
     const { user } = useAuth();
     const roleName = user?.role?.name || (typeof user?.role === 'string' ? user?.role : '');
     const isCompanyAdmin = roleName === 'admin' || (roleName === 'super_admin' && !!user?.company_id);
     const canEditInventory = isCompanyAdmin || roleName === 'inventario';
-
     const [vehicles, setVehicles] = useState([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
