@@ -79,7 +79,7 @@ const CreditBoard = () => {
     const fetchCredits = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('https://autosqp.co/api/credits', {
+            const response = await axios.get('/credits', {
                 headers: { Authorization: `Bearer ${token}` },
                 params: { limit: 500 }
             });
@@ -87,7 +87,7 @@ const CreditBoard = () => {
 
             if (items.length === 0) {
                 const syncResponse = await axios.post(
-                    'https://autosqp.co/api/credits/sync',
+                    '/credits/sync',
                     {},
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
@@ -110,7 +110,7 @@ const CreditBoard = () => {
     const fetchCreditUsers = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('https://autosqp.co/api/users/', {
+            const response = await axios.get('/users/', {
                 headers: { Authorization: `Bearer ${token}` },
                 params: { limit: 500 }
             });
@@ -125,10 +125,10 @@ const CreditBoard = () => {
         try {
             const token = localStorage.getItem('token');
             const [notesResponse, filesResponse] = await Promise.all([
-                axios.get(`https://autosqp.co/api/leads/${leadId}/notes`, {
+                axios.get(`/leads/${leadId}/notes`, {
                     headers: { Authorization: `Bearer ${token}` }
                 }),
-                axios.get(`https://autosqp.co/api/leads/${leadId}/files`, {
+                axios.get(`/leads/${leadId}/files`, {
                     headers: { Authorization: `Bearer ${token}` }
                 })
             ]);
@@ -164,7 +164,7 @@ const CreditBoard = () => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.put(`https://autosqp.co/api/credits/${creditId}`,
+            await axios.put(`/credits/${creditId}`,
                 { status: newStatus },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -193,7 +193,7 @@ const CreditBoard = () => {
                 status: 'pending'
             };
 
-            const response = await axios.post('https://autosqp.co/api/credits', payload, {
+            const response = await axios.post('/credits', payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -220,7 +220,7 @@ const CreditBoard = () => {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.post(
-                'https://autosqp.co/api/credits/sync',
+                '/credits/sync',
                 {},
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -258,7 +258,7 @@ const CreditBoard = () => {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.post(
-                'https://autosqp.co/api/gmail/credits/analyze',
+                '/gmail/credits/analyze',
                 {},
                 {
                     headers: { Authorization: `Bearer ${token}` },
@@ -302,7 +302,7 @@ const CreditBoard = () => {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.post(
-                `https://autosqp.co/api/credits/${selectedCredit.id}/notes`,
+                `/credits/${selectedCredit.id}/notes`,
                 { content: creditNoteInput.trim() },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -340,7 +340,7 @@ const CreditBoard = () => {
                 const formData = new FormData();
                 formData.append('file', file);
                 const response = await axios.post(
-                    `https://autosqp.co/api/credits/${selectedCredit.id}/files`,
+                `/credits/${selectedCredit.id}/files`,
                     formData,
                     {
                         headers: {

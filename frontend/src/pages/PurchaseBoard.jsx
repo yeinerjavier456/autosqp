@@ -123,13 +123,13 @@ const PurchaseBoard = () => {
                 setLoading(false);
                 return;
             }
-            const response = await axios.get('https://autosqp.co/api/purchases', {
+            const response = await axios.get('/purchases', {
                 headers: { Authorization: `Bearer ${token}` },
                 params: { limit: 500 }
             });
             let items = normalizePurchaseItems(response.data);
             if (items.length === 0) {
-                const syncResponse = await axios.post('https://autosqp.co/api/purchases/sync', {}, {
+                const syncResponse = await axios.post('/purchases/sync', {}, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 items = normalizePurchaseItems(syncResponse.data);
@@ -155,7 +155,7 @@ const PurchaseBoard = () => {
                 setPurchaseUsers([]);
                 return;
             }
-            const response = await axios.get('https://autosqp.co/api/users/', {
+            const response = await axios.get('/users/', {
                 headers: { Authorization: `Bearer ${token}` },
                 params: { limit: 500 }
             });
@@ -170,9 +170,9 @@ const PurchaseBoard = () => {
         try {
             const token = localStorage.getItem('token');
             const [notesResponse, filesResponse, optionsResponse] = await Promise.all([
-                axios.get(`https://autosqp.co/api/leads/${leadId}/notes`, { headers: { Authorization: `Bearer ${token}` } }),
-                axios.get(`https://autosqp.co/api/leads/${leadId}/files`, { headers: { Authorization: `Bearer ${token}` } }),
-                axios.get(`https://autosqp.co/api/purchases/${selectedPurchase.id}/options`, { headers: { Authorization: `Bearer ${token}` } })
+                axios.get(`/leads/${leadId}/notes`, { headers: { Authorization: `Bearer ${token}` } }),
+                axios.get(`/leads/${leadId}/files`, { headers: { Authorization: `Bearer ${token}` } }),
+                axios.get(`/purchases/${selectedPurchase.id}/options`, { headers: { Authorization: `Bearer ${token}` } })
             ]);
             setPurchaseLeadNotes(Array.isArray(notesResponse.data) ? notesResponse.data : []);
             setPurchaseLeadFiles(Array.isArray(filesResponse.data) ? filesResponse.data : []);
@@ -196,7 +196,7 @@ const PurchaseBoard = () => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.put(`https://autosqp.co/api/purchases/${purchaseId}`, { status: newStatus }, {
+            await axios.put(`/purchases/${purchaseId}`, { status: newStatus }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (selectedPurchase?.id === purchaseId) {
@@ -212,7 +212,7 @@ const PurchaseBoard = () => {
     const handleSyncPurchases = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.post('https://autosqp.co/api/purchases/sync', {}, {
+            const response = await axios.post('/purchases/sync', {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const items = normalizePurchaseItems(response.data);
@@ -247,7 +247,7 @@ const PurchaseBoard = () => {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.post(
-                'https://autosqp.co/api/purchases/manual',
+                    '/purchases/manual',
                 {
                     client_name: manualPurchaseForm.client_name.trim(),
                     phone: manualPurchaseForm.phone.trim(),
@@ -287,7 +287,7 @@ const PurchaseBoard = () => {
         setSavingPurchaseNote(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.post(`https://autosqp.co/api/purchases/${selectedPurchase.id}/notes`, {
+            const response = await axios.post(`/purchases/${selectedPurchase.id}/notes`, {
                 content: purchaseNoteInput.trim()
             }, { headers: { Authorization: `Bearer ${token}` } });
             const updatedPurchase = response.data?.purchase;
@@ -320,7 +320,7 @@ const PurchaseBoard = () => {
             for (const file of purchaseSelectedFiles) {
                 const formData = new FormData();
                 formData.append('file', file);
-                await axios.post(`https://autosqp.co/api/purchases/${selectedPurchase.id}/files`, formData, {
+            await axios.post(`/purchases/${selectedPurchase.id}/files`, formData, {
                     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' }
                 });
             }
@@ -355,7 +355,7 @@ const PurchaseBoard = () => {
             optionPhotos.forEach((photo) => formData.append('photos', photo));
 
             const response = await axios.post(
-                `https://autosqp.co/api/purchases/${selectedPurchase.id}/options`,
+                `/purchases/${selectedPurchase.id}/options`,
                 formData,
                 { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' } }
             );
