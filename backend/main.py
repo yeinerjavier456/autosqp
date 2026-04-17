@@ -2944,15 +2944,15 @@ def read_advisor_stats(
     top_managers = sorted(
         manager_activity_map.values(),
         key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
-    )[:5]
+    )
     top_status_movers = sorted(
         status_mover_map.values(),
         key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
-    )[:5]
+    )
     ally_top_managers = sorted(
         ally_manager_activity_map.values(),
         key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
-    )[:5]
+    )
 
     credit_status_distribution = {}
     credit_total = 0

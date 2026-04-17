@@ -535,10 +535,14 @@ const AdvisorDashboard = () => {
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="mb-4">
                     <h3 className="text-lg font-bold text-slate-800">{isAllyDashboard ? 'Quién asigna leads a aliados' : 'Ranking de gestión por usuario'}</h3>
-                    <p className="text-sm text-slate-500">{isAllyDashboard ? 'Gestión registrada sobre leads del tablero de aliados dentro del rango seleccionado.' : 'Acciones registradas en historial dentro del rango seleccionado.'}</p>
+                    <p className="text-sm text-slate-500">
+                        {isAllyDashboard
+                            ? 'Gestión registrada sobre leads del tablero de aliados dentro del rango seleccionado.'
+                            : 'Acciones registradas en historial dentro del rango seleccionado para todos los usuarios que gestionaron leads.'}
+                    </p>
                 </div>
                 {currentRanking.length > 0 ? (
-                    <div className="space-y-3">
+                    <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
                         {currentRanking.map((manager, index) => (
                             <div key={`${manager.user_id}-${index}`} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
                                 <div>
