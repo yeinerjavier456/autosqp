@@ -505,33 +505,6 @@ const AdvisorDashboard = () => {
                 </div>
             )}
 
-            {!isAllyDashboard && hasAllySection && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <div className="mb-4">
-                        <h3 className="text-lg font-bold text-slate-800">Gestion de aliados</h3>
-                        <p className="text-sm text-slate-500">Estados actuales de la cola donde participan aliados en la empresa.</p>
-                    </div>
-                    <div className="h-72">
-                        {allyEntries.length > 0 ? (
-                            <Bar
-                                data={allyData}
-                                options={{
-                                    indexAxis: 'y',
-                                    maintainAspectRatio: false,
-                                    responsive: true,
-                                    plugins: { legend: { display: false } },
-                                    scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
-                                }}
-                            />
-                        ) : (
-                            <div className="flex h-full items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
-                                Aun no hay actividad de aliados visible.
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="mb-4">
                     <h3 className="text-lg font-bold text-slate-800">{isAllyDashboard ? 'Quién asigna leads a aliados' : 'Ranking de gestión por usuario'}</h3>
