@@ -438,16 +438,6 @@ const AdvisorDashboard = () => {
 
             {!isAllyDashboard && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {hasAllySection && (
-                    <DashboardMetric
-                        title="Gestion de aliados"
-                        value={stats.ally_total}
-                        helper="Leads donde un aliado esta asignado o en supervision."
-                        onClick={() => navigate('/aliado/dashboard')}
-                        className="border-cyan-200 bg-cyan-50 text-cyan-900"
-                        helperClassName="text-cyan-700"
-                    />
-                )}
                 {hasCreditsSection && (
                     <DashboardMetric
                         title="Solicitudes de credito"
