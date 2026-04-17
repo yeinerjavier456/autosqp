@@ -621,6 +621,8 @@ class RoleDashboardStats(BaseModel):
     ally_unread_replies_count: int
     status_distribution: Dict[str, int]
     ally_status_distribution: Dict[str, int]
+    source_distribution: Dict[str, int]
+    ally_source_distribution: Dict[str, int]
     recent_leads_by_day: Dict[str, int]
     ally_recent_leads_by_day: Dict[str, int]
     credit_total: int

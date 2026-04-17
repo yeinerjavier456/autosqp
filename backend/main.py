@@ -2791,6 +2791,8 @@ def read_advisor_stats(
 
     status_distribution = {}
     ally_status_distribution = {}
+    source_distribution = {}
+    ally_source_distribution = {}
     unread_replies_count = 0
     ally_unread_replies_count = 0
     active_pipeline_count = 0
@@ -2824,6 +2826,8 @@ def read_advisor_stats(
             ally_total += 1
             ally_lead_ids.append(lead.id)
             ally_status_distribution[status_key] = ally_status_distribution.get(status_key, 0) + 1
+            ally_source_key = (lead.source or "sin_fuente").strip().lower() or "sin_fuente"
+            ally_source_distribution[ally_source_key] = ally_source_distribution.get(ally_source_key, 0) + 1
             if status_key == "new":
                 ally_leads_new += 1
             if status_key == "sold":
@@ -2842,6 +2846,8 @@ def read_advisor_stats(
 
         autos_lead_ids.append(lead.id)
         status_distribution[status_key] = status_distribution.get(status_key, 0) + 1
+        source_key = (lead.source or "sin_fuente").strip().lower() or "sin_fuente"
+        source_distribution[source_key] = source_distribution.get(source_key, 0) + 1
         if status_key not in {"sold", "lost"}:
             active_pipeline_count += 1
         if lead.has_unread_reply:
@@ -3036,6 +3042,8 @@ def read_advisor_stats(
         "ally_unread_replies_count": ally_unread_replies_count,
         "status_distribution": status_distribution,
         "ally_status_distribution": ally_status_distribution,
+        "source_distribution": source_distribution,
+        "ally_source_distribution": ally_source_distribution,
         "recent_leads_by_day": recent_leads_by_day,
         "ally_recent_leads_by_day": ally_recent_leads_by_day,
         "credit_total": credit_total,

@@ -39,6 +39,20 @@ const LEAD_STATUS_LABELS = {
     ally_managed: 'Aliados'
 };
 
+const LEAD_SOURCE_LABELS = {
+    web: 'Web',
+    whatsapp: 'WhatsApp',
+    facebook: 'Facebook',
+    instagram: 'Instagram',
+    tiktok: 'TikTok',
+    showroom: 'Showroom',
+    ally: 'Aliado',
+    aliado: 'Aliado',
+    referred: 'Referido',
+    manual: 'Manual',
+    sin_fuente: 'Sin fuente'
+};
+
 const CREDIT_STATUS_LABELS = {
     pending: 'Solicitud recibida',
     in_review: 'En estudio',
@@ -170,6 +184,12 @@ const AdvisorDashboard = () => {
     const allyEntries = Object.entries(stats.ally_status_distribution || {})
         .map(([key, value]) => [formatLabel(key, LEAD_STATUS_LABELS), value])
         .sort((a, b) => b[1] - a[1]);
+    const sourceEntries = Object.entries(stats.source_distribution || {})
+        .map(([key, value]) => [formatLabel(key, LEAD_SOURCE_LABELS), value])
+        .sort((a, b) => b[1] - a[1]);
+    const allySourceEntries = Object.entries(stats.ally_source_distribution || {})
+        .map(([key, value]) => [formatLabel(key, LEAD_SOURCE_LABELS), value])
+        .sort((a, b) => b[1] - a[1]);
     const creditEntries = Object.entries(stats.credit_status_distribution || {})
         .map(([key, value]) => [formatLabel(key, CREDIT_STATUS_LABELS), value])
         .sort((a, b) => b[1] - a[1]);
@@ -213,7 +233,6 @@ const AdvisorDashboard = () => {
         ],
     };
     const allyData = buildBarData(allyEntries, 'Aliados', '#14b8a6');
-
     const creditData = buildBarData(creditEntries, 'Creditos', '#7c3aed');
     const purchaseData = buildBarData(purchaseEntries, 'Compras', '#db2777');
     const inventoryData = buildBarData(inventoryEntries, 'Inventario', '#2563eb');
@@ -251,6 +270,22 @@ const AdvisorDashboard = () => {
     const topManager = isAllyDashboard
         ? (allyTopManagers[0] || null)
         : (topStatusMovers[0] || topManagers[0] || null);
+    const currentSourceEntries = isAllyDashboard ? allySourceEntries : sourceEntries;
+    const leadSourceData = {
+        labels: currentSourceEntries.map(([label]) => label),
+        datasets: [
+            {
+                label: 'Fuentes',
+                data: currentSourceEntries.map(([, value]) => value),
+                backgroundColor: ['#2563eb', '#16a34a', '#f97316', '#ec4899', '#0f766e', '#8b5cf6', '#f59e0b', '#64748b'],
+                borderWidth: 0,
+            },
+        ],
+    };
+    const currentSourceTitle = isAllyDashboard ? 'Fuentes de leads de aliados' : 'Fuentes de leads';
+    const currentSourceDescription = isAllyDashboard
+        ? 'Origen de los leads donde participan aliados en el rango seleccionado.'
+        : 'Origen de los leads de AutosQP dentro del rango seleccionado.';
     const currentTrendData = isAllyDashboard
         ? {
             labels: Object.entries(stats.ally_recent_leads_by_day || {}).map(([label]) => label),
@@ -501,6 +536,30 @@ const AdvisorDashboard = () => {
                                 />
                             )}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {(isAllyDashboard ? hasAllySection : hasLeadsSection) && (
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">{currentSourceTitle}</h3>
+                        <p className="text-sm text-slate-500">{currentSourceDescription}</p>
+                    </div>
+                    <div className="h-80">
+                        {currentSourceEntries.length > 0 ? (
+                            <Doughnut
+                                data={leadSourceData}
+                                options={{
+                                    maintainAspectRatio: false,
+                                    plugins: { legend: { position: 'bottom' } },
+                                }}
+                            />
+                        ) : (
+                            <div className="flex h-full items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
+                                Aun no hay fuentes de leads registradas en este rango.
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
