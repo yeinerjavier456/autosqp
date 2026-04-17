@@ -410,7 +410,7 @@ const AdvisorDashboard = () => {
                 />
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <DashboardMetric
                     title="Nuevos del rango"
                     value={dashboardNewLeadsInRange}
@@ -418,14 +418,6 @@ const AdvisorDashboard = () => {
                     onClick={(isAllyDashboard ? hasAllySection : hasLeadsSection) ? () => navigate(isAllyDashboard ? '/aliado/dashboard' : leadBoardPath) : undefined}
                     className="border-blue-200 bg-blue-50 text-blue-900"
                     helperClassName="text-blue-700"
-                />
-                <DashboardMetric
-                    title="Cambios de estado"
-                    value={dashboardStatusChanges}
-                    helper="Movimientos de estado registrados en el periodo."
-                    onClick={(isAllyDashboard ? hasAllySection : hasLeadsSection) ? () => navigate(isAllyDashboard ? '/aliado/dashboard' : leadBoardPath) : undefined}
-                    className="border-indigo-200 bg-indigo-50 text-indigo-900"
-                    helperClassName="text-indigo-700"
                 />
                 <DashboardMetric
                     title="Usuario que más gestiona"
