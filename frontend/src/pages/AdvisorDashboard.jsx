@@ -102,6 +102,19 @@ const getLast7DaysRange = () => {
     };
 };
 
+const getCurrentMonthRange = () => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    const formatDate = (date) => date.toISOString().slice(0, 10);
+
+    return {
+        start: formatDate(start),
+        end: formatDate(end)
+    };
+};
+
 const buildBarData = (entries, label, color) => ({
     labels: entries.map(([entryLabel]) => entryLabel),
     datasets: [
@@ -140,6 +153,7 @@ const AdvisorDashboard = () => {
     const [stats, setStats] = useState(null);
     const [dashboardView, setDashboardView] = useState('autosqp');
     const defaultRange = getLast7DaysRange();
+    const [rangePreset, setRangePreset] = useState('last7');
     const [startDate, setStartDate] = useState(defaultRange.start);
     const [endDate, setEndDate] = useState(defaultRange.end);
 
@@ -158,12 +172,15 @@ const AdvisorDashboard = () => {
         const fetchStats = async () => {
             try {
                 const token = localStorage.getItem('token');
-                const response = await axios.get('https://autosqp.co/api/stats/advisor', {
-                    headers: { Authorization: `Bearer ${token}` },
-                    params: {
+                const params = rangePreset === 'all'
+                    ? { period: 'all' }
+                    : {
                         start_date: startDate,
                         end_date: endDate
-                    }
+                    };
+                const response = await axios.get('https://autosqp.co/api/stats/advisor', {
+                    headers: { Authorization: `Bearer ${token}` },
+                    params
                 });
                 setStats(response.data);
             } catch (error) {
@@ -171,8 +188,8 @@ const AdvisorDashboard = () => {
             }
         };
 
-        if (user?.company_id && startDate && endDate) fetchStats();
-    }, [user, startDate, endDate]);
+        if (user?.company_id && (rangePreset === 'all' || (startDate && endDate))) fetchStats();
+    }, [user, startDate, endDate, rangePreset]);
 
     if (!stats) {
         return <div className="p-8 text-center text-gray-500">Cargando tablero...</div>;
@@ -253,7 +270,9 @@ const AdvisorDashboard = () => {
     const allyTopManagers = Array.isArray(stats.ally_top_managers) ? stats.ally_top_managers : [];
     const advisorManagers = topManagers.filter((manager) => manager?.role_name === 'asesor');
 
-    const rangeLabel = `del ${startDate} al ${endDate}`;
+    const rangeLabel = rangePreset === 'all'
+        ? 'de todo el historial'
+        : `del ${startDate} al ${endDate}`;
     const trendTitle = 'Ritmo de gestión del rango elegido';
     const trendDescription = 'Leads gestionados dentro del rango manual seleccionado.';
     const leadBoardPath = permissions.has('ally_board') && !permissions.has('leads_board')
@@ -343,27 +362,43 @@ const AdvisorDashboard = () => {
                             <input
                                 type="date"
                                 value={startDate}
+                                disabled={rangePreset === 'all'}
                                 onChange={(e) => setStartDate(e.target.value)}
-                                className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white outline-none backdrop-blur-sm transition focus:border-cyan-200"
+                                className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white outline-none backdrop-blur-sm transition focus:border-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
                             />
                             <input
                                 type="date"
                                 value={endDate}
+                                disabled={rangePreset === 'all'}
                                 min={startDate || undefined}
                                 onChange={(e) => setEndDate(e.target.value)}
-                                className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white outline-none backdrop-blur-sm transition focus:border-cyan-200"
+                                className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white outline-none backdrop-blur-sm transition focus:border-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
                             />
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const range = getLast7DaysRange();
-                                    setStartDate(range.start);
-                                    setEndDate(range.end);
+                            <select
+                                value={rangePreset}
+                                onChange={(e) => {
+                                    const nextPreset = e.target.value;
+                                    setRangePreset(nextPreset);
+
+                                    if (nextPreset === 'month') {
+                                        const range = getCurrentMonthRange();
+                                        setStartDate(range.start);
+                                        setEndDate(range.end);
+                                        return;
+                                    }
+
+                                    if (nextPreset === 'last7') {
+                                        const range = getLast7DaysRange();
+                                        setStartDate(range.start);
+                                        setEndDate(range.end);
+                                    }
                                 }}
-                                className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-cyan-50 transition hover:bg-white/20"
+                                className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-cyan-50 outline-none transition focus:border-cyan-200"
                             >
-                                Últimos 7 días
-                            </button>
+                                <option value="all" className="text-slate-900">Todo</option>
+                                <option value="month" className="text-slate-900">Mes</option>
+                                <option value="last7" className="text-slate-900">Últimos 7 días</option>
+                            </select>
                         </div>
                     </div>
                 </div>

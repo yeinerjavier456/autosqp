@@ -2670,7 +2670,12 @@ def upsert_brand_model(db: Session, make: Optional[str], model: Optional[str]):
             db.add(models.CarModel(name=model_name, brand_id=brand.id))
 
 
-def get_dashboard_period_bounds(period: Optional[str], start_date: Optional[str] = None, end_date: Optional[str] = None):
+def get_dashboard_period_bounds(
+    period: Optional[str],
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    oldest_record_at: Optional[datetime.datetime] = None
+):
     normalized_period = (period or "month").strip().lower()
     now = datetime.datetime.utcnow()
 
@@ -2713,6 +2718,38 @@ def get_dashboard_period_bounds(period: Optional[str], start_date: Optional[str]
             return dt_value.strftime("%m/%Y")
 
         return "custom", start, end, bucket_labels, bucket_label
+
+    if normalized_period == "all":
+        oldest = oldest_record_at or now
+        start = oldest.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = (now + datetime.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        start_month = datetime.date(start.year, start.month, 1)
+        end_month = datetime.date(end.year, end.month, 1)
+        total_months = max(1, (end_month.year - start_month.year) * 12 + (end_month.month - start_month.month) + 1)
+
+        if total_months <= 24:
+            bucket_labels = []
+            month_cursor = start_month
+            while month_cursor <= end_month:
+                bucket_labels.append(month_cursor.strftime("%m/%Y"))
+                if month_cursor.month == 12:
+                    month_cursor = datetime.date(month_cursor.year + 1, 1, 1)
+                else:
+                    month_cursor = datetime.date(month_cursor.year, month_cursor.month + 1, 1)
+
+            def bucket_label(dt_value: datetime.datetime):
+                return dt_value.strftime("%m/%Y")
+
+            return normalized_period, start, end, bucket_labels, bucket_label
+
+        start_year = start.year
+        end_year = end.year
+        bucket_labels = [str(year) for year in range(start_year, end_year + 1)]
+
+        def bucket_label(dt_value: datetime.datetime):
+            return str(dt_value.year)
+
+        return normalized_period, start, end, bucket_labels, bucket_label
 
     if normalized_period == "day":
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -2763,21 +2800,30 @@ def read_advisor_stats(
     permissions = set(get_role_permissions(current_user.role))
     company_scope = role_name in {"admin", "super_admin"}
     ally_user_ids = set(get_company_ally_user_ids(db, current_user.company_id))
-    normalized_period, period_start, period_end, trend_labels, get_trend_bucket = get_dashboard_period_bounds(period, start_date, end_date)
 
-    leads_query = db.query(models.Lead).options(
-        joinedload(models.Lead.supervisors),
-        joinedload(models.Lead.purchase_options)
-    ).filter(
+    visible_leads_query = db.query(models.Lead).filter(
         models.Lead.company_id == current_user.company_id
     )
     if not company_scope:
-        leads_query = leads_query.filter(
+        visible_leads_query = visible_leads_query.filter(
             or_(
                 models.Lead.assigned_to_id == current_user.id,
                 models.Lead.supervisors.any(models.User.id == current_user.id)
             )
         )
+
+    oldest_visible_lead = visible_leads_query.order_by(models.Lead.created_at.asc()).first()
+    normalized_period, period_start, period_end, trend_labels, get_trend_bucket = get_dashboard_period_bounds(
+        period,
+        start_date,
+        end_date,
+        getattr(oldest_visible_lead, "created_at", None)
+    )
+
+    leads_query = visible_leads_query.options(
+        joinedload(models.Lead.supervisors),
+        joinedload(models.Lead.purchase_options)
+    )
     all_leads = leads_query.all()
 
     def is_within_dashboard_range(dt_value: Optional[datetime.datetime]) -> bool:
