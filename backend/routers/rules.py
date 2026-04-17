@@ -195,6 +195,11 @@ def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
         
     db.commit()
 
+import time
+
+LAST_CHECK_TIME = 0
+CHECK_INTERVAL = 60
+
 @router.post("/run-checks")
 def trigger_checks(
     db: Session = Depends(get_db),
@@ -202,6 +207,22 @@ def trigger_checks(
 ):
     """
     Manual trigger or called by frontend polling to lazy-evaluate rules.
+    Throttled globally to avoid locking the DB.
     """
-    check_and_trigger_rules(db)
+    global LAST_CHECK_TIME
+    current_time = time.time()
+    
+    # Solo ejecutar como maximo 1 vez por minuto
+    if current_time - LAST_CHECK_TIME < CHECK_INTERVAL:
+        return {"status": "skipped", "message": "Throttled to prevent DB locks"}
+        
+    LAST_CHECK_TIME = current_time
+    
+    try:
+        check_and_trigger_rules(db)
+    except Exception as e:
+        # Reset on failure to allow retry
+        LAST_CHECK_TIME = 0 
+        raise e
+        
     return {"status": "checked"}
