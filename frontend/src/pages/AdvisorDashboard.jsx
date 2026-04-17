@@ -401,7 +401,7 @@ const AdvisorDashboard = () => {
                     helperClassName="text-amber-700"
                 />
                 <DashboardMetric
-                    title="Pendientes por revisar"
+                    title="Chats por responder"
                     value={dashboardUnreadReplies}
                     helper={`Tiempo medio de respuesta visible: ${stats.response_time_min} min.`}
                     onClick={(isAllyDashboard ? hasAllySection : hasLeadsSection) ? () => navigate(isAllyDashboard ? '/aliado/dashboard' : leadBoardPath) : undefined}
