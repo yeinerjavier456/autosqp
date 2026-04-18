@@ -1695,6 +1695,9 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const [showCommentModal, setShowCommentModal] = useState(false);
     const [pendingStatusChange, setPendingStatusChange] = useState(null);
     const [statusComment, setStatusComment] = useState('');
+    const [dragHasVehicle, setDragHasVehicle] = useState(null);
+    const [dragSelectedVehicleId, setDragSelectedVehicleId] = useState('');
+    const [dragDesiredVehicle, setDragDesiredVehicle] = useState('');
 
     // Modal State - History View
     const [selectedLeadForHistory, setSelectedLeadForHistory] = useState(null);
@@ -1737,6 +1740,9 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         setHighlightedLeadId(null);
         setPendingStatusChange(null);
         setStatusComment('');
+        setDragHasVehicle(null);
+        setDragSelectedVehicleId('');
+        setDragDesiredVehicle('');
         setNewLeadForm({
             name: '',
             email: '',
@@ -1942,6 +1948,9 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
             setPendingStatusChange({ leadId: id, newStatus });
             setStatusComment('');
+            setDragHasVehicle(null);
+            setDragSelectedVehicleId('');
+            setDragDesiredVehicle('');
 
             if (newStatus === 'sold') {
                 initiateSale(id);
@@ -1979,17 +1988,40 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
         const { leadId, newStatus } = pendingStatusChange;
 
+        let processDetail = null;
+        if (newStatus === 'interested') {
+            if (dragHasVehicle === null) {
+                Swal.fire('Atención', 'Debes indicar si el vehiculo está disponible en inventario o si toca conseguirlo.', 'warning');
+                return;
+            }
+            const desiredVehicleFallback = dragDesiredVehicle.trim() || 'Por definir';
+            if (!dragHasVehicle && !desiredVehicleFallback) {
+                Swal.fire('Atención', 'Debes indicar qué vehiculo busca el cliente.', 'warning');
+                return;
+            }
+            const shouldMoveToPurchaseSearch = dragHasVehicle === true && !dragSelectedVehicleId;
+            processDetail = {
+                has_vehicle: shouldMoveToPurchaseSearch ? false : dragHasVehicle,
+                vehicle_id: dragHasVehicle && dragSelectedVehicleId ? parseInt(dragSelectedVehicleId) : null,
+                desired_vehicle: (!dragHasVehicle || shouldMoveToPurchaseSearch) ? desiredVehicleFallback : null
+            };
+        }
+
         try {
             // Optimistic UI Update
             setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l));
             setShowCommentModal(false);
 
             const token = localStorage.getItem('token');
+            const payload = {
+                status: newStatus,
+                comment: statusComment
+            };
+            if (processDetail) {
+                payload.process_detail = processDetail;
+            }
             await axios.put(`https://autosqp.co/api/leads/${leadId}`,
-                {
-                    status: newStatus,
-                    comment: statusComment
-                },
+                payload,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
@@ -2588,6 +2620,40 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                             onChange={(e) => setStatusComment(e.target.value)}
                             autoFocus
                         ></textarea>
+
+                        {pendingStatusChange?.newStatus === 'interested' && (
+                            <div className="mb-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <label className="block text-sm font-bold text-gray-700 mb-2">Información del Vehículo</label>
+                                <div className="space-y-3">
+                                    <div className="flex gap-4">
+                                        <label className="flex items-center gap-2 cursor-pointer text-sm">
+                                            <input type="radio" className="w-4 h-4 text-blue-600 focus:ring-blue-500" checked={dragHasVehicle === true} onChange={() => setDragHasVehicle(true)} />
+                                            <span>En Inventario</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer text-sm">
+                                            <input type="radio" className="w-4 h-4 text-blue-600 focus:ring-blue-500" checked={dragHasVehicle === false} onChange={() => { setDragHasVehicle(false); setDragSelectedVehicleId(''); }} />
+                                            <span>Buscar en mercado</span>
+                                        </label>
+                                    </div>
+                                    {dragHasVehicle === true && (
+                                        <div>
+                                            <select className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={dragSelectedVehicleId} onChange={(e) => setDragSelectedVehicleId(e.target.value)}>
+                                                <option value="">-- Seleccionar vehículo del inventario --</option>
+                                                {availableVehicles.map(v => (
+                                                    <option key={v.id} value={v.id}>{v.brand} {v.model} ({v.year}) - {v.license_plate}</option>
+                                                ))}
+                                            </select>
+                                            <span className="text-xs text-gray-500 mt-1 block">Si no lo encuentras, márcalo como Buscar en mercado u omítelo para encargar compras.</span>
+                                        </div>
+                                    )}
+                                    {dragHasVehicle === false && (
+                                        <div>
+                                            <input type="text" className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="¿Qué carro busca? (Ej: Mazda 3 2020 rojo)" value={dragDesiredVehicle} onChange={(e) => setDragDesiredVehicle(e.target.value)} />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
 
                         <div className="flex gap-3">
                             <button
