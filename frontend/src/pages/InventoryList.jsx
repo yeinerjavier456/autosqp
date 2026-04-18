@@ -256,75 +256,10 @@ const InventoryList = () => {
         return digits;
     };
 
-    const sanitizeFileName = (value) => String(value || 'vehiculo')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-zA-Z0-9_-]+/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '')
-        .toLowerCase();
-
-    const copyTextToClipboard = async (text) => {
-        if (navigator.clipboard?.writeText) {
-            await navigator.clipboard.writeText(text);
-            return true;
-        }
-
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        textArea.style.position = 'fixed';
-        textArea.style.opacity = '0';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        const successful = document.execCommand('copy');
-        document.body.removeChild(textArea);
-        return successful;
-    };
-
-    const downloadFileFromUrl = async (url, fileName) => {
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`No se pudo descargar ${fileName}`);
-        }
-
-        const blob = await response.blob();
-        const objectUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = objectUrl;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(objectUrl);
-    };
-
-    const downloadVehiclePhotos = async (vehicle) => {
+    const buildWhatsAppVehicleMessage = (vehicle, customMessage = '') => {
         const photoLinks = Array.isArray(vehicle?.photos)
             ? vehicle.photos.map((photo) => normalizeMediaUrl(photo)).filter(Boolean)
             : [];
-
-        if (photoLinks.length === 0) return 0;
-
-        const baseName = sanitizeFileName(`${vehicle?.make || 'vehiculo'}-${vehicle?.model || vehicle?.id || 'foto'}`);
-
-        for (let index = 0; index < photoLinks.length; index += 1) {
-            const photoUrl = photoLinks[index];
-            try {
-                const urlObject = new URL(photoUrl, window.location.origin);
-                const rawExtension = urlObject.pathname.split('.').pop()?.toLowerCase();
-                const extension = rawExtension && rawExtension.length <= 5 ? rawExtension : 'jpg';
-                const fileName = `${baseName}-${index + 1}.${extension}`;
-                await downloadFileFromUrl(photoUrl, fileName);
-            } catch (error) {
-                console.error('Error descargando foto del vehículo', photoUrl, error);
-            }
-        }
-
-        return photoLinks.length;
-    };
-
-    const buildWhatsAppVehicleMessage = (vehicle, customMessage = '') => {
         const maskedPlate = vehicle?.plate ? `***${String(vehicle.plate).slice(-3).toUpperCase()}` : 'No especificada';
         const infoLines = [];
 
@@ -349,6 +284,13 @@ const InventoryList = () => {
 
         infoLines.push('', `Ficha web: ${getPublicVehicleUrl(vehicle.id)}`);
 
+        if (photoLinks.length > 0) {
+            infoLines.push('', 'Fotos del vehículo:');
+            photoLinks.forEach((photo, index) => {
+                infoLines.push(`${index + 1}. ${photo}`);
+            });
+        }
+
         return infoLines.join('\n');
     };
 
@@ -360,7 +302,7 @@ const InventoryList = () => {
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-gray-700">Número destino</label>
                         <input id="whatsapp-destination-number" type="text" class="swal2-input" placeholder="Ej: 3212959493 o +573212959493" />
-                        <p class="mt-1 text-xs text-slate-500">Se copiará el mensaje, se abrirá tu WhatsApp y se descargarán las fotos para adjuntarlas.</p>
+                        <p class="mt-1 text-xs text-slate-500">Se abrirá tu WhatsApp con el mensaje listo para enviar.</p>
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-gray-700">Mensaje inicial opcional</label>
@@ -402,16 +344,8 @@ const InventoryList = () => {
             }
 
             const message = buildWhatsAppVehicleMessage(vehicle, formValues.custom_message || '');
-            const copied = await copyTextToClipboard(message);
-            const downloadedPhotos = await downloadVehiclePhotos(vehicle);
             const shareUrl = `https://wa.me/${normalizedNumber}?text=${encodeURIComponent(message)}`;
             window.open(shareUrl, '_blank', 'noopener,noreferrer');
-
-            Swal.fire(
-                'Listo',
-                `${copied ? 'Mensaje copiado.' : 'Mensaje preparado.'} ${downloadedPhotos > 0 ? `Se descargaron ${downloadedPhotos} foto(s) para adjuntar.` : 'Este vehículo no tiene fotos para descargar.'}`,
-                'success'
-            );
         } catch (error) {
             console.error('Error enviando vehículo por WhatsApp', error);
             Swal.fire(
