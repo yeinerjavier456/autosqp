@@ -107,3 +107,49 @@ def get_company_appointments(
 
     appointments = query.order_by(models.LeadAppointment.appointment_date.asc()).all()
     return appointments
+
+
+@router.put("/{appointment_id}", response_model=schemas.LeadAppointment)
+def update_appointment(
+    appointment_id: int,
+    appointment_update: schemas.LeadAppointmentUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    appointment = db.query(models.LeadAppointment).filter(models.LeadAppointment.id == appointment_id).first()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    if not can_view_all_appointments(current_user) and appointment.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to edit this appointment")
+
+    if appointment_update.appointment_date is not None:
+        appointment.appointment_date = appointment_update.appointment_date
+    if appointment_update.title is not None:
+        appointment.title = appointment_update.title.strip() if appointment_update.title else None
+    if appointment_update.note is not None:
+        appointment.note = appointment_update.note.strip() if appointment_update.note else None
+    if appointment_update.status is not None:
+        appointment.status = appointment_update.status
+
+    db.commit()
+    db.refresh(appointment)
+    return appointment
+
+
+@router.delete("/{appointment_id}")
+def delete_appointment(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    appointment = db.query(models.LeadAppointment).filter(models.LeadAppointment.id == appointment_id).first()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    if not can_view_all_appointments(current_user) and appointment.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this appointment")
+
+    db.delete(appointment)
+    db.commit()
+    return {"message": "Appointment deleted successfully"}

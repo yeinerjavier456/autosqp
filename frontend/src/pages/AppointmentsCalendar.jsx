@@ -49,6 +49,9 @@ const AppointmentsCalendar = () => {
     const [appointments, setAppointments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState('all');
+    const [activeAppointment, setActiveAppointment] = useState(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editForm, setEditForm] = useState({ title: '', note: '', appointment_date: '' });
     const lastFetchedRangeRef = useRef('');
     const currentRangeRef = useRef(null);
     const requestIdRef = useRef(0);
@@ -128,9 +131,61 @@ const AppointmentsCalendar = () => {
     }, [appointments]);
 
     const handleEventClick = ({ event }) => {
-        const leadId = event.extendedProps?.leadId;
-        if (!leadId) return;
-        navigate(`/admin/leads?leadId=${leadId}`);
+        const appointmentId = event.id;
+        const appointment = appointments.find(a => String(a.id) === appointmentId);
+        if (appointment) {
+            setActiveAppointment(appointment);
+            setEditForm({
+                title: appointment.title || '',
+                note: appointment.note || '',
+                appointment_date: new Date(appointment.appointment_date).toISOString().slice(0, 16)
+            });
+            setIsEditModalOpen(true);
+        }
+    };
+
+    const handleUpdateAppointment = async () => {
+        if (!activeAppointment) return;
+        try {
+            const token = localStorage.getItem('token');
+            await axios.put(`https://autosqp.co/api/appointments/${activeAppointment.id}`, {
+                title: editForm.title,
+                note: editForm.note,
+                appointment_date: new Date(editForm.appointment_date).toISOString()
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setIsEditModalOpen(false);
+            if (currentRangeRef.current) {
+                fetchAppointments(currentRangeRef.current, viewMode);
+            }
+        } catch (error) {
+            console.error('Error updating appointment:', error);
+            alert('Error al actualizar la cita');
+        }
+    };
+
+    const handleDeleteAppointment = async () => {
+        if (!activeAppointment) return;
+        if (!window.confirm('¿Estás seguro de que deseas eliminar esta cita?')) return;
+        try {
+            const token = localStorage.getItem('token');
+            await axios.delete(`https://autosqp.co/api/appointments/${activeAppointment.id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setIsEditModalOpen(false);
+            if (currentRangeRef.current) {
+                fetchAppointments(currentRangeRef.current, viewMode);
+            }
+        } catch (error) {
+            console.error('Error deleting appointment:', error);
+            alert('Error al eliminar la cita');
+        }
+    };
+
+    const handleViewLead = () => {
+        if (!activeAppointment?.lead?.id) return;
+        navigate(`/admin/leads?leadId=${activeAppointment.lead.id}`);
     };
 
     const handleDatesSet = (arg) => {
@@ -249,6 +304,73 @@ const AppointmentsCalendar = () => {
                     )}
                 </div>
             </div>
+
+            {isEditModalOpen && activeAppointment && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+                    <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+                        <div className="mb-4 flex items-center justify-between">
+                            <h3 className="text-lg font-bold text-slate-900">Detalles de la Cita</h3>
+                            <button
+                                onClick={() => setIsEditModalOpen(false)}
+                                className="text-slate-400 hover:text-slate-600"
+                            >
+                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Título</label>
+                                <input
+                                    type="text"
+                                    value={editForm.title}
+                                    onChange={(e) => setEditForm(prev => ({ ...prev, title: e.target.value }))}
+                                    className="mt-1 block w-full rounded-lg border border-slate-300 p-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Fecha y Hora</label>
+                                <input
+                                    type="datetime-local"
+                                    value={editForm.appointment_date}
+                                    onChange={(e) => setEditForm(prev => ({ ...prev, appointment_date: e.target.value }))}
+                                    className="mt-1 block w-full rounded-lg border border-slate-300 p-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Notas</label>
+                                <textarea
+                                    value={editForm.note}
+                                    onChange={(e) => setEditForm(prev => ({ ...prev, note: e.target.value }))}
+                                    rows="3"
+                                    className="mt-1 block w-full rounded-lg border border-slate-300 p-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                            </div>
+                        </div>
+                        <div className="mt-6 flex flex-wrap gap-2">
+                            <button
+                                onClick={handleUpdateAppointment}
+                                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                            >
+                                Guardar
+                            </button>
+                            <button
+                                onClick={handleViewLead}
+                                className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                            >
+                                Ver Lead
+                            </button>
+                            <button
+                                onClick={handleDeleteAppointment}
+                                className="flex-1 rounded-lg bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-100"
+                            >
+                                Eliminar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

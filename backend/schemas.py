@@ -189,6 +189,12 @@ class LeadAppointmentCreate(BaseModel):
     title: Optional[str] = None
     note: Optional[str] = None
 
+class LeadAppointmentUpdate(BaseModel):
+    appointment_date: Optional[datetime] = None
+    title: Optional[str] = None
+    note: Optional[str] = None
+    status: Optional[str] = None
+
 
 class AppointmentLeadInfo(BaseModel):
     id: int
