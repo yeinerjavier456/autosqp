@@ -56,9 +56,9 @@ const AppointmentsCalendar = () => {
     const currentRangeRef = useRef(null);
     const requestIdRef = useRef(0);
 
-    const fetchAppointments = async (range, currentViewMode = viewMode) => {
+    const fetchAppointments = async (range, currentViewMode = viewMode, force = false) => {
         const rangeKey = `${range?.start || ''}|${range?.end || ''}|${currentViewMode}`;
-        if (!rangeKey || rangeKey === lastFetchedRangeRef.current) {
+        if (!rangeKey || (!force && rangeKey === lastFetchedRangeRef.current)) {
             setLoading(false);
             return;
         }
@@ -157,7 +157,7 @@ const AppointmentsCalendar = () => {
             });
             setIsEditModalOpen(false);
             if (currentRangeRef.current) {
-                fetchAppointments(currentRangeRef.current, viewMode);
+                fetchAppointments(currentRangeRef.current, viewMode, true);
             }
         } catch (error) {
             console.error('Error updating appointment:', error);
@@ -175,7 +175,7 @@ const AppointmentsCalendar = () => {
             });
             setIsEditModalOpen(false);
             if (currentRangeRef.current) {
-                fetchAppointments(currentRangeRef.current, viewMode);
+                fetchAppointments(currentRangeRef.current, viewMode, true);
             }
         } catch (error) {
             console.error('Error deleting appointment:', error);
