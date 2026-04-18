@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import FullCalendar from '@fullcalendar/react';
@@ -34,9 +34,20 @@ const AppointmentsCalendar = () => {
     const navigate = useNavigate();
     const [appointments, setAppointments] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [currentRange, setCurrentRange] = useState({ start: null, end: null });
+    const lastFetchedRangeRef = useRef('');
+    const requestIdRef = useRef(0);
 
-    const fetchAppointments = async (range = currentRange) => {
+    const fetchAppointments = async (range) => {
+        const rangeKey = `${range?.start || ''}|${range?.end || ''}`;
+        if (!rangeKey || rangeKey === lastFetchedRangeRef.current) {
+            setLoading(false);
+            return;
+        }
+
+        lastFetchedRangeRef.current = rangeKey;
+        requestIdRef.current += 1;
+        const currentRequestId = requestIdRef.current;
+
         try {
             setLoading(true);
             const token = localStorage.getItem('token');
@@ -50,18 +61,20 @@ const AppointmentsCalendar = () => {
                 params
             });
 
-            setAppointments(Array.isArray(response.data) ? response.data : []);
+            if (currentRequestId === requestIdRef.current) {
+                setAppointments(Array.isArray(response.data) ? response.data : []);
+            }
         } catch (error) {
             console.error('Error fetching appointments:', error);
-            setAppointments([]);
+            if (currentRequestId === requestIdRef.current) {
+                setAppointments([]);
+            }
         } finally {
-            setLoading(false);
+            if (currentRequestId === requestIdRef.current) {
+                setLoading(false);
+            }
         }
     };
-
-    useEffect(() => {
-        fetchAppointments();
-    }, []);
 
     const events = useMemo(() => (
         appointments.map((appointment) => {
@@ -105,7 +118,6 @@ const AppointmentsCalendar = () => {
 
     const handleDatesSet = (arg) => {
         const nextRange = { start: arg.startStr, end: arg.endStr };
-        setCurrentRange(nextRange);
         fetchAppointments(nextRange);
     };
 
@@ -138,43 +150,49 @@ const AppointmentsCalendar = () => {
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
-                {loading ? (
-                    <div className="flex min-h-[520px] items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-slate-500">
-                        Cargando citas...
-                    </div>
-                ) : (
-                    <div className="appointments-calendar">
-                        <FullCalendar
-                            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                            initialView="timeGridWeek"
-                            headerToolbar={{
-                                left: 'prev,next today',
-                                center: 'title',
-                                right: 'dayGridMonth,timeGridWeek,timeGridDay'
-                            }}
-                            buttonText={{
-                                today: 'Hoy',
-                                month: 'Mes',
-                                week: 'Semana',
-                                day: 'Día'
-                            }}
-                            locale={esLocale}
-                            firstDay={1}
-                            height="auto"
-                            allDaySlot={false}
-                            slotMinTime="07:00:00"
-                            slotMaxTime="20:00:00"
-                            events={events}
-                            eventClick={handleEventClick}
-                            datesSet={handleDatesSet}
-                            eventTimeFormat={{
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                hour12: true
-                            }}
-                        />
-                    </div>
-                )}
+                <div className="relative appointments-calendar">
+                    {loading && (
+                        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-white/70 backdrop-blur-[1px]">
+                            <div className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-600 shadow-sm">
+                                Cargando citas...
+                            </div>
+                        </div>
+                    )}
+                    <FullCalendar
+                        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                        initialView="timeGridWeek"
+                        headerToolbar={{
+                            left: 'prev,next today',
+                            center: 'title',
+                            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                        }}
+                        buttonText={{
+                            today: 'Hoy',
+                            month: 'Mes',
+                            week: 'Semana',
+                            day: 'Día'
+                        }}
+                        locale={esLocale}
+                        firstDay={1}
+                        height="auto"
+                        allDaySlot={false}
+                        slotMinTime="07:00:00"
+                        slotMaxTime="20:00:00"
+                        events={events}
+                        eventClick={handleEventClick}
+                        datesSet={handleDatesSet}
+                        eventTimeFormat={{
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true
+                        }}
+                    />
+                    {!loading && events.length === 0 && (
+                        <div className="mt-4 flex min-h-[120px] items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-slate-500">
+                            No hay citas programadas en este rango.
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
