@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, get_db
 import models, schemas, auth_utils
 from models import LeadNote, LeadFile # Explicitly for create_all to see them
-from routers import whatsapp, credits, purchases, notifications, rules, vehicles, meta, tiktok, gmail # Import the new routers
+from routers import whatsapp, credits, purchases, notifications, rules, vehicles, meta, tiktok, gmail, appointments # Import the new routers
 from jose import JWTError, jwt
 import datetime
 import os
@@ -516,6 +516,7 @@ app.include_router(vehicles.router)
 app.include_router(meta.router)
 app.include_router(tiktok.router)
 app.include_router(gmail.router)
+app.include_router(appointments.router)
 
 
 # Configure CORS
@@ -1215,7 +1216,7 @@ def ensure_role_view_defaults_synced():
 
             for role in roles:
                 effective_role_name = getattr(role, "base_role_name", None) or getattr(role, "name", None)
-                if effective_role_name not in {"admin", "super_admin"}:
+                if effective_role_name not in {"admin", "super_admin", "asesor", "aliado"}:
                     continue
 
                 default_permissions = DEFAULT_ROLE_VIEW_ACCESS.get(effective_role_name, [])

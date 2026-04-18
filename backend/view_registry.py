@@ -7,6 +7,7 @@ SYSTEM_VIEWS = [
     {"id": "companies", "label": "Empresas globales", "path": "/admin/companies-list", "scope": "global"},
     {"id": "inventory", "label": "Inventario", "path": "/admin/inventory", "scope": "company"},
     {"id": "leads_board", "label": "Tablero de leads", "path": "/admin/leads", "scope": "company"},
+    {"id": "appointments_calendar", "label": "Calendario de citas", "path": "/admin/appointments", "scope": "company"},
     {"id": "deleted_leads", "label": "Leads eliminados", "path": "/admin/leads/deleted", "scope": "company"},
     {"id": "ally_board", "label": "Tablero de aliados", "path": "/aliado/dashboard", "scope": "company"},
     {"id": "alerts", "label": "Alertas automaticas", "path": "/admin/alerts", "scope": "company"},
@@ -27,15 +28,15 @@ DEFAULT_ROLE_VIEW_ACCESS = {
     "super_admin": [view["id"] for view in SYSTEM_VIEWS],
     "admin": [
         "dashboard", "users", "roles", "integrations", "logs", "inventory",
-        "leads_board", "deleted_leads", "ally_board", "alerts", "sales", "credits", "gmail_credit_audit", "purchase_board",
+        "leads_board", "appointments_calendar", "deleted_leads", "ally_board", "alerts", "sales", "credits", "gmail_credit_audit", "purchase_board",
         "facebook_leads", "tiktok_leads", "whatsapp_leads", "instagram_leads",
         "internal_chat", "whatsapp_dashboard"
     ],
     "asesor": [
-        "dashboard", "inventory", "leads_board", "my_sales", "credits", "gmail_credit_audit", "internal_chat"
+        "dashboard", "inventory", "leads_board", "appointments_calendar", "my_sales", "credits", "gmail_credit_audit", "internal_chat"
     ],
     "aliado": [
-        "dashboard", "ally_board", "credits", "gmail_credit_audit", "internal_chat", "inventory"
+        "dashboard", "ally_board", "appointments_calendar", "credits", "gmail_credit_audit", "internal_chat", "inventory"
     ],
     "inventario": ["inventory", "internal_chat"],
     "compras": ["purchase_board", "internal_chat"],

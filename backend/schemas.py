@@ -175,6 +175,49 @@ class LeadReminder(LeadReminderBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+class LeadAppointmentBase(BaseModel):
+    lead_id: int
+    appointment_date: datetime
+    title: Optional[str] = None
+    note: Optional[str] = None
+    status: str = "scheduled"
+
+
+class LeadAppointmentCreate(BaseModel):
+    appointment_date: datetime
+    title: Optional[str] = None
+    note: Optional[str] = None
+
+
+class AppointmentLeadInfo(BaseModel):
+    id: int
+    name: str
+    phone: Optional[str] = None
+    status: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AppointmentUserInfo(BaseModel):
+    id: int
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LeadAppointment(LeadAppointmentBase):
+    id: int
+    user_id: int
+    is_notified: int
+    created_at: datetime
+    updated_at: datetime
+    lead: Optional[AppointmentLeadInfo] = None
+    user: Optional[AppointmentUserInfo] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
 class AutomationRuleBase(BaseModel):
     name: str
     event_type: str

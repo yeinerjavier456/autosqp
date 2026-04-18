@@ -107,23 +107,23 @@ export const NotificationsProvider = ({ children }) => {
         }
     };
 
-    // Create Reminder
-    const createReminder = async (leadId, reminderDate, note) => {
+    // Create Appointment
+    const createAppointment = async (leadId, appointmentDate, note) => {
         try {
             // Convertir la fecha local a UTC para el backend
-            const localDate = new Date(reminderDate);
+            const localDate = new Date(appointmentDate);
             const utcString = localDate.toISOString().substring(0, 16);
 
-            await axios.post(`https://autosqp.co/api/notifications/leads/${leadId}/reminders`, {
-                lead_id: leadId,
-                reminder_date: utcString,
-                note: note
+            await axios.post(`https://autosqp.co/api/appointments/leads/${leadId}`, {
+                appointment_date: utcString,
+                note: note,
+                title: note
             }, {
                 headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
             });
             Swal.fire({
                 icon: 'success',
-                title: 'Recordatorio creado',
+                title: 'Cita programada',
                 toast: true,
                 position: 'top-end',
                 showConfirmButton: false,
@@ -148,24 +148,21 @@ export const NotificationsProvider = ({ children }) => {
                 },
                 timer: 3000
             });
-            // Maybe refresh reminders list if visible?
         } catch (error) {
-            console.error("Error creating reminder:", error);
+            console.error("Error creating appointment:", error);
             Swal.fire({
                 icon: 'error',
                 title: 'Error',
-                text: 'No se pudo crear el recordatorio'
+                text: 'No se pudo programar la cita'
             });
         }
     };
 
     // Polling
     useEffect(() => {
-        if (user) {
-            fetchNotifications();
-            // const interval = setInterval(fetchNotifications, 15000); // Poll every 15 seconds
-            return () => clearInterval(interval);
-        }
+        if (!user) return undefined;
+        fetchNotifications();
+        return undefined;
     }, [user]);
 
     const value = {
@@ -174,7 +171,7 @@ export const NotificationsProvider = ({ children }) => {
         fetchNotifications,
         markAsRead,
         markAllAsRead,
-        createReminder
+        createAppointment
     };
 
     return (

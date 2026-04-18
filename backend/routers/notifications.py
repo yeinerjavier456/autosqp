@@ -55,6 +55,11 @@ def get_notifications(
     except Exception as exc:
         print(f"Notification reminder check failed: {exc}")
 
+    try:
+        check_due_appointments(db, current_user.id)
+    except Exception as exc:
+        print(f"Notification appointment check failed: {exc}")
+
     notifications = db.query(models.Notification).filter(
         models.Notification.user_id == current_user.id
     ).order_by(models.Notification.created_at.desc()).offset(skip).limit(limit).all()
@@ -160,4 +165,32 @@ def check_due_reminders(db: Session, user_id: int):
         reminder.is_completed = 1
         
     if due_reminders:
+        db.commit()
+
+
+def check_due_appointments(db: Session, user_id: int):
+    now = datetime.datetime.utcnow()
+
+    due_appointments = db.query(models.LeadAppointment).filter(
+        models.LeadAppointment.user_id == user_id,
+        models.LeadAppointment.is_notified == 0,
+        models.LeadAppointment.status == "scheduled",
+        models.LeadAppointment.appointment_date <= now
+    ).all()
+
+    for appointment in due_appointments:
+        lead_name = appointment.lead.name if appointment.lead else "Lead Desconocido"
+        title = appointment.title or "Cita programada"
+        time_label = appointment.appointment_date.strftime("%d/%m/%Y %I:%M %p") if appointment.appointment_date else ""
+        notification = models.Notification(
+            user_id=user_id,
+            title="Cita agendada",
+            message=f"{title} con {lead_name} - {time_label}".strip(" -"),
+            type="info",
+            link=f"/admin/leads?leadId={appointment.lead_id}"
+        )
+        db.add(notification)
+        appointment.is_notified = 1
+
+    if due_appointments:
         db.commit()

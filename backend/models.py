@@ -342,6 +342,24 @@ class LeadReminder(Base):
     user = relationship("User", backref="reminders")
     lead = relationship("Lead", backref="reminders")
 
+
+class LeadAppointment(Base):
+    __tablename__ = "lead_appointments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=False, index=True)
+    appointment_date = Column(DateTime, nullable=False, index=True)
+    title = Column(String(200), nullable=True)
+    note = Column(String(500), nullable=True)
+    status = Column(String(30), default="scheduled", nullable=False)
+    is_notified = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    user = relationship("User", backref="appointments")
+    lead = relationship("Lead", backref="appointments")
+
 class AutomationRule(Base):
     __tablename__ = "automation_rules"
 
