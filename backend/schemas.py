@@ -679,9 +679,13 @@ class RoleDashboardStats(BaseModel):
     sales_status_distribution: Dict[str, int]
     inventory_total: int
     inventory_status_distribution: Dict[str, int]
+    appointments_total: int
+    appointments_today: int
+    appointments_upcoming: int
     top_managers: List[Dict[str, Any]] = []
     top_status_movers: List[Dict[str, Any]] = []
     ally_top_managers: List[Dict[str, Any]] = []
+    appointments_by_user: List[Dict[str, Any]] = []
 
 class ReportsStats(BaseModel):
     total_leads: int

@@ -167,6 +167,7 @@ const AdvisorDashboard = () => {
     const hasPurchasesSection = permissions.has('purchase_board');
     const hasInventorySection = permissions.has('inventory');
     const hasSalesSection = permissions.has('sales') || permissions.has('my_sales');
+    const hasAppointmentsSection = permissions.has('appointments_calendar');
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -268,6 +269,7 @@ const AdvisorDashboard = () => {
     const topManagers = Array.isArray(stats.top_managers) ? stats.top_managers : [];
     const topStatusMovers = Array.isArray(stats.top_status_movers) ? stats.top_status_movers : [];
     const allyTopManagers = Array.isArray(stats.ally_top_managers) ? stats.ally_top_managers : [];
+    const appointmentsByUser = Array.isArray(stats.appointments_by_user) ? stats.appointments_by_user : [];
     const advisorManagers = topManagers.filter((manager) => manager?.role_name === 'asesor');
 
     const rangeLabel = rangePreset === 'all'
@@ -445,7 +447,7 @@ const AdvisorDashboard = () => {
                 />
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className={`grid grid-cols-1 gap-4 ${hasAppointmentsSection ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
                 <DashboardMetric
                     title="Nuevos del rango"
                     value={dashboardNewLeadsInRange}
@@ -461,6 +463,16 @@ const AdvisorDashboard = () => {
                     className="border-fuchsia-200 bg-fuchsia-50 text-fuchsia-900"
                     helperClassName="text-fuchsia-700"
                 />
+                {hasAppointmentsSection && (
+                    <DashboardMetric
+                        title="Citas programadas"
+                        value={stats.appointments_total || 0}
+                        helper={`${stats.appointments_today || 0} para hoy y ${stats.appointments_upcoming || 0} pendientes en el rango.`}
+                        onClick={() => navigate('/admin/appointments')}
+                        className="border-cyan-200 bg-cyan-50 text-cyan-900"
+                        helperClassName="text-cyan-700"
+                    />
+                )}
             </div>
 
             {!isAllyDashboard && (
@@ -618,6 +630,36 @@ const AdvisorDashboard = () => {
                     </div>
                 )}
             </div>
+
+            {hasAppointmentsSection && !isAllyDashboard && (
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">Ranking de citas agendadas</h3>
+                        <p className="text-sm text-slate-500">
+                            Muestra quién generó las citas en el rango seleccionado. Los administradores ven toda la empresa; cada asesor o aliado ve solo sus propias citas.
+                        </p>
+                    </div>
+                    {appointmentsByUser.length > 0 ? (
+                        <div className="max-h-[24rem] space-y-3 overflow-y-auto pr-1">
+                            {appointmentsByUser.map((manager, index) => (
+                                <div key={`${manager.user_id}-${index}`} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                                    <div>
+                                        <p className="text-sm font-semibold text-slate-800">{manager.full_name || manager.email || `Usuario ${manager.user_id}`}</p>
+                                        <p className="text-xs text-slate-500">{manager.role_label || 'Usuario'}{manager.email ? ` • ${manager.email}` : ''}</p>
+                                    </div>
+                                    <span className="rounded-full bg-cyan-100 px-3 py-1 text-sm font-bold text-cyan-700">
+                                        {manager.count}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="flex h-28 items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
+                            Aun no hay citas registradas en este rango.
+                        </div>
+                    )}
+                </div>
+            )}
 
             {!isAllyDashboard && (
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">

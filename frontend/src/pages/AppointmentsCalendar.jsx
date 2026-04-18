@@ -121,6 +121,20 @@ const AppointmentsCalendar = () => {
         fetchAppointments(nextRange);
     };
 
+    const renderEventContent = (eventInfo) => {
+        const advisorName = eventInfo.event.extendedProps?.advisorName || 'Sin responsable';
+        const detail = eventInfo.event.extendedProps?.detail || 'Cita programada';
+
+        return (
+            <div className="px-1 py-0.5 leading-tight">
+                <div className="text-[11px] font-semibold opacity-80">{eventInfo.timeText}</div>
+                <div className="truncate text-xs font-bold">{eventInfo.event.title}</div>
+                <div className="truncate text-[11px] opacity-80">Generó: {advisorName}</div>
+                <div className="truncate text-[11px] opacity-70">{detail}</div>
+            </div>
+        );
+    };
+
     return (
         <div className="space-y-6">
             <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -129,7 +143,7 @@ const AppointmentsCalendar = () => {
                         <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-600">Agenda comercial</p>
                         <h1 className="mt-2 text-3xl font-black text-slate-900">Calendario de Citas</h1>
                         <p className="mt-2 max-w-2xl text-sm text-slate-600">
-                            Consulta las citas programadas por la empresa y abre el lead con un clic para seguir la gestión.
+                            Los administradores ven todas las citas; el resto del equipo solo ve las que agendó. Haz clic en una cita para abrir el lead.
                         </p>
                     </div>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -179,6 +193,7 @@ const AppointmentsCalendar = () => {
                         slotMinTime="07:00:00"
                         slotMaxTime="20:00:00"
                         events={events}
+                        eventContent={renderEventContent}
                         eventClick={handleEventClick}
                         datesSet={handleDatesSet}
                         eventTimeFormat={{

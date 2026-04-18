@@ -18,6 +18,7 @@ import re
 import json
 import random
 from io import BytesIO
+from zoneinfo import ZoneInfo
 from view_registry import SYSTEM_VIEWS, DEFAULT_ROLE_VIEW_ACCESS, DEFAULT_ROLE_MENU_ORDER, VALID_VIEW_IDS, COMPANY_VIEW_IDS
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -26,6 +27,8 @@ from fastapi.responses import StreamingResponse
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
+
+BOGOTA_TZ = ZoneInfo("America/Bogota")
 
 def ensure_role_configuration_columns():
     with engine.begin() as conn:
@@ -3121,6 +3124,71 @@ def read_advisor_stats(
             status_key = vehicle.status or "available"
             inventory_status_distribution[status_key] = inventory_status_distribution.get(status_key, 0) + 1
 
+    appointments_total = 0
+    appointments_today = 0
+    appointments_upcoming = 0
+    appointments_by_user_map: Dict[int, Dict[str, Any]] = {}
+    if "appointments_calendar" in permissions:
+        appointments_query = db.query(models.LeadAppointment).options(
+            joinedload(models.LeadAppointment.user),
+            joinedload(models.LeadAppointment.lead)
+        ).join(
+            models.Lead,
+            models.Lead.id == models.LeadAppointment.lead_id
+        ).filter(
+            models.Lead.company_id == current_user.company_id
+        )
+
+        if not company_scope:
+            appointments_query = appointments_query.filter(models.LeadAppointment.user_id == current_user.id)
+
+        appointments = [
+            appointment for appointment in appointments_query.all()
+            if is_within_dashboard_range(getattr(appointment, "appointment_date", None))
+        ]
+
+        appointments_total = len(appointments)
+        now_bogota = datetime.datetime.now(BOGOTA_TZ).replace(tzinfo=None)
+        today_bogota = now_bogota.date()
+
+        for appointment in appointments:
+            appointment_date = getattr(appointment, "appointment_date", None)
+            if not appointment_date:
+                continue
+            if appointment_date.date() == today_bogota:
+                appointments_today += 1
+            if appointment_date >= now_bogota and (appointment.status or "scheduled") != "cancelled":
+                appointments_upcoming += 1
+
+            if not appointment.user_id:
+                continue
+
+            current_item = appointments_by_user_map.setdefault(
+                appointment.user_id,
+                {
+                    "user_id": appointment.user_id,
+                    "full_name": getattr(getattr(appointment, "user", None), "full_name", None),
+                    "email": getattr(getattr(appointment, "user", None), "email", None),
+                    "role_name": get_user_role_name(getattr(appointment, "user", None)),
+                    "role_label": getattr(getattr(getattr(appointment, "user", None), "role", None), "label", None),
+                    "count": 0,
+                }
+            )
+            current_item["count"] += 1
+            if not current_item.get("full_name"):
+                current_item["full_name"] = getattr(getattr(appointment, "user", None), "full_name", None)
+            if not current_item.get("email"):
+                current_item["email"] = getattr(getattr(appointment, "user", None), "email", None)
+            if not current_item.get("role_name"):
+                current_item["role_name"] = get_user_role_name(getattr(appointment, "user", None))
+            if not current_item.get("role_label"):
+                current_item["role_label"] = getattr(getattr(getattr(appointment, "user", None), "role", None), "label", None)
+
+    appointments_by_user = sorted(
+        appointments_by_user_map.values(),
+        key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
+    )
+
     return {
         "total_leads": total_leads,
         "leads_new": leads_new,
@@ -3156,9 +3224,13 @@ def read_advisor_stats(
         "sales_status_distribution": sales_status_distribution,
         "inventory_total": inventory_total,
         "inventory_status_distribution": inventory_status_distribution,
+        "appointments_total": appointments_total,
+        "appointments_today": appointments_today,
+        "appointments_upcoming": appointments_upcoming,
         "top_managers": top_managers,
         "top_status_movers": top_status_movers,
         "ally_top_managers": ally_top_managers,
+        "appointments_by_user": appointments_by_user,
     }
 
 @app.post("/seed/brands")

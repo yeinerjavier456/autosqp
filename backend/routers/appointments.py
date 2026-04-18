@@ -14,6 +14,17 @@ router = APIRouter(
 )
 
 
+def can_view_all_appointments(user: Optional[models.User]) -> bool:
+    role = getattr(user, "role", None)
+    role_name = (
+        getattr(role, "base_role_name", None)
+        or getattr(role, "name", None)
+        or getattr(user, "role", None)
+        or ""
+    )
+    return str(role_name).strip().lower() in {"admin", "super_admin"}
+
+
 @router.post("/leads/{lead_id}", response_model=schemas.LeadAppointment)
 def create_lead_appointment(
     lead_id: int,
@@ -56,12 +67,17 @@ def get_lead_appointments(
     if current_user.company_id and lead.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    appointments = db.query(models.LeadAppointment).options(
+    appointments_query = db.query(models.LeadAppointment).options(
         joinedload(models.LeadAppointment.lead),
         joinedload(models.LeadAppointment.user)
     ).filter(
         models.LeadAppointment.lead_id == lead_id
-    ).order_by(models.LeadAppointment.appointment_date.asc()).all()
+    )
+
+    if not can_view_all_appointments(current_user):
+        appointments_query = appointments_query.filter(models.LeadAppointment.user_id == current_user.id)
+
+    appointments = appointments_query.order_by(models.LeadAppointment.appointment_date.asc()).all()
     return appointments
 
 
@@ -79,6 +95,9 @@ def get_company_appointments(
 
     if current_user.company_id:
         query = query.filter(models.Lead.company_id == current_user.company_id)
+
+    if not can_view_all_appointments(current_user):
+        query = query.filter(models.LeadAppointment.user_id == current_user.id)
 
     if start:
         query = query.filter(models.LeadAppointment.appointment_date >= start)
