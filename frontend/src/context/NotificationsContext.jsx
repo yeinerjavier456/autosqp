@@ -110,12 +110,8 @@ export const NotificationsProvider = ({ children }) => {
     // Create Appointment
     const createAppointment = async (leadId, appointmentDate, note) => {
         try {
-            // Convertir la fecha local a UTC para el backend
-            const localDate = new Date(appointmentDate);
-            const utcString = localDate.toISOString().substring(0, 16);
-
             await axios.post(`https://autosqp.co/api/appointments/leads/${leadId}`, {
-                appointment_date: utcString,
+                appointment_date: appointmentDate,
                 note: note,
                 title: note
             }, {

@@ -141,7 +141,7 @@ def check_due_reminders(db: Session, user_id: int):
     Checks for due reminders for this user that haven't been completed yet.
     Creates a notification and marks reminder as completed.
     """
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(BOGOTA_TZ).replace(tzinfo=None)
     
     due_reminders = db.query(models.LeadReminder).filter(
         models.LeadReminder.user_id == user_id,
@@ -169,7 +169,7 @@ def check_due_reminders(db: Session, user_id: int):
 
 
 def check_due_appointments(db: Session, user_id: int):
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(BOGOTA_TZ).replace(tzinfo=None)
 
     due_appointments = db.query(models.LeadAppointment).filter(
         models.LeadAppointment.user_id == user_id,
