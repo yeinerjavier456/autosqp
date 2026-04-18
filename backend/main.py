@@ -1104,8 +1104,8 @@ def maybe_assign_credit_coordinator(
     if not coordinator:
         return assigned_to_id, normalize_supervisor_ids(supervisor_ids), None
 
-    next_supervisor_ids = ensure_user_in_supervisors(supervisor_ids, assigned_to_id)
-    return coordinator.id, next_supervisor_ids, coordinator
+    next_supervisor_ids = ensure_user_in_supervisors(supervisor_ids, coordinator.id)
+    return assigned_to_id, next_supervisor_ids, coordinator
 
 
 def should_keep_assigner_as_supervisor(
@@ -2458,7 +2458,7 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
         new_status=new_lead.status,
         comment=(
             f"{new_lead.message or 'Lead creado manualmente'} "
-            f"(Asignado automaticamente a coordinacion de credito: {credit_coordinator.full_name or credit_coordinator.email})"
+            f"(Coordinador de credito añadido como supervisor: {credit_coordinator.full_name or credit_coordinator.email})"
             if credit_coordinator else
             (new_lead.message or "Lead creado manualmente")
         )
@@ -4341,10 +4341,10 @@ def update_lead(
         supervisor_ids=target_supervisor_ids
     )
     if credit_coordinator:
-        target_assigned_user = credit_coordinator
-        payload_update['assigned_to_id'] = target_assigned_to_id
+        pass
+        # payload_update['assigned_to_id'] = target_assigned_to_id
     manual_assignment_requested = lead_update.assigned_to_id is not None
-    if (manual_assignment_requested or credit_coordinator) and should_keep_assigner_as_supervisor(current_user.id, target_assigned_to_id):
+    if manual_assignment_requested and should_keep_assigner_as_supervisor(current_user.id, target_assigned_to_id):
         target_supervisor_ids = ensure_user_in_supervisors(target_supervisor_ids, current_user.id)
     target_role_name = get_user_role_name(target_assigned_user)
     board_transfer = should_reset_status_for_board_transfer(previous_role_name, target_role_name)
@@ -4371,7 +4371,7 @@ def update_lead(
         )
     auto_credit_comment = None
     if credit_coordinator and credit_coordinator.id != getattr(previous_assigned_user, "id", None):
-        auto_credit_comment = f"Lead asignado automaticamente a coordinacion de credito: {credit_coordinator.full_name or credit_coordinator.email}"
+        auto_credit_comment = f"Coordinador de credito añadido como supervisor: {credit_coordinator.full_name or credit_coordinator.email}"
     history_comment = lead_update.comment.strip() if lead_update.comment and lead_update.comment.strip() else (auto_credit_comment or auto_transfer_comment)
     has_comment = bool(history_comment)
     process_detail_data = lead_update.process_detail
