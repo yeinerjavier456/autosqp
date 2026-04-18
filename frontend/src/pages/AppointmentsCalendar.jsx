@@ -135,10 +135,14 @@ const AppointmentsCalendar = () => {
         const appointment = appointments.find(a => String(a.id) === appointmentId);
         if (appointment) {
             setActiveAppointment(appointment);
+            const dateObj = new Date(appointment.appointment_date);
+            const tzOffset = dateObj.getTimezoneOffset() * 60000;
+            const localISOTime = new Date(dateObj.getTime() - tzOffset).toISOString().slice(0, 16);
+
             setEditForm({
                 title: appointment.title || '',
                 note: appointment.note || '',
-                appointment_date: new Date(appointment.appointment_date).toISOString().slice(0, 16)
+                appointment_date: localISOTime
             });
             setIsEditModalOpen(true);
         }
