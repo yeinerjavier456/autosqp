@@ -6,6 +6,7 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import esLocale from '@fullcalendar/core/locales/es';
+import { useAuth } from '../context/AuthContext';
 
 const getAppointmentPalette = (status) => {
     switch ((status || '').toLowerCase()) {
@@ -32,13 +33,28 @@ const getAppointmentPalette = (status) => {
 
 const AppointmentsCalendar = () => {
     const navigate = useNavigate();
+    const { user } = useAuth();
+    
+    const getRoleName = (u) => {
+        if (!u) return '';
+        const role = u.role;
+        if (typeof role === 'string') return role;
+        if (role && role.base_role_name) return role.base_role_name;
+        if (role && role.name) return role.name;
+        return '';
+    };
+    const roleName = getRoleName(user).toLowerCase().trim();
+    const isAdmin = roleName === 'admin' || roleName === 'super_admin';
+
     const [appointments, setAppointments] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [viewMode, setViewMode] = useState('all');
     const lastFetchedRangeRef = useRef('');
+    const currentRangeRef = useRef(null);
     const requestIdRef = useRef(0);
 
-    const fetchAppointments = async (range) => {
-        const rangeKey = `${range?.start || ''}|${range?.end || ''}`;
+    const fetchAppointments = async (range, currentViewMode = viewMode) => {
+        const rangeKey = `${range?.start || ''}|${range?.end || ''}|${currentViewMode}`;
         if (!rangeKey || rangeKey === lastFetchedRangeRef.current) {
             setLoading(false);
             return;
@@ -55,6 +71,7 @@ const AppointmentsCalendar = () => {
 
             if (range?.start) params.start = range.start;
             if (range?.end) params.end = range.end;
+            if (currentViewMode !== 'all') params.view_mode = currentViewMode;
 
             const response = await axios.get('https://autosqp.co/api/appointments/', {
                 headers: { Authorization: `Bearer ${token}` },
@@ -118,7 +135,16 @@ const AppointmentsCalendar = () => {
 
     const handleDatesSet = (arg) => {
         const nextRange = { start: arg.startStr, end: arg.endStr };
-        fetchAppointments(nextRange);
+        currentRangeRef.current = nextRange;
+        fetchAppointments(nextRange, viewMode);
+    };
+
+    const handleViewModeChange = (e) => {
+        const newMode = e.target.value;
+        setViewMode(newMode);
+        if (currentRangeRef.current) {
+            fetchAppointments(currentRangeRef.current, newMode);
+        }
     };
 
     const renderEventContent = (eventInfo) => {
@@ -145,6 +171,20 @@ const AppointmentsCalendar = () => {
                         <p className="mt-2 max-w-2xl text-sm text-slate-600">
                             Los administradores ven todas las citas; el resto del equipo solo ve las que agendó. Haz clic en una cita para abrir el lead.
                         </p>
+                        {isAdmin && (
+                            <div className="mt-4 inline-flex items-center space-x-2">
+                                <label htmlFor="viewMode" className="text-sm font-medium text-slate-700">Ver:</label>
+                                <select
+                                    id="viewMode"
+                                    value={viewMode}
+                                    onChange={handleViewModeChange}
+                                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                >
+                                    <option value="all">Todas las citas</option>
+                                    <option value="me">Mis citas</option>
+                                </select>
+                            </div>
+                        )}
                     </div>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                         <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">

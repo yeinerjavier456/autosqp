@@ -85,6 +85,7 @@ def get_lead_appointments(
 def get_company_appointments(
     start: Optional[datetime.datetime] = Query(default=None),
     end: Optional[datetime.datetime] = Query(default=None),
+    view_mode: Optional[str] = Query(default="all"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -96,7 +97,7 @@ def get_company_appointments(
     if current_user.company_id:
         query = query.filter(models.Lead.company_id == current_user.company_id)
 
-    if not can_view_all_appointments(current_user):
+    if not can_view_all_appointments(current_user) or view_mode == "me":
         query = query.filter(models.LeadAppointment.user_id == current_user.id)
 
     if start:
