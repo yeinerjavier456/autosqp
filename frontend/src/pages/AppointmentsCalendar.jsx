@@ -135,14 +135,10 @@ const AppointmentsCalendar = () => {
         const appointment = appointments.find(a => String(a.id) === appointmentId);
         if (appointment) {
             setActiveAppointment(appointment);
-            const dateObj = new Date(appointment.appointment_date);
-            const tzOffset = dateObj.getTimezoneOffset() * 60000;
-            const localISOTime = new Date(dateObj.getTime() - tzOffset).toISOString().slice(0, 16);
-
             setEditForm({
                 title: appointment.title || '',
                 note: appointment.note || '',
-                appointment_date: localISOTime
+                appointment_date: String(appointment.appointment_date).slice(0, 16)
             });
             setIsEditModalOpen(true);
         }
@@ -155,7 +151,7 @@ const AppointmentsCalendar = () => {
             await axios.put(`https://autosqp.co/api/appointments/${activeAppointment.id}`, {
                 title: editForm.title,
                 note: editForm.note,
-                appointment_date: new Date(editForm.appointment_date).toISOString()
+                appointment_date: editForm.appointment_date
             }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
