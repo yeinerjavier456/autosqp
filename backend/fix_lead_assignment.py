@@ -3,13 +3,22 @@ import datetime
 from dataclasses import dataclass
 from typing import Optional
 
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 import models
 from database import SessionLocal
 
 
 RECOVERABLE_ROLE_NAMES = {"asesor", "compras", "coordinador_creditos", "aliado"}
+SYSTEM_CREDIT_HISTORY_MARKERS = (
+    "solicitud de crédito actualizada:",
+    "se agregó nota en solicitud de crédito:",
+    "documento adjuntado en solicitud de crédito:",
+    "lead creado automaticamente desde solicitud de crédito",
+    "lead creado automáticamente desde nueva solicitud de crédito",
+    "correo de credito relacionado automaticamente desde gmail:",
+    "correo de crédito relacionado automáticamente desde gmail:",
+)
 
 
 def normalize_role_text(value: Optional[str]) -> str:
@@ -196,6 +205,8 @@ class LeadFixResult:
     new_assignee_id: Optional[int]
     cleaned_supervisors: bool
     reason: str
+    previous_status: Optional[str] = None
+    new_status: Optional[str] = None
 
 
 def format_user(user: Optional[models.User], fallback_id: Optional[int] = None) -> str:
@@ -215,6 +226,7 @@ def build_query(db: Session, args: argparse.Namespace):
             joinedload(models.Lead.created_by).joinedload(models.User.role),
             joinedload(models.Lead.supervisors).joinedload(models.User.role),
             joinedload(models.Lead.supervisor_links),
+            selectinload(models.Lead.history).joinedload(models.LeadHistory.user).joinedload(models.User.role),
         )
         .order_by(models.Lead.id.asc())
     )
@@ -231,6 +243,46 @@ def build_query(db: Session, args: argparse.Namespace):
     return query.limit(args.limit) if args.limit else query
 
 
+def is_system_credit_history_entry(entry: models.LeadHistory) -> bool:
+    comment = ((getattr(entry, "comment", None) or "").strip().lower())
+    return any(marker in comment for marker in SYSTEM_CREDIT_HISTORY_MARKERS)
+
+
+def get_latest_real_status_transition(lead: models.Lead) -> Optional[models.LeadHistory]:
+    history_entries = sorted(
+        list(getattr(lead, "history", None) or []),
+        key=lambda item: (
+            getattr(item, "created_at", datetime.datetime.min) or datetime.datetime.min,
+            getattr(item, "id", 0) or 0,
+        ),
+        reverse=True,
+    )
+    for entry in history_entries:
+        previous_status = (getattr(entry, "previous_status", None) or "").strip()
+        new_status = (getattr(entry, "new_status", None) or "").strip()
+        if not new_status or previous_status == new_status:
+            continue
+        if is_system_credit_history_entry(entry):
+            continue
+        return entry
+    return None
+
+
+def get_suspicious_credit_target_status(lead: models.Lead) -> Optional[str]:
+    if getattr(lead, "status", None) != models.LeadStatus.CREDIT_APPLICATION.value:
+        return None
+
+    latest_real_transition = get_latest_real_status_transition(lead)
+    if not latest_real_transition:
+        return None
+
+    latest_target_status = (getattr(latest_real_transition, "new_status", None) or "").strip()
+    if not latest_target_status or latest_target_status == models.LeadStatus.CREDIT_APPLICATION.value:
+        return None
+
+    return latest_target_status
+
+
 def should_fix_lead(lead: models.Lead, include_unassigned: bool) -> bool:
     if getattr(lead, "assigned_to_id", None):
         return not is_valid_lead_assignee(getattr(lead, "assigned_to", None), lead.company_id)
@@ -238,18 +290,27 @@ def should_fix_lead(lead: models.Lead, include_unassigned: bool) -> bool:
 
 
 def process_lead(db: Session, lead: models.Lead, args: argparse.Namespace) -> Optional[LeadFixResult]:
-    if not should_fix_lead(lead, args.include_unassigned):
+    should_fix_assignment = should_fix_lead(lead, args.include_unassigned) and not args.suspicious_credit_only
+    suspicious_target_status = get_suspicious_credit_target_status(lead)
+    should_fix_suspicious_credit = bool(suspicious_target_status)
+
+    if args.suspicious_credit_only and not should_fix_suspicious_credit:
+        return None
+
+    if not should_fix_assignment and not should_fix_suspicious_credit:
         return None
 
     previous_user = getattr(lead, "assigned_to", None)
     previous_assignee_id = getattr(lead, "assigned_to_id", None)
     previous_assignee_name = format_user(previous_user, getattr(lead, "assigned_to_id", None))
-    fallback_user = find_fallback_lead_assignee(db, lead)
+    fallback_user = find_fallback_lead_assignee(db, lead) if should_fix_assignment else None
     valid_supervisor_ids = get_valid_supervisor_ids(lead)
     current_supervisor_ids = [link.user_id for link in (lead.supervisor_links or [])]
-    cleaned_supervisors = sorted(valid_supervisor_ids) != sorted(current_supervisor_ids)
+    cleaned_supervisors = should_fix_assignment and (sorted(valid_supervisor_ids) != sorted(current_supervisor_ids))
+    previous_status = getattr(lead, "status", None)
+    next_status = suspicious_target_status if should_fix_suspicious_credit else previous_status
 
-    if not fallback_user and not cleaned_supervisors:
+    if not fallback_user and not cleaned_supervisors and not should_fix_suspicious_credit:
         return LeadFixResult(
             lead_id=lead.id,
             lead_name=lead.name,
@@ -260,14 +321,17 @@ def process_lead(db: Session, lead: models.Lead, args: argparse.Namespace) -> Op
             new_assignee_id=None,
             cleaned_supervisors=False,
             reason="Sin candidato recuperable; se deja para revisión manual.",
+            previous_status=previous_status,
+            new_status=next_status,
         )
 
     new_assignee_name = format_user(fallback_user)
     if args.apply:
-        lead.assigned_to_id = fallback_user.id if fallback_user else None
+        if should_fix_assignment:
+            lead.assigned_to_id = fallback_user.id if fallback_user else None
         if cleaned_supervisors:
             set_supervisors(db, lead, valid_supervisor_ids)
-        assignment_changed = previous_assignee_id != (fallback_user.id if fallback_user else None)
+        assignment_changed = should_fix_assignment and previous_assignee_id != (fallback_user.id if fallback_user else None)
         if assignment_changed:
             add_sanitization_history(
                 db,
@@ -275,14 +339,35 @@ def process_lead(db: Session, lead: models.Lead, args: argparse.Namespace) -> Op
                 previous_assignee_name,
                 new_assignee_name if fallback_user else "Sin asignar",
             )
+        if should_fix_suspicious_credit and suspicious_target_status and previous_status != suspicious_target_status:
+            lead.status = suspicious_target_status
+            lead.status_updated_at = datetime.datetime.utcnow()
+            db.add(
+                models.LeadHistory(
+                    lead_id=lead.id,
+                    user_id=None,
+                    previous_status=previous_status,
+                    new_status=suspicious_target_status,
+                    comment=(
+                        "Saneamiento automático de estado: lead devuelto a "
+                        f"'{suspicious_target_status}' porque quedó en solicitud de crédito "
+                        "sin una transición válida en historial."
+                    ),
+                    created_at=datetime.datetime.utcnow(),
+                )
+            )
 
     reason_parts = []
     if fallback_user:
         reason_parts.append("Responsable recuperado desde creador/historial")
-    else:
+    elif should_fix_assignment:
         reason_parts.append("Sin responsable recuperable")
     if cleaned_supervisors:
         reason_parts.append("supervisores inválidos limpiados")
+    if should_fix_suspicious_credit and suspicious_target_status:
+        reason_parts.append(
+            f"estado sospechoso detectado en solicitud de crédito; último estado real: {suspicious_target_status}"
+        )
 
     return LeadFixResult(
         lead_id=lead.id,
@@ -294,12 +379,15 @@ def process_lead(db: Session, lead: models.Lead, args: argparse.Namespace) -> Op
         new_assignee_id=fallback_user.id if fallback_user else None,
         cleaned_supervisors=cleaned_supervisors,
         reason=". ".join(reason_parts) + ".",
+        previous_status=previous_status,
+        new_status=next_status,
     )
 
 
 def print_result(result: LeadFixResult) -> None:
     print(
         f"Lead #{result.lead_id} | Empresa {result.company_id} | {result.lead_name}\n"
+        f"  Estado: {result.previous_status or 'N/A'} -> {result.new_status or 'N/A'}\n"
         f"  Antes: {result.previous_assignee}\n"
         f"  Despues: {result.new_assignee or 'Sin cambio'}\n"
         f"  Supervisores limpiados: {'si' if result.cleaned_supervisors else 'no'}\n"
@@ -325,6 +413,11 @@ def parse_args() -> argparse.Namespace:
         "--include-deleted",
         action="store_true",
         help="Incluye leads eliminados lógicamente.",
+    )
+    parser.add_argument(
+        "--suspicious-credit-only",
+        action="store_true",
+        help="Revisa solo leads que quedaron en solicitud de crédito sin una transición válida en historial.",
     )
     return parser.parse_args()
 
