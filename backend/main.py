@@ -2433,7 +2433,7 @@ def read_leads(
 
     for lead in leads:
         related_credit = credit_map.get(lead.id)
-        if related_credit:
+        if related_credit and lead.status == models.LeadStatus.CREDIT_APPLICATION.value:
             lead.credit_application_id = related_credit.id
             lead.credit_application_status = related_credit.status
             lead.credit_application_updated_at = related_credit.updated_at
@@ -2472,7 +2472,7 @@ def get_lead_detail(
         models.CreditApplication.updated_at.desc(),
         models.CreditApplication.created_at.desc()
     ).first()
-    if related_credit:
+    if related_credit and lead.status == models.LeadStatus.CREDIT_APPLICATION.value:
         lead.credit_application_id = related_credit.id
         lead.credit_application_status = related_credit.status
         lead.credit_application_updated_at = related_credit.updated_at

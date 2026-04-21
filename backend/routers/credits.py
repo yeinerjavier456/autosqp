@@ -24,6 +24,16 @@ VALID_CREDIT_STATUSES = {
 }
 
 
+def _is_credit_stage_lead(lead: Optional[models.Lead]) -> bool:
+    return bool(lead and lead.status == models.LeadStatus.CREDIT_APPLICATION.value)
+
+
+def _is_credit_board_entry(credit: models.CreditApplication) -> bool:
+    if not credit.lead_id:
+        return True
+    return _is_credit_stage_lead(getattr(credit, "lead", None))
+
+
 def _credit_status_label(status_value: Optional[str]) -> str:
     return {
         models.CreditStatus.PENDING.value: "Solicitud recibida",
@@ -224,7 +234,8 @@ def _build_credit_feed(
     credits = []
     if current_user.company_id:
         company_credit_rows = db.query(models.CreditApplication).options(
-            joinedload(models.CreditApplication.assigned_to)
+            joinedload(models.CreditApplication.assigned_to),
+            joinedload(models.CreditApplication.lead)
         ).filter(
             models.CreditApplication.company_id == current_user.company_id
         ).order_by(models.CreditApplication.created_at.desc()).all()
@@ -232,7 +243,8 @@ def _build_credit_feed(
         linked_credit_rows = []
         if credit_stage_lead_ids:
             linked_credit_rows = db.query(models.CreditApplication).options(
-                joinedload(models.CreditApplication.assigned_to)
+                joinedload(models.CreditApplication.assigned_to),
+                joinedload(models.CreditApplication.lead)
             ).filter(
                 models.CreditApplication.lead_id.in_(credit_stage_lead_ids)
             ).order_by(models.CreditApplication.created_at.desc()).all()
@@ -240,11 +252,13 @@ def _build_credit_feed(
         merged_by_id = {}
         for credit in [*linked_credit_rows, *company_credit_rows]:
             merged_by_id[credit.id] = credit
-        credits = list(merged_by_id.values())
+        credits = [credit for credit in merged_by_id.values() if _is_credit_board_entry(credit)]
     else:
         credits = db.query(models.CreditApplication).options(
-            joinedload(models.CreditApplication.assigned_to)
+            joinedload(models.CreditApplication.assigned_to),
+            joinedload(models.CreditApplication.lead)
         ).order_by(models.CreditApplication.created_at.desc()).all()
+        credits = [credit for credit in credits if _is_credit_board_entry(credit)]
 
     if effective_role_name in ['asesor', 'vendedor', 'aliado']:
         supervised_lead_ids = {

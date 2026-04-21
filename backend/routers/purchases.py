@@ -127,6 +127,22 @@ VALID_PURCHASE_STATUSES = {
 }
 
 
+def _is_purchase_board_entry(purchase: models.CreditApplication) -> bool:
+    lead = getattr(purchase, "lead", None)
+    if not lead:
+        notes = (getattr(purchase, "notes", None) or "").strip().lower()
+        return "compra" in notes or "busqueda de vehiculo" in notes or "búsqueda de vehiculo" in notes
+
+    detail = getattr(lead, "process_detail", None)
+    desired_vehicle = ((getattr(detail, "desired_vehicle", None) or "").strip() if detail else "")
+    has_vehicle = getattr(detail, "has_vehicle", None) if detail else None
+    return bool(
+        lead.status == models.LeadStatus.INTERESTED.value
+        and has_vehicle is False
+        and desired_vehicle
+    )
+
+
 def _purchase_status_label(status_value: Optional[str]) -> str:
     return {
         models.CreditStatus.PENDING.value: "Solicitud recibida",
@@ -289,10 +305,12 @@ def _build_purchase_feed(
 
     _sync_purchase_requests_for_company(db, current_user.company_id)
     purchases = db.query(models.CreditApplication).options(
-        joinedload(models.CreditApplication.assigned_to)
+        joinedload(models.CreditApplication.assigned_to),
+        joinedload(models.CreditApplication.lead).joinedload(models.Lead.process_detail)
     ).filter(
         models.CreditApplication.company_id == current_user.company_id
     ).order_by(models.CreditApplication.created_at.desc()).all()
+    purchases = [item for item in purchases if _is_purchase_board_entry(item)]
 
     role_name = getattr(getattr(current_user, "role", None), "base_role_name", None) or getattr(getattr(current_user, "role", None), "name", None)
     if role_name in ["asesor", "vendedor", "aliado"]:
