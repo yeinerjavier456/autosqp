@@ -31,7 +31,7 @@ const TikTokLanding = () => {
                                 hideLauncher={true}
                                 embedded={true}
                                 forceFreshSession={true}
-                                sourcePage="/tiktok"
+                                sourcePage="/autos"
                                 sessionStorageKey="autosqp_public_chat_session_tiktok"
                                 initialAssistantMessage="Hola, bienvenido a Autos QP. Soy tu asesora virtual y voy a ayudarte a perfilar tu solicitud. Para empezar, cuéntame qué vehículo te interesa."
                             />
