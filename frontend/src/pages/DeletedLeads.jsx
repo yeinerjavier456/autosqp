@@ -41,6 +41,34 @@ const DeletedLeads = () => {
 
     const total = useMemo(() => items.length, [items]);
 
+    const handleRestoreLead = async (lead) => {
+        const result = await Swal.fire({
+            title: 'Restaurar lead',
+            text: `El lead ${lead?.name || 'sin nombre'} volverá a aparecer en los tableros activos.`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, restaurar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#2563eb',
+        });
+
+        if (!result.isConfirmed) {
+            return;
+        }
+
+        try {
+            const token = localStorage.getItem('token');
+            await axios.post(`https://autosqp.co/api/leads/${lead.id}/restore`, {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            Swal.fire('Restaurado', 'El lead fue restaurado correctamente.', 'success');
+            fetchDeletedLeads();
+        } catch (error) {
+            console.error('Error restoring lead', error);
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo restaurar el lead', 'error');
+        }
+    };
+
     return (
         <div className="p-4 md:p-6 space-y-5">
             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -92,6 +120,7 @@ const DeletedLeads = () => {
                                     <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-500">Eliminado por</th>
                                     <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-500">Fecha</th>
                                     <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-500">Motivo</th>
+                                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-500">Acción</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -104,6 +133,15 @@ const DeletedLeads = () => {
                                         <td className="px-4 py-3 text-sm text-slate-600">{lead.deleted_by?.full_name || lead.deleted_by?.email || 'Sistema'}</td>
                                         <td className="px-4 py-3 text-sm text-slate-600">{formatDateTime(lead.deleted_at)}</td>
                                         <td className="px-4 py-3 text-sm text-slate-700 whitespace-pre-wrap">{lead.deleted_reason || 'Sin motivo registrado'}</td>
+                                        <td className="px-4 py-3 text-sm text-slate-700">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRestoreLead(lead)}
+                                                className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700"
+                                            >
+                                                Restaurar
+                                            </button>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>

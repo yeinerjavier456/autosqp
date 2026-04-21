@@ -2331,6 +2331,59 @@ def read_deleted_leads(
     items = query.order_by(models.Lead.deleted_at.desc(), models.Lead.id.desc()).offset(skip).limit(limit).all()
     return {"items": items, "total": total}
 
+
+@app.post("/leads/{lead_id}/restore", response_model=schemas.Lead)
+def restore_deleted_lead(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden restaurar leads eliminados")
+
+    lead = db.query(models.Lead).options(
+        joinedload(models.Lead.assigned_to),
+        joinedload(models.Lead.created_by),
+        joinedload(models.Lead.deleted_by),
+        joinedload(models.Lead.supervisors),
+        joinedload(models.Lead.history).joinedload(models.LeadHistory.user),
+        joinedload(models.Lead.conversation).joinedload(models.Conversation.messages),
+        joinedload(models.Lead.process_detail),
+        joinedload(models.Lead.notes).joinedload(models.LeadNote.user),
+        joinedload(models.Lead.files).joinedload(models.LeadFile.user),
+        joinedload(models.Lead.purchase_options).joinedload(models.PurchaseOption.user),
+        joinedload(models.Lead.purchase_options).joinedload(models.PurchaseOption.decision_user),
+    ).filter(models.Lead.id == lead_id).first()
+
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    if current_user.company_id and lead.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="No tienes permisos para restaurar leads de otra empresa")
+
+    if not lead.deleted_at:
+        raise HTTPException(status_code=400, detail="El lead no está eliminado")
+
+    deleted_reason_snapshot = lead.deleted_reason
+    lead.deleted_at = None
+    lead.deleted_reason = None
+    lead.deleted_by_id = None
+
+    db.add(models.LeadHistory(
+        lead_id=lead.id,
+        user_id=current_user.id,
+        previous_status=lead.status,
+        new_status=lead.status,
+        comment=(
+            f"Lead restaurado al tablero."
+            f"{f' Motivo original de eliminación: {deleted_reason_snapshot}' if deleted_reason_snapshot else ''}"
+        )
+    ))
+
+    db.commit()
+    db.refresh(lead)
+    return lead
+
 @app.put("/leads/bulk-assign", status_code=200)
 def bulk_assign_leads(
     payload: schemas.LeadBulkAssign, 
