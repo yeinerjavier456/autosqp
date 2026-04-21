@@ -876,6 +876,83 @@ def is_active_user(user: Optional[models.User]) -> bool:
     return bool(getattr(user, "is_active", 1))
 
 
+def is_valid_lead_assignee(user: Optional[models.User], company_id: Optional[int] = None) -> bool:
+    if not user or not is_active_user(user):
+        return False
+    if company_id and getattr(user, "company_id", None) != company_id:
+        return False
+
+    role_name = get_user_role_name(user)
+    return bool(role_name and role_name != "user")
+
+
+def is_recoverable_lead_owner(user: Optional[models.User], company_id: Optional[int] = None) -> bool:
+    if not is_valid_lead_assignee(user, company_id):
+        return False
+
+    role_name = get_user_role_name(user)
+    return role_name in {"asesor", "compras", "coordinador_creditos", "aliado"}
+
+
+def find_fallback_lead_assignee(
+    db: Session,
+    lead: models.Lead,
+    preferred_user: Optional[models.User] = None
+) -> Optional[models.User]:
+    candidate_pool = []
+
+    if preferred_user and is_recoverable_lead_owner(preferred_user, lead.company_id):
+        candidate_pool.append(preferred_user)
+
+    created_by_user = getattr(lead, "created_by", None)
+    if created_by_user is None and getattr(lead, "created_by_id", None):
+        created_by_user = db.query(models.User).join(models.Role, isouter=True).filter(
+            models.User.id == lead.created_by_id
+        ).first()
+    if created_by_user and is_recoverable_lead_owner(created_by_user, lead.company_id):
+        candidate_pool.append(created_by_user)
+
+    seen_ids = {user.id for user in candidate_pool if getattr(user, "id", None)}
+    if candidate_pool:
+        return candidate_pool[0]
+
+    history_users = db.query(models.User).join(
+        models.LeadHistory,
+        models.LeadHistory.user_id == models.User.id
+    ).join(models.Role, isouter=True).filter(
+        models.LeadHistory.lead_id == lead.id,
+        models.User.company_id == lead.company_id
+    ).order_by(models.LeadHistory.created_at.desc()).all()
+
+    for history_user in history_users:
+        history_user_id = getattr(history_user, "id", None)
+        if history_user_id in seen_ids:
+            continue
+        if is_recoverable_lead_owner(history_user, lead.company_id):
+            return history_user
+
+    return None
+
+
+def sanitize_lead_assignment_for_response(lead: Optional[models.Lead]) -> Optional[models.Lead]:
+    if not lead:
+        return lead
+
+    assigned_user = getattr(lead, "assigned_to", None)
+    if getattr(lead, "assigned_to_id", None) and not is_valid_lead_assignee(assigned_user, getattr(lead, "company_id", None)):
+        lead.assigned_to = None
+
+    valid_supervisors = [
+        supervisor
+        for supervisor in (getattr(lead, "supervisors", None) or [])
+        if is_valid_lead_assignee(supervisor, getattr(lead, "company_id", None))
+    ]
+    if len(valid_supervisors) != len(getattr(lead, "supervisors", None) or []):
+        lead.supervisors = valid_supervisors
+
+    return lead
+
+
 def is_purchase_manager_role(role: Optional[models.Role]) -> bool:
     if not role:
         return False
@@ -1129,6 +1206,11 @@ def get_effective_lead_assignment_for_update(
 
     manual_assignment_requested = lead_update.assigned_to_id is not None
     target_assigned_to_id = lead.assigned_to_id
+
+    if not manual_assignment_requested and not is_valid_lead_assignee(previous_assigned_user, lead.company_id):
+        recovered_user = find_fallback_lead_assignee(db, lead, preferred_user=current_user)
+        target_assigned_user = recovered_user
+        target_assigned_to_id = recovered_user.id if recovered_user else None
 
     if manual_assignment_requested:
         if lead_update.assigned_to_id:
@@ -2234,6 +2316,14 @@ def read_leads(
 ):
     role_name = get_user_role_name(current_user)
     can_view_all_company_leads = role_name in {"admin", "super_admin"}
+    active_assignee_filter = and_(
+        models.User.role_id.isnot(None),
+        or_(models.User.is_active == True, models.User.is_active.is_(None))
+    )
+    invalid_assignment_filter = or_(
+        models.Lead.assigned_to_id.is_(None),
+        ~models.Lead.assigned_to.has(active_assignee_filter)
+    )
 
     query = db.query(models.Lead).options(
         joinedload(models.Lead.assigned_to),
@@ -2285,7 +2375,14 @@ def read_leads(
         query = query.filter(
             or_(
                 models.Lead.assigned_to_id == current_user.id,
-                models.Lead.supervisors.any(models.User.id == current_user.id)
+                models.Lead.supervisors.any(models.User.id == current_user.id),
+                and_(
+                    invalid_assignment_filter,
+                    or_(
+                        models.Lead.created_by_id == current_user.id,
+                        models.Lead.history.any(models.LeadHistory.user_id == current_user.id)
+                    )
+                )
             )
         )
 
@@ -2326,6 +2423,7 @@ def read_leads(
             lead.credit_application_id = related_credit.id
             lead.credit_application_status = related_credit.status
             lead.credit_application_updated_at = related_credit.updated_at
+        sanitize_lead_assignment_for_response(lead)
 
     return {"items": leads, "total": total}
 
@@ -2365,6 +2463,7 @@ def get_lead_detail(
         lead.credit_application_status = related_credit.status
         lead.credit_application_updated_at = related_credit.updated_at
 
+    sanitize_lead_assignment_for_response(lead)
     return lead
 
 

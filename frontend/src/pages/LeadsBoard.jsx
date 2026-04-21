@@ -125,7 +125,8 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
     const purchaseOptionsMeta = getPurchaseOptionsMeta(lead);
     const assignedPersonName = lead?.assigned_to?.full_name || lead?.assigned_to?.email || 'Sin asignar';
     const assignedPersonInitial = assignedPersonName?.charAt(0)?.toUpperCase() || '?';
-    const additionalResponsibleUsers = getLeadSupervisorUsers(lead).filter((user) => user?.id !== lead?.assigned_to?.id);
+    const assignedLeadUserId = getLeadAssignedUserId(lead);
+    const additionalResponsibleUsers = getLeadSupervisorUsers(lead).filter((user) => user?.id !== assignedLeadUserId);
     const additionalResponsibleLabel = additionalResponsibleUsers.length === 1
         ? (additionalResponsibleUsers[0]?.full_name || additionalResponsibleUsers[0]?.email || '1 adicional')
         : additionalResponsibleUsers.length > 1
@@ -316,6 +317,8 @@ const parseUserId = (value) => {
     return Number.isInteger(parsedValue) ? parsedValue : null;
 };
 
+const getLeadAssignedUserId = (lead) => parseUserId(lead?.assigned_to?.id ?? lead?.assigned_to_id);
+
 const isUserActive = (user) => {
     const value = user?.is_active;
     return value === undefined || value === null || value === true || value === 1;
@@ -393,7 +396,7 @@ const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragS
 // History Modal Component
 const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervisors, onDeleteLead, advisors, onAssign, onRefreshLeadBoard, availableVehicles, currentUserRole, boardMode = 'general', loadingDetail = false }) => {
     const { user } = useAuth();
-    const [assignedAdvisor, setAssignedAdvisor] = useState(lead?.assigned_to?.id || '');
+    const [assignedAdvisor, setAssignedAdvisor] = useState(getLeadAssignedUserId(lead) || '');
     const [selectedSupervisors, setSelectedSupervisors] = useState(getLeadSupervisorIds(lead));
     const { createAppointment } = useNotifications();
     const [newComment, setNewComment] = useState('');
@@ -436,7 +439,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     const [savingContactInfo, setSavingContactInfo] = useState(false);
 
     useEffect(() => {
-        setAssignedAdvisor(lead?.assigned_to?.id || '');
+        setAssignedAdvisor(getLeadAssignedUserId(lead) || '');
         setSelectedSupervisors(getLeadSupervisorIds(lead));
         setIsSupervisionSelectorOpen(false);
         setEditableLeadName(lead?.name || '');
@@ -445,7 +448,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         setHasVehicle(typeof lead?.process_detail?.has_vehicle === 'boolean' ? lead.process_detail.has_vehicle : null);
         setSelectedVehicleId(lead?.process_detail?.vehicle_id || '');
         setDesiredVehicle(lead?.process_detail?.desired_vehicle || '');
-    }, [lead?.id, lead?.assigned_to?.id]);
+    }, [lead?.id, lead?.assigned_to?.id, lead?.assigned_to_id]);
 
     useEffect(() => {
         if (lead && lead.id) {
@@ -687,7 +690,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     const isCompanyAdmin = normalizedCurrentUserRole === 'admin' || normalizedCurrentUserRole === 'super_admin';
     const currentUserId = user?.id ? parseInt(user.id, 10) : null;
     const leadSupervisorIds = getLeadSupervisorIds(lead);
-    const isAssignedLeadOwner = lead?.assigned_to?.id === currentUserId;
+    const isAssignedLeadOwner = getLeadAssignedUserId(lead) === currentUserId;
     const isSupervisorOnlyViewer = !isCompanyAdmin && leadSupervisorIds.includes(currentUserId) && !isAssignedLeadOwner;
     const canModifyLead = !isSupervisorOnlyViewer;
     const canManageSupervision = isCompanyAdmin;
@@ -1972,7 +1975,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const initiateSale = (leadId) => {
         const lead = leads.find(l => l.id === leadId);
         setSelectedLeadForSale(lead);
-        const defaultSellerId = lead.assigned_to?.id || '';
+        const defaultSellerId = getLeadAssignedUserId(lead) || '';
         setSaleForm({ vehicle_id: '', sale_price: '', seller_id: defaultSellerId });
         setShowSaleModal(true);
         fetchAvailableVehicles();
@@ -2348,7 +2351,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const filterByStatus = (status) => {
         return leads.filter(lead => {
             const supervisorIds = getLeadSupervisorIds(lead);
-            const assignedUserId = parseUserId(lead.assigned_to?.id);
+            const assignedUserId = getLeadAssignedUserId(lead);
             const matchesStatus = lead.status === status;
             const matchesSearch =
                 lead.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -2713,7 +2716,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                                         <option value="">(Yo mismo) - {user.email}</option>
                                         {advisors.map(adv => (
                                             <option key={adv.id} value={adv.id}>
-                                                {adv.full_name || adv.email} - {getDisplayRoleName(adv.role)} {adv.id === selectedLeadForSale?.assigned_to?.id ? '(Asignado)' : ''}
+                                                {adv.full_name || adv.email} - {getDisplayRoleName(adv.role)} {adv.id === getLeadAssignedUserId(selectedLeadForSale) ? '(Asignado)' : ''}
                                             </option>
                                         ))}
                                     </select>
