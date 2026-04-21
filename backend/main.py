@@ -1172,19 +1172,30 @@ def maybe_assign_credit_coordinator(
     previous_status: Optional[str],
     target_status: Optional[str],
     assigned_to_id: Optional[int],
-    supervisor_ids: Optional[List[int]]
+    supervisor_ids: Optional[List[int]],
+    current_user_id: Optional[int] = None,
+    previous_assigned_to_id: Optional[int] = None
 ):
+    next_supervisor_ids = normalize_supervisor_ids(supervisor_ids)
+
     if target_status != models.LeadStatus.CREDIT_APPLICATION.value:
-        return assigned_to_id, normalize_supervisor_ids(supervisor_ids), None
+        return assigned_to_id, next_supervisor_ids, None
 
     if previous_status == models.LeadStatus.CREDIT_APPLICATION.value:
-        return assigned_to_id, normalize_supervisor_ids(supervisor_ids), None
+        return assigned_to_id, next_supervisor_ids, None
+
+    # Preserve traceability when the lead enters the credit flow:
+    # keep the current responsible user, the previous responsible user,
+    # and the user performing the transition inside the lead team.
+    next_supervisor_ids = ensure_user_in_supervisors(next_supervisor_ids, assigned_to_id)
+    next_supervisor_ids = ensure_user_in_supervisors(next_supervisor_ids, previous_assigned_to_id)
+    next_supervisor_ids = ensure_user_in_supervisors(next_supervisor_ids, current_user_id)
 
     coordinator = choose_credit_coordinator(db, lead_company_id)
     if not coordinator:
-        return assigned_to_id, normalize_supervisor_ids(supervisor_ids), None
+        return assigned_to_id, next_supervisor_ids, None
 
-    next_supervisor_ids = ensure_user_in_supervisors(supervisor_ids, coordinator.id)
+    next_supervisor_ids = ensure_user_in_supervisors(next_supervisor_ids, coordinator.id)
     return assigned_to_id, next_supervisor_ids, coordinator
 
 
@@ -1247,7 +1258,9 @@ def get_effective_lead_assignment_for_update(
         previous_status=lead.status,
         target_status=effective_status,
         assigned_to_id=target_assigned_to_id,
-        supervisor_ids=target_supervisor_ids
+        supervisor_ids=target_supervisor_ids,
+        current_user_id=current_user.id,
+        previous_assigned_to_id=getattr(previous_assigned_user, "id", None)
     )
 
     if manual_assignment_requested and should_keep_assigner_as_supervisor(current_user.id, target_assigned_to_id):
@@ -1262,6 +1275,7 @@ def get_effective_lead_assignment_for_update(
         "board_transfer": board_transfer,
         "credit_coordinator": credit_coordinator,
         "manual_assignment_requested": manual_assignment_requested,
+        "target_role_name": target_role_name,
     }
 
 
@@ -2660,7 +2674,8 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
         previous_status=None,
         target_status=effective_status,
         assigned_to_id=assigned_user_id,
-        supervisor_ids=supervisor_ids
+        supervisor_ids=supervisor_ids,
+        current_user_id=current_user.id
     )
     if should_supervise_manual_lead(current_user.id, assigned_user_id):
         supervisor_ids = ensure_user_in_supervisors(supervisor_ids, current_user.id)
@@ -4552,6 +4567,7 @@ def update_lead(
     effective_status = assignment_context["effective_status"]
     board_transfer = assignment_context["board_transfer"]
     credit_coordinator = assignment_context["credit_coordinator"]
+    target_role_name = assignment_context["target_role_name"]
 
     if payload_update.get('status') is not None or payload_update.get('assigned_to_id') is not None:
         payload_update['status'] = effective_status
