@@ -1111,6 +1111,78 @@ def maybe_assign_credit_coordinator(
     return assigned_to_id, next_supervisor_ids, coordinator
 
 
+def get_effective_lead_assignment_for_update(
+    db: Session,
+    lead: models.Lead,
+    lead_update: schemas.LeadUpdate,
+    current_user: models.User
+):
+    previous_assigned_user = lead.assigned_to
+    previous_role_name = get_user_role_name(previous_assigned_user)
+    target_assigned_user = previous_assigned_user
+    current_supervisor_ids = normalize_supervisor_ids(getattr(lead, "supervisor_ids", []))
+    target_supervisor_ids = (
+        normalize_supervisor_ids(lead_update.supervisor_ids)
+        if lead_update.supervisor_ids is not None
+        else current_supervisor_ids
+    )
+
+    manual_assignment_requested = lead_update.assigned_to_id is not None
+    target_assigned_to_id = lead.assigned_to_id
+
+    if manual_assignment_requested:
+        if lead_update.assigned_to_id:
+            target_user = db.query(models.User).join(models.Role, isouter=True).filter(
+                models.User.id == lead_update.assigned_to_id
+            ).first()
+            if not target_user or target_user.company_id != lead.company_id:
+                raise HTTPException(status_code=400, detail="Invalid assigned user (not in company)")
+            if not is_active_user(target_user):
+                raise HTTPException(status_code=400, detail="No puedes reasignar el lead a un usuario inactivo")
+            if not can_assign_lead_to_user(current_user, target_user):
+                raise HTTPException(status_code=400, detail="Tu rol no tiene permitido reasignar leads a este rol")
+            target_assigned_user = target_user
+            target_assigned_to_id = target_user.id
+        else:
+            target_assigned_user = None
+            target_assigned_to_id = None
+
+    base_status = lead_update.status if lead_update.status is not None else lead.status
+    target_role_name = get_user_role_name(target_assigned_user)
+    board_transfer = should_reset_status_for_board_transfer(previous_role_name, target_role_name)
+    effective_status = enforce_ally_managed_status(
+        db=db,
+        current_user=current_user,
+        base_status=base_status,
+        assigned_to_id=target_assigned_to_id
+    )
+    if board_transfer:
+        effective_status = models.LeadStatus.NEW.value
+
+    target_assigned_to_id, target_supervisor_ids, credit_coordinator = maybe_assign_credit_coordinator(
+        db=db,
+        lead_company_id=lead.company_id,
+        previous_status=lead.status,
+        target_status=effective_status,
+        assigned_to_id=target_assigned_to_id,
+        supervisor_ids=target_supervisor_ids
+    )
+
+    if manual_assignment_requested and should_keep_assigner_as_supervisor(current_user.id, target_assigned_to_id):
+        target_supervisor_ids = ensure_user_in_supervisors(target_supervisor_ids, current_user.id)
+
+    return {
+        "previous_assigned_user": previous_assigned_user,
+        "target_assigned_user": target_assigned_user,
+        "target_assigned_to_id": target_assigned_to_id,
+        "target_supervisor_ids": target_supervisor_ids,
+        "effective_status": effective_status,
+        "board_transfer": board_transfer,
+        "credit_coordinator": credit_coordinator,
+        "manual_assignment_requested": manual_assignment_requested,
+    }
+
+
 def should_keep_assigner_as_supervisor(
     current_user_id: Optional[int],
     target_assigned_to_id: Optional[int]
@@ -4367,56 +4439,25 @@ def update_lead(
     if lead_update.supervisor_ids is not None:
         ensure_can_manage_lead_supervision(current_user, lead)
 
-    previous_assigned_user = lead.assigned_to
-    previous_role_name = get_user_role_name(previous_assigned_user)
-    target_assigned_user = previous_assigned_user
-    current_supervisor_ids = normalize_supervisor_ids(getattr(lead, "supervisor_ids", []))
-    target_supervisor_ids = normalize_supervisor_ids(lead_update.supervisor_ids) if lead_update.supervisor_ids is not None else current_supervisor_ids
-
-    if lead_update.assigned_to_id is not None:
-        if lead_update.assigned_to_id:
-            target_user = db.query(models.User).join(models.Role, isouter=True).filter(
-                models.User.id == lead_update.assigned_to_id
-            ).first()
-            if not target_user or target_user.company_id != lead.company_id:
-                raise HTTPException(status_code=400, detail="Invalid assigned user (not in company)")
-            if not is_active_user(target_user):
-                raise HTTPException(status_code=400, detail="No puedes reasignar el lead a un usuario inactivo")
-            if not can_assign_lead_to_user(current_user, target_user):
-                raise HTTPException(status_code=400, detail="Tu rol no tiene permitido reasignar leads a este rol")
-            target_assigned_user = target_user
-        else:
-            target_assigned_user = None
-    
     payload_update = lead_update.dict(exclude={'comment', 'process_detail', 'supervisor_ids'}, exclude_unset=True)
-    target_assigned_to_id = payload_update.get('assigned_to_id', lead.assigned_to_id)
-    target_status = payload_update.get('status', lead.status)
-    target_assigned_to_id, target_supervisor_ids, credit_coordinator = maybe_assign_credit_coordinator(
+    assignment_context = get_effective_lead_assignment_for_update(
         db=db,
-        lead_company_id=lead.company_id,
-        previous_status=lead.status,
-        target_status=target_status,
-        assigned_to_id=target_assigned_to_id,
-        supervisor_ids=target_supervisor_ids
+        lead=lead,
+        lead_update=lead_update,
+        current_user=current_user
     )
-    if credit_coordinator:
-        pass
-        # payload_update['assigned_to_id'] = target_assigned_to_id
-    manual_assignment_requested = lead_update.assigned_to_id is not None
-    if manual_assignment_requested and should_keep_assigner_as_supervisor(current_user.id, target_assigned_to_id):
-        target_supervisor_ids = ensure_user_in_supervisors(target_supervisor_ids, current_user.id)
-    target_role_name = get_user_role_name(target_assigned_user)
-    board_transfer = should_reset_status_for_board_transfer(previous_role_name, target_role_name)
-    effective_status = enforce_ally_managed_status(
-        db=db,
-        current_user=current_user,
-        base_status=payload_update.get('status', lead.status),
-        assigned_to_id=target_assigned_to_id
-    )
-    if board_transfer:
-        effective_status = models.LeadStatus.NEW.value
+    previous_assigned_user = assignment_context["previous_assigned_user"]
+    target_assigned_user = assignment_context["target_assigned_user"]
+    target_assigned_to_id = assignment_context["target_assigned_to_id"]
+    target_supervisor_ids = assignment_context["target_supervisor_ids"]
+    effective_status = assignment_context["effective_status"]
+    board_transfer = assignment_context["board_transfer"]
+    credit_coordinator = assignment_context["credit_coordinator"]
+
     if payload_update.get('status') is not None or payload_update.get('assigned_to_id') is not None:
         payload_update['status'] = effective_status
+    if lead_update.assigned_to_id is not None:
+        payload_update['assigned_to_id'] = target_assigned_to_id
 
     # Check for status change OR comment to log history
     # If status changes, or if there's a comment (even without status change), we log it.
@@ -4498,9 +4539,21 @@ def update_lead(
 
     # Auto-create/update purchase request queue for role "compras"
     upsert_purchase_request_from_lead(db, lead)
-        
+
     db.commit()
     db.refresh(lead)
+
+    if credit_coordinator and credit_coordinator.id != getattr(previous_assigned_user, "id", None):
+        notification = models.Notification(
+            user_id=credit_coordinator.id,
+            title="Lead en solicitud de crédito",
+            message=f"Ahora haces parte de la gestión del lead: {lead.name}.",
+            type="info",
+            link=build_lead_board_link(credit_coordinator, lead.id)
+        )
+        db.add(notification)
+        db.commit()
+        db.refresh(lead)
 
     if target_assigned_to_id and target_assigned_to_id != getattr(previous_assigned_user, "id", None):
         notification = models.Notification(

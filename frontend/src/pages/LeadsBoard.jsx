@@ -125,6 +125,12 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
     const purchaseOptionsMeta = getPurchaseOptionsMeta(lead);
     const assignedPersonName = lead?.assigned_to?.full_name || lead?.assigned_to?.email || 'Sin asignar';
     const assignedPersonInitial = assignedPersonName?.charAt(0)?.toUpperCase() || '?';
+    const additionalResponsibleUsers = getLeadSupervisorUsers(lead).filter((user) => user?.id !== lead?.assigned_to?.id);
+    const additionalResponsibleLabel = additionalResponsibleUsers.length === 1
+        ? (additionalResponsibleUsers[0]?.full_name || additionalResponsibleUsers[0]?.email || '1 adicional')
+        : additionalResponsibleUsers.length > 1
+            ? `${additionalResponsibleUsers.length} adicionales`
+            : '';
     const agePalette = getLeadAgePalette(lead?.created_at);
 
     return (
@@ -198,6 +204,9 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
                     <div className="min-w-0">
                         <p className={`text-[9px] font-bold uppercase tracking-wide ${agePalette.assignedLabelClassName}`}>Asignado a</p>
                         <p className={`truncate text-[11px] font-semibold ${agePalette.metaClassName}`}>{assignedPersonName}</p>
+                        {additionalResponsibleLabel && (
+                            <p className={`truncate text-[10px] ${agePalette.mutedClassName}`}>Equipo: {additionalResponsibleLabel}</p>
+                        )}
                     </div>
                 </div>
 
