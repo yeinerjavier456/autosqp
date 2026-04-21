@@ -35,6 +35,17 @@ const UserForm = () => {
     const isInventarioRoleSelected = (selectedRole?.base_role_name || selectedRole?.name) === 'inventario';
     const currentRoleName = currentUser?.role?.base_role_name || currentUser?.role?.name;
 
+    const isAdvisorCandidate = (candidate) => {
+        const roleName = (
+            candidate?.role?.base_role_name ||
+            candidate?.role?.name ||
+            candidate?.role?.label ||
+            ''
+        ).toString().trim().toLowerCase();
+
+        return roleName.includes('asesor') || roleName.includes('vendedor');
+    };
+
     useEffect(() => {
         const fetchDependencies = async () => {
             try {
@@ -154,7 +165,7 @@ const UserForm = () => {
 
     const handleDelete = async () => {
         const reassignmentOptions = availableUsers
-            .filter((candidate) => String(candidate.id) !== String(id))
+            .filter((candidate) => String(candidate.id) !== String(id) && isAdvisorCandidate(candidate) && candidate?.is_active !== false)
             .map((candidate) => `
                 <option value="${candidate.id}">
                     ${(candidate.full_name || candidate.email)}${candidate.role?.label ? ` - ${candidate.role.label}` : ''}
@@ -172,7 +183,7 @@ const UserForm = () => {
                         <option value="">Sin reasignación</option>
                         ${reassignmentOptions}
                     </select>
-                    <p style="margin-top:10px;font-size:12px;color:#64748b;">Si el usuario tiene leads asignados, debes escoger aquí el nuevo responsable.</p>
+                    <p style="margin-top:10px;font-size:12px;color:#64748b;">Si el usuario tiene leads asignados, debes escoger aquí un Asesor / Vendedor activo como nuevo responsable.</p>
                 </div>
             `,
             icon: 'warning',

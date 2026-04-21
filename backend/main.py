@@ -983,6 +983,7 @@ def get_active_reassignment_candidates(
     company_id: Optional[int],
     current_user: models.User,
     exclude_user_id: Optional[int] = None,
+    advisor_only: bool = False,
 ) -> List[models.User]:
     if not company_id:
         return []
@@ -998,6 +999,8 @@ def get_active_reassignment_candidates(
         if not is_active_user(user):
             continue
         if not user.role:
+            continue
+        if advisor_only and get_user_role_name(user) != "asesor":
             continue
         if not can_assign_lead_to_user(current_user, user):
             continue
@@ -1658,6 +1661,8 @@ def delete_user(
             raise HTTPException(status_code=400, detail="Debes escoger un usuario diferente para la reasignación")
         if not getattr(replacement_user, "is_active", True):
             raise HTTPException(status_code=400, detail="El usuario destino está inhabilitado")
+        if get_user_role_name(replacement_user) != "asesor":
+            raise HTTPException(status_code=400, detail="Solo puedes reasignar leads a usuarios con rol Asesor / Vendedor")
 
     if assigned_leads_count > 0 and replacement_user is None:
         raise HTTPException(
@@ -1717,6 +1722,7 @@ def redistribute_user_leads(
         company_id=source_user.company_id,
         current_user=current_user,
         exclude_user_id=source_user.id,
+        advisor_only=True,
     )
     if not recipient_users:
         raise HTTPException(status_code=400, detail="No hay usuarios activos disponibles para redistribuir estos leads")
