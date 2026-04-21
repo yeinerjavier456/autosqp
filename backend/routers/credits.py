@@ -179,6 +179,11 @@ def sync_credit_applications_for_company(db: Session, company_id: int):
         changed = True
         created_leads += 1
 
+    # Important:
+    # the credit board should reflect the lead flow, not override it.
+    # If a linked credit application already exists, we keep the relationship,
+    # but we do not push the lead back to credit stage or steal ownership from
+    # the person who is actively managing the lead on the board.
     for credit in db.query(models.CreditApplication).filter(
         models.CreditApplication.company_id == company_id,
         models.CreditApplication.lead_id.isnot(None)
@@ -186,15 +191,6 @@ def sync_credit_applications_for_company(db: Session, company_id: int):
         linked_lead = db.query(models.Lead).filter(models.Lead.id == credit.lead_id).first()
         if not linked_lead:
             continue
-        if linked_lead.status != models.LeadStatus.CREDIT_APPLICATION.value:
-            linked_lead.status = models.LeadStatus.CREDIT_APPLICATION.value
-            linked_lead.status_updated_at = datetime.datetime.utcnow()
-            changed = True
-            updated_count += 1
-        if credit.assigned_to_id and linked_lead.assigned_to_id != credit.assigned_to_id:
-            linked_lead.assigned_to_id = credit.assigned_to_id
-            changed = True
-            updated_count += 1
 
     if changed:
         db.commit()
