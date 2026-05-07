@@ -73,3 +73,12 @@ INFO:     127.0.0.1:54518 - "GET /leads?board_scope=general&limit=5000 HTTP/1.1"
 INFO:     127.0.0.1:54527 - "GET /leads?board_scope=general&limit=5000 HTTP/1.1" 200 OK
 INFO:     127.0.0.1:54534 - "GET /leads?board_scope=general&limit=5000 HTTP/1.1" 200 OK
 INFO:     127.0.0.1:54575 - "GET /leads?board_scope=general&limit=5000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54604 - "GET /leads?board_scope=general&limit=5000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54618 - "GET /leads?board_scope=general&limit=5000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54631 - "GET /leads?board_scope=general&limit=5000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54643 - "GET /leads?board_scope=general&limit=5000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54658 - "GET /leads?board_scope=general&limit=5000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54666 - "GET /leads?board_scope=general&limit=5000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54703 - "GET /leads?board_scope=general&limit=5000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54712 - "GET /internal-messages?date=2026-05-07 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54745 - "GET /leads?board_scope=general&limit=5000 HTTP/1.1" 200 OK

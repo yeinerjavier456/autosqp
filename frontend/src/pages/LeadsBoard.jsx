@@ -1139,8 +1139,15 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         minimumDownPayment: effectiveCreditDetail?.approved_down_payment ?? salesApprovalSummary?.minimumDownPayment ?? null,
     };
     const creditAssignedName = creditDetail?.assigned_to?.full_name || creditDetail?.assigned_to?.email || 'Sin responsable';
-    const purchaseAssignedName = purchaseDetail?.assigned_to?.full_name || purchaseDetail?.assigned_to?.email || 'Sin responsable';
-    const normalizedPurchaseStatus = String(purchaseDetail?.status || '').trim().toLowerCase();
+    const purchaseRequestId = purchaseDetail?.id || lead?.purchase_request_id || null;
+    const normalizedPurchaseStatus = String(purchaseDetail?.status || lead?.purchase_request_status || '').trim().toLowerCase();
+    const purchaseAssignedName = purchaseDetail?.assigned_to?.full_name
+        || purchaseDetail?.assigned_to?.email
+        || (
+            normalizedPurchaseStatus
+                ? 'Equipo de compras'
+                : 'Sin responsable'
+        );
     const canManagePurchaseRequest = (
         isCompanyAdminRole(currentUserRole) ||
         normalizedCurrentUserRole === 'compras'
@@ -1156,7 +1163,12 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     );
     const reservationAmountValue = lead?.process_detail?.reservation_amount ?? null;
     const reservationPaymentMethodValue = lead?.process_detail?.reservation_payment_method || '';
-    const purchaseRejectionReason = extractLatestPurchaseRejectionReason(purchaseDetail?.notes || '');
+    const purchaseSummarySource = [
+        purchaseDetail?.notes || '',
+        lead?.purchase_request_notes || '',
+        ...purchaseRelatedNotes.map((note) => note?.content || ''),
+    ].filter(Boolean).join('\n');
+    const purchaseRejectionReason = extractLatestPurchaseRejectionReason(purchaseSummarySource);
 
     const showReadOnlyWarning = () => {
         Swal.fire('Solo lectura', 'Tienes este lead en supervisión. Puedes verlo, pero solo un administrador puede modificarlo.', 'info');
@@ -1183,7 +1195,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     };
 
     const handlePurchaseRequestDecision = async (decision) => {
-        if (!purchaseDetail?.id || processingPurchaseDecision) return;
+        if (!purchaseRequestId || processingPurchaseDecision) return;
         if (!canManagePurchaseRequest) {
             Swal.fire('Sin permisos', 'Solo el gestor de compras o un administrador pueden decidir esta solicitud.', 'warning');
             return;
@@ -1307,7 +1319,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         try {
             const token = localStorage.getItem('token');
             const response = await axios.put(
-                `${API_BASE_URL}/purchases/${purchaseDetail.id}`,
+                `${API_BASE_URL}/purchases/${purchaseRequestId}`,
                 statusPayload,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -2337,7 +2349,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                         <span className="text-xs font-medium text-slate-400">Cargando...</span>
                                     )}
                                 </div>
-                                {(purchaseDetail || purchaseRelatedNotes.length > 0) ? (
+                                {(purchaseDetail || normalizedPurchaseStatus || purchaseRelatedNotes.length > 0 || lead?.purchase_request_notes) ? (
                                     <>
                                         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
                                             <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-4 shadow-sm">
@@ -2371,7 +2383,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                             </div>
                                         </div>
 
-                                        {purchaseDetail && (
+                                        {normalizedPurchaseStatus && (
                                             <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
                                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                                     <div>
