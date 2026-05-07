@@ -30,6 +30,157 @@ models.Base.metadata.create_all(bind=engine)
 
 BOGOTA_TZ = ZoneInfo("America/Bogota")
 
+LEGACY_LEAD_STATUS_MAP = {
+    "interested": "in_process",
+    "credit_application": "credit_study",
+    "qualified": "approvals",
+    "ally_managed": "new",
+}
+
+LEAD_STATUS_SEQUENCE = [
+    "new",
+    "contacted",
+    "in_process",
+    "credit_study",
+    "approvals",
+    "reserved",
+    "preparation",
+    "sold",
+    "lost",
+]
+
+LEAD_CREDIT_FLOW_STATUSES = {"credit_study", "approvals", "reserved", "preparation", "sold"}
+LEAD_STATUS_LABELS = {
+    "new": "Nuevos",
+    "contacted": "Contactados",
+    "in_process": "En proceso",
+    "credit_study": "Estudio de crédito",
+    "approvals": "Aprobaciones",
+    "reserved": "Reservas",
+    "preparation": "Alistamientos",
+    "sold": "Vendidos",
+    "lost": "Perdidos",
+}
+
+
+def normalize_lead_status_value(status: Optional[str], default: str = "new") -> str:
+    normalized = (status or "").strip().lower()
+    if not normalized:
+        return default
+    return LEGACY_LEAD_STATUS_MAP.get(normalized, normalized)
+
+
+def is_credit_stage_status(status: Optional[str]) -> bool:
+    return normalize_lead_status_value(status) in LEAD_CREDIT_FLOW_STATUSES
+
+
+def is_purchase_stage_status(status: Optional[str]) -> bool:
+    return normalize_lead_status_value(status) in {
+        models.LeadStatus.RESERVED.value,
+        models.LeadStatus.PREPARATION.value,
+        models.LeadStatus.SOLD.value,
+    }
+
+
+def is_purchase_request_record(record: Optional[models.CreditApplication]) -> bool:
+    if not record:
+        return False
+    notes_text = (getattr(record, "notes", None) or "").strip().lower()
+    purchase_markers = (
+        "[purchase_request]",
+        "solicitud de compra",
+        "compra",
+        "busqueda de vehiculo",
+        "búsqueda de vehiculo",
+        "busqueda del vehiculo",
+        "búsqueda del vehículo",
+    )
+    return any(marker in notes_text for marker in purchase_markers)
+
+
+def pick_related_credit_record(
+    records: list[models.CreditApplication],
+    lead_status: Optional[str] = None,
+) -> Optional[models.CreditApplication]:
+    credit_records = [record for record in (records or []) if not is_purchase_request_record(record)]
+    if not credit_records:
+        return None
+
+    normalized_lead_status = normalize_lead_status_value(lead_status)
+    advanced_credit_stages = {
+        models.LeadStatus.APPROVALS.value,
+        models.LeadStatus.RESERVED.value,
+        models.LeadStatus.PREPARATION.value,
+        models.LeadStatus.SOLD.value,
+    }
+    status_priority = {
+        models.CreditStatus.COMPLETED.value: 5,
+        models.CreditStatus.APPROVED.value: 4,
+        models.CreditStatus.REJECTED.value: 3,
+        models.CreditStatus.IN_REVIEW.value: 2,
+        models.CreditStatus.PENDING.value: 1,
+    }
+
+    def _score(record: models.CreditApplication):
+        record_status = (getattr(record, "status", None) or "").strip().lower()
+        priority = status_priority.get(record_status, 0)
+        notes_text = (getattr(record, "notes", None) or "").strip().lower()
+        if normalized_lead_status in advanced_credit_stages and record_status == models.CreditStatus.PENDING.value:
+            if notes_text.startswith("generado automaticamente desde lead") or notes_text.startswith("[credit_request] generado automaticamente desde lead"):
+                priority = -1
+        sort_date = getattr(record, "updated_at", None) or getattr(record, "created_at", None) or datetime.datetime.min
+        return (priority, sort_date)
+
+    return max(credit_records, key=_score)
+
+
+def pick_related_purchase_record(records: list[models.CreditApplication]) -> Optional[models.CreditApplication]:
+    purchase_records = [record for record in (records or []) if is_purchase_request_record(record)]
+    if not purchase_records:
+        return None
+    return max(
+        purchase_records,
+        key=lambda record: getattr(record, "updated_at", None) or getattr(record, "created_at", None) or datetime.datetime.min
+    )
+
+
+def normalize_credit_desired_vehicle(value: Optional[str]) -> str:
+    normalized = " ".join(str(value or "").split()).strip()
+    return normalized or "Por definir"
+
+
+def get_lead_credit_vehicle_context(
+    db: Session,
+    lead: Optional[models.Lead],
+    process_detail: Optional[models.LeadProcessDetail] = None
+) -> Dict[str, str]:
+    detail = process_detail
+    if detail is None and lead:
+        detail = db.query(models.LeadProcessDetail).filter(
+            models.LeadProcessDetail.lead_id == lead.id
+        ).first()
+
+    vehicle_label = ""
+    if detail:
+        if detail.vehicle_id:
+            vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == detail.vehicle_id).first()
+            if vehicle:
+                vehicle_label = " ".join(
+                    part for part in [vehicle.make, vehicle.model, str(vehicle.year or ""), getattr(vehicle, "plate", None)] if part
+                ).strip()
+        if not vehicle_label:
+            vehicle_label = (detail.desired_vehicle or "").strip()
+
+    if not vehicle_label and lead:
+        vehicle_label = (lead.message or "").strip()
+
+    vehicle_label = normalize_credit_desired_vehicle(vehicle_label)
+    mode_label = "vehiculo de inventario" if detail and detail.has_vehicle else "vehiculo por buscar"
+    return {
+        "vehicle": vehicle_label,
+        "mode": mode_label
+    }
+
 def ensure_role_configuration_columns():
     with engine.begin() as conn:
         role_columns = {
@@ -92,7 +243,7 @@ def ensure_payment_receipts_columns():
 
         conn.execute(text(
             "UPDATE roles SET is_system = 1 WHERE name IN "
-            "('super_admin', 'admin', 'asesor', 'aliado', 'inventario', 'compras', 'user')"
+            "('super_admin', 'admin', 'asesor', 'gestion_creditos', 'aliado', 'inventario', 'compras', 'user')"
         ))
 
 ensure_role_configuration_columns()
@@ -103,7 +254,9 @@ def ensure_user_status_columns():
         with engine.begin() as conn:
             user_columns = {
                 "is_active": "ALTER TABLE users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1",
+                "auto_assign_leads": "ALTER TABLE users ADD COLUMN auto_assign_leads BOOLEAN NOT NULL DEFAULT 0",
             }
+            created_columns = set()
             for column_name, ddl in user_columns.items():
                 exists = conn.execute(text(
                     "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
@@ -112,10 +265,80 @@ def ensure_user_status_columns():
                 ), {"column_name": column_name}).scalar()
                 if not exists:
                     conn.execute(text(ddl))
+                    created_columns.add(column_name)
+
+            if "auto_assign_leads" in created_columns:
+                conn.execute(text("""
+                    UPDATE users u
+                    LEFT JOIN roles r ON r.id = u.role_id
+                    SET u.auto_assign_leads = 1
+                    WHERE COALESCE(u.is_active, 1) = 1
+                      AND (
+                        COALESCE(r.base_role_name, r.name) = 'asesor'
+                        OR COALESCE(r.auto_assign_leads, 0) = 1
+                      )
+                """))
     except Exception as exc:
         print(f"Warning: could not ensure user status columns: {exc}", flush=True)
 
 ensure_user_status_columns()
+
+
+def ensure_system_roles_exist():
+    try:
+        system_roles = {
+            "super_admin": "Super Admin Global",
+            "admin": "Administrador de Empresa",
+            "inventario": "Gestor de Inventario",
+            "asesor": "Asesor / Vendedor",
+            "gestion_creditos": "Gestion de Creditos",
+            "aliado": "Aliado Estrategico",
+            "compras": "Gestor de Compras",
+            "user": "Usuario Basico",
+        }
+
+        with Session(engine) as db:
+            existing_roles = {
+                role.name: role
+                for role in db.query(models.Role).filter(models.Role.name.in_(system_roles.keys())).all()
+            }
+            changed = False
+
+            for role_name, label in system_roles.items():
+                role = existing_roles.get(role_name)
+                if not role:
+                    role = models.Role(
+                        name=role_name,
+                        label=label,
+                        is_system=True,
+                        permissions_json=json.dumps(DEFAULT_ROLE_VIEW_ACCESS.get(role_name, [])),
+                        menu_order_json=json.dumps(DEFAULT_ROLE_MENU_ORDER.get(role_name, [])),
+                        auto_assign_leads=(role_name == "asesor"),
+                    )
+                    db.add(role)
+                    changed = True
+                    continue
+
+                if not getattr(role, "label", None):
+                    role.label = label
+                    changed = True
+                if not getattr(role, "is_system", False):
+                    role.is_system = True
+                    changed = True
+                if not getattr(role, "permissions_json", None):
+                    role.permissions_json = json.dumps(DEFAULT_ROLE_VIEW_ACCESS.get(role_name, []))
+                    changed = True
+                if not getattr(role, "menu_order_json", None):
+                    role.menu_order_json = json.dumps(DEFAULT_ROLE_MENU_ORDER.get(role_name, []))
+                    changed = True
+
+            if changed:
+                db.commit()
+    except Exception as exc:
+        print(f"Warning: could not ensure system roles: {exc}", flush=True)
+
+
+ensure_system_roles_exist()
 
 def ensure_sales_metadata_columns():
     try:
@@ -392,6 +615,86 @@ def ensure_credit_notes_text_column():
 
 ensure_credit_notes_text_column()
 
+
+def ensure_credit_desired_vehicle_text_column():
+    try:
+        with engine.connect() as conn:
+            desired_vehicle_column_type = conn.execute(text(
+                "SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_applications' "
+                "AND COLUMN_NAME = 'desired_vehicle'"
+            )).scalar()
+
+            if desired_vehicle_column_type and desired_vehicle_column_type.lower() != "text":
+                conn.execute(text(
+                    "ALTER TABLE credit_applications MODIFY COLUMN desired_vehicle TEXT NULL"
+                ))
+                conn.commit()
+    except Exception as exc:
+        print(f"Warning: could not ensure credit desired_vehicle text column: {exc}", flush=True)
+
+
+ensure_credit_desired_vehicle_text_column()
+
+
+def ensure_credit_approval_columns():
+    try:
+        with engine.connect() as conn:
+            existing_cols_result = conn.execute(text(
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_applications'"
+            ))
+            existing_cols = {row[0] for row in existing_cols_result.fetchall()}
+
+            if "approved_amount" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE credit_applications "
+                    "ADD COLUMN approved_amount INTEGER NULL"
+                ))
+            if "approval_percentage" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE credit_applications "
+                    "ADD COLUMN approval_percentage INTEGER NULL"
+                ))
+            if "approved_down_payment" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE credit_applications "
+                    "ADD COLUMN approved_down_payment INTEGER NULL"
+                ))
+            conn.commit()
+    except Exception as exc:
+        print(f"Warning: could not ensure credit approval columns: {exc}", flush=True)
+
+
+ensure_credit_approval_columns()
+
+
+def ensure_lead_process_detail_reservation_columns():
+    try:
+        with engine.connect() as conn:
+            existing_cols_result = conn.execute(text(
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'lead_process_details'"
+            ))
+            existing_cols = {row[0] for row in existing_cols_result.fetchall()}
+
+            if "reservation_amount" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE lead_process_details "
+                    "ADD COLUMN reservation_amount INTEGER NULL"
+                ))
+            if "reservation_payment_method" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE lead_process_details "
+                    "ADD COLUMN reservation_payment_method VARCHAR(50) NULL"
+                ))
+            conn.commit()
+    except Exception as exc:
+        print(f"Warning: could not ensure lead process detail reservation columns: {exc}", flush=True)
+
+
+ensure_lead_process_detail_reservation_columns()
+
 def ensure_sent_alert_logs_indexes():
     try:
         with engine.connect() as conn:
@@ -498,6 +801,35 @@ def ensure_user_activity_column():
 
 
 ensure_user_activity_column()
+
+
+def ensure_lead_statuses_synced():
+    try:
+        with engine.begin() as conn:
+            for old_status, new_status in LEGACY_LEAD_STATUS_MAP.items():
+                conn.execute(
+                    text("UPDATE leads SET status = :new_status WHERE status = :old_status"),
+                    {"old_status": old_status, "new_status": new_status}
+                )
+                conn.execute(
+                    text(
+                        "UPDATE lead_history SET previous_status = :new_status "
+                        "WHERE previous_status = :old_status"
+                    ),
+                    {"old_status": old_status, "new_status": new_status}
+                )
+                conn.execute(
+                    text(
+                        "UPDATE lead_history SET new_status = :new_status "
+                        "WHERE new_status = :old_status"
+                    ),
+                    {"old_status": old_status, "new_status": new_status}
+                )
+    except Exception as exc:
+        print(f"Warning: could not sync lead statuses: {exc}", flush=True)
+
+
+ensure_lead_statuses_synced()
 
 app = FastAPI(title="AutosQP API", description="API para gestión de compra venta de carros")
 
@@ -624,7 +956,7 @@ def enforce_ally_managed_status(
     base_status: Optional[str],
     assigned_to_id: Optional[int] = None
 ) -> str:
-    return base_status or models.LeadStatus.NEW.value
+    return normalize_lead_status_value(base_status, models.LeadStatus.NEW.value)
 
 
 def can_manually_assign_to_any_role(current_user: models.User) -> bool:
@@ -660,8 +992,17 @@ def get_user_role_name(user: Optional[models.User]) -> Optional[str]:
         return "aliado"
     if "asesor" in role_names or "vendedor" in role_names or "asesor vendedor" in role_names:
         return "asesor"
+    if (
+        "gestion creditos" in role_names
+        or "gestion de creditos" in role_names
+        or "gestor de creditos" in role_names
+        or "gestor creditos" in role_names
+        or any("gestion" in role_name and "credit" in role_name for role_name in role_names)
+        or any("gestor" in role_name and "credit" in role_name for role_name in role_names)
+    ):
+        return "gestion_creditos"
     if any("coordinador" in role_name and "credit" in role_name for role_name in role_names):
-        return "coordinador_creditos"
+        return "gestion_creditos"
     if "compras" in role_names:
         return "compras"
     if "inventario" in role_names:
@@ -826,6 +1167,11 @@ def is_credit_coordinator_role(role: Optional[models.Role]) -> bool:
     role_names.discard("")
 
     explicit_credit_role_names = {
+        "gestion creditos",
+        "gestion de creditos",
+        "gestor de creditos",
+        "gestor creditos",
+        "gestion_creditos",
         "coordinador",
         "coordinador credito",
         "coordinador de credito",
@@ -876,6 +1222,15 @@ def is_active_user(user: Optional[models.User]) -> bool:
     return bool(getattr(user, "is_active", 1))
 
 
+def can_user_receive_auto_assigned_leads(user: Optional[models.User]) -> bool:
+    if not user or not is_active_user(user):
+        return False
+    role = getattr(user, "role", None)
+    if not is_advisor_role(role):
+        return False
+    return bool(getattr(user, "auto_assign_leads", False))
+
+
 def is_valid_lead_assignee(user: Optional[models.User], company_id: Optional[int] = None) -> bool:
     if not user or not is_active_user(user):
         return False
@@ -891,7 +1246,7 @@ def is_recoverable_lead_owner(user: Optional[models.User], company_id: Optional[
         return False
 
     role_name = get_user_role_name(user)
-    return role_name in {"asesor", "compras", "coordinador_creditos", "aliado"}
+    return role_name in {"asesor", "compras", "gestion_creditos", "aliado"}
 
 
 def find_fallback_lead_assignee(
@@ -1020,30 +1375,8 @@ def get_auto_assign_candidate_users(db: Session, company_id: Optional[int]) -> L
 
     eligible_users = []
     for user in candidates:
-        if not is_active_user(user):
-            continue
-        role = getattr(user, "role", None)
-        if not role:
-            continue
-        if is_ally_role(role):
-            continue
-        if bool(getattr(role, "auto_assign_leads", False)) and is_advisor_role(role):
+        if can_user_receive_auto_assigned_leads(user):
             eligible_users.append(user)
-
-    if eligible_users:
-        return eligible_users
-
-    # Backward-compatible fallback for companies that still rely on the default advisor role.
-    fallback_users = []
-    for user in candidates:
-        if not is_active_user(user):
-            continue
-        role = getattr(user, "role", None)
-        if role and not is_ally_role(role) and is_advisor_role(role):
-            fallback_users.append(user)
-
-    if fallback_users:
-        return fallback_users
 
     return eligible_users
 
@@ -1061,6 +1394,7 @@ def get_active_reassignment_candidates(
     current_user: models.User,
     exclude_user_id: Optional[int] = None,
     advisor_only: bool = False,
+    auto_assign_only: bool = False,
 ) -> List[models.User]:
     if not company_id:
         return []
@@ -1078,6 +1412,8 @@ def get_active_reassignment_candidates(
         if not user.role:
             continue
         if advisor_only and get_user_role_name(user) != "asesor":
+            continue
+        if auto_assign_only and not can_user_receive_auto_assigned_leads(user):
             continue
         if not can_assign_lead_to_user(current_user, user):
             continue
@@ -1178,10 +1514,10 @@ def maybe_assign_credit_coordinator(
 ):
     next_supervisor_ids = normalize_supervisor_ids(supervisor_ids)
 
-    if target_status != models.LeadStatus.CREDIT_APPLICATION.value:
+    if normalize_lead_status_value(target_status) != models.LeadStatus.CREDIT_STUDY.value:
         return assigned_to_id, next_supervisor_ids, None
 
-    if previous_status == models.LeadStatus.CREDIT_APPLICATION.value:
+    if normalize_lead_status_value(previous_status) == models.LeadStatus.CREDIT_STUDY.value:
         return assigned_to_id, next_supervisor_ids, None
 
     # Preserve traceability when the lead enters the credit flow:
@@ -1302,25 +1638,51 @@ def validate_interested_process_detail(
     process_detail_data: Optional[schemas.LeadProcessDetailCreate],
     existing_detail: Optional[models.LeadProcessDetail] = None,
 ):
-    if target_status != models.LeadStatus.INTERESTED.value:
+    normalized_status = normalize_lead_status_value(target_status)
+    if normalized_status == models.LeadStatus.IN_PROCESS.value:
+        has_vehicle = process_detail_data.has_vehicle if process_detail_data is not None else getattr(existing_detail, "has_vehicle", None)
+        vehicle_id = process_detail_data.vehicle_id if process_detail_data is not None else getattr(existing_detail, "vehicle_id", None)
+        desired_vehicle = process_detail_data.desired_vehicle if process_detail_data is not None else getattr(existing_detail, "desired_vehicle", None)
+        desired_vehicle = (desired_vehicle or "").strip()
+
+        if has_vehicle is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Debes indicar si el vehículo está disponible en inventario o si toca conseguirlo."
+            )
+
+        if has_vehicle and not vehicle_id:
+            raise HTTPException(status_code=400, detail="Debes seleccionar un vehículo disponible del inventario.")
+
+        if not has_vehicle and not desired_vehicle:
+            raise HTTPException(status_code=400, detail="Debes indicar qué vehículo busca el cliente.")
         return
 
-    has_vehicle = process_detail_data.has_vehicle if process_detail_data is not None else getattr(existing_detail, "has_vehicle", None)
-    vehicle_id = process_detail_data.vehicle_id if process_detail_data is not None else getattr(existing_detail, "vehicle_id", None)
-    desired_vehicle = process_detail_data.desired_vehicle if process_detail_data is not None else getattr(existing_detail, "desired_vehicle", None)
-    desired_vehicle = (desired_vehicle or "").strip()
-
-    if has_vehicle is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Debes indicar si el vehículo está disponible en inventario o si toca conseguirlo."
+    if normalized_status == models.LeadStatus.RESERVED.value:
+        reservation_amount = (
+            process_detail_data.reservation_amount if process_detail_data is not None
+            else getattr(existing_detail, "reservation_amount", None)
         )
+        payment_method = (
+            process_detail_data.reservation_payment_method if process_detail_data is not None
+            else getattr(existing_detail, "reservation_payment_method", None)
+        )
+        try:
+            reservation_amount = int(reservation_amount) if reservation_amount is not None else None
+        except (TypeError, ValueError):
+            reservation_amount = None
 
-    if has_vehicle and not vehicle_id:
-        raise HTTPException(status_code=400, detail="Debes seleccionar un vehículo disponible del inventario.")
-
-    if not has_vehicle and not desired_vehicle:
-        raise HTTPException(status_code=400, detail="Debes indicar qué vehículo busca el cliente.")
+        payment_method = (payment_method or "").strip().lower()
+        if reservation_amount is None or reservation_amount <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Debes indicar el monto de la separación para pasar el lead a Reservas."
+            )
+        if payment_method not in {"efectivo", "transferencia"}:
+            raise HTTPException(
+                status_code=400,
+                detail="Debes indicar si la separación fue en efectivo o transferencia."
+            )
 
 
 def normalize_interested_process_detail(
@@ -1329,7 +1691,16 @@ def normalize_interested_process_detail(
     existing_detail: Optional[models.LeadProcessDetail],
     lead: Optional[models.Lead],
 ) -> Optional[schemas.LeadProcessDetailCreate]:
-    if target_status != models.LeadStatus.INTERESTED.value or process_detail_data is None:
+    normalized_status = normalize_lead_status_value(target_status)
+    if process_detail_data is None:
+        return process_detail_data
+
+    if normalized_status == models.LeadStatus.RESERVED.value:
+        if process_detail_data.reservation_payment_method:
+            process_detail_data.reservation_payment_method = process_detail_data.reservation_payment_method.strip().lower()
+        return process_detail_data
+
+    if normalized_status != models.LeadStatus.IN_PROCESS.value:
         return process_detail_data
 
     if process_detail_data.has_vehicle is True and not process_detail_data.vehicle_id:
@@ -1390,7 +1761,7 @@ def ensure_role_view_defaults_synced():
 
             for role in roles:
                 effective_role_name = getattr(role, "base_role_name", None) or getattr(role, "name", None)
-                if effective_role_name not in {"admin", "super_admin", "asesor", "aliado"}:
+                if effective_role_name not in {"admin", "super_admin", "asesor", "gestion_creditos", "aliado", "compras", "inventario", "user"}:
                     continue
 
                 default_permissions = DEFAULT_ROLE_VIEW_ACCESS.get(effective_role_name, [])
@@ -1424,10 +1795,10 @@ def ensure_role_view_defaults_synced():
 
 
 def serialize_role(role: models.Role) -> schemas.Role:
-    default_permissions = DEFAULT_ROLE_VIEW_ACCESS.get(role.name, [])
-    permissions = sanitize_view_ids(parse_json_list(getattr(role, "permissions_json", None), default_permissions), getattr(role, "company_id", None))
-    menu_order = sanitize_view_ids(parse_json_list(getattr(role, "menu_order_json", None), DEFAULT_ROLE_MENU_ORDER.get(role.name, permissions)), getattr(role, "company_id", None))
     effective_role_name = getattr(role, "base_role_name", None) or role.name
+    default_permissions = DEFAULT_ROLE_VIEW_ACCESS.get(effective_role_name, [])
+    permissions = sanitize_view_ids(parse_json_list(getattr(role, "permissions_json", None), default_permissions), getattr(role, "company_id", None))
+    menu_order = sanitize_view_ids(parse_json_list(getattr(role, "menu_order_json", None), DEFAULT_ROLE_MENU_ORDER.get(effective_role_name, permissions)), getattr(role, "company_id", None))
 
     for view_id in permissions:
         if view_id not in menu_order:
@@ -1476,16 +1847,22 @@ def resolve_assignable_role(db: Session, target_role: models.Role, company_id: O
 def serialize_user(user: models.User, is_online: Optional[bool] = None) -> dict:
     payload = schemas.User.model_validate(user, from_attributes=True).model_dump()
     payload["role"] = serialize_role(user.role) if user.role else None
+    payload["auto_assign_leads"] = bool(getattr(user, "auto_assign_leads", False) and is_advisor_role(getattr(user, "role", None)))
     if is_online is not None:
         payload["is_online"] = is_online
     return payload
 
 def upsert_purchase_request_from_lead(db: Session, lead: models.Lead):
     """
-    Create/update a credit application for purchase managers when a lead is in
-    interested status and is marked as "no vehicle in inventory" with a desired vehicle.
+    Create/update a purchase request for purchase managers when a lead reaches
+    reservation/purchase flow and is marked as "no vehicle in inventory" with a desired vehicle.
     """
-    if not lead or lead.status != models.LeadStatus.INTERESTED.value:
+    normalized_status = normalize_lead_status_value(getattr(lead, "status", None))
+    if not lead or normalized_status not in {
+        models.LeadStatus.RESERVED.value,
+        models.LeadStatus.PREPARATION.value,
+        models.LeadStatus.SOLD.value,
+    }:
         return
 
     detail = db.query(models.LeadProcessDetail).filter(models.LeadProcessDetail.lead_id == lead.id).first()
@@ -1494,12 +1871,12 @@ def upsert_purchase_request_from_lead(db: Session, lead: models.Lead):
     if detail.has_vehicle:
         return
 
-    desired_vehicle = (detail.desired_vehicle or "").strip()
+    desired_vehicle = normalize_credit_desired_vehicle((detail.desired_vehicle or "").strip())
     if not desired_vehicle:
         return
 
     safe_phone = (lead.phone or "").strip() or f"lead-{lead.id}"
-    existing_credit = db.query(models.CreditApplication).filter(
+    existing_purchase_candidates = db.query(models.CreditApplication).filter(
         models.CreditApplication.company_id == lead.company_id,
         or_(
             models.CreditApplication.lead_id == lead.id,
@@ -1513,22 +1890,45 @@ def upsert_purchase_request_from_lead(db: Session, lead: models.Lead):
                 ])
             )
         )
-    ).order_by(models.CreditApplication.created_at.desc()).first()
+    ).order_by(
+        models.CreditApplication.updated_at.desc(),
+        models.CreditApplication.created_at.desc()
+    ).all()
+    existing_purchase = next(
+        (record for record in existing_purchase_candidates if is_purchase_request_record(record)),
+        None
+    )
 
-    auto_note = f"Generado automáticamente desde lead #{lead.id} en estado En proceso."
-    if existing_credit:
-        existing_credit.lead_id = lead.id
-        existing_credit.client_name = lead.name or existing_credit.client_name
-        existing_credit.email = lead.email or existing_credit.email
-        existing_credit.company_id = lead.company_id
-        existing_credit.desired_vehicle = desired_vehicle or existing_credit.desired_vehicle
-        if not existing_credit.notes:
-            existing_credit.notes = auto_note
-        return
-
+    note_parts = [
+        "[PURCHASE_REQUEST]",
+        f"Generado automáticamente desde lead #{lead.id} en estado {LEAD_STATUS_LABELS.get(normalized_status, normalized_status)}."
+    ]
+    note_parts.append(f"Vehículo por buscar: {desired_vehicle}.")
+    if normalized_status == models.LeadStatus.RESERVED.value:
+        reservation_amount = getattr(detail, "reservation_amount", None)
+        reservation_payment_method = (getattr(detail, "reservation_payment_method", None) or "").strip().lower()
+        if reservation_amount:
+            note_parts.append(f"Separación registrada: ${reservation_amount:,.0f}".replace(",", "."))
+        if reservation_payment_method:
+            note_parts.append(f"Medio de pago de separación: {reservation_payment_method.capitalize()}.")
+    auto_note = " ".join(part for part in note_parts if part)
     compras_users = get_purchase_manager_users(db, lead.company_id)
     assigned_purchase_user = choose_purchase_manager(db, lead.company_id)
     assigned_compras_id = assigned_purchase_user.id if assigned_purchase_user else None
+
+    if existing_purchase:
+        existing_purchase.lead_id = lead.id
+        existing_purchase.client_name = lead.name or existing_purchase.client_name
+        existing_purchase.email = lead.email or existing_purchase.email
+        existing_purchase.company_id = lead.company_id
+        existing_purchase.desired_vehicle = desired_vehicle or existing_purchase.desired_vehicle
+        if assigned_compras_id and existing_purchase.assigned_to_id != assigned_compras_id:
+            existing_purchase.assigned_to_id = assigned_compras_id
+        if not existing_purchase.status:
+            existing_purchase.status = models.CreditStatus.PENDING.value
+        if not (existing_purchase.notes or "").strip():
+            existing_purchase.notes = auto_note
+        return
 
     new_credit = models.CreditApplication(
         lead_id=lead.id,
@@ -1567,43 +1967,49 @@ def upsert_credit_application_from_lead(
     Create/update a credit application when the lead enters credit request stage.
     This keeps the same lead visible in /creditos without creating duplicates.
     """
-    if not lead or lead.status != models.LeadStatus.CREDIT_APPLICATION.value:
+    if not lead or normalize_lead_status_value(lead.status) != models.LeadStatus.CREDIT_STUDY.value:
         return
 
     detail = db.query(models.LeadProcessDetail).filter(
         models.LeadProcessDetail.lead_id == lead.id
     ).first()
+    vehicle_context = get_lead_credit_vehicle_context(db, lead, detail)
+    desired_vehicle = vehicle_context["vehicle"]
 
-    desired_vehicle = ""
-    if detail:
-        if detail.vehicle_id:
-            vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == detail.vehicle_id).first()
-            if vehicle:
-                desired_vehicle = " ".join(
-                    part for part in [vehicle.make, vehicle.model, str(vehicle.year or "")] if part
-                ).strip()
-        if not desired_vehicle:
-            desired_vehicle = (detail.desired_vehicle or "").strip()
-
-    if not desired_vehicle:
-        desired_vehicle = (lead.message or "").strip() or "Por definir"
-
-    note_parts = [f"Generado autom?ticamente desde lead #{lead.id}."]
+    note_parts = ["[CREDIT_REQUEST]", f"Generado autom?ticamente desde lead #{lead.id}."]
+    note_parts.append(f"{vehicle_context['mode'].capitalize()}: {desired_vehicle}.")
     if comment and comment.strip():
         note_parts.append(f"Seguimiento: {comment.strip()}")
     auto_note = " ".join(note_parts)
+    credit_assignee_id = lead.assigned_to_id
+    if not (lead.assigned_to and is_credit_coordinator_role(getattr(lead.assigned_to, "role", None))):
+        for supervisor in getattr(lead, "supervisors", []) or []:
+            if is_active_user(supervisor) and is_credit_coordinator_role(getattr(supervisor, "role", None)):
+                credit_assignee_id = supervisor.id
+                break
+        else:
+            credit_coordinator = choose_credit_coordinator(db, lead.company_id)
+            if credit_coordinator:
+                credit_assignee_id = credit_coordinator.id
 
-    existing_credit = db.query(models.CreditApplication).filter(
+    existing_credit_candidates = db.query(models.CreditApplication).filter(
         models.CreditApplication.company_id == lead.company_id,
         models.CreditApplication.lead_id == lead.id
-    ).order_by(models.CreditApplication.created_at.desc()).first()
+    ).order_by(
+        models.CreditApplication.updated_at.desc(),
+        models.CreditApplication.created_at.desc()
+    ).all()
+    existing_credit = next(
+        (record for record in existing_credit_candidates if not is_purchase_request_record(record)),
+        None
+    )
 
     if existing_credit:
         existing_credit.client_name = lead.name or existing_credit.client_name
         existing_credit.phone = (lead.phone or "").strip() or existing_credit.phone
         existing_credit.email = lead.email or existing_credit.email
         existing_credit.desired_vehicle = desired_vehicle or existing_credit.desired_vehicle
-        existing_credit.assigned_to_id = lead.assigned_to_id or existing_credit.assigned_to_id
+        existing_credit.assigned_to_id = credit_assignee_id or existing_credit.assigned_to_id
         existing_credit.notes = auto_note
         if not existing_credit.status:
             existing_credit.status = models.CreditStatus.PENDING.value
@@ -1623,7 +2029,7 @@ def upsert_credit_application_from_lead(
         status=models.CreditStatus.PENDING.value,
         notes=auto_note,
         company_id=lead.company_id,
-        assigned_to_id=lead.assigned_to_id
+        assigned_to_id=credit_assignee_id
     ))
 
 
@@ -1698,12 +2104,17 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
         raise HTTPException(status_code=400, detail="Email already registered")
     
     hashed_password = auth_utils.get_password_hash(user.password)
+    auto_assign_leads = bool(user.auto_assign_leads) if is_advisor_role(role_obj) else False
     new_user = models.User(
         email=user.email,
         full_name=user.full_name,
         hashed_password=hashed_password,
         role_id=role_obj.id, 
-        company_id=user.company_id
+        company_id=user.company_id,
+        auto_assign_leads=auto_assign_leads,
+        commission_percentage=user.commission_percentage or 0,
+        base_salary=user.base_salary,
+        payment_dates=user.payment_dates
     )
     db.add(new_user)
     db.commit()
@@ -1736,7 +2147,8 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
         raise HTTPException(status_code=404, detail="User not found")
     if current_user.company_id and db_user.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="No tienes permisos para editar usuarios de otra empresa")
-    
+    resolved_role = getattr(db_user, "role", None)
+
     if user_update.email:
         db_user.email = user_update.email
     if user_update.password:
@@ -1750,6 +2162,7 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
             raise HTTPException(status_code=403, detail="No puedes usar roles de otra empresa")
         print(f"Setting role_id to: {target_role.id}") 
         db_user.role_id = target_role.id
+        resolved_role = target_role
     if user_update.company_id is not None:
         if current_user.company_id and user_update.company_id != current_user.company_id:
             raise HTTPException(status_code=403, detail="No puedes mover usuarios a otra empresa")
@@ -1764,6 +2177,10 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
         db_user.base_salary = user_update.base_salary
     if user_update.payment_dates is not None:
         db_user.payment_dates = user_update.payment_dates
+    if user_update.auto_assign_leads is not None:
+        db_user.auto_assign_leads = bool(user_update.auto_assign_leads) if is_advisor_role(resolved_role) else False
+    elif not is_advisor_role(resolved_role):
+        db_user.auto_assign_leads = False
         
     try:
         db.commit()
@@ -1891,6 +2308,7 @@ def redistribute_user_leads(
         current_user=current_user,
         exclude_user_id=source_user.id,
         advisor_only=True,
+        auto_assign_only=True,
     )
     if not recipient_users:
         raise HTTPException(status_code=400, detail="No hay usuarios activos disponibles para redistribuir estos leads")
@@ -2362,7 +2780,6 @@ def read_leads(
         if not can_view_all_company_leads:
             query = query.filter(
                 or_(
-                    models.Lead.status == models.LeadStatus.ALLY_MANAGED.value,
                     models.Lead.assigned_to_id == current_user.id,
                     models.Lead.supervisors.any(models.User.id == current_user.id)
                 )
@@ -2370,13 +2787,12 @@ def read_leads(
         elif aliado_user_ids:
             query = query.filter(
                 or_(
-                    models.Lead.status == models.LeadStatus.ALLY_MANAGED.value,
                     models.Lead.assigned_to_id.in_(aliado_user_ids),
                     models.Lead.supervisors.any(models.User.id.in_(aliado_user_ids))
                 )
             )
         else:
-            query = query.filter(models.Lead.status == models.LeadStatus.ALLY_MANAGED.value)
+            query = query.filter(false())
     elif aliado_user_ids and not can_view_all_company_leads:
         query = query.filter(
             or_(
@@ -2404,7 +2820,7 @@ def read_leads(
         query = query.filter(models.Lead.source == source)
     
     if status:
-        query = query.filter(models.Lead.status == status)
+        query = query.filter(models.Lead.status == normalize_lead_status_value(status))
 
     if q:
         search = f"%{q}%"
@@ -2419,6 +2835,7 @@ def read_leads(
 
     lead_ids = [lead.id for lead in leads]
     credit_map = {}
+    purchase_map = {}
     if lead_ids:
         related_credits = db.query(models.CreditApplication).filter(
             models.CreditApplication.lead_id.in_(lead_ids)
@@ -2428,15 +2845,33 @@ def read_leads(
         ).all()
 
         for credit in related_credits:
-            if credit.lead_id and credit.lead_id not in credit_map:
-                credit_map[credit.lead_id] = credit
+            if not credit.lead_id:
+                continue
+            if is_purchase_request_record(credit):
+                if credit.lead_id not in purchase_map:
+                    purchase_map[credit.lead_id] = credit
+            else:
+                if credit.lead_id not in credit_map:
+                    credit_map[credit.lead_id] = credit
 
     for lead in leads:
-        related_credit = credit_map.get(lead.id)
-        if related_credit and lead.status == models.LeadStatus.CREDIT_APPLICATION.value:
+        lead.status = normalize_lead_status_value(lead.status)
+        related_credit = pick_related_credit_record(
+            [record for record in related_credits if record.lead_id == lead.id] if lead_ids else [],
+            lead.status
+        )
+        related_purchase = pick_related_purchase_record(
+            [record for record in related_credits if record.lead_id == lead.id] if lead_ids else []
+        )
+        if related_credit and is_credit_stage_status(lead.status):
             lead.credit_application_id = related_credit.id
             lead.credit_application_status = related_credit.status
             lead.credit_application_updated_at = related_credit.updated_at
+        if related_purchase and is_purchase_stage_status(lead.status):
+            lead.purchase_request_id = related_purchase.id
+            lead.purchase_request_status = related_purchase.status
+            lead.purchase_request_updated_at = related_purchase.updated_at
+            lead.purchase_request_notes = related_purchase.notes
         sanitize_lead_assignment_for_response(lead)
 
     return {"items": leads, "total": total}
@@ -2466,16 +2901,24 @@ def get_lead_detail(
     if current_user.company_id and lead.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    related_credit = db.query(models.CreditApplication).filter(
+    related_records = db.query(models.CreditApplication).filter(
         models.CreditApplication.lead_id == lead.id
     ).order_by(
         models.CreditApplication.updated_at.desc(),
         models.CreditApplication.created_at.desc()
-    ).first()
-    if related_credit and lead.status == models.LeadStatus.CREDIT_APPLICATION.value:
+    ).all()
+    related_credit = pick_related_credit_record(related_records, lead.status)
+    related_purchase = pick_related_purchase_record(related_records)
+    lead.status = normalize_lead_status_value(lead.status)
+    if related_credit and is_credit_stage_status(lead.status):
         lead.credit_application_id = related_credit.id
         lead.credit_application_status = related_credit.status
         lead.credit_application_updated_at = related_credit.updated_at
+    if related_purchase and is_purchase_stage_status(lead.status):
+        lead.purchase_request_id = related_purchase.id
+        lead.purchase_request_status = related_purchase.status
+        lead.purchase_request_updated_at = related_purchase.updated_at
+        lead.purchase_request_notes = related_purchase.notes
 
     sanitize_lead_assignment_for_response(lead)
     return lead
@@ -3145,11 +3588,10 @@ def read_advisor_stats(
 
         supervisor_ids = {supervisor.id for supervisor in (lead.supervisors or []) if supervisor and supervisor.id}
         touches_ally_board = bool(
-            status_key == models.LeadStatus.ALLY_MANAGED.value or (
             ally_user_ids and (
                 (lead.assigned_to_id in ally_user_ids) or
                 bool(supervisor_ids & ally_user_ids)
-            ))
+            )
         )
         if touches_ally_board:
             ally_total += 1
@@ -4587,8 +5029,6 @@ def update_lead(
     auto_credit_comment = None
     if credit_coordinator and credit_coordinator.id != getattr(previous_assigned_user, "id", None):
         auto_credit_comment = f"Coordinador de credito añadido como supervisor: {credit_coordinator.full_name or credit_coordinator.email}"
-    history_comment = lead_update.comment.strip() if lead_update.comment and lead_update.comment.strip() else (auto_credit_comment or auto_transfer_comment)
-    has_comment = bool(history_comment)
     process_detail_data = lead_update.process_detail
     previous_process_detail = db.query(models.LeadProcessDetail).filter(models.LeadProcessDetail.lead_id == lead.id).first()
     previous_vehicle_id = previous_process_detail.vehicle_id if previous_process_detail else None
@@ -4600,6 +5040,35 @@ def update_lead(
     )
     if not is_contact_only_update:
         validate_interested_process_detail(effective_status, process_detail_data, previous_process_detail)
+
+    history_comment_parts = []
+    if lead_update.comment and lead_update.comment.strip():
+        history_comment_parts.append(lead_update.comment.strip())
+    elif auto_credit_comment or auto_transfer_comment:
+        history_comment_parts.append(auto_credit_comment or auto_transfer_comment)
+
+    if normalize_lead_status_value(effective_status) == models.LeadStatus.CREDIT_STUDY.value:
+        context_detail = process_detail_data or previous_process_detail
+        vehicle_context = get_lead_credit_vehicle_context(db, lead, context_detail)
+        vehicle_phrase = f"{vehicle_context['mode'].capitalize()}: {vehicle_context['vehicle']}"
+        if not any(vehicle_phrase.lower() in part.lower() for part in history_comment_parts):
+            history_comment_parts.append(vehicle_phrase)
+
+    if normalize_lead_status_value(effective_status) == models.LeadStatus.RESERVED.value:
+        context_detail = process_detail_data or previous_process_detail
+        reservation_amount = getattr(context_detail, "reservation_amount", None)
+        reservation_payment_method = (getattr(context_detail, "reservation_payment_method", None) or "").strip().lower()
+        if reservation_amount:
+            reservation_phrase = f"Separación registrada: ${int(reservation_amount):,}".replace(",", ".")
+            if not any(reservation_phrase.lower() in part.lower() for part in history_comment_parts):
+                history_comment_parts.append(reservation_phrase)
+        if reservation_payment_method:
+            payment_phrase = f"Medio de separación: {reservation_payment_method.capitalize()}"
+            if not any(payment_phrase.lower() in part.lower() for part in history_comment_parts):
+                history_comment_parts.append(payment_phrase)
+
+    history_comment = " | ".join(part for part in history_comment_parts if part).strip() or None
+    has_comment = bool(history_comment)
 
     if has_status_change or has_comment:
         if has_status_change:
@@ -4631,14 +5100,15 @@ def update_lead(
         
     # Handle Process Detail Upsert
     if process_detail_data:
+        process_detail_payload = process_detail_data.dict(exclude_unset=True)
         existing_detail = db.query(models.LeadProcessDetail).filter(models.LeadProcessDetail.lead_id == lead.id).first()
         if existing_detail:
-            for k, v in process_detail_data.dict().items():
+            for k, v in process_detail_payload.items():
                 setattr(existing_detail, k, v)
         else:
             new_detail = models.LeadProcessDetail(
                 lead_id=lead.id,
-                **process_detail_data.dict()
+                **process_detail_payload
             )
             db.add(new_detail)
 
@@ -4654,6 +5124,24 @@ def update_lead(
 
     # Auto-create/update purchase request queue for role "compras"
     upsert_purchase_request_from_lead(db, lead)
+
+    related_credit_records = db.query(models.CreditApplication).filter(
+        models.CreditApplication.lead_id == lead.id
+    ).order_by(
+        models.CreditApplication.updated_at.desc(),
+        models.CreditApplication.created_at.desc()
+    ).all()
+    related_credit = next(
+        (record for record in related_credit_records if not is_purchase_request_record(record)),
+        None
+    )
+    if related_credit and normalize_lead_status_value(lead.status) == models.LeadStatus.SOLD.value:
+        if related_credit.status != models.CreditStatus.COMPLETED.value:
+            related_credit.status = models.CreditStatus.COMPLETED.value
+            related_credit.notes = (
+                f"{(related_credit.notes or '').rstrip()}\n"
+                "Marcado automáticamente como vendido desde el tablero de leads."
+            ).strip()
 
     db.commit()
     db.refresh(lead)

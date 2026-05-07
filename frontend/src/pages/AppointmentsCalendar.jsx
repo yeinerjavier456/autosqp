@@ -7,6 +7,9 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import esLocale from '@fullcalendar/core/locales/es';
 import { useAuth } from '../context/AuthContext';
+import { formatBogotaDateTime } from '../utils/dateTime';
+
+const API_BASE_URL = `${window.location.origin}/crm/api`;
 
 const getAppointmentPalette = (status) => {
     switch ((status || '').toLowerCase()) {
@@ -76,7 +79,7 @@ const AppointmentsCalendar = () => {
             if (range?.end) params.end = range.end;
             if (currentViewMode !== 'all') params.view_mode = currentViewMode;
 
-            const response = await axios.get('https://autosqp.co/api/appointments/', {
+            const response = await axios.get(`${API_BASE_URL}/appointments/`, {
                 headers: { Authorization: `Bearer ${token}` },
                 params
             });
@@ -148,7 +151,7 @@ const AppointmentsCalendar = () => {
         if (!activeAppointment) return;
         try {
             const token = localStorage.getItem('token');
-            await axios.put(`https://autosqp.co/api/appointments/${activeAppointment.id}`, {
+            await axios.put(`${API_BASE_URL}/appointments/${activeAppointment.id}`, {
                 title: editForm.title,
                 note: editForm.note,
                 appointment_date: editForm.appointment_date
@@ -170,7 +173,7 @@ const AppointmentsCalendar = () => {
         if (!window.confirm('¿Estás seguro de que deseas eliminar esta cita?')) return;
         try {
             const token = localStorage.getItem('token');
-            await axios.delete(`https://autosqp.co/api/appointments/${activeAppointment.id}`, {
+            await axios.delete(`${API_BASE_URL}/appointments/${activeAppointment.id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setIsEditModalOpen(false);
@@ -318,6 +321,26 @@ const AppointmentsCalendar = () => {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
+                        </div>
+                        <div className="mb-4 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <div>
+                                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Lead</p>
+                                <p className="mt-1 text-sm font-semibold text-slate-900">
+                                    {activeAppointment?.lead?.name || 'Lead sin nombre'}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Agendada por</p>
+                                <p className="mt-1 text-sm font-semibold text-slate-900">
+                                    {activeAppointment?.user?.full_name || activeAppointment?.user?.email || 'Sin responsable'}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Fecha registrada</p>
+                                <p className="mt-1 text-sm text-slate-700">
+                                    {formatBogotaDateTime(activeAppointment?.appointment_date) || 'Sin fecha'}
+                                </p>
+                            </div>
                         </div>
                         <div className="space-y-4">
                             <div>

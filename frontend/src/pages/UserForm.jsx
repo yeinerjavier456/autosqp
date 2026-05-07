@@ -4,6 +4,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Swal from 'sweetalert2';
 
+const API_BASE_URL = import.meta.env.DEV ? '/crm/api' : 'https://autosqp.co/api';
+
 const UserForm = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -15,6 +17,7 @@ const UserForm = () => {
         password: '',
         role_id: '',
         company_id: '',
+        auto_assign_leads: false,
     });
     const [companies, setCompanies] = useState([]);
     const [roles, setRoles] = useState([]);
@@ -27,12 +30,14 @@ const UserForm = () => {
         admin: 'Administrador de Empresa',
         inventario: 'Gestor de Inventario (crear/editar vehículos)',
         asesor: 'Asesor / Vendedor',
+        gestion_creditos: 'Gestión de Créditos',
         aliado: 'Aliado Estratégico',
         compras: 'Gestor de Compras',
         user: 'Usuario Básico',
     };
     const selectedRole = roles.find(r => String(r.id) === String(user.role_id));
     const isInventarioRoleSelected = (selectedRole?.base_role_name || selectedRole?.name) === 'inventario';
+    const isAdvisorRoleSelected = (selectedRole?.base_role_name || selectedRole?.name) === 'asesor';
     const currentRoleName = currentUser?.role?.base_role_name || currentUser?.role?.name;
 
     const isAdvisorCandidate = (candidate) => {
@@ -53,17 +58,17 @@ const UserForm = () => {
                 const headers = { Authorization: `Bearer ${token}` };
 
                 // Fetch Roles
-                const rolesRes = await axios.get('https://autosqp.co/api/roles/', { headers });
+                const rolesRes = await axios.get(`${API_BASE_URL}/roles/`, { headers });
                 setRoles(rolesRes.data);
 
                 if (id) {
-                    const usersRes = await axios.get('https://autosqp.co/api/users/?limit=500', { headers });
+                    const usersRes = await axios.get(`${API_BASE_URL}/users/?limit=500`, { headers });
                     setAvailableUsers(Array.isArray(usersRes.data?.items) ? usersRes.data.items : []);
                 }
 
                 // Fetch Companies if Super Admin
                 if (!currentUser?.company_id) {
-                    const compRes = await axios.get('https://autosqp.co/api/companies/?limit=100', { headers });
+                    const compRes = await axios.get(`${API_BASE_URL}/companies/?limit=100`, { headers });
                     setCompanies(compRes.data.items);
                 }
             } catch (error) {
@@ -78,7 +83,7 @@ const UserForm = () => {
                 try {
                     const token = localStorage.getItem('token');
                     console.log(`Fetching user ${id}...`);
-                    const response = await axios.get(`https://autosqp.co/api/users/${id}`, {
+                    const response = await axios.get(`${API_BASE_URL}/users/${id}`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
                     console.log("User data loaded:", response.data);
@@ -95,6 +100,7 @@ const UserForm = () => {
                     setUser({
                         ...userData,
                         role_id: loadedRoleId || '',
+                        auto_assign_leads: Boolean(userData.auto_assign_leads),
                         password: ''
                     });
                 } catch (error) {
@@ -108,9 +114,21 @@ const UserForm = () => {
     }, [id, currentUser]);
 
     const handleChange = (e) => {
+        const { name, value, type, checked } = e.target;
+        const nextValue = type === 'checkbox' ? checked : value;
+        if (name === 'role_id') {
+            const nextRole = roles.find((role) => String(role.id) === String(nextValue));
+            const nextIsAdvisorRole = (nextRole?.base_role_name || nextRole?.name) === 'asesor';
+            setUser({
+                ...user,
+                role_id: nextValue,
+                auto_assign_leads: nextIsAdvisorRole ? Boolean(user.auto_assign_leads) : false,
+            });
+            return;
+        }
         setUser({
             ...user,
-            [e.target.name]: e.target.value,
+            [name]: nextValue,
         });
     };
 
@@ -135,6 +153,7 @@ const UserForm = () => {
             if (payload.role_id) {
                 payload.role_id = parseInt(payload.role_id);
             }
+            payload.auto_assign_leads = Boolean(payload.auto_assign_leads);
 
             // Inventory role must not persist payroll/commission fields
             const selectedRoleForSave = roles.find(r => r.id === payload.role_id);
@@ -143,12 +162,15 @@ const UserForm = () => {
                 payload.base_salary = null;
                 payload.payment_dates = null;
             }
+            if ((selectedRoleForSave?.base_role_name || selectedRoleForSave?.name) !== 'asesor') {
+                payload.auto_assign_leads = false;
+            }
 
             if (isEditing) {
-                await axios.put(`https://autosqp.co/api/users/${id}`, payload, { headers });
+                await axios.put(`${API_BASE_URL}/users/${id}`, payload, { headers });
                 setStatus({ type: 'success', message: 'Usuario actualizado exitosamente!' });
             } else {
-                await axios.post('https://autosqp.co/api/users/', payload, { headers });
+                await axios.post(`${API_BASE_URL}/users/`, payload, { headers });
                 setStatus({ type: 'success', message: 'Usuario creado exitosamente!' });
             }
 
@@ -205,7 +227,7 @@ const UserForm = () => {
             setStatus({ type: 'loading', message: 'Inhabilitando...' });
             try {
                 const token = localStorage.getItem('token');
-                await axios.delete(`https://autosqp.co/api/users/${id}`, {
+                await axios.delete(`${API_BASE_URL}/users/${id}`, {
                     headers: { Authorization: `Bearer ${token}` },
                     data: result.value || {}
                 });
@@ -320,6 +342,26 @@ const UserForm = () => {
 
                         {!isInventarioRoleSelected && (
                             <>
+                                {isAdvisorRoleSelected && (
+                                    <div className="md:col-span-2">
+                                        <label className="flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                name="auto_assign_leads"
+                                                checked={Boolean(user.auto_assign_leads)}
+                                                onChange={handleChange}
+                                                className="mt-1 h-4 w-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            <div>
+                                                <span className="block text-sm font-semibold text-slate-700">Permitir asignación automática</span>
+                                                <span className="block text-xs text-slate-500 mt-1">
+                                                    Si está activo, este usuario podrá recibir leads nuevos por asignación automática y entrar en redistribuciones automáticas cuando aplique.
+                                                </span>
+                                            </div>
+                                        </label>
+                                    </div>
+                                )}
+
                                 {/* Commission Field - Only for Admin/SuperAdmin to set on others */}
                                 <div>
                                     <label className="block text-sm font-medium text-slate-600 mb-1">Comisión (%)</label>

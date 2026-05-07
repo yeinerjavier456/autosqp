@@ -4,9 +4,119 @@ import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationsContext';
 import Swal from 'sweetalert2';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { formatBogotaDateTime } from '../utils/dateTime';
+
+const API_BASE_URL = `${window.location.origin}/crm/api`;
+
+const extractCreditVehicleTrace = (comment) => {
+    const text = (comment || '').trim();
+    if (!text) return { vehicleTrace: '', mainComment: '' };
+
+    const vehicleMatch = text.match(/(Veh[ií]culo (?:por buscar|de inventario):[^|"]+)/i);
+    const vehicleTrace = vehicleMatch ? vehicleMatch[1].trim() : '';
+    const mainComment = vehicleTrace
+        ? text
+            .replace(vehicleMatch[1], '')
+            .replace(/\s*\|\s*/g, ' | ')
+            .replace(/^(\|\s*)|(\s*\|)$/g, '')
+            .trim()
+        : text;
+
+    return { vehicleTrace, mainComment };
+};
+
+const formatLeadCurrencyValue = (value) => {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return value || '';
+    return new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        maximumFractionDigits: 0,
+    }).format(numericValue);
+};
+
+const extractSalesApprovalSummary = (text) => {
+    const normalizedText = String(text || '').trim();
+    if (!normalizedText) return null;
+    if (!normalizedText.toLowerCase().includes('resumen para ventas:')) return null;
+
+    const vehicleMatch = normalizedText.match(/veh[ií]culo\s+(.+?)\s*\|\s*monto aprobado/i);
+    const approvedAmountMatch = normalizedText.match(/monto aprobado\s+\$?\s*([\d.,]+)/i);
+    const approvalPercentageMatch = normalizedText.match(/porcentaje aprobado\s+([\d.,]+)%/i);
+    const minimumDownPaymentMatch = normalizedText.match(/cuota inicial m[ií]nima\s+\$?\s*([\d.,]+)/i);
+
+    const parseNumericValue = (rawValue) => {
+        if (!rawValue) return null;
+        const digitsOnly = String(rawValue).replace(/[^\d]/g, '');
+        if (!digitsOnly) return null;
+        const numericValue = Number(digitsOnly);
+        return Number.isFinite(numericValue) ? numericValue : null;
+    };
+
+    const parsePercentageValue = (rawValue) => {
+        if (!rawValue) return null;
+        const normalizedNumber = String(rawValue).replace(',', '.').trim();
+        const numericValue = Number(normalizedNumber);
+        return Number.isFinite(numericValue) ? numericValue : null;
+    };
+
+    return {
+        vehicle: vehicleMatch?.[1]?.trim() || '',
+        approvedAmount: parseNumericValue(approvedAmountMatch?.[1]),
+        approvalPercentage: parsePercentageValue(approvalPercentageMatch?.[1]),
+        minimumDownPayment: parseNumericValue(minimumDownPaymentMatch?.[1]),
+    };
+};
+
+const extractApprovalMetrics = (text) => {
+    const normalizedText = String(text || '').trim();
+    if (!normalizedText) return null;
+
+    const approvedAmountMatch = normalizedText.match(/monto aprobado[:\s]+\$?\s*([\d.,]+)/i);
+    const approvalPercentageMatch = normalizedText.match(/porcentaje aprobado[:\s]+([\d.,]+)%/i);
+    const minimumDownPaymentMatch = normalizedText.match(/cuota inicial(?: m[ií]nima)?[:\s]+\$?\s*([\d.,]+)/i);
+
+    const parseMoney = (rawValue) => {
+        if (!rawValue) return null;
+        const digitsOnly = String(rawValue).replace(/[^\d]/g, '');
+        if (!digitsOnly) return null;
+        const numericValue = Number(digitsOnly);
+        return Number.isFinite(numericValue) ? numericValue : null;
+    };
+
+    const parsePercentage = (rawValue) => {
+        if (!rawValue) return null;
+        const normalizedNumber = String(rawValue).replace(',', '.').trim();
+        const numericValue = Number(normalizedNumber);
+        return Number.isFinite(numericValue) ? numericValue : null;
+    };
+
+    const approvedAmount = parseMoney(approvedAmountMatch?.[1]);
+    const approvalPercentage = parsePercentage(approvalPercentageMatch?.[1]);
+    const minimumDownPayment = parseMoney(minimumDownPaymentMatch?.[1]);
+
+    if (approvedAmount == null && approvalPercentage == null && minimumDownPayment == null) {
+        return null;
+    }
+
+    return {
+        approvedAmount,
+        approvalPercentage,
+        minimumDownPayment,
+    };
+};
+
+const extractLatestPurchaseRejectionReason = (text) => {
+    const normalizedText = String(text || '').trim();
+    if (!normalizedText) return '';
+
+    const matches = [...normalizedText.matchAll(/Solicitud de compra cancelada\.\s*Motivo:\s*(.+)/gi)];
+    if (matches.length === 0) return '';
+    return String(matches[matches.length - 1]?.[1] || '').trim();
+};
 
 // Draggable Lead Card Component
-const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = false, boardMode = 'general' }) => {
+const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = false, boardMode = 'general', canDrag = true }) => {
     const getLeadAgePalette = (createdAt) => {
         if (!createdAt) {
             return {
@@ -95,6 +205,71 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
         }
     };
 
+    const getLeadVisualPalette = (leadItem, leadStatus) => {
+        const normalizedLeadStatus = normalizeLeadStatus(leadStatus || leadItem?.status);
+        const normalizedCreditStatus = String(leadItem?.credit_application_status || '').trim().toLowerCase();
+        const normalizedPurchaseRequestStatus = String(leadItem?.purchase_request_status || '').trim().toLowerCase();
+
+        if (
+            ['reserved', 'preparation'].includes(normalizedLeadStatus) &&
+            normalizedPurchaseRequestStatus === 'rejected'
+        ) {
+            return {
+                cardClassName: 'bg-red-100',
+                borderClassName: 'border-red-300',
+                dividerClassName: 'border-red-200',
+                titleClassName: 'text-red-950',
+                metaClassName: 'text-red-900',
+                mutedClassName: 'text-red-800',
+                assignedLabelClassName: 'text-red-700',
+                actionButtonClassName: 'text-red-900 hover:text-red-950 hover:bg-red-200/70',
+            };
+        }
+
+        if (normalizedLeadStatus === 'credit_study' || normalizedLeadStatus === 'approvals') {
+            if (normalizedCreditStatus === 'approved') {
+                return {
+                    cardClassName: 'bg-emerald-100',
+                    borderClassName: 'border-emerald-300',
+                    dividerClassName: 'border-emerald-200',
+                    titleClassName: 'text-emerald-950',
+                    metaClassName: 'text-emerald-900',
+                    mutedClassName: 'text-emerald-800',
+                    assignedLabelClassName: 'text-emerald-700',
+                    actionButtonClassName: 'text-emerald-900 hover:text-emerald-950 hover:bg-emerald-200/70',
+                };
+            }
+
+            if (normalizedCreditStatus === 'in_review') {
+                return {
+                    cardClassName: 'bg-amber-100',
+                    borderClassName: 'border-amber-300',
+                    dividerClassName: 'border-amber-300',
+                    titleClassName: 'text-amber-950',
+                    metaClassName: 'text-amber-900',
+                    mutedClassName: 'text-amber-800',
+                    assignedLabelClassName: 'text-amber-700',
+                    actionButtonClassName: 'text-amber-900 hover:text-amber-950 hover:bg-amber-200/70',
+                };
+            }
+
+            if (normalizedCreditStatus === 'rejected') {
+                return {
+                    cardClassName: 'bg-red-100',
+                    borderClassName: 'border-red-300',
+                    dividerClassName: 'border-red-200',
+                    titleClassName: 'text-red-950',
+                    metaClassName: 'text-red-900',
+                    mutedClassName: 'text-red-800',
+                    assignedLabelClassName: 'text-red-700',
+                    actionButtonClassName: 'text-red-900 hover:text-red-950 hover:bg-red-200/70',
+                };
+            }
+        }
+
+        return getLeadAgePalette(leadItem?.created_at);
+    };
+
     const getPurchaseOptionsMeta = (leadItem) => {
         const options = Array.isArray(leadItem?.purchase_options) ? leadItem.purchase_options : [];
         if (options.length === 0) return null;
@@ -121,8 +296,29 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
         };
     };
 
+    const getPurchaseRequestMeta = (leadItem) => {
+        const statusValue = String(leadItem?.purchase_request_status || '').trim().toLowerCase();
+        if (!statusValue) return null;
+
+        switch (statusValue) {
+            case 'pending':
+                return { label: 'Solicitud de compra recibida', className: 'bg-amber-100 text-amber-800 border-amber-200' };
+            case 'in_review':
+                return { label: 'Compra: en búsqueda', className: 'bg-sky-100 text-sky-800 border-sky-200' };
+            case 'approved':
+                return { label: 'Compra: opciones encontradas', className: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+            case 'rejected':
+                return { label: 'Solicitud de compra rechazada', className: 'bg-rose-100 text-rose-800 border-rose-200' };
+            case 'completed':
+                return { label: 'Compra cerrada', className: 'bg-slate-200 text-slate-800 border-slate-300' };
+            default:
+                return null;
+        }
+    };
+
     const creditStatusMeta = getCreditStatusMeta(lead.credit_application_status);
     const purchaseOptionsMeta = getPurchaseOptionsMeta(lead);
+    const purchaseRequestMeta = getPurchaseRequestMeta(lead);
     const assignedPersonName = lead?.assigned_to?.full_name || lead?.assigned_to?.email || 'Sin asignar';
     const assignedPersonInitial = assignedPersonName?.charAt(0)?.toUpperCase() || '?';
     const assignedLeadUserId = getLeadAssignedUserId(lead);
@@ -132,23 +328,19 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
         : additionalResponsibleUsers.length > 1
             ? `${additionalResponsibleUsers.length} adicionales`
             : '';
-    const agePalette = getLeadAgePalette(lead?.created_at);
+    const agePalette = getLeadVisualPalette(lead, status);
+    const normalizedStatus = normalizeLeadStatus(status);
+    const statusMeta = getLeadStatusMeta(normalizedStatus);
 
     return (
         <div
             id={`lead-card-${lead.id}`}
-            draggable="true"
+            draggable={canDrag}
             onDragStart={(e) => onDragStart(e, lead.id)}
-            className={`p-3 rounded-lg shadow-sm border-2 hover:shadow-md transition-all transform hover:-translate-y-0.5 cursor-grab active:cursor-grabbing group relative animate-fade-in ${agePalette.cardClassName} ${agePalette.borderClassName}`}
+            className={`p-3 rounded-lg shadow-sm border-2 hover:shadow-md transition-all transform hover:-translate-y-0.5 group relative animate-fade-in ${canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed opacity-95'} ${agePalette.cardClassName} ${agePalette.borderClassName}`}
             style={{
                 borderColor: isHighlighted ? '#2563eb' : undefined,
-                borderLeftColor:
-                    status === 'new' ? '#3b82f6' :
-                        status === 'contacted' ? '#eab308' :
-                            status === 'interested' ? '#f97316' :
-                                status === 'credit_application' ? '#0f766e' :
-                                status === 'sold' ? '#22c55e' :
-                                    status === 'ally_managed' ? '#8b5cf6' : '#9ca3af',
+                borderLeftColor: statusMeta.borderColor,
                 borderLeftWidth: '6px',
                 boxShadow: isHighlighted ? '0 0 0 3px rgba(37, 99, 235, 0.18)' : undefined
             }}
@@ -182,6 +374,12 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
                         <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${purchaseOptionsMeta.className}`}>
                             <span className="h-2 w-2 rounded-full bg-current opacity-70"></span>
                             {purchaseOptionsMeta.label}
+                        </span>
+                    )}
+                    {purchaseRequestMeta && (
+                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${purchaseRequestMeta.className}`}>
+                            <span className="h-2 w-2 rounded-full bg-current opacity-70"></span>
+                            {purchaseRequestMeta.label}
                         </span>
                     )}
                 </div>
@@ -317,7 +515,90 @@ const parseUserId = (value) => {
     return Number.isInteger(parsedValue) ? parsedValue : null;
 };
 
+const LEGACY_LEAD_STATUS_MAP = {
+    interested: 'in_process',
+    credit_application: 'credit_study',
+    qualified: 'approvals',
+    ally_managed: 'new',
+};
+
+const LEAD_STATUS_OPTIONS = [
+    { value: 'new', label: 'Nuevos', columnColor: 'text-blue-600', borderColor: '#3b82f6', historyBadgeClass: 'bg-blue-500' },
+    { value: 'contacted', label: 'Contactados', columnColor: 'text-amber-600', borderColor: '#eab308', historyBadgeClass: 'bg-amber-500' },
+    { value: 'in_process', label: 'En proceso', columnColor: 'text-orange-600', borderColor: '#f97316', historyBadgeClass: 'bg-orange-500' },
+    { value: 'credit_study', label: 'Estudio de crédito', columnColor: 'text-teal-600', borderColor: '#0f766e', historyBadgeClass: 'bg-teal-500' },
+    { value: 'approvals', label: 'Aprobaciones', columnColor: 'text-cyan-600', borderColor: '#0891b2', historyBadgeClass: 'bg-cyan-500' },
+    { value: 'reserved', label: 'Reservas', columnColor: 'text-violet-600', borderColor: '#8b5cf6', historyBadgeClass: 'bg-violet-500' },
+    { value: 'preparation', label: 'Alistamientos', columnColor: 'text-fuchsia-600', borderColor: '#c026d3', historyBadgeClass: 'bg-fuchsia-500' },
+    { value: 'sold', label: 'Vendidos', columnColor: 'text-green-600', borderColor: '#22c55e', historyBadgeClass: 'bg-green-500' },
+    { value: 'lost', label: 'Perdidos', columnColor: 'text-slate-500', borderColor: '#64748b', historyBadgeClass: 'bg-slate-500' },
+];
+
+const LEAD_STATUS_META = LEAD_STATUS_OPTIONS.reduce((accumulator, statusOption) => {
+    accumulator[statusOption.value] = statusOption;
+    return accumulator;
+}, {});
+
+const normalizeLeadStatus = (status) => {
+    const normalizedStatus = String(status || '').trim().toLowerCase();
+    if (!normalizedStatus) return 'new';
+    return LEGACY_LEAD_STATUS_MAP[normalizedStatus] || normalizedStatus;
+};
+
+const getLeadStatusMeta = (status) => (
+    LEAD_STATUS_META[normalizeLeadStatus(status)] || LEAD_STATUS_META.new
+);
+
+const getLeadStatusLabel = (status) => getLeadStatusMeta(status).label;
+
+const normalizeLeadRecord = (lead) => {
+    if (!lead) return lead;
+    return {
+        ...lead,
+        status: normalizeLeadStatus(lead.status),
+        history: Array.isArray(lead.history)
+            ? lead.history.map((entry) => ({
+                ...entry,
+                previous_status: entry?.previous_status ? normalizeLeadStatus(entry.previous_status) : entry?.previous_status,
+                new_status: entry?.new_status ? normalizeLeadStatus(entry.new_status) : entry?.new_status,
+            }))
+            : lead.history,
+    };
+};
+
 const getLeadAssignedUserId = (lead) => parseUserId(lead?.assigned_to?.id ?? lead?.assigned_to_id);
+
+const isCompanyAdminRole = (role) => {
+    const normalizedRole = normalizeRoleKey(role);
+    return normalizedRole === 'admin' || normalizedRole === 'super_admin';
+};
+
+const isSupervisorOnlyCreditViewer = (lead, currentUserId, currentUserRole) => {
+    if (!lead || currentUserId === null || isCompanyAdminRole(currentUserRole)) return false;
+    if (normalizeLeadStatus(lead?.status) !== 'credit_study') return false;
+    const supervisorIds = getLeadSupervisorIds(lead);
+    const assignedUserId = getLeadAssignedUserId(lead);
+    return supervisorIds.includes(currentUserId) && assignedUserId !== currentUserId;
+};
+
+const isCreditNotificationForLead = (notification, leadId) => {
+    if (!notification || !leadId) return false;
+    const link = String(notification.link || '');
+    const haystack = `${notification.title || ''} ${notification.message || ''}`.toLowerCase();
+    return link.includes(`leadId=${leadId}`) && haystack.includes('crédito');
+};
+
+const isCreditNotificationForBoard = (notification, boardMode = 'general') => {
+    if (!notification) return false;
+    const link = String(notification.link || '');
+    const haystack = `${notification.title || ''} ${notification.message || ''}`.toLowerCase();
+    const expectedRoute = boardMode === 'ally' ? '/aliado/dashboard' : '/admin/leads';
+    return (
+        Number(notification?.is_read || 0) === 0 &&
+        link.includes(expectedRoute) &&
+        (haystack.includes('crédito') || haystack.includes('credito'))
+    );
+};
 
 const isUserActive = (user) => {
     const value = user?.is_active;
@@ -352,14 +633,14 @@ const buildPurchaseOptionShareText = (lead, option) => {
     if (Array.isArray(option?.photos) && option.photos.length > 0) {
         lines.push('');
         lines.push('Fotos:');
-        option.photos.forEach((photo) => lines.push(`https://autosqp.com/api${photo}`));
+        option.photos.forEach((photo) => lines.push(`${API_BASE_URL}${photo}`));
     }
 
     return lines.join('\n');
 };
 
 // Kanban Column
-const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragStart, onViewHistory, highlightedLeadId, boardMode = 'general' }) => {
+const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragStart, onViewHistory, highlightedLeadId, boardMode = 'general', currentUserId = null, currentUserRole = '' }) => {
     return (
         <div
             className={`flex-1 min-w-[290px] rounded-xl p-3 border flex flex-col h-full backdrop-blur-sm ${boardMode === 'ally' ? 'bg-amber-50/70 border-amber-200' : 'bg-slate-50/80 border-slate-200'}`}
@@ -386,6 +667,7 @@ const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragS
                         onViewHistory={onViewHistory}
                         isHighlighted={lead.id === highlightedLeadId}
                         boardMode={boardMode}
+                        canDrag={!isSupervisorOnlyCreditViewer(lead, currentUserId, currentUserRole)}
                     />
                 ))}
             </div>
@@ -400,7 +682,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     const [selectedSupervisors, setSelectedSupervisors] = useState(getLeadSupervisorIds(lead));
     const { createAppointment } = useNotifications();
     const [newComment, setNewComment] = useState('');
-    const [newStatus, setNewStatus] = useState(lead?.status || 'new');
+    const [newStatus, setNewStatus] = useState(normalizeLeadStatus(lead?.status || 'new'));
     const [loading, setLoading] = useState(false);
     const [savingSupervisors, setSavingSupervisors] = useState(false);
     const [isSupervisionSelectorOpen, setIsSupervisionSelectorOpen] = useState(false);
@@ -411,6 +693,8 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     );
     const [selectedVehicleId, setSelectedVehicleId] = useState(lead?.process_detail?.vehicle_id || '');
     const [desiredVehicle, setDesiredVehicle] = useState(lead?.process_detail?.desired_vehicle || '');
+    const [reservationAmount, setReservationAmount] = useState(lead?.process_detail?.reservation_amount ? String(lead.process_detail.reservation_amount) : '');
+    const [reservationPaymentMethod, setReservationPaymentMethod] = useState(lead?.process_detail?.reservation_payment_method || '');
 
     // Load Lead Messages
     const [messages, setMessages] = useState([]);
@@ -419,11 +703,13 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     // Reply State
     const [replyMessage, setReplyMessage] = useState('');
     const [sendingReply, setSendingReply] = useState(false);
-    const [isLeadHeaderCollapsed, setIsLeadHeaderCollapsed] = useState(false);
+    const [activeDetailTab, setActiveDetailTab] = useState('resumen');
 
     // Reminder State
     const [reminderDate, setReminderDate] = useState('');
     const [reminderNote, setReminderNote] = useState('');
+    const [leadAppointments, setLeadAppointments] = useState([]);
+    const [loadingAppointments, setLoadingAppointments] = useState(false);
 
     // Notes & Files State
     const [noteContent, setNoteContent] = useState('');
@@ -433,10 +719,19 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     const [leadNotes, setLeadNotes] = useState([]);
     const [leadFiles, setLeadFiles] = useState([]);
     const [purchaseOptions, setPurchaseOptions] = useState(Array.isArray(lead?.purchase_options) ? lead.purchase_options : []);
+    const [creditDetail, setCreditDetail] = useState(null);
+    const [loadingCreditDetail, setLoadingCreditDetail] = useState(false);
+    const [purchaseDetail, setPurchaseDetail] = useState(null);
+    const [loadingPurchaseDetail, setLoadingPurchaseDetail] = useState(false);
+    const [processingPurchaseDecision, setProcessingPurchaseDecision] = useState(false);
     const [editableLeadName, setEditableLeadName] = useState(lead?.name || '');
     const [editableLeadEmail, setEditableLeadEmail] = useState(lead?.email || '');
     const [editableLeadPhone, setEditableLeadPhone] = useState(lead?.phone || '');
     const [savingContactInfo, setSavingContactInfo] = useState(false);
+    const supervisorSyncKey = JSON.stringify(getLeadSupervisorIds(lead));
+    useEffect(() => {
+        setActiveDetailTab('resumen');
+    }, [lead?.id]);
 
     useEffect(() => {
         setAssignedAdvisor(getLeadAssignedUserId(lead) || '');
@@ -445,10 +740,13 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         setEditableLeadName(lead?.name || '');
         setEditableLeadEmail(lead?.email || '');
         setEditableLeadPhone(lead?.phone || '');
+        setNewStatus(normalizeLeadStatus(lead?.status || 'new'));
         setHasVehicle(typeof lead?.process_detail?.has_vehicle === 'boolean' ? lead.process_detail.has_vehicle : null);
         setSelectedVehicleId(lead?.process_detail?.vehicle_id || '');
         setDesiredVehicle(lead?.process_detail?.desired_vehicle || '');
-    }, [lead?.id, lead?.assigned_to?.id, lead?.assigned_to_id]);
+        setReservationAmount(lead?.process_detail?.reservation_amount ? String(lead.process_detail.reservation_amount) : '');
+        setReservationPaymentMethod(lead?.process_detail?.reservation_payment_method || '');
+    }, [lead?.id, lead?.assigned_to?.id, lead?.assigned_to_id, supervisorSyncKey]);
 
     useEffect(() => {
         if (lead && lead.id) {
@@ -456,6 +754,9 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             setLeadNotes(lead.notes || []);
             setLeadFiles(lead.files || []);
             setPurchaseOptions(Array.isArray(lead.purchase_options) ? lead.purchase_options : []);
+            fetchLeadAppointments();
+            fetchCreditDetail();
+            fetchPurchaseDetail();
         }
     }, [lead]);
 
@@ -463,7 +764,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         setLoadingMessages(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get(`https://autosqp.co/api/leads/${lead.id}/messages`, {
+            const response = await axios.get(`${API_BASE_URL}/leads/${lead.id}/messages`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             // Reverse so oldest is top, newest is bottom
@@ -472,6 +773,57 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             console.error("Error fetching lead messages", error);
         } finally {
             setLoadingMessages(false);
+        }
+    };
+
+    const fetchCreditDetail = async () => {
+        if (!lead?.id) return;
+        setLoadingCreditDetail(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.get(`${API_BASE_URL}/credits/by-lead/${lead.id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setCreditDetail(response.data || null);
+        } catch (error) {
+            console.error('Error fetching credit detail', error);
+            setCreditDetail(null);
+        } finally {
+            setLoadingCreditDetail(false);
+        }
+    };
+
+    const fetchPurchaseDetail = async () => {
+        if (!lead?.id) return;
+        setLoadingPurchaseDetail(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.get(`${API_BASE_URL}/purchases/by-lead/${lead.id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setPurchaseDetail(response.data || null);
+        } catch (error) {
+            console.error('Error fetching purchase detail', error);
+            setPurchaseDetail(null);
+        } finally {
+            setLoadingPurchaseDetail(false);
+        }
+    };
+
+    const fetchLeadAppointments = async () => {
+        if (!lead?.id) return;
+        setLoadingAppointments(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.get(`${API_BASE_URL}/appointments/leads/${lead.id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setLeadAppointments(Array.isArray(response.data) ? response.data : []);
+        } catch (error) {
+            console.error('Error fetching lead appointments', error);
+            setLeadAppointments([]);
+        } finally {
+            setLoadingAppointments(false);
         }
     };
 
@@ -497,14 +849,14 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
 
             if (source === 'whatsapp') {
                 // Determine Whatsapp Route
-                await axios.post('https://autosqp.co/api/whatsapp/send_message', {
+                await axios.post(`${API_BASE_URL}/whatsapp/send_message`, {
                     phone_number: lead.phone,
                     message_text: replyMessage
                 }, { headers: { Authorization: `Bearer ${token}` } });
 
             } else if (source === 'facebook' || source === 'instagram') {
                 // Determine Meta Route
-                await axios.post(`https://autosqp.co/api/meta/conversations/${conversationId}/send`, {
+                await axios.post(`${API_BASE_URL}/meta/conversations/${conversationId}/send`, {
                     conversation_id: conversationId,
                     sender_type: 'user',
                     content: replyMessage,
@@ -536,7 +888,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         setUploadingNote(true);
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.post(`https://autosqp.co/api/leads/${lead.id}/notes`, {
+            const res = await axios.post(`${API_BASE_URL}/leads/${lead.id}/notes`, {
                 content: noteContent
             }, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -567,7 +919,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             for (const file of selectedFiles) {
                 const formData = new FormData();
                 formData.append('file', file);
-                const res = await axios.post(`https://autosqp.co/api/leads/${lead.id}/files`, formData, {
+                const res = await axios.post(`${API_BASE_URL}/leads/${lead.id}/files`, formData, {
                     headers: {
                         Authorization: `Bearer ${token}`,
                         'Content-Type': 'multipart/form-data'
@@ -616,7 +968,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
 
         try {
             const token = localStorage.getItem('token');
-            await axios.delete(`https://autosqp.co/api/leads/${lead.id}/files/${fileToDelete.id}`, {
+            await axios.delete(`${API_BASE_URL}/leads/${lead.id}/files/${fileToDelete.id}`, {
                 headers: { Authorization: `Bearer ${token}` },
                 data: { reason: reason.trim() }
             });
@@ -643,13 +995,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
 
     const formatLeadDate = (value) => {
         if (!value) return '';
-        return new Date(value).toLocaleString('es-CO', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
+        return formatBogotaDateTime(value);
     };
 
     const getCreditStatusLabel = (creditStatus) => {
@@ -660,6 +1006,17 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             case 'rejected': return 'No viable';
             case 'completed': return 'Finalizado';
             default: return creditStatus || '';
+        }
+    };
+
+    const getPurchaseRequestStatusLabel = (purchaseStatus) => {
+        switch (purchaseStatus) {
+            case 'pending': return 'Solicitud recibida';
+            case 'in_review': return 'En búsqueda';
+            case 'approved': return 'Opciones encontradas';
+            case 'rejected': return 'Solicitud rechazada';
+            case 'completed': return 'Cerrado';
+            default: return purchaseStatus || '';
         }
     };
 
@@ -681,6 +1038,16 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             isInitialDescription: true
         }] : []),
         ...(Array.isArray(lead.history) ? lead.history : [])
+    ];
+
+    const detailTabs = [
+        { id: 'resumen', label: 'Resumen' },
+        { id: 'credito', label: 'Crédito' },
+        { id: 'compras', label: 'Compras' },
+        { id: 'gestion', label: 'Gestión' },
+        { id: 'citas', label: 'Citas' },
+        { id: 'conversacion', label: 'Conversación' },
+        { id: 'historial', label: 'Historial' },
     ];
 
     const normalizedCurrentUserRole = normalizeRoleKey(user?.role) || normalizeRoleKey(currentUserRole);
@@ -726,9 +1093,253 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     const supervisionNames = selectedSupervisorUsers.length > 0
         ? selectedSupervisorUsers.map((person) => person.full_name || person.email).join(', ')
         : 'Aun no hay personas en supervision para este lead.';
+    const leadDesiredVehicle = lead?.process_detail?.desired_vehicle?.trim() || '';
+    const selectedInventoryVehicle = hasVehicle === true && selectedVehicleId
+        ? availableVehicles?.find((vehicle) => String(vehicle.id) === String(selectedVehicleId))
+        : null;
+    const persistedInventoryVehicle = lead?.process_detail?.has_vehicle && lead?.process_detail?.vehicle_id
+        ? availableVehicles?.find((vehicle) => String(vehicle.id) === String(lead.process_detail.vehicle_id))
+        : null;
+    const visibleVehicleText = selectedInventoryVehicle
+        ? [selectedInventoryVehicle.make, selectedInventoryVehicle.model, selectedInventoryVehicle.year].filter(Boolean).join(' ')
+        : persistedInventoryVehicle
+            ? [persistedInventoryVehicle.make, persistedInventoryVehicle.model, persistedInventoryVehicle.year].filter(Boolean).join(' ')
+            : leadDesiredVehicle;
+    const vehicleTrackingLabel = lead?.process_detail?.has_vehicle ? 'Vehículo desde inventario' : 'Vehículo solicitado';
+    const creditRelatedNotes = leadNotes.filter((note) => /cr[eé]dito|solicitud de cr[eé]dito|aprobado|viable|rechazado|en estudio/i.test(note?.content || ''));
+    const purchaseRelatedNotes = leadNotes.filter((note) => /compra|veh[ií]culo|opci[oó]n|b[uú]squeda/i.test(note?.content || ''));
+    const latestSalesApprovalNote = [...leadNotes]
+        .reverse()
+        .find((note) => extractSalesApprovalSummary(note?.content));
+    const salesApprovalSummary = latestSalesApprovalNote
+        ? extractSalesApprovalSummary(latestSalesApprovalNote.content)
+        : null;
+    const effectiveCreditDetail = creditDetail || (lead?.credit_application_status ? {
+        status: lead.credit_application_status,
+        desired_vehicle: visibleVehicleText || '',
+        approved_amount: salesApprovalSummary?.approvedAmount ?? null,
+        approval_percentage: salesApprovalSummary?.approvalPercentage ?? null,
+        approved_down_payment: salesApprovalSummary?.minimumDownPayment ?? null,
+        notes: latestSalesApprovalNote?.content || '',
+        updated_at: lead.credit_application_updated_at || latestSalesApprovalNote?.created_at || null,
+        assigned_to: null,
+        monthly_income: null,
+        other_income: null,
+        occupation: null,
+        application_mode: null,
+    } : null);
+    const creditSummarySource = [
+        creditDetail?.notes || '',
+        latestSalesApprovalNote?.content || '',
+        ...creditRelatedNotes.map((note) => note?.content || ''),
+    ].find((content) => extractApprovalMetrics(content)) || '';
+    const approvalMetrics = extractApprovalMetrics(creditSummarySource) || {
+        approvedAmount: effectiveCreditDetail?.approved_amount ?? salesApprovalSummary?.approvedAmount ?? null,
+        approvalPercentage: effectiveCreditDetail?.approval_percentage ?? salesApprovalSummary?.approvalPercentage ?? null,
+        minimumDownPayment: effectiveCreditDetail?.approved_down_payment ?? salesApprovalSummary?.minimumDownPayment ?? null,
+    };
+    const creditAssignedName = creditDetail?.assigned_to?.full_name || creditDetail?.assigned_to?.email || 'Sin responsable';
+    const purchaseAssignedName = purchaseDetail?.assigned_to?.full_name || purchaseDetail?.assigned_to?.email || 'Sin responsable';
+    const normalizedPurchaseStatus = String(purchaseDetail?.status || '').trim().toLowerCase();
+    const canManagePurchaseRequest = (
+        isCompanyAdminRole(currentUserRole) ||
+        normalizedCurrentUserRole === 'compras'
+    );
+    const canResubmitPurchaseRequest = (
+        normalizedPurchaseStatus === 'rejected' &&
+        !canManagePurchaseRequest &&
+        (
+            isAssignedLeadOwner ||
+            leadSupervisorIds.includes(currentUserId) ||
+            ['asesor', 'aliado'].includes(normalizedCurrentUserRole)
+        )
+    );
+    const reservationAmountValue = lead?.process_detail?.reservation_amount ?? null;
+    const reservationPaymentMethodValue = lead?.process_detail?.reservation_payment_method || '';
+    const purchaseRejectionReason = extractLatestPurchaseRejectionReason(purchaseDetail?.notes || '');
 
     const showReadOnlyWarning = () => {
         Swal.fire('Solo lectura', 'Tienes este lead en supervisión. Puedes verlo, pero solo un administrador puede modificarlo.', 'info');
+    };
+
+    const refreshLeadDetailSnapshot = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.get(`${API_BASE_URL}/leads/${lead.id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const refreshedLead = normalizeLeadRecord(response.data);
+            if (typeof onRefreshLeadBoard === 'function') {
+                await onRefreshLeadBoard();
+            }
+            if (typeof onUpdateContact === 'function') {
+                // no-op placeholder to keep modal callbacks untouched
+            }
+            return refreshedLead;
+        } catch (error) {
+            console.error('Error refreshing lead detail snapshot', error);
+            return null;
+        }
+    };
+
+    const handlePurchaseRequestDecision = async (decision) => {
+        if (!purchaseDetail?.id || processingPurchaseDecision) return;
+        if (!canManagePurchaseRequest) {
+            Swal.fire('Sin permisos', 'Solo el gestor de compras o un administrador pueden decidir esta solicitud.', 'warning');
+            return;
+        }
+
+        let statusPayload = null;
+        if (decision === 'accept') {
+            const confirmation = await Swal.fire({
+                title: 'Aceptar solicitud de compra',
+                text: 'La solicitud pasará automáticamente a En búsqueda.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Aceptar solicitud',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#059669'
+            });
+            if (!confirmation.isConfirmed) return;
+            statusPayload = {
+                status: 'in_review',
+                status_note: 'Solicitud aceptada para iniciar la búsqueda del vehículo.'
+            };
+        } else if (decision === 'cancel') {
+            const { value: rejectionReason } = await Swal.fire({
+                title: 'Cancelar solicitud de compra',
+                input: 'textarea',
+                inputLabel: 'Motivo de cancelación',
+                inputPlaceholder: 'Explica por qué se rechaza esta solicitud...',
+                inputAttributes: { 'aria-label': 'Motivo de cancelación' },
+                showCancelButton: true,
+                confirmButtonText: 'Cancelar solicitud',
+                cancelButtonText: 'Volver',
+                confirmButtonColor: '#dc2626',
+                inputValidator: (value) => {
+                    if (!value || !value.trim()) {
+                        return 'Debes indicar el motivo de cancelación';
+                    }
+                    return null;
+                }
+            });
+            if (!rejectionReason) return;
+            statusPayload = {
+                status: 'rejected',
+                status_note: rejectionReason.trim()
+            };
+        } else if (decision === 'resubmit') {
+            const { value: resubmitPayload } = await Swal.fire({
+                title: 'Volver a solicitar búsqueda',
+                html: `
+                    <div style="display:grid; gap:12px; text-align:left;">
+                        <div>
+                            <label style="display:block; font-size:12px; font-weight:700; color:#475569; margin-bottom:6px;">Vehículo solicitado</label>
+                            <input id="swal-purchase-vehicle" class="swal2-input" style="margin:0; width:100%;" value="${(purchaseDetail?.desired_vehicle || visibleVehicleText || '').replace(/"/g, '&quot;')}" placeholder="Ej: Mazda 3 Touring" />
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:12px; font-weight:700; color:#475569; margin-bottom:6px;">Separación entregada</label>
+                            <input id="swal-purchase-separation" type="number" min="0" class="swal2-input" style="margin:0; width:100%;" value="${reservationAmountValue ?? ''}" placeholder="Ej: 10000000" />
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:12px; font-weight:700; color:#475569; margin-bottom:6px;">Medio de pago</label>
+                            <select id="swal-purchase-payment-method" class="swal2-select" style="margin:0; width:100%;">
+                                <option value="">Selecciona una opción</option>
+                                <option value="efectivo" ${reservationPaymentMethodValue === 'efectivo' ? 'selected' : ''}>Efectivo</option>
+                                <option value="transferencia" ${reservationPaymentMethodValue === 'transferencia' ? 'selected' : ''}>Transferencia</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:12px; font-weight:700; color:#475569; margin-bottom:6px;">Motivo para volver a solicitar</label>
+                            <textarea id="swal-purchase-resubmit-reason" class="swal2-textarea" style="margin:0; width:100%;" placeholder="Explica por qué se debe volver a solicitar la búsqueda..."></textarea>
+                        </div>
+                    </div>
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: 'Reenviar a compras',
+                cancelButtonText: 'Volver',
+                confirmButtonColor: '#2563eb',
+                preConfirm: () => {
+                    const desiredVehicleValue = document.getElementById('swal-purchase-vehicle')?.value?.trim() || '';
+                    const reservationAmountRaw = document.getElementById('swal-purchase-separation')?.value?.trim() || '';
+                    const reservationPaymentMethodValue = document.getElementById('swal-purchase-payment-method')?.value?.trim() || '';
+                    const resubmitReasonValue = document.getElementById('swal-purchase-resubmit-reason')?.value?.trim() || '';
+
+                    if (!desiredVehicleValue) {
+                        Swal.showValidationMessage('Debes indicar el vehículo solicitado');
+                        return false;
+                    }
+                    if (!reservationAmountRaw || Number(reservationAmountRaw) <= 0) {
+                        Swal.showValidationMessage('Debes indicar el valor de la separación');
+                        return false;
+                    }
+                    if (!reservationPaymentMethodValue) {
+                        Swal.showValidationMessage('Debes indicar el medio de pago de la separación');
+                        return false;
+                    }
+                    if (!resubmitReasonValue) {
+                        Swal.showValidationMessage('Debes indicar el motivo para volver a solicitar');
+                        return false;
+                    }
+
+                    return {
+                        desired_vehicle: desiredVehicleValue,
+                        reservation_amount: Number(reservationAmountRaw),
+                        reservation_payment_method: reservationPaymentMethodValue,
+                        reason: resubmitReasonValue,
+                    };
+                }
+            });
+            if (!resubmitPayload) return;
+            statusPayload = {
+                status: 'pending',
+                status_note: `Solicitud reenviada por asesor. Motivo: ${resubmitPayload.reason}`,
+                desired_vehicle: resubmitPayload.desired_vehicle,
+                reservation_amount: resubmitPayload.reservation_amount,
+                reservation_payment_method: resubmitPayload.reservation_payment_method,
+            };
+        } else {
+            return;
+        }
+
+        setProcessingPurchaseDecision(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.put(
+                `${API_BASE_URL}/purchases/${purchaseDetail.id}`,
+                statusPayload,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            if (decision === 'resubmit') {
+                if (statusPayload.desired_vehicle) {
+                    setDesiredVehicle(statusPayload.desired_vehicle);
+                }
+                if (statusPayload.reservation_amount != null) {
+                    setReservationAmount(String(statusPayload.reservation_amount));
+                }
+                if (statusPayload.reservation_payment_method) {
+                    setReservationPaymentMethod(statusPayload.reservation_payment_method);
+                }
+            }
+            setPurchaseDetail(response.data || null);
+            await fetchPurchaseDetail();
+            await refreshLeadDetailSnapshot();
+            Swal.fire(
+                'Éxito',
+                decision === 'accept'
+                    ? 'La solicitud pasó a En búsqueda.'
+                    : decision === 'cancel'
+                        ? 'La solicitud fue cancelada correctamente.'
+                        : 'La solicitud fue reenviada a compras.',
+                'success'
+            );
+        } catch (error) {
+            console.error('Error updating purchase request status', error);
+            Swal.fire('Error', error?.response?.data?.detail || 'No se pudo actualizar la solicitud de compra.', 'error');
+        } finally {
+            setProcessingPurchaseDecision(false);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -741,12 +1352,12 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
 
         // Si no es status 'interested', comprobamos el comment
         const adminCanSaveWithoutNote = currentUserRole === 'admin' || currentUserRole === 'super_admin';
-        if (!adminCanSaveWithoutNote && !newComment.trim() && newStatus !== 'interested' && newStatus === lead?.status) {
+        if (!adminCanSaveWithoutNote && !newComment.trim() && newStatus !== 'in_process' && newStatus === normalizeLeadStatus(lead?.status)) {
             Swal.fire('Error', 'Debes escribir una nota o comentario', 'warning');
             return;
         }
 
-        if (newStatus === 'interested') {
+        if (newStatus === 'in_process') {
             if (hasVehicle === null) {
                 Swal.fire('Atención', 'Debes indicar si el vehículo está disponible en inventario o si toca conseguirlo.', 'warning');
                 return;
@@ -758,16 +1369,37 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             }
         }
 
+        if (newStatus === 'reserved') {
+            const parsedReservationAmount = Number(String(reservationAmount || '').replace(/[^\d]/g, ''));
+            const normalizedPaymentMethod = String(reservationPaymentMethod || '').trim().toLowerCase();
+            if (!Number.isFinite(parsedReservationAmount) || parsedReservationAmount <= 0) {
+                Swal.fire('Atención', 'Debes indicar el monto de la separación para pasar el lead a Reservas.', 'warning');
+                return;
+            }
+            if (!['efectivo', 'transferencia'].includes(normalizedPaymentMethod)) {
+                Swal.fire('Atención', 'Debes indicar si la separación fue en efectivo o transferencia.', 'warning');
+                return;
+            }
+        }
+
         setLoading(true);
         try {
             let processDetail = null;
-            if (newStatus === 'interested') {
+            if (newStatus === 'in_process') {
                 const desiredVehicleFallback = desiredVehicle.trim() || lead?.process_detail?.desired_vehicle?.trim() || lead?.message?.trim() || 'Por definir';
                 const shouldMoveToPurchaseSearch = hasVehicle === true && !selectedVehicleId;
                 processDetail = {
                     has_vehicle: shouldMoveToPurchaseSearch ? false : hasVehicle,
                     vehicle_id: hasVehicle && selectedVehicleId ? parseInt(selectedVehicleId) : null,
                     desired_vehicle: (!hasVehicle || shouldMoveToPurchaseSearch) ? desiredVehicleFallback : null
+                };
+            } else if (newStatus === 'reserved') {
+                processDetail = {
+                    has_vehicle: typeof lead?.process_detail?.has_vehicle === 'boolean' ? lead.process_detail.has_vehicle : false,
+                    vehicle_id: lead?.process_detail?.vehicle_id || null,
+                    desired_vehicle: lead?.process_detail?.desired_vehicle || desiredVehicle.trim() || lead?.message?.trim() || 'Por definir',
+                    reservation_amount: Number(String(reservationAmount || '').replace(/[^\d]/g, '')),
+                    reservation_payment_method: String(reservationPaymentMethod || '').trim().toLowerCase(),
                 };
             }
             await onUpdate(lead.id, newStatus, newComment, processDetail, canManageSupervision ? selectedSupervisors : null);
@@ -791,6 +1423,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         await createAppointment(lead.id, reminderDate, reminderNote);
         setReminderDate('');
         setReminderNote('');
+        await fetchLeadAppointments();
     };
 
     const handleSaveSupervisorSelection = async () => {
@@ -888,7 +1521,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
 
         option.photos.forEach((photo, index) => {
             const link = document.createElement('a');
-            link.href = `https://autosqp.com/api${photo}`;
+            link.href = `${API_BASE_URL}${photo}`;
             link.download = `${option.title || 'opcion'}-${index + 1}.jpg`;
             document.body.appendChild(link);
             link.click();
@@ -933,7 +1566,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         try {
             const token = localStorage.getItem('token');
             const response = await axios.put(
-                `https://autosqp.co/api/purchases/options/${option.id}/decision`,
+                `${API_BASE_URL}/purchases/options/${option.id}/decision`,
                 {
                     decision_status: decisionStatus,
                     decision_note: decisionNote.trim()
@@ -984,16 +1617,6 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                 </span>
                             )}
                         </div>
-                        <div className="mt-4 flex justify-end">
-                            <button
-                                type="button"
-                                onClick={() => setIsLeadHeaderCollapsed((prev) => !prev)}
-                                className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-100"
-                            >
-                                <svg className={`h-4 w-4 transition-transform ${isLeadHeaderCollapsed ? '-rotate-90' : 'rotate-0'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-                                {isLeadHeaderCollapsed ? 'Expandir cabecera' : 'Colapsar cabecera'}
-                            </button>
-                        </div>
                         {loadingDetail && (
                             <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700">
                                 Cargando detalle completo del lead...
@@ -1011,7 +1634,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                     {savingContactInfo ? 'Guardando...' : 'Guardar datos'}
                                 </button>
                             </div>
-                            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
                                 <div>
                                     <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">Nombre</label>
                                     <input
@@ -1039,125 +1662,455 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                         className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                                     />
                                 </div>
+                                <div>
+                                    <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">Estado actual</label>
+                                    <div className="flex h-[42px] items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+                                        {getLeadStatusLabel(normalizeLeadStatus(lead.status))}
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        {!isLeadHeaderCollapsed && (lead.message || lead.created_at) && (
-                            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Resumen del lead</p>
-                                    {lead.created_at && (
-                                        <span className="text-[11px] font-medium text-slate-400">
-                                            Creado: {formatLeadDate(lead.created_at)}
-                                        </span>
-                                    )}
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition">
+                        <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+
+                <div className="overflow-y-auto custom-scrollbar pr-2 flex-1 space-y-6">
+                    {isSupervisorOnlyViewer && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                            Este lead está en modo solo lectura para ti por estar en supervisión. Solo un administrador puede modificarlo.
+                        </div>
+                    )}
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex flex-wrap gap-2">
+                            {detailTabs.map((tab) => {
+                                const isActive = activeDetailTab === tab.id;
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        type="button"
+                                        onClick={() => setActiveDetailTab(tab.id)}
+                                        className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${
+                                            isActive
+                                                ? 'border-blue-200 bg-blue-50 text-blue-700 shadow-sm'
+                                                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleDeleteLead}
+                            disabled={!canModifyLead}
+                            className="self-start rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 lg:self-auto"
+                        >
+                            Eliminar lead
+                        </button>
+                    </div>
+
+                    {activeDetailTab === 'citas' && (
+                        <div className="space-y-4">
+                            <div className="bg-indigo-50/60 p-4 rounded-xl border border-indigo-100">
+                                <h3 className="text-sm font-bold text-indigo-800 mb-3 flex items-center gap-2">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    Programar Cita
+                                </h3>
+                                <div className="flex flex-col sm:flex-row gap-3 items-end">
+                                    <div className="w-full sm:flex-1">
+                                        <label className="block text-[10px] font-bold text-indigo-700 uppercase mb-1">Fecha y Hora</label>
+                                        <input
+                                            type="datetime-local"
+                                            className="w-full border border-indigo-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                            value={reminderDate}
+                                            onChange={(e) => setReminderDate(e.target.value)}
+                                            disabled={!canModifyLead}
+                                        />
+                                    </div>
+                                    <div className="w-full sm:flex-[2]">
+                                        <label className="block text-[10px] font-bold text-indigo-700 uppercase mb-1">Detalle de la cita</label>
+                                        <input
+                                            type="text"
+                                            placeholder="Ej: Cita en showroom, prueba de manejo, visita..."
+                                            className="w-full border border-indigo-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                            value={reminderNote}
+                                            onChange={(e) => setReminderNote(e.target.value)}
+                                            disabled={!canModifyLead}
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={handleCreateAppointment}
+                                        disabled={!canModifyLead}
+                                        className="w-full sm:w-auto bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 transition shadow-sm h-[38px] disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        Programar cita
+                                    </button>
                                 </div>
-                                <p className="mt-2 text-sm text-slate-700 whitespace-pre-wrap">
-                                    {lead.message || 'Sin descripcion inicial registrada.'}
-                                </p>
                             </div>
-                        )}
-                        {!isLeadHeaderCollapsed && lead.credit_application_status && (
-                            <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                                <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-700">Estado de la solicitud de credito</p>
-                                <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-emerald-900">
-                                    <span className="rounded-full bg-white px-3 py-1 font-semibold border border-emerald-200">
-                                        {getCreditStatusLabel(lead.credit_application_status)}
-                                    </span>
-                                    {lead.credit_application_updated_at && (
-                                        <span className="text-xs text-emerald-700">
-                                            Actualizado: {formatLeadDate(lead.credit_application_updated_at)}
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                        {!isLeadHeaderCollapsed && Array.isArray(purchaseOptions) && purchaseOptions.length > 0 && (
-                            <div className="mt-3 rounded-xl border border-pink-200 bg-pink-50 p-3">
+
+                            <div className="rounded-xl border border-slate-200 bg-white p-4">
                                 <div className="flex items-center justify-between gap-2">
-                                    <p className="text-[11px] font-bold uppercase tracking-wide text-pink-700">Opciones encontradas para la búsqueda</p>
-                                    <span className="text-[11px] font-medium text-pink-500">{purchaseOptions.length} opcion(es)</span>
+                                    <h3 className="text-sm font-bold text-slate-800">Historial de citas agendadas</h3>
+                                    <span className="text-xs font-medium text-slate-400">{leadAppointments.length} cita(s)</span>
                                 </div>
-                                <div className="mt-3 space-y-3">
-                                    {purchaseOptions.map((option) => (
-                                        <div key={option.id} className="rounded-xl border border-pink-100 bg-white p-3">
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div>
-                                                    <p className="text-sm font-bold text-slate-800">{option.title}</p>
-                                                    {option.description && <p className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">{option.description}</p>}
+                                {loadingAppointments ? (
+                                    <div className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
+                                        Cargando citas...
+                                    </div>
+                                ) : leadAppointments.length > 0 ? (
+                                    <div className="mt-4 space-y-3 max-h-[420px] overflow-y-auto pr-2 custom-scrollbar">
+                                        {leadAppointments.map((appointment) => (
+                                            <div key={appointment.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                                                    <div>
+                                                        <p className="text-sm font-bold text-slate-800">{appointment.title || 'Cita programada'}</p>
+                                                        <p className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">{appointment.note || 'Sin detalle adicional.'}</p>
+                                                    </div>
+                                                    <div className="flex flex-col items-start gap-1 md:items-end">
+                                                        <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-indigo-700">
+                                                            {appointment.status || 'scheduled'}
+                                                        </span>
+                                                        <span className="text-xs font-medium text-slate-500">
+                                                            {formatBogotaDateTime(appointment.appointment_date)}
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                                <div className="flex flex-col items-end gap-2">
-                                                    <span className="text-[10px] text-slate-400">{option.created_at ? formatLeadDate(option.created_at) : 'Reciente'}</span>
-                                                    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
-                                                        option.decision_status === 'accepted'
-                                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                                            : option.decision_status === 'rejected'
-                                                                ? 'border-rose-200 bg-rose-50 text-rose-700'
-                                                                : 'border-amber-200 bg-amber-50 text-amber-700'
-                                                    }`}>
-                                                        {option.decision_status === 'accepted'
-                                                            ? 'Aceptada'
-                                                            : option.decision_status === 'rejected'
-                                                                ? 'Rechazada'
-                                                                : 'Pendiente'}
-                                                    </span>
+                                                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500">
+                                                    <span><strong className="text-slate-700">Lead:</strong> {appointment?.lead?.name || lead.name}</span>
+                                                    <span><strong className="text-slate-700">Agendada por:</strong> {appointment?.user?.full_name || appointment?.user?.email || 'Sin registro'}</span>
+                                                    <span><strong className="text-slate-700">Creada:</strong> {formatBogotaDateTime(appointment.created_at)}</span>
                                                 </div>
                                             </div>
-                                            {Array.isArray(option.photos) && option.photos.length > 0 && (
-                                                <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3">
-                                                    {option.photos.map((photo, index) => (
-                                                        <a key={`${option.id}-${index}`} href={`https://autosqp.com/api${photo}`} target="_blank" rel="noopener noreferrer" className="overflow-hidden rounded-lg border border-pink-100 bg-slate-50">
-                                                            <img src={`https://autosqp.com/api${photo}`} alt={option.title} className="h-24 w-full object-cover" />
-                                                        </a>
-                                                    ))}
-                                                </div>
-                                            )}
-                                            <div className="mt-3 flex flex-wrap gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleCopyPurchaseOptionText(option)}
-                                                    className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
-                                                >
-                                                    Copiar texto
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDownloadPurchaseOptionPhotos(option)}
-                                                    className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100"
-                                                >
-                                                    Descargar fotos
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handlePurchaseOptionDecision(option, 'accepted')}
-                                                    disabled={!canModifyLead}
-                                                    className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                >
-                                                    Aceptar
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handlePurchaseOptionDecision(option, 'rejected')}
-                                                    disabled={!canModifyLead}
-                                                    className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                >
-                                                    Rechazar
-                                                </button>
-                                            </div>
-                                            {option.decision_note && (
-                                                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                                                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                                                        Nota de {option.decision_status === 'accepted' ? 'aceptacion' : 'decision'}
-                                                    </p>
-                                                    <p className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">{option.decision_note}</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
+                                        Aún no hay citas programadas para este lead.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {activeDetailTab === 'gestion' && (
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                            <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                            Agregar Nota / Actualizar Estado
+                        </h3>
+                        <form onSubmit={handleSubmit} className="space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="sm:col-span-1">
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Estado</label>
+                                    <select
+                                        value={newStatus}
+                                        onChange={(e) => setNewStatus(e.target.value)}
+                                        disabled={!canModifyLead}
+                                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                    >
+                                        {LEAD_STATUS_OPTIONS.map((statusOption) => (
+                                            <option key={statusOption.value} value={statusOption.value}>
+                                                {statusOption.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="sm:col-span-2">
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Nota / Comentario</label>
+                                    <textarea
+                                        value={newComment}
+                                        onChange={(e) => setNewComment(e.target.value)}
+                                        disabled={!canModifyLead}
+                                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                        rows="1"
+                                        placeholder="Escribe detalles..."
+                                    ></textarea>
                                 </div>
                             </div>
-                        )}
-                        {!isLeadHeaderCollapsed && (
-                        <div className="mt-4 grid grid-cols-1 xl:grid-cols-[420px,minmax(0,1fr)] gap-4">
+
+                            {/* Process Detail conditional UI */}
+                            {newStatus === 'in_process' && (
+                                <div className="p-3 bg-orange-50 rounded-lg border border-orange-100 flex flex-col gap-3 animate-fade-in shadow-sm">
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-700 mb-2">Disponibilidad del vehículo</p>
+                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                            <button
+                                                type="button"
+                                                disabled={!canModifyLead}
+                                                onClick={() => {
+                                                    setHasVehicle(true);
+                                                    setDesiredVehicle('');
+                                                }}
+                                                className={`rounded-lg border px-3 py-2 text-sm font-semibold text-left transition ${hasVehicle === true ? 'border-orange-500 bg-white text-orange-700 shadow-sm' : 'border-orange-200 bg-orange-50 text-gray-600 hover:bg-white'} disabled:cursor-not-allowed disabled:opacity-60`}
+                                            >
+                                                Lo tenemos en inventario
+                                            </button>
+                                            <button
+                                                type="button"
+                                                disabled={!canModifyLead}
+                                                onClick={() => {
+                                                    setHasVehicle(false);
+                                                    setSelectedVehicleId('');
+                                                }}
+                                                className={`rounded-lg border px-3 py-2 text-sm font-semibold text-left transition ${hasVehicle === false ? 'border-orange-500 bg-white text-orange-700 shadow-sm' : 'border-orange-200 bg-orange-50 text-gray-600 hover:bg-white'} disabled:cursor-not-allowed disabled:opacity-60`}
+                                            >
+                                                Toca conseguirlo
+                                            </button>
+                                        </div>
+                                        <p className="mt-2 text-xs text-gray-500">
+                                            Debes escoger una opción para poder guardar este lead en En proceso.
+                                        </p>
+                                    </div>
+                                    {hasVehicle === null ? (
+                                        <div className="rounded-lg border border-dashed border-orange-200 bg-white/70 px-3 py-3 text-sm text-gray-500">
+                                            Selecciona primero si el vehículo está en inventario o si debe entrar a búsqueda.
+                                        </div>
+                                    ) : hasVehicle === true ? (
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Seleccionar Vehículo / Placa</label>
+                                            <select
+                                                className="w-full text-sm border border-orange-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-orange-500 bg-white shadow-inner"
+                                                value={selectedVehicleId}
+                                                disabled={!canModifyLead}
+                                                onChange={(e) => setSelectedVehicleId(e.target.value)}
+                                            >
+                                                <option value="">-- Buscar Auto Disponible --</option>
+                                                {availableVehicles?.map(v => (
+                                                    <option key={v.id} value={v.id}>{v.make} {v.model} - Placa: {v.plate}</option>
+                                                ))}
+                                            </select>
+                                            <p className="mt-2 text-xs text-gray-500">
+                                                Si no seleccionas un carro del inventario, el lead pasará automáticamente a solicitud de búsqueda.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Vehículo de Interés que Busca (Texto Libre)</label>
+                                            <input
+                                                type="text"
+                                                className="w-full text-sm border border-orange-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-orange-500 bg-white shadow-inner"
+                                                value={desiredVehicle}
+                                                disabled={!canModifyLead}
+                                                onChange={(e) => setDesiredVehicle(e.target.value)}
+                                                placeholder="Ej: Toyota Hilux 2020 Color Blanco..."
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* SECCIÓN DE NOTAS MÚLTIPLES - Siempre visible */}
+                            <div className="mt-4 border-t border-gray-200 pt-3">
+                                <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Notas del Proceso</h4>
+                                <div className="flex gap-2 mb-3">
+                                    <input
+                                        type="text"
+                                        className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-orange-500 bg-white"
+                                        placeholder="Agregar una nueva nota..."
+                                        value={noteContent}
+                                        onChange={(e) => setNoteContent(e.target.value)}
+                                        disabled={!canModifyLead}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleAddNote}
+                                        disabled={uploadingNote || !noteContent.trim() || !canModifyLead}
+                                        className="bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-orange-700 disabled:opacity-50"
+                                    >
+                                        {uploadingNote ? 'Guardando...' : 'Agregar'}
+                                    </button>
+                                </div>
+                                {/* Lista de notas */}
+                                {leadNotes.length > 0 && (
+                                    <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                                        {leadNotes.map((note) => (
+                                              <div key={note.id} className="bg-white p-2 rounded border border-gray-100 shadow-sm text-sm">
+                                                  <p className="text-[11px] font-semibold text-slate-500">
+                                                      {note.user?.full_name || note.user?.email || 'Usuario'}
+                                                  </p>
+                                                  <p className="text-gray-800">{note.content}</p>
+                                                  <span className="text-[10px] text-gray-400">
+                                                      {formatBogotaDateTime(note.created_at)}
+                                                  </span>
+                                              </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* SECCIÓN DE ARCHIVOS */}
+                            <div className="mt-4 border-t border-gray-200 pt-3">
+                                <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Archivos Adjuntos / Documentos</h4>
+                                <div className="flex gap-2 mb-3 items-center">
+                                    <input
+                                        id="file-upload-input"
+                                        type="file"
+                                        multiple
+                                        accept="*"
+                                        className="flex-1 text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-orange-100 file:text-orange-700 hover:file:bg-orange-200"
+                                        disabled={!canModifyLead}
+                                        onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleFileUpload}
+                                        disabled={uploadingFile || selectedFiles.length === 0 || !canModifyLead}
+                                        className="bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-orange-700 disabled:opacity-50"
+                                    >
+                                        {uploadingFile ? 'Subiendo...' : `Subir ${selectedFiles.length > 0 ? `(${selectedFiles.length})` : ''}`}
+                                    </button>
+                                </div>
+                                {/* Lista de archivos */}
+                                {leadFiles.length > 0 && (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                                        {leadFiles.map((file) => (
+                                            <div key={file.id} className="bg-white p-2 rounded border border-gray-200 shadow-sm flex flex-col gap-2">
+                                                    <a href={`${API_BASE_URL}${file.file_path}`} target="_blank" rel="noopener noreferrer" className="hover:border-orange-500 transition flex flex-col items-center gap-1 group">
+                                                    {file.file_type && file.file_type.includes('image') ? (
+                                                        <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center overflow-hidden">
+                                                            <img src={`${API_BASE_URL}${file.file_path}`} alt="File" className="w-full h-full object-cover" />
+                                                        </div>
+                                                    ) : (
+                                                        <svg className="w-8 h-8 text-gray-400 group-hover:text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                                                    )}
+                                                    <span className="text-[10px] text-gray-600 truncate w-full text-center">{file.file_name}</span>
+                                                </a>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDeleteLeadFile(file)}
+                                                    disabled={!canModifyLead}
+                                                    className="w-full rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600 transition hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    Eliminar
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={loading || !canModifyLead}
+                                className="w-full bg-blue-600 text-white text-sm font-bold py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {loading ? 'Guardando...' : 'Guardar Nota y Actualizar'}
+                            </button>
+                        </form>
+                    </div>
+                    )}
+
+                    {activeDetailTab === 'resumen' && (
+                        <div className="space-y-4">
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Estado actual</p>
+                                    {lead.updated_at && (
+                                        <span className="text-[11px] font-medium text-slate-400">
+                                            Actualizado: {formatLeadDate(lead.updated_at)}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="mt-3 flex flex-wrap items-center gap-3">
+                                    <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700">
+                                        {getLeadStatusLabel(lead.status)}
+                                    </span>
+                                    {lead.credit_application_status && (
+                                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
+                                            Crédito: {getCreditStatusLabel(lead.credit_application_status)}
+                                        </span>
+                                    )}
+                                </div>
+                                {visibleVehicleText && (
+                                    <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                        <span className="font-semibold">{vehicleTrackingLabel}:</span> {visibleVehicleText}
+                                    </div>
+                                )}
+                            </div>
+
+                            {salesApprovalSummary && (
+                                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <div>
+                                            <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-700">Resumen para ventas</p>
+                                            <p className="mt-1 text-sm text-emerald-900">
+                                                Aprobación lista para que ventas continúe el proceso sin buscar la nota manualmente.
+                                            </p>
+                                        </div>
+                                        {latestSalesApprovalNote?.created_at && (
+                                            <span className="text-[11px] font-medium text-emerald-700/80">
+                                                Registrado: {formatLeadDate(latestSalesApprovalNote.created_at)}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                        <div className="rounded-xl border border-emerald-100 bg-white px-3 py-3">
+                                            <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-700">Vehículo</p>
+                                            <p className="mt-1 text-sm font-semibold text-slate-800">
+                                                {salesApprovalSummary.vehicle || visibleVehicleText || 'Sin definir'}
+                                            </p>
+                                        </div>
+                                        <div className="rounded-xl border border-emerald-100 bg-white px-3 py-3">
+                                            <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-700">Monto aprobado</p>
+                                            <p className="mt-1 text-sm font-semibold text-slate-800">
+                                                {formatLeadCurrencyValue(salesApprovalSummary.approvedAmount)}
+                                            </p>
+                                        </div>
+                                        <div className="rounded-xl border border-emerald-100 bg-white px-3 py-3">
+                                            <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-700">Porcentaje aprobado</p>
+                                            <p className="mt-1 text-sm font-semibold text-slate-800">
+                                                {salesApprovalSummary.approvalPercentage != null ? `${salesApprovalSummary.approvalPercentage}%` : 'Sin definir'}
+                                            </p>
+                                        </div>
+                                        <div className="rounded-xl border border-emerald-100 bg-white px-3 py-3">
+                                            <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-700">Cuota inicial mínima</p>
+                                            <p className="mt-1 text-sm font-semibold text-slate-800">
+                                                {formatLeadCurrencyValue(salesApprovalSummary.minimumDownPayment)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {newStatus === 'reserved' && (
+                                <div className="p-3 bg-violet-50 rounded-lg border border-violet-100 flex flex-col gap-3 animate-fade-in shadow-sm">
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Monto de la separación</label>
+                                            <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                value={reservationAmount}
+                                                disabled={!canModifyLead}
+                                                onChange={(e) => setReservationAmount(e.target.value.replace(/[^\d]/g, ''))}
+                                                className="w-full text-sm border border-violet-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500 bg-white shadow-inner"
+                                                placeholder="Ej: 2000000"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Medio de pago</label>
+                                            <select
+                                                value={reservationPaymentMethod}
+                                                disabled={!canModifyLead}
+                                                onChange={(e) => setReservationPaymentMethod(e.target.value)}
+                                                className="w-full text-sm border border-violet-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500 bg-white shadow-inner"
+                                            >
+                                                <option value="">Selecciona una opción</option>
+                                                <option value="efectivo">Efectivo</option>
+                                                <option value="transferencia">Transferencia</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-gray-500">
+                                        Sin estos datos no se puede mover el lead a Reservas ni enviarlo a búsqueda en compras.
+                                    </p>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-1 xl:grid-cols-[420px,minmax(0,1fr)] gap-4">
                             <div className="space-y-4">
                                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                                     <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-2">Asignado a</label>
@@ -1285,335 +2238,261 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                     )}
                                 </div>
                             </div>
-                            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col min-h-[460px] max-h-[62vh]">
-                                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                                    <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-                                        <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                                        Conversacion del Cliente ({messages.length})
-                                    </h3>
-                                </div>
-                                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 custom-scrollbar min-h-0">
-                                    {loadingMessages ? (
-                                        <div className="text-center text-sm text-gray-400 py-4">Cargando mensajes...</div>
-                                    ) : messages.length > 0 ? (
-                                        messages.map((msg, index) => (
-                                            <div key={msg.id || index} className={`flex flex-col ${msg.sender_type === 'user' ? 'items-end' : 'items-start'}`}>
-                                                <div className="flex items-end gap-1 mb-1">
-                                                    <span className="text-[10px] text-gray-400 font-medium">
-                                                        {msg.sender_type === 'user' ? (msg.sender?.email || 'Nosotros') : lead.name}
-                                                    </span>
-                                                </div>
-                                                <div className={`px-4 py-2 rounded-2xl max-w-[85%] ${msg.sender_type === 'user'
-                                                    ? 'bg-blue-600 text-white rounded-br-sm shadow-sm'
-                                                    : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm'
-                                                    }`}>
-                                                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                                                </div>
-                                                <span className="text-[9px] text-gray-400 mt-1">
-                                                    {new Date(msg.created_at).toLocaleString([], { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}
-                                                </span>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <div className="h-full flex items-center justify-center text-sm text-gray-400">
-                                            No hay mensajes cargados para este lead.
-                                        </div>
-                                    )}
-                                </div>
-                                {(lead.source === 'facebook' || lead.source === 'instagram' || lead.source === 'whatsapp') && (
-                                    <form onSubmit={handleSendReply} className="bg-white border-t border-gray-200 p-3 flex gap-2">
+
+                            <div className="space-y-4">
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <h3 className="text-sm font-bold text-gray-700 mb-3">Archivos adjuntos / documentos</h3>
+                                    <div className="flex gap-2 mb-3 items-center">
                                         <input
-                                            type="text"
-                                            placeholder={`Responder por ${lead.source}...`}
-                                            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                                            value={replyMessage}
-                                            onChange={(e) => setReplyMessage(e.target.value)}
-                                            disabled={sendingReply || !canModifyLead}
+                                            id="file-upload-input"
+                                            type="file"
+                                            multiple
+                                            accept="*"
+                                            className="flex-1 text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-orange-100 file:text-orange-700 hover:file:bg-orange-200"
+                                            disabled={!canModifyLead}
+                                            onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
                                         />
                                         <button
-                                            type="submit"
-                                            disabled={!replyMessage.trim() || sendingReply || !canModifyLead}
-                                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm font-bold transition disabled:opacity-50 flex items-center gap-1"
+                                            type="button"
+                                            onClick={handleFileUpload}
+                                            disabled={uploadingFile || selectedFiles.length === 0 || !canModifyLead}
+                                            className="bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-orange-700 disabled:opacity-50"
                                         >
-                                            {sendingReply ? '...' : (
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
-                                            )}
+                                            {uploadingFile ? 'Subiendo...' : `Subir ${selectedFiles.length > 0 ? `(${selectedFiles.length})` : ''}`}
                                         </button>
-                                    </form>
-                                )}
-                            </div>
-                        </div>
-                        )}
-                    </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition">
-                        <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                </div>
-
-                <div className="overflow-y-auto custom-scrollbar pr-2 flex-1 space-y-6">
-                    {isSupervisorOnlyViewer && (
-                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                            Este lead está en modo solo lectura para ti por estar en supervisión. Solo un administrador puede modificarlo.
-                        </div>
-                    )}
-                    <div className="flex justify-end">
-                        <button
-                            type="button"
-                            onClick={handleDeleteLead}
-                            disabled={!canModifyLead}
-                            className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            Eliminar lead
-                        </button>
-                    </div>
-
-                    {/* Appointment Section */}
-                    <div className="bg-indigo-50/60 p-4 rounded-xl border border-indigo-100">
-                        <h3 className="text-sm font-bold text-indigo-800 mb-3 flex items-center gap-2">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            Programar Cita
-                        </h3>
-                        <div className="flex flex-col sm:flex-row gap-3 items-end">
-                            <div className="w-full sm:flex-1">
-                                <label className="block text-[10px] font-bold text-indigo-700 uppercase mb-1">Fecha y Hora</label>
-                                <input
-                                    type="datetime-local"
-                                    className="w-full border border-indigo-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
-                                    value={reminderDate}
-                                    onChange={(e) => setReminderDate(e.target.value)}
-                                    disabled={!canModifyLead}
-                                />
-                            </div>
-                            <div className="w-full sm:flex-[2]">
-                                <label className="block text-[10px] font-bold text-indigo-700 uppercase mb-1">Detalle de la cita</label>
-                                <input
-                                    type="text"
-                                    placeholder="Ej: Cita en showroom, prueba de manejo, visita..."
-                                    className="w-full border border-indigo-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
-                                    value={reminderNote}
-                                    onChange={(e) => setReminderNote(e.target.value)}
-                                    disabled={!canModifyLead}
-                                />
-                            </div>
-                            <button
-                                onClick={handleCreateAppointment}
-                                disabled={!canModifyLead}
-                                className="w-full sm:w-auto bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 transition shadow-sm h-[38px] disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                Programar cita
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Status Update Section */}
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                        <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                            <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                            Agregar Nota / Actualizar Estado
-                        </h3>
-                        <form onSubmit={handleSubmit} className="space-y-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <div className="sm:col-span-1">
-                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Estado</label>
-                                    <select
-                                        value={newStatus}
-                                        onChange={(e) => setNewStatus(e.target.value)}
-                                        disabled={!canModifyLead}
-                                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                                    >
-                                        <option value="new">Nuevo</option>
-                                        <option value="contacted">Contactado</option>
-                                        <option value="interested">En proceso</option>
-                                        <option value="credit_application">Solicitud de crédito</option>
-                                        <option value="sold">Vendido</option>
-                                        <option value="lost">Perdido</option>
-                                    </select>
-                                </div>
-                                <div className="sm:col-span-2">
-                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Nota / Comentario</label>
-                                    <textarea
-                                        value={newComment}
-                                        onChange={(e) => setNewComment(e.target.value)}
-                                        disabled={!canModifyLead}
-                                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                                        rows="1"
-                                        placeholder="Escribe detalles..."
-                                    ></textarea>
-                                </div>
-                            </div>
-
-                            {/* Process Detail conditional UI */}
-                            {newStatus === 'interested' && (
-                                <div className="p-3 bg-orange-50 rounded-lg border border-orange-100 flex flex-col gap-3 animate-fade-in shadow-sm">
-                                    <div>
-                                        <p className="text-sm font-bold text-gray-700 mb-2">Disponibilidad del vehículo</p>
-                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                            <button
-                                                type="button"
-                                                disabled={!canModifyLead}
-                                                onClick={() => {
-                                                    setHasVehicle(true);
-                                                    setDesiredVehicle('');
-                                                }}
-                                                className={`rounded-lg border px-3 py-2 text-sm font-semibold text-left transition ${hasVehicle === true ? 'border-orange-500 bg-white text-orange-700 shadow-sm' : 'border-orange-200 bg-orange-50 text-gray-600 hover:bg-white'} disabled:cursor-not-allowed disabled:opacity-60`}
-                                            >
-                                                Lo tenemos en inventario
-                                            </button>
-                                            <button
-                                                type="button"
-                                                disabled={!canModifyLead}
-                                                onClick={() => {
-                                                    setHasVehicle(false);
-                                                    setSelectedVehicleId('');
-                                                }}
-                                                className={`rounded-lg border px-3 py-2 text-sm font-semibold text-left transition ${hasVehicle === false ? 'border-orange-500 bg-white text-orange-700 shadow-sm' : 'border-orange-200 bg-orange-50 text-gray-600 hover:bg-white'} disabled:cursor-not-allowed disabled:opacity-60`}
-                                            >
-                                                Toca conseguirlo
-                                            </button>
-                                        </div>
-                                        <p className="mt-2 text-xs text-gray-500">
-                                            Debes escoger una opción para poder guardar este lead en En proceso.
-                                        </p>
                                     </div>
-                                    {hasVehicle === null ? (
-                                        <div className="rounded-lg border border-dashed border-orange-200 bg-white/70 px-3 py-3 text-sm text-gray-500">
-                                            Selecciona primero si el vehículo está en inventario o si debe entrar a búsqueda.
-                                        </div>
-                                    ) : hasVehicle === true ? (
-                                        <div>
-                                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Seleccionar Vehículo / Placa</label>
-                                            <select
-                                                className="w-full text-sm border border-orange-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-orange-500 bg-white shadow-inner"
-                                                value={selectedVehicleId}
-                                                disabled={!canModifyLead}
-                                                onChange={(e) => setSelectedVehicleId(e.target.value)}
-                                            >
-                                                <option value="">-- Buscar Auto Disponible --</option>
-                                                {availableVehicles?.map(v => (
-                                                    <option key={v.id} value={v.id}>{v.make} {v.model} - Placa: {v.plate}</option>
-                                                ))}
-                                            </select>
-                                            <p className="mt-2 text-xs text-gray-500">
-                                                Si no seleccionas un carro del inventario, el lead pasará automáticamente a solicitud de búsqueda.
-                                            </p>
+                                    {leadFiles.length > 0 ? (
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-72 overflow-y-auto pr-2 custom-scrollbar">
+                                            {leadFiles.map((file) => (
+                                                <div key={file.id} className="bg-white p-2 rounded border border-gray-200 shadow-sm flex flex-col gap-2">
+                                                    <a href={`${API_BASE_URL}${file.file_path}`} target="_blank" rel="noopener noreferrer" className="hover:border-orange-500 transition flex flex-col items-center gap-1 group">
+                                                        {file.file_type && file.file_type.includes('image') ? (
+                                                            <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center overflow-hidden">
+                                                                <img src={`${API_BASE_URL}${file.file_path}`} alt="File" className="w-full h-full object-cover" />
+                                                            </div>
+                                                        ) : (
+                                                            <svg className="w-8 h-8 text-gray-400 group-hover:text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                                                        )}
+                                                        <span className="text-[10px] text-gray-600 truncate w-full text-center">{file.file_name}</span>
+                                                    </a>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDeleteLeadFile(file)}
+                                                        disabled={!canModifyLead}
+                                                        className="w-full rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600 transition hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        Eliminar
+                                                    </button>
+                                                </div>
+                                            ))}
                                         </div>
                                     ) : (
-                                        <div>
-                                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Vehículo de Interés que Busca (Texto Libre)</label>
-                                            <input
-                                                type="text"
-                                                className="w-full text-sm border border-orange-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-orange-500 bg-white shadow-inner"
-                                                value={desiredVehicle}
-                                                disabled={!canModifyLead}
-                                                onChange={(e) => setDesiredVehicle(e.target.value)}
-                                                placeholder="Ej: Toyota Hilux 2020 Color Blanco..."
-                                            />
+                                        <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-400">
+                                            No hay documentos cargados para este lead.
                                         </div>
                                     )}
                                 </div>
-                            )}
 
-                            {/* SECCIÓN DE NOTAS MÚLTIPLES - Siempre visible */}
-                            <div className="mt-4 border-t border-gray-200 pt-3">
-                                <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Notas del Proceso</h4>
-                                <div className="flex gap-2 mb-3">
+                            </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeDetailTab === 'credito' && (
+                        <div className="space-y-4">
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 shadow-sm">
+                                        <p className="text-sm font-medium text-emerald-700">Monto aprobado</p>
+                                        <p className="mt-2 text-3xl font-bold text-emerald-950">
+                                            {approvalMetrics.approvedAmount != null ? formatLeadCurrencyValue(approvalMetrics.approvedAmount) : 'Sin definir'}
+                                        </p>
+                                    </div>
+                                    <div className="rounded-2xl border border-sky-200 bg-sky-50 px-5 py-4 shadow-sm">
+                                        <p className="text-sm font-medium text-sky-700">Porcentaje aprobado</p>
+                                        <p className="mt-2 text-3xl font-bold text-sky-950">
+                                            {approvalMetrics.approvalPercentage != null ? `${approvalMetrics.approvalPercentage}%` : 'Sin definir'}
+                                        </p>
+                                    </div>
+                                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-sm">
+                                        <p className="text-sm font-medium text-amber-700">Cuota inicial mínima</p>
+                                        <p className="mt-2 text-3xl font-bold text-amber-950">
+                                            {approvalMetrics.minimumDownPayment != null ? formatLeadCurrencyValue(approvalMetrics.minimumDownPayment) : 'Sin definir'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeDetailTab === 'compras' && (
+                        <div className="space-y-4">
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div>
+                                        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Información de compras</p>
+                                        <p className="mt-1 text-sm text-slate-600">Resumen claro del caso para compras y decisión inicial de la solicitud.</p>
+                                    </div>
+                                    {loadingPurchaseDetail && (
+                                        <span className="text-xs font-medium text-slate-400">Cargando...</span>
+                                    )}
+                                </div>
+                                {(purchaseDetail || purchaseRelatedNotes.length > 0) ? (
+                                    <>
+                                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                            <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-4 shadow-sm">
+                                                <p className="text-sm font-medium text-cyan-700">Vehículo solicitado</p>
+                                                <p className="mt-2 text-2xl font-bold text-cyan-950 break-words">
+                                                    {purchaseDetail?.desired_vehicle || visibleVehicleText || 'Sin definir'}
+                                                </p>
+                                            </div>
+                                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 shadow-sm">
+                                                <p className="text-sm font-medium text-emerald-700">Monto aprobado</p>
+                                                <p className="mt-2 text-2xl font-bold text-emerald-950">
+                                                    {approvalMetrics.approvedAmount != null ? formatLeadCurrencyValue(approvalMetrics.approvedAmount) : 'Sin definir'}
+                                                </p>
+                                            </div>
+                                            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-sm">
+                                                <p className="text-sm font-medium text-amber-700">Pago mínimo</p>
+                                                <p className="mt-2 text-2xl font-bold text-amber-950">
+                                                    {approvalMetrics.minimumDownPayment != null ? formatLeadCurrencyValue(approvalMetrics.minimumDownPayment) : 'Sin definir'}
+                                                </p>
+                                            </div>
+                                            <div className="rounded-2xl border border-violet-200 bg-violet-50 px-5 py-4 shadow-sm">
+                                                <p className="text-sm font-medium text-violet-700">Separación</p>
+                                                <p className="mt-2 text-2xl font-bold text-violet-950">
+                                                    {reservationAmountValue != null ? formatLeadCurrencyValue(reservationAmountValue) : 'Sin definir'}
+                                                </p>
+                                                {reservationPaymentMethodValue && (
+                                                    <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-violet-700">
+                                                        {reservationPaymentMethodValue}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {purchaseDetail && (
+                                            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                                    <div>
+                                                        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Estado de la solicitud</p>
+                                                        <p className="mt-1 text-sm font-semibold text-slate-800">{getPurchaseRequestStatusLabel(normalizedPurchaseStatus)}</p>
+                                                        <p className="mt-1 text-xs text-slate-500">Responsable: {purchaseAssignedName}</p>
+                                                    </div>
+                                                    {normalizedPurchaseStatus === 'pending' && canManagePurchaseRequest && (
+                                                        <div className="flex flex-wrap gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handlePurchaseRequestDecision('accept')}
+                                                                disabled={processingPurchaseDecision}
+                                                                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                                                            >
+                                                                {processingPurchaseDecision ? 'Procesando...' : 'Aceptar'}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handlePurchaseRequestDecision('cancel')}
+                                                                disabled={processingPurchaseDecision}
+                                                                className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
+                                                            >
+                                                                {processingPurchaseDecision ? 'Procesando...' : 'Cancelar'}
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {normalizedPurchaseStatus === 'rejected' && (
+                                                    <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+                                                        <p className="text-[11px] font-bold uppercase tracking-wide text-rose-700">Solicitud cancelada</p>
+                                                        <p className="mt-1 text-sm text-rose-900">
+                                                            {purchaseRejectionReason || 'Compras canceló esta solicitud sin dejar un motivo visible.'}
+                                                        </p>
+                                                        {canResubmitPurchaseRequest && (
+                                                            <div className="mt-3">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handlePurchaseRequestDecision('resubmit')}
+                                                                    disabled={processingPurchaseDecision}
+                                                                    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                                                                >
+                                                                    {processingPurchaseDecision ? 'Procesando...' : 'Volver a solicitar'}
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div className="mt-4 rounded-lg border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-400">
+                                        Este lead todavía no tiene información relacionada en compras.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {activeDetailTab === 'conversacion' && (
+                        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col min-h-[540px] max-h-[68vh]">
+                            <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                                <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                                    <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                                    Conversación del cliente ({messages.length})
+                                </h3>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 custom-scrollbar min-h-0">
+                                {loadingMessages ? (
+                                    <div className="text-center text-sm text-gray-400 py-4">Cargando mensajes...</div>
+                                ) : messages.length > 0 ? (
+                                    messages.map((msg, index) => (
+                                        <div key={msg.id || index} className={`flex flex-col ${msg.sender_type === 'user' ? 'items-end' : 'items-start'}`}>
+                                            <div className="flex items-end gap-1 mb-1">
+                                                <span className="text-[10px] text-gray-400 font-medium">
+                                                    {msg.sender_type === 'user' ? (msg.sender?.email || 'Nosotros') : lead.name}
+                                                </span>
+                                            </div>
+                                            <div className={`px-4 py-2 rounded-2xl max-w-[85%] ${msg.sender_type === 'user'
+                                                ? 'bg-blue-600 text-white rounded-br-sm shadow-sm'
+                                                : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm'
+                                                }`}>
+                                                <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                                            </div>
+                                            <span className="text-[9px] text-gray-400 mt-1">
+                                                {formatBogotaDateTime(msg.created_at, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="h-full flex items-center justify-center text-sm text-gray-400">
+                                        No hay mensajes cargados para este lead.
+                                    </div>
+                                )}
+                            </div>
+                            {(lead.source === 'facebook' || lead.source === 'instagram' || lead.source === 'whatsapp') && (
+                                <form onSubmit={handleSendReply} className="bg-white border-t border-gray-200 p-3 flex gap-2">
                                     <input
                                         type="text"
-                                        className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-orange-500 bg-white"
-                                        placeholder="Agregar una nueva nota..."
-                                        value={noteContent}
-                                        onChange={(e) => setNoteContent(e.target.value)}
-                                        disabled={!canModifyLead}
+                                        placeholder={`Responder por ${lead.source}...`}
+                                        className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={replyMessage}
+                                        onChange={(e) => setReplyMessage(e.target.value)}
+                                        disabled={sendingReply || !canModifyLead}
                                     />
                                     <button
-                                        type="button"
-                                        onClick={handleAddNote}
-                                        disabled={uploadingNote || !noteContent.trim() || !canModifyLead}
-                                        className="bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-orange-700 disabled:opacity-50"
+                                        type="submit"
+                                        disabled={!replyMessage.trim() || sendingReply || !canModifyLead}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm font-bold transition disabled:opacity-50 flex items-center gap-1"
                                     >
-                                        {uploadingNote ? 'Guardando...' : 'Agregar'}
+                                        {sendingReply ? '...' : (
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                                        )}
                                     </button>
-                                </div>
-                                {/* Lista de notas */}
-                                {leadNotes.length > 0 && (
-                                    <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-                                        {leadNotes.map((note) => (
-                                              <div key={note.id} className="bg-white p-2 rounded border border-gray-100 shadow-sm text-sm">
-                                                  <p className="text-[11px] font-semibold text-slate-500">
-                                                      {note.user?.full_name || note.user?.email || 'Usuario'}
-                                                  </p>
-                                                  <p className="text-gray-800">{note.content}</p>
-                                                  <span className="text-[10px] text-gray-400">
-                                                      {new Date(note.created_at).toLocaleString()}
-                                                  </span>
-                                              </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                                </form>
+                            )}
+                        </div>
+                    )}
 
-                            {/* SECCIÓN DE ARCHIVOS */}
-                            <div className="mt-4 border-t border-gray-200 pt-3">
-                                <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Archivos Adjuntos / Documentos</h4>
-                                <div className="flex gap-2 mb-3 items-center">
-                                    <input
-                                        id="file-upload-input"
-                                        type="file"
-                                        multiple
-                                        accept="*"
-                                        className="flex-1 text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-orange-100 file:text-orange-700 hover:file:bg-orange-200"
-                                        disabled={!canModifyLead}
-                                        onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={handleFileUpload}
-                                        disabled={uploadingFile || selectedFiles.length === 0 || !canModifyLead}
-                                        className="bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-orange-700 disabled:opacity-50"
-                                    >
-                                        {uploadingFile ? 'Subiendo...' : `Subir ${selectedFiles.length > 0 ? `(${selectedFiles.length})` : ''}`}
-                                    </button>
-                                </div>
-                                {/* Lista de archivos */}
-                                {leadFiles.length > 0 && (
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-                                        {leadFiles.map((file) => (
-                                            <div key={file.id} className="bg-white p-2 rounded border border-gray-200 shadow-sm flex flex-col gap-2">
-                                                <a href={`https://autosqp.com/api${file.file_path}`} target="_blank" rel="noopener noreferrer" className="hover:border-orange-500 transition flex flex-col items-center gap-1 group">
-                                                    {file.file_type && file.file_type.includes('image') ? (
-                                                        <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center overflow-hidden">
-                                                            <img src={`https://autosqp.com/api${file.file_path}`} alt="File" className="w-full h-full object-cover" />
-                                                        </div>
-                                                    ) : (
-                                                        <svg className="w-8 h-8 text-gray-400 group-hover:text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                                                    )}
-                                                    <span className="text-[10px] text-gray-600 truncate w-full text-center">{file.file_name}</span>
-                                                </a>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDeleteLeadFile(file)}
-                                                    disabled={!canModifyLead}
-                                                    className="w-full rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600 transition hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                >
-                                                    Eliminar
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-
-                            <button
-                                type="submit"
-                                disabled={loading || !canModifyLead}
-                                className="w-full bg-blue-600 text-white text-sm font-bold py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {loading ? 'Guardando...' : 'Guardar Nota y Actualizar'}
-                            </button>
-                        </form>
-                    </div>
-
-                    {/* History List */}
+                    {activeDetailTab === 'historial' && (
                     <div>
                         <div className="flex border-b border-gray-200 mb-4">
                             <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide border-b-2 border-blue-600 py-2 inline-block">
@@ -1622,7 +2501,13 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                         </div>
                         <div className="space-y-4">
                             {historyEntries.length > 0 ? (
-                                [...historyEntries].reverse().map((record) => (
+                                [...historyEntries].reverse().map((record) => {
+                                    const { vehicleTrace, mainComment } = extractCreditVehicleTrace(record.comment);
+                                    const fallbackVehicleTrace = !vehicleTrace && normalizeLeadStatus(record.new_status) === 'credit_study' && visibleVehicleText
+                                        ? `${vehicleTrackingLabel}: ${visibleVehicleText}`
+                                        : '';
+                                    const effectiveVehicleTrace = vehicleTrace || fallbackVehicleTrace;
+                                    return (
                                     <div key={record.id} className="flex gap-4 group">
                                         <div className="flex flex-col items-center">
                                             <div className="w-2 h-2 rounded-full bg-blue-400 mt-2 ring-4 ring-white"></div>
@@ -1639,19 +2524,14 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                                           {!record.isInitialDescription && (
                                                               <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                                                         )}
-                                                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded text-white 
-                                                                ${record.isInitialDescription ? 'bg-indigo-500' :
-                                                                    record.new_status === 'sold' ? 'bg-green-500' :
-                                                                    record.new_status === 'credit_application' ? 'bg-teal-500' :
-                                                                record.new_status === 'ally_managed' ? 'bg-purple-500' :
-                                                                    record.new_status === 'lost' ? 'bg-gray-500' : 'bg-blue-500'}`}>
+                                                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded text-white ${
+                                                              record.isInitialDescription
+                                                                  ? 'bg-indigo-500'
+                                                                  : getLeadStatusMeta(record.new_status).historyBadgeClass
+                                                          }`}>
                                                               {record.isInitialDescription
                                                                   ? 'lead creado'
-                                                                  : record.new_status === 'ally_managed'
-                                                                  ? 'gestionado por aliado'
-                                                                  : record.new_status === 'credit_application'
-                                                                      ? 'solicitud de crédito'
-                                                                      : record.new_status}
+                                                                  : getLeadStatusLabel(record.new_status)}
                                                           </span>
                                                           </div>
                                                           <p className="text-[11px] font-semibold text-slate-500">
@@ -1659,14 +2539,19 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                                           </p>
                                                       </div>
                                                       <span className="text-[10px] text-gray-400 font-mono">
-                                                          {record.created_at ? new Date(record.created_at).toLocaleString() : 'Reciente'}
+                                                          {record.created_at ? formatBogotaDateTime(record.created_at) : 'Reciente'}
                                                       </span>
                                                 </div>
-                                                <p className="text-sm text-gray-700 italic">"{record.comment || 'Sin comentario'}"</p>
+                                                {effectiveVehicleTrace && (
+                                                    <div className="mb-2 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+                                                        <span className="font-semibold">Vehículo relacionado:</span> {effectiveVehicleTrace.replace(/^Veh[ií]culo (?:por buscar|de inventario|solicitado|desde inventario):\s*/i, '')}
+                                                    </div>
+                                                )}
+                                                <p className="text-sm text-gray-700 italic">"{mainComment || record.comment || 'Sin comentario'}"</p>
                                             </div>
                                         </div>
                                     </div>
-                                ))
+                                )})
                             ) : (
                                 <div className="text-center py-12 text-gray-400 italic bg-gray-50 rounded-xl border border-dashed border-gray-200">
                                     No hay historial registrado para este lead.
@@ -1674,6 +2559,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                             )}
                         </div>
                     </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -1682,6 +2568,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
 
 const LeadsBoard = ({ boardMode = 'general' }) => {
     const { user } = useAuth();
+    const { notifications, fetchNotifications, markAsRead } = useNotifications();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const [leads, setLeads] = useState([]);
@@ -1710,6 +2597,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const [dragHasVehicle, setDragHasVehicle] = useState(null);
     const [dragSelectedVehicleId, setDragSelectedVehicleId] = useState('');
     const [dragDesiredVehicle, setDragDesiredVehicle] = useState('');
+    const [dragReservationAmount, setDragReservationAmount] = useState('');
+    const [dragReservationPaymentMethod, setDragReservationPaymentMethod] = useState('');
 
     // Modal State - History View
     const [selectedLeadForHistory, setSelectedLeadForHistory] = useState(null);
@@ -1743,6 +2632,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         return roleName === 'aliado';
     });
     const supervisionUsers = advisors.filter((adv) => normalizeRoleKey(adv.role) !== 'user');
+    const shownBoardCreditNotificationsRef = React.useRef('');
 
     useEffect(() => {
         setLoading(true);
@@ -1755,6 +2645,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         setDragHasVehicle(null);
         setDragSelectedVehicleId('');
         setDragDesiredVehicle('');
+        setDragReservationAmount('');
+        setDragReservationPaymentMethod('');
         setNewLeadForm({
             name: '',
             email: '',
@@ -1769,6 +2661,50 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         fetchAdvisors();
         fetchAvailableVehicles();
     }, [boardMode]);
+
+    useEffect(() => {
+        if (!fetchNotifications) return;
+        shownBoardCreditNotificationsRef.current = '';
+        fetchNotifications({ silentToast: true });
+    }, [boardMode]);
+
+    useEffect(() => {
+        if (!Array.isArray(notifications) || !markAsRead || !fetchNotifications) return;
+
+        const unreadCreditNotifications = notifications.filter((notification) =>
+            isCreditNotificationForBoard(notification, boardMode)
+        );
+
+        if (unreadCreditNotifications.length === 0) return;
+
+        const notificationKey = `${boardMode}:${unreadCreditNotifications.map((notification) => notification.id).join(',')}`;
+        if (shownBoardCreditNotificationsRef.current === notificationKey) return;
+        shownBoardCreditNotificationsRef.current = notificationKey;
+
+        const showUnreadCreditNotifications = async () => {
+            await Swal.fire({
+                title: 'Novedades de crédito',
+                html: `
+                    <div style="display:grid; gap:12px; text-align:left;">
+                        ${unreadCreditNotifications.map((notification) => `
+                            <div style="border:1px solid #dbeafe; border-radius:12px; padding:12px; background:#f8fbff;">
+                                <div style="font-weight:700; color:#1d4ed8; margin-bottom:4px;">${notification.title || 'Actualización'}</div>
+                                <div style="font-size:14px; color:#334155;">${notification.message || ''}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `,
+                icon: 'info',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#2563eb'
+            });
+
+            await Promise.all(unreadCreditNotifications.map((notification) => markAsRead(notification.id)));
+            await fetchNotifications({ silentToast: true });
+        };
+
+        showUnreadCreditNotifications();
+    }, [boardMode, notifications]);
 
     useEffect(() => {
         const searchTimer = setTimeout(() => {
@@ -1835,7 +2771,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     .filter((id) => Number.isInteger(id))
                 : [];
 
-            const response = await axios.post('https://autosqp.co/api/leads', payload, {
+            const response = await axios.post(`${API_BASE_URL}/leads`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -1865,7 +2801,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const fetchLeads = async (term = '') => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('https://autosqp.co/api/leads', {
+            const response = await axios.get(`${API_BASE_URL}/leads`, {
                 headers: { Authorization: `Bearer ${token}` },
                 params: {
                     board_scope: boardMode,
@@ -1874,11 +2810,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 }
             });
             const items = Array.isArray(response.data.items) ? response.data.items : [];
-            setLeads(items.map((item) => (
-                isAllyBoard && item.status === 'ally_managed'
-                    ? { ...item, status: 'new' }
-                    : item
-            )));
+            setLeads(items.map(normalizeLeadRecord));
         } catch (error) {
             console.error("Error fetching leads", error);
         } finally {
@@ -1888,16 +2820,16 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
     const fetchLeadDetail = async (leadId) => {
         const token = localStorage.getItem('token');
-        const response = await axios.get(`https://autosqp.co/api/leads/${leadId}`, {
+        const response = await axios.get(`${API_BASE_URL}/leads/${leadId}`, {
             headers: { Authorization: `Bearer ${token}` }
         });
-        return response.data;
+        return normalizeLeadRecord(response.data);
     };
 
     const fetchAvailableVehicles = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('https://autosqp.co/api/vehicles/?status=available', {
+            const response = await axios.get(`${API_BASE_URL}/vehicles/?status=available`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setAvailableVehicles(response.data.items || []);
@@ -1909,7 +2841,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const fetchAdvisors = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('https://autosqp.co/api/users/', {
+            const response = await axios.get(`${API_BASE_URL}/users/`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const users = (response.data.items || []).filter((user) => isUserActive(user));
@@ -1955,6 +2887,12 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         if (leadId) {
             const id = parseInt(leadId);
             const lead = leads.find(l => l.id === id);
+            if (!lead) return;
+
+            if (isSupervisorOnlyCreditViewer(lead, currentUserId, currentRoleName)) {
+                Swal.fire('Solo lectura', 'Como supervisor en Estudio de crédito puedes ver el lead, pero no cambiarle el estado desde este tablero.', 'info');
+                return;
+            }
 
             if (lead.status === newStatus) return;
 
@@ -1963,6 +2901,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             setDragHasVehicle(null);
             setDragSelectedVehicleId('');
             setDragDesiredVehicle('');
+            setDragReservationAmount('');
+            setDragReservationPaymentMethod('');
 
             if (newStatus === 'sold') {
                 initiateSale(id);
@@ -2001,7 +2941,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         const { leadId, newStatus } = pendingStatusChange;
 
         let processDetail = null;
-        if (newStatus === 'interested') {
+        if (newStatus === 'in_process') {
             if (dragHasVehicle === null) {
                 Swal.fire('Atención', 'Debes indicar si el vehiculo está disponible en inventario o si toca conseguirlo.', 'warning');
                 return;
@@ -2016,6 +2956,25 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 has_vehicle: shouldMoveToPurchaseSearch ? false : dragHasVehicle,
                 vehicle_id: dragHasVehicle && dragSelectedVehicleId ? parseInt(dragSelectedVehicleId) : null,
                 desired_vehicle: (!dragHasVehicle || shouldMoveToPurchaseSearch) ? desiredVehicleFallback : null
+            };
+        } else if (newStatus === 'reserved') {
+            const parsedReservationAmount = Number(String(dragReservationAmount || '').replace(/[^\d]/g, ''));
+            const normalizedPaymentMethod = String(dragReservationPaymentMethod || '').trim().toLowerCase();
+            if (!Number.isFinite(parsedReservationAmount) || parsedReservationAmount <= 0) {
+                Swal.fire('Atención', 'Debes indicar el monto de la separación para pasar el lead a Reservas.', 'warning');
+                return;
+            }
+            if (!['efectivo', 'transferencia'].includes(normalizedPaymentMethod)) {
+                Swal.fire('Atención', 'Debes indicar si la separación fue en efectivo o transferencia.', 'warning');
+                return;
+            }
+            const leadRef = leads.find((item) => item.id === leadId);
+            processDetail = {
+                has_vehicle: typeof leadRef?.process_detail?.has_vehicle === 'boolean' ? leadRef.process_detail.has_vehicle : false,
+                vehicle_id: leadRef?.process_detail?.vehicle_id || null,
+                desired_vehicle: leadRef?.process_detail?.desired_vehicle || leadRef?.message?.trim() || 'Por definir',
+                reservation_amount: parsedReservationAmount,
+                reservation_payment_method: normalizedPaymentMethod,
             };
         }
 
@@ -2032,7 +2991,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             if (processDetail) {
                 payload.process_detail = processDetail;
             }
-            await axios.put(`https://autosqp.co/api/leads/${leadId}`,
+            await axios.put(`${API_BASE_URL}/leads/${leadId}`,
                 payload,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -2066,7 +3025,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 payload.supervisor_ids = supervisorIds;
             }
 
-            await axios.put(`https://autosqp.co/api/leads/${leadId}`,
+            await axios.put(`${API_BASE_URL}/leads/${leadId}`,
                 payload,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -2114,7 +3073,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.put(
-                `https://autosqp.co/api/leads/${leadId}`,
+                `${API_BASE_URL}/leads/${leadId}`,
                 contactData,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -2164,7 +3123,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const handleSaveSupervisors = async (leadId, supervisorIds) => {
         try {
             const token = localStorage.getItem('token');
-            await axios.put(`https://autosqp.co/api/leads/${leadId}`,
+            const response = await axios.put(`${API_BASE_URL}/leads/${leadId}`,
                 {
                     supervisor_ids: supervisorIds,
                     comment: 'Supervision actualizada'
@@ -2172,19 +3131,15 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
-            const supervisorUsers = advisors.filter((adv) => supervisorIds.includes(adv.id));
+            const normalizedLead = normalizeLeadRecord(response.data);
             setLeads(prev => prev.map((lead) => (
                 lead.id === leadId
-                    ? { ...lead, supervisor_ids: supervisorIds, supervisors: supervisorUsers }
+                    ? normalizedLead
                     : lead
             )));
-            setSelectedLeadForHistory(prev => (
-                prev && prev.id === leadId
-                    ? { ...prev, supervisor_ids: supervisorIds, supervisors: supervisorUsers }
-                    : prev
-            ));
+            setSelectedLeadForHistory(prev => (prev && prev.id === leadId ? normalizedLead : prev));
 
-            fetchLeads();
+            await fetchLeads();
             Swal.fire({
                 icon: 'success',
                 title: 'Supervision actualizada',
@@ -2218,7 +3173,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 payload.supervisor_ids = sanitizedSupervisorIds;
             }
 
-            await axios.put(`https://autosqp.co/api/leads/${leadId}`, payload, {
+            await axios.put(`${API_BASE_URL}/leads/${leadId}`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -2272,7 +3227,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const handleDeleteLead = async (leadId, reason) => {
         try {
             const token = localStorage.getItem('token');
-            await axios.delete(`https://autosqp.co/api/leads/${leadId}`, {
+            await axios.delete(`${API_BASE_URL}/leads/${leadId}`, {
                 headers: { Authorization: `Bearer ${token}` },
                 data: { reason }
             });
@@ -2315,11 +3270,11 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 payload.seller_id = parseInt(saleForm.seller_id);
             }
 
-            await axios.post('https://autosqp.co/api/sales/', payload, {
+            await axios.post(`${API_BASE_URL}/sales/`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            await axios.put(`https://autosqp.co/api/leads/${selectedLeadForSale.id}`,
+            await axios.put(`${API_BASE_URL}/leads/${selectedLeadForSale.id}`,
                 { status: 'sold', comment: `Venta registrada: Vehículo ID ${saleForm.vehicle_id}` },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -2352,7 +3307,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         return leads.filter(lead => {
             const supervisorIds = getLeadSupervisorIds(lead);
             const assignedUserId = getLeadAssignedUserId(lead);
-            const matchesStatus = lead.status === status;
+            const matchesStatus = normalizeLeadStatus(lead.status) === normalizeLeadStatus(status);
             const matchesSearch =
                 lead.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 lead.phone?.includes(searchTerm);
@@ -2370,7 +3325,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             const matchesAssigned = !assignedFilter ||
                 (assignedFilter === 'assigned' ? hasAnyResponsible : !hasAnyResponsible);
 
-            const matchesGlobalStatus = !globalStatusFilter || lead.status === globalStatusFilter;
+            const matchesGlobalStatus = !globalStatusFilter || normalizeLeadStatus(lead.status) === normalizeLeadStatus(globalStatusFilter);
 
             return matchesStatus && matchesSearch && matchesDate && matchesUser && matchesAssigned && matchesGlobalStatus && matchesMyLeads;
         });
@@ -2448,12 +3403,11 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                                     onChange={(e) => setGlobalStatusFilter(e.target.value)}
                                 >
                                     <option value="">Todos los Estados</option>
-                                    <option value="new">Nuevos</option>
-                                    <option value="contacted">Contactados</option>
-                                    <option value="interested">En proceso</option>
-                                    <option value="credit_application">Solicitud de crédito</option>
-                                    <option value="sold">Vendidos</option>
-                                    <option value="lost">Perdidos</option>
+                                    {LEAD_STATUS_OPTIONS.map((statusOption) => (
+                                        <option key={statusOption.value} value={statusOption.value}>
+                                            {statusOption.label}
+                                        </option>
+                                    ))}
                                 </select>
                             </div>
 
@@ -2532,78 +3486,23 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
             {/* Kanban Board */}
             <div className="flex gap-4 overflow-x-auto pb-4 h-full items-start">
-                <KanbanColumn
-                    title="Nuevos"
-                    status="new"
-                    color="text-blue-600"
-                    leads={filterByStatus('new')}
-                    onDragStart={handleDragStart}
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                    onViewHistory={handleViewHistory}
-                    highlightedLeadId={highlightedLeadId}
-                    boardMode={boardMode}
-                />
-                <KanbanColumn
-                    title="Contactados"
-                    status="contacted"
-                    color="text-yellow-600"
-                    leads={filterByStatus('contacted')}
-                    onDragStart={handleDragStart}
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                    onViewHistory={handleViewHistory}
-                    highlightedLeadId={highlightedLeadId}
-                    boardMode={boardMode}
-                />
-                <KanbanColumn
-                    title="En proceso"
-                    status="interested"
-                    color="text-orange-600"
-                    leads={filterByStatus('interested')}
-                    onDragStart={handleDragStart}
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                    onViewHistory={handleViewHistory}
-                    highlightedLeadId={highlightedLeadId}
-                    boardMode={boardMode}
-                />
-                <KanbanColumn
-                    title="Solicitud de crédito"
-                    status="credit_application"
-                    color="text-teal-600"
-                    leads={filterByStatus('credit_application')}
-                    onDragStart={handleDragStart}
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                    onViewHistory={handleViewHistory}
-                    highlightedLeadId={highlightedLeadId}
-                    boardMode={boardMode}
-                />
-                <KanbanColumn
-                    title="Vendidos"
-                    status="sold"
-                    color="text-green-600"
-                    leads={filterByStatus('sold')}
-                    onDragStart={handleDragStart}
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                    onViewHistory={handleViewHistory}
-                    highlightedLeadId={highlightedLeadId}
-                    boardMode={boardMode}
-                />
-                <KanbanColumn
-                    title="Perdidos"
-                    status="lost"
-                    color="text-gray-400"
-                    leads={filterByStatus('lost')}
-                    onDragStart={handleDragStart}
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                    onViewHistory={handleViewHistory}
-                    highlightedLeadId={highlightedLeadId}
-                    boardMode={boardMode}
-                />
+                {LEAD_STATUS_OPTIONS.map((statusOption) => (
+                    <KanbanColumn
+                        key={statusOption.value}
+                        title={statusOption.label}
+                        status={statusOption.value}
+                        color={statusOption.columnColor}
+                        leads={filterByStatus(statusOption.value)}
+                        onDragStart={handleDragStart}
+                        onDragOver={handleDragOver}
+                        onDrop={handleDrop}
+                        onViewHistory={handleViewHistory}
+                        highlightedLeadId={highlightedLeadId}
+                        boardMode={boardMode}
+                        currentUserId={currentUserId}
+                        currentUserRole={currentRoleName}
+                    />
+                ))}
             </div>
 
             {/* Comment Modal for Status Change */}
@@ -2613,13 +3512,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                         <h2 className="text-xl font-bold mb-4 text-gray-800">Confirmar cambio de estado</h2>
                         <p className="text-sm text-gray-500 mb-4">
                             Estás cambiando el lead a: <span className="font-bold text-blue-600 uppercase">
-                                {pendingStatusChange?.newStatus === 'new' ? 'NUEVO' :
-                                    pendingStatusChange?.newStatus === 'contacted' ? 'CONTACTADO' :
-                                        pendingStatusChange?.newStatus === 'interested' ? 'INTERESADO' :
-                                            pendingStatusChange?.newStatus === 'credit_application' ? 'SOLICITUD DE CRÉDITO' :
-                                            pendingStatusChange?.newStatus === 'lost' ? 'PERDIDO' :
-                                                pendingStatusChange?.newStatus === 'sold' ? 'VENDIDO' :
-                                                    pendingStatusChange?.newStatus === 'ally_managed' ? 'GESTIONADO POR ALIADO' : pendingStatusChange?.newStatus}
+                                {getLeadStatusLabel(pendingStatusChange?.newStatus)}
                             </span>.
                             <br />Por favor, indica el motivo o un comentario para el seguimiento.
                         </p>
@@ -2633,7 +3526,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                             autoFocus
                         ></textarea>
 
-                        {pendingStatusChange?.newStatus === 'interested' && (
+                        {normalizeLeadStatus(pendingStatusChange?.newStatus) === 'in_process' && (
                             <div className="mb-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
                                 <label className="block text-sm font-bold text-gray-700 mb-2">Información del Vehículo</label>
                                 <div className="space-y-3">
@@ -2667,9 +3560,48 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                             </div>
                         )}
 
+                        {normalizeLeadStatus(pendingStatusChange?.newStatus) === 'reserved' && (
+                            <div className="mb-4 bg-violet-50 p-4 rounded-lg border border-violet-200">
+                                <label className="block text-sm font-bold text-gray-700 mb-3">Información obligatoria de la reserva</label>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Monto de la separación</label>
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            className="w-full border border-violet-200 rounded p-2 text-sm focus:ring-2 focus:ring-violet-500 outline-none"
+                                            placeholder="Ej: 2000000"
+                                            value={dragReservationAmount}
+                                            onChange={(e) => setDragReservationAmount(e.target.value.replace(/[^\d]/g, ''))}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Medio de pago de la separación</label>
+                                        <select
+                                            className="w-full border border-violet-200 rounded p-2 text-sm focus:ring-2 focus:ring-violet-500 outline-none"
+                                            value={dragReservationPaymentMethod}
+                                            onChange={(e) => setDragReservationPaymentMethod(e.target.value)}
+                                        >
+                                            <option value="">Selecciona una opción</option>
+                                            <option value="efectivo">Efectivo</option>
+                                            <option value="transferencia">Transferencia</option>
+                                        </select>
+                                    </div>
+                                    <p className="text-xs text-gray-500">
+                                        Sin esta información no se podrá guardar el lead en Reservas ni enviarlo al tablero de compras.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="flex gap-3">
                             <button
-                                onClick={() => { setShowCommentModal(false); setStatusComment(''); }}
+                                onClick={() => {
+                                    setShowCommentModal(false);
+                                    setStatusComment('');
+                                    setDragReservationAmount('');
+                                    setDragReservationPaymentMethod('');
+                                }}
                                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50"
                             >
                                 Cancelar

@@ -42,6 +42,16 @@ const getApiErrorMessage = (error, fallbackMessage) => {
     return fallbackMessage;
 };
 
+const formatPurchaseCurrency = (value) => {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return 'Sin definir';
+    return new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        maximumFractionDigits: 0,
+    }).format(numericValue);
+};
+
 const STATUS_LABELS = {
     pending: 'Solicitud recibida',
     in_review: 'En busqueda',
@@ -93,6 +103,7 @@ const PurchaseBoard = () => {
     const [savingPurchaseNote, setSavingPurchaseNote] = useState(false);
     const [uploadingPurchaseFiles, setUploadingPurchaseFiles] = useState(false);
     const [savingPurchaseOption, setSavingPurchaseOption] = useState(false);
+    const [processingInitialDecision, setProcessingInitialDecision] = useState(false);
 
     useEffect(() => {
         if (!user?.id) return;
@@ -207,6 +218,77 @@ const PurchaseBoard = () => {
             console.error('Error updating purchase status', error);
             Swal.fire('Error', 'No se pudo actualizar el estado', 'error');
             fetchPurchases();
+        }
+    };
+
+    const handleInitialPurchaseDecision = async (purchase, decision) => {
+        if (!purchase?.id || processingInitialDecision) return;
+
+        let payload = null;
+        if (decision === 'accept') {
+            const confirmation = await Swal.fire({
+                title: 'Aceptar solicitud de compra',
+                text: 'La solicitud pasará automáticamente a En búsqueda.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Aceptar solicitud',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#059669'
+            });
+            if (!confirmation.isConfirmed) return;
+            payload = {
+                status: 'in_review',
+                status_note: 'Solicitud aceptada para iniciar la búsqueda del vehículo.'
+            };
+        } else {
+            const { value: rejectionReason } = await Swal.fire({
+                title: 'Cancelar solicitud de compra',
+                input: 'textarea',
+                inputLabel: 'Motivo de cancelación',
+                inputPlaceholder: 'Explica por qué se rechaza esta solicitud...',
+                showCancelButton: true,
+                confirmButtonText: 'Cancelar solicitud',
+                cancelButtonText: 'Volver',
+                confirmButtonColor: '#dc2626',
+                inputValidator: (value) => {
+                    if (!value || !value.trim()) {
+                        return 'Debes indicar el motivo de cancelación';
+                    }
+                    return null;
+                }
+            });
+            if (!rejectionReason) return;
+            payload = {
+                status: 'rejected',
+                status_note: rejectionReason.trim()
+            };
+        }
+
+        setProcessingInitialDecision(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.put(`${API_BASE_URL}/purchases/${purchase.id}`, payload, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const updatedPurchase = {
+                ...response.data,
+                status: VALID_PURCHASE_STATUSES.includes(response.data?.status) ? response.data.status : 'pending'
+            };
+            setPurchases((prev) => prev.map((item) => item.id === updatedPurchase.id ? { ...item, ...updatedPurchase } : item));
+            setSelectedPurchase((prev) => prev && prev.id === updatedPurchase.id ? { ...prev, ...updatedPurchase } : prev);
+            await fetchPurchases();
+            Swal.fire(
+                'Éxito',
+                decision === 'accept'
+                    ? 'La solicitud pasó a En búsqueda.'
+                    : 'La solicitud fue cancelada correctamente.',
+                'success'
+            );
+        } catch (error) {
+            console.error('Error updating purchase request', error);
+            Swal.fire('Error', getApiErrorMessage(error, 'No se pudo actualizar la solicitud de compra'), 'error');
+        } finally {
+            setProcessingInitialDecision(false);
         }
     };
 
@@ -490,7 +572,7 @@ const PurchaseBoard = () => {
                                 {(provided) => (
                                     <div {...provided.droppableProps} ref={provided.innerRef} className="flex-1 overflow-y-auto custom-scrollbar px-1">
                                         {getPurchasesByStatus(col.id).map((purchase, index) => (
-                                            <Draggable key={purchase.id} draggableId={purchase.id.toString()} index={index}>
+                                            <Draggable key={purchase.id} draggableId={purchase.id.toString()} index={index} isDragDisabled={purchase.status === 'pending' || purchase.status === 'completed'}>
                                                 {(dragProvided) => (
                                                     <div ref={dragProvided.innerRef} {...dragProvided.draggableProps} {...dragProvided.dragHandleProps} onClick={() => setSelectedPurchase(purchase)} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-3 hover:shadow-md transition cursor-pointer group">
                                                         <div className="flex justify-between items-start mb-2">
@@ -531,28 +613,64 @@ const PurchaseBoard = () => {
                             <button onClick={() => setSelectedPurchase(null)} className="text-2xl text-gray-400 hover:text-gray-600">&times;</button>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Cliente</p>
-                                <div className="space-y-2 text-sm text-slate-700">
-                                    <p><span className="font-semibold">Telefono:</span> {selectedPurchase.phone || 'Sin telefono'}</p>
-                                    <p><span className="font-semibold">Email:</span> {selectedPurchase.email || 'Sin email'}</p>
-                                    <p><span className="font-semibold">Vehiculo buscado:</span> {selectedPurchase.desired_vehicle}</p>
-                                </div>
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 mb-6">
+                            <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-4 shadow-sm">
+                                <p className="text-sm font-medium text-cyan-700">Vehículo solicitado</p>
+                                <p className="mt-2 text-2xl font-bold text-cyan-950 break-words">{selectedPurchase.desired_vehicle || 'Sin definir'}</p>
                             </div>
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Proceso de compra</p>
-                                <div className="space-y-2 text-sm text-slate-700">
-                                    <p><span className="font-semibold">Estado:</span> {getPurchaseStatusLabel(selectedPurchase.status)}</p>
-                                    <p><span className="font-semibold">Asignado a:</span> {purchaseUsers.find((person) => person.id === selectedPurchase.assigned_to_id)?.full_name || 'Sin asignar'}</p>
-                                    <p><span className="font-semibold">Creado:</span> {selectedPurchase.created_at ? new Date(selectedPurchase.created_at).toLocaleString() : 'Sin fecha'}</p>
-                                </div>
+                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 shadow-sm">
+                                <p className="text-sm font-medium text-emerald-700">Monto aprobado</p>
+                                <p className="mt-2 text-2xl font-bold text-emerald-950">{formatPurchaseCurrency(selectedPurchase.approved_amount)}</p>
+                            </div>
+                            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-sm">
+                                <p className="text-sm font-medium text-amber-700">Pago mínimo</p>
+                                <p className="mt-2 text-2xl font-bold text-amber-950">{formatPurchaseCurrency(selectedPurchase.approved_down_payment)}</p>
+                            </div>
+                            <div className="rounded-2xl border border-violet-200 bg-violet-50 px-5 py-4 shadow-sm">
+                                <p className="text-sm font-medium text-violet-700">Separación</p>
+                                <p className="mt-2 text-2xl font-bold text-violet-950">
+                                    {formatPurchaseCurrency(selectedPurchase.lead?.process_detail?.reservation_amount)}
+                                </p>
+                                {selectedPurchase.lead?.process_detail?.reservation_payment_method && (
+                                    <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-violet-700">
+                                        {selectedPurchase.lead.process_detail.reservation_payment_method}
+                                    </p>
+                                )}
                             </div>
                         </div>
 
                         <div className="rounded-xl border border-slate-200 bg-white p-4 mb-6">
-                            <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Notas de la solicitud</p>
-                            <p className="text-sm text-slate-700 whitespace-pre-wrap">{selectedPurchase.notes || 'Sin notas registradas.'}</p>
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Estado de la solicitud</p>
+                                    <p className="text-sm text-slate-700">
+                                        <span className="font-semibold">Estado:</span> {getPurchaseStatusLabel(selectedPurchase.status)}
+                                    </p>
+                                    <p className="mt-1 text-sm text-slate-700">
+                                        <span className="font-semibold">Asignado a:</span> {purchaseUsers.find((person) => person.id === selectedPurchase.assigned_to_id)?.full_name || 'Sin asignar'}
+                                    </p>
+                                </div>
+                                {selectedPurchase.status === 'pending' && (
+                                    <div className="flex flex-wrap gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleInitialPurchaseDecision(selectedPurchase, 'accept')}
+                                            disabled={processingInitialDecision}
+                                            className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                                        >
+                                            {processingInitialDecision ? 'Procesando...' : 'Aceptar'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleInitialPurchaseDecision(selectedPurchase, 'cancel')}
+                                            disabled={processingInitialDecision}
+                                            className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
+                                        >
+                                            {processingInitialDecision ? 'Procesando...' : 'Cancelar'}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         <div className="rounded-xl border border-slate-200 bg-white p-4 mb-6 space-y-4">

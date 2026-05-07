@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getOrderedMenuViews, hasViewAccess, getRoleName } from '../config/views';
 
+const API_BASE_URL = import.meta.env.DEV ? '/crm/api' : 'https://autosqp.co/api';
+
 const LoginPage = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -22,7 +24,7 @@ const LoginPage = () => {
             formData.append('username', email);
             formData.append('password', password);
 
-            const response = await axios.post('https://autosqp.co/api/token', formData, {
+            const response = await axios.post(`${API_BASE_URL}/token`, formData, {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },

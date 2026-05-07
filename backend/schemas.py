@@ -16,12 +16,13 @@ class LeadSource(str, enum.Enum):
 class LeadStatus(str, enum.Enum):
     NEW = "new"
     CONTACTED = "contacted"
-    INTERESTED = "interested"
-    CREDIT_APPLICATION = "credit_application"
-    QUALIFIED = "qualified"
+    IN_PROCESS = "in_process"
+    CREDIT_STUDY = "credit_study"
+    APPROVALS = "approvals"
+    RESERVED = "reserved"
+    PREPARATION = "preparation"
     LOST = "lost"
     SOLD = "sold"
-    ALLY_MANAGED = "ally_managed"
 
 class VehicleStatus(str, enum.Enum):
     AVAILABLE = "available"
@@ -40,6 +41,7 @@ class UserBase(BaseModel):
     full_name: Optional[str] = None
     role_id: int
     company_id: Optional[int] = None
+    auto_assign_leads: Optional[bool] = False
     commission_percentage: Optional[float] = 0.0
     base_salary: Optional[int] = None
     payment_dates: Optional[str] = None
@@ -83,6 +85,7 @@ class UserUpdate(BaseModel):
     role_id: Optional[int] = None
     company_id: Optional[int] = None
     is_active: Optional[int] = None
+    auto_assign_leads: Optional[bool] = None
     commission_percentage: Optional[float] = None
     base_salary: Optional[int] = None
     payment_dates: Optional[str] = None
@@ -347,6 +350,8 @@ class LeadProcessDetailBase(BaseModel):
     vehicle_id: Optional[int] = None
     desired_vehicle: Optional[str] = None
     business_sheet_url: Optional[str] = None
+    reservation_amount: Optional[int] = None
+    reservation_payment_method: Optional[str] = None
 
 class LeadProcessDetailCreate(LeadProcessDetailBase):
     pass
@@ -467,6 +472,10 @@ class Lead(LeadBase):
     credit_application_id: Optional[int] = None
     credit_application_status: Optional[str] = None
     credit_application_updated_at: Optional[datetime] = None
+    purchase_request_id: Optional[int] = None
+    purchase_request_status: Optional[str] = None
+    purchase_request_updated_at: Optional[datetime] = None
+    purchase_request_notes: Optional[str] = None
     history: List[LeadHistory] = []
     conversation: Optional[Conversation] = None
     process_detail: Optional[LeadProcessDetail] = None
@@ -729,6 +738,9 @@ class CreditApplicationBase(BaseModel):
     occupation: str 
     application_mode: Optional[str] = "individual"
     down_payment: Optional[int] = 0
+    approved_amount: Optional[int] = None
+    approval_percentage: Optional[int] = None
+    approved_down_payment: Optional[int] = None
     notes: Optional[str] = None
     status: Optional[str] = "pending"
 
@@ -750,13 +762,19 @@ class CreditApplicationUpdate(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     desired_vehicle: Optional[str] = None
+    reservation_amount: Optional[int] = None
+    reservation_payment_method: Optional[str] = None
     monthly_income: Optional[int] = None
     other_income: Optional[int] = None
     occupation: Optional[str] = None
     application_mode: Optional[str] = None
     down_payment: Optional[int] = None
+    approved_amount: Optional[int] = None
+    approval_percentage: Optional[int] = None
+    approved_down_payment: Optional[int] = None
     notes: Optional[str] = None
     status: Optional[str] = None
+    status_note: Optional[str] = None
     assigned_to_id: Optional[int] = None
 
 class CreditNoteCreate(BaseModel):
@@ -769,6 +787,8 @@ class CreditApplication(CreditApplicationBase):
     updated_at: datetime
     company_id: int
     assigned_to_id: Optional[int] = None
+    assigned_to: Optional[User] = None
+    lead: Optional[Lead] = None
     
     model_config = ConfigDict(from_attributes=True)
 

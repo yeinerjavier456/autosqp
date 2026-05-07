@@ -4,9 +4,22 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import Swal from 'sweetalert2';
 import { useNavigate } from 'react-router-dom';
+import { formatBogotaDate, formatBogotaDateForInput, formatBogotaDateTime } from '../utils/dateTime';
 
 const VALID_CREDIT_STATUSES = ['pending', 'in_review', 'approved', 'rejected', 'completed'];
 const API_BASE_URL = `${window.location.origin}/crm/api`;
+
+const getCreditSupervisorIds = (credit) => {
+    const supervisors = Array.isArray(credit?.lead?.supervisors) ? credit.lead.supervisors : [];
+    return supervisors
+        .map((supervisor) => parseInt(supervisor?.id, 10))
+        .filter((id) => Number.isInteger(id));
+};
+const buildCreditFileUrl = (filePath) => {
+    if (!filePath) return '#';
+    if (/^https?:\/\//i.test(filePath)) return filePath;
+    return `${API_BASE_URL}${filePath.startsWith('/') ? filePath : `/${filePath}`}`;
+};
 
 const normalizeCreditItems = (responseData) => {
     if (Array.isArray(responseData?.items)) return responseData.items;
@@ -14,6 +27,17 @@ const normalizeCreditItems = (responseData) => {
     if (Array.isArray(responseData?.payload)) return responseData.payload;
     if (Array.isArray(responseData)) return responseData;
     return [];
+};
+
+const calculateMinimumDownPaymentFromApproval = (approvedAmount, approvalPercentage) => {
+    const safeApprovedAmount = Number(approvedAmount) || 0;
+    const safeApprovalPercentage = Number(approvalPercentage) || 0;
+
+    if (!safeApprovedAmount || !safeApprovalPercentage || safeApprovalPercentage <= 0 || safeApprovalPercentage > 100) {
+        return 0;
+    }
+
+    return Math.max(0, Math.round(safeApprovedAmount * ((100 - safeApprovalPercentage) / 100)));
 };
 
 const CreditBoard = () => {
@@ -31,7 +55,7 @@ const CreditBoard = () => {
     const [assignedFilter, setAssignedFilter] = useState('');
     const [userFilter, setUserFilter] = useState('');
     const [globalStatusFilter, setGlobalStatusFilter] = useState('');
-    const [showMyCreditsOnly, setShowMyCreditsOnly] = useState(false);
+    const [showMyCreditsOnly, setShowMyCreditsOnly] = useState(true);
     const [creditLeadNotes, setCreditLeadNotes] = useState([]);
     const [creditLeadFiles, setCreditLeadFiles] = useState([]);
     const [creditNoteInput, setCreditNoteInput] = useState('');
@@ -58,7 +82,7 @@ const CreditBoard = () => {
         'in_review': { id: 'in_review', title: 'En Estudio', color: 'bg-blue-100 text-blue-800' },
         'approved': { id: 'approved', title: 'Aprobado (Viable)', color: 'bg-green-100 text-green-800' },
         'rejected': { id: 'rejected', title: 'No Viable / Rechazado', color: 'bg-red-100 text-red-800' },
-        'completed': { id: 'completed', title: 'Finalizado / Vendido', color: 'bg-indigo-100 text-indigo-800' }
+        'completed': { id: 'completed', title: 'Vendido', color: 'bg-emerald-100 text-emerald-800' }
     };
 
     useEffect(() => {
@@ -95,10 +119,13 @@ const CreditBoard = () => {
                 items = normalizeCreditItems(syncResponse.data);
             }
 
-            setCredits(items.map((item) => ({
-                ...item,
-                status: VALID_CREDIT_STATUSES.includes(item?.status) ? item.status : 'pending'
-            })));
+            setCredits(
+                items
+                    .map((item) => ({
+                        ...item,
+                        status: VALID_CREDIT_STATUSES.includes(item?.status) ? item.status : 'pending'
+                    }))
+            );
         } catch (error) {
             console.error(error);
             Swal.fire('Error', 'No se pudieron cargar las solicitudes', 'error');
@@ -156,6 +183,138 @@ const CreditBoard = () => {
 
         const newStatus = destination.droppableId;
         const creditId = parseInt(draggableId);
+        const requiresApprovalFields = newStatus === 'approved';
+
+        if (newStatus === 'completed') {
+            Swal.fire(
+                'Cambio automático',
+                'La columna Vendido se actualiza automáticamente cuando el lead pasa a Vendido en el tablero de leads.',
+                'info'
+            );
+            return;
+        }
+
+        const { value: modalPayload, isConfirmed } = await Swal.fire({
+            title: 'Nota del cambio de estado',
+            html: `
+                <div style="display:grid; gap:12px; text-align:left;">
+                    <label style="display:grid; gap:6px;">
+                        <span style="font-size:13px; font-weight:700; color:#334155;">Nota del cambio</span>
+                        <span style="font-size:14px; color:#475569;">Describe el motivo del cambio a "${getCreditStatusLabel(newStatus)}"</span>
+                        <textarea id="credit-status-note" class="swal2-textarea" placeholder="Escribe aquí el seguimiento, respuesta o razón del cambio..." style="margin:0; width:100%; min-height:110px;"></textarea>
+                    </label>
+                    ${requiresApprovalFields ? `
+                        <div style="display:grid; gap:10px;">
+                            <div style="font-weight:700; color:#0f172a; font-size:14px;">Datos obligatorios de la aprobación</div>
+                            <label style="display:grid; gap:6px;">
+                                <span style="font-size:13px; font-weight:700; color:#334155;">Monto aprobado</span>
+                                <input id="credit-approved-amount" class="swal2-input" type="number" min="1" placeholder="Ej: 70000000" style="margin:0; width:100%;" />
+                            </label>
+                            <label style="display:grid; gap:6px;">
+                                <span style="font-size:13px; font-weight:700; color:#334155;">Porcentaje financiado del vehículo</span>
+                                <input id="credit-approval-percentage" class="swal2-input" type="number" min="1" max="100" placeholder="Ej: 90" style="margin:0; width:100%;" />
+                                <div style="font-size:12px; color:#64748b;">Escribe el porcentaje real que aprobó el banco sobre el valor total del vehículo. Ejemplo: si aprueba el 90%, escribe 90.</div>
+                            </label>
+                            <label style="display:grid; gap:6px;">
+                                <span style="font-size:13px; font-weight:700; color:#334155;">Cuota inicial mínima a pagar</span>
+                                <input id="credit-approved-down-payment" class="swal2-input" type="number" min="0" readonly placeholder="Se calcula automáticamente" style="margin:0; width:100%; background:#f8fafc; color:#0f172a; cursor:not-allowed;" />
+                                <div id="credit-approved-down-payment-helper" style="font-size:12px; color:#64748b;"></div>
+                            </label>
+                        </div>
+                    ` : ''}
+                </div>
+            `,
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: 'Guardar cambio',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#2563eb',
+            cancelButtonColor: '#64748b',
+            didOpen: () => {
+                if (!requiresApprovalFields) return;
+
+                const approvedAmountInput = document.getElementById('credit-approved-amount');
+                const approvalPercentageInput = document.getElementById('credit-approval-percentage');
+                const approvedDownPaymentInput = document.getElementById('credit-approved-down-payment');
+                const helper = document.getElementById('credit-approved-down-payment-helper');
+
+                const updateMinimumDownPayment = () => {
+                    const approvedAmount = parseInt(approvedAmountInput?.value || '0', 10);
+                    const approvalPercentage = parseInt(approvalPercentageInput?.value || '0', 10);
+
+                    if (!approvedAmount || !approvalPercentage || approvalPercentage <= 0 || approvalPercentage > 100) {
+                        if (helper) {
+                            helper.textContent = 'Ingresa monto aprobado y el porcentaje financiado real para calcular la cuota inicial mínima.';
+                        }
+                        if (approvedDownPaymentInput) {
+                            approvedDownPaymentInput.min = '0';
+                            approvedDownPaymentInput.value = '';
+                        }
+                        return;
+                    }
+
+                    const minimumDownPayment = calculateMinimumDownPaymentFromApproval(approvedAmount, approvalPercentage);
+                    if (approvedDownPaymentInput) {
+                        approvedDownPaymentInput.min = String(minimumDownPayment);
+                        approvedDownPaymentInput.value = String(minimumDownPayment);
+                    }
+                    if (helper) {
+                        helper.textContent = `Cuota inicial mínima calculada automáticamente: $${minimumDownPayment.toLocaleString('es-CO')}`;
+                    }
+                };
+
+                approvedAmountInput?.addEventListener('input', updateMinimumDownPayment);
+                approvalPercentageInput?.addEventListener('input', updateMinimumDownPayment);
+                updateMinimumDownPayment();
+            },
+            preConfirm: () => {
+                const statusNote = document.getElementById('credit-status-note')?.value?.trim() || '';
+                const approvedAmount = document.getElementById('credit-approved-amount')?.value || '';
+                const approvalPercentage = document.getElementById('credit-approval-percentage')?.value || '';
+                const approvedDownPayment = document.getElementById('credit-approved-down-payment')?.value || '';
+
+                if (statusNote.length < 4) {
+                    Swal.showValidationMessage('Debes escribir una nota corta para continuar.');
+                    return false;
+                }
+
+                if (requiresApprovalFields) {
+                    if (!approvedAmount || parseInt(approvedAmount, 10) <= 0) {
+                        Swal.showValidationMessage('Debes indicar el monto aprobado.');
+                        return false;
+                    }
+                    if (!approvalPercentage || parseInt(approvalPercentage, 10) <= 0) {
+                        Swal.showValidationMessage('Debes indicar el porcentaje de aprobación.');
+                        return false;
+                    }
+                    if (parseInt(approvalPercentage, 10) > 100) {
+                        Swal.showValidationMessage('El porcentaje financiado no puede ser mayor a 100.');
+                        return false;
+                    }
+                    const minimumDownPayment = calculateMinimumDownPaymentFromApproval(
+                        parseInt(approvedAmount, 10),
+                        parseInt(approvalPercentage, 10)
+                    );
+                    if (approvedDownPayment === '') {
+                        Swal.showValidationMessage('No se pudo calcular la cuota inicial mínima. Revisa el monto aprobado y el porcentaje financiado.');
+                        return false;
+                    }
+                    if (parseInt(approvedDownPayment, 10) !== minimumDownPayment) {
+                        Swal.showValidationMessage(`La cuota inicial mínima calculada debe ser exactamente $${minimumDownPayment.toLocaleString('es-CO')}.`);
+                        return false;
+                    }
+                }
+
+                return {
+                    status_note: statusNote,
+                    approved_amount: requiresApprovalFields ? parseInt(approvedAmount, 10) : null,
+                    approval_percentage: requiresApprovalFields ? parseInt(approvalPercentage, 10) : null,
+                    approved_down_payment: requiresApprovalFields ? parseInt(approvedDownPayment, 10) : null,
+                };
+            }
+        });
+
+        if (!isConfirmed || !modalPayload) return;
 
         // Optimistic UI Update
         const updatedCredits = credits.map(c =>
@@ -165,16 +324,23 @@ const CreditBoard = () => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.put(`${API_BASE_URL}/credits/${creditId}`,
-                { status: newStatus },
+            const response = await axios.put(`${API_BASE_URL}/credits/${creditId}`,
+                {
+                    status: newStatus,
+                    status_note: modalPayload.status_note,
+                    approved_amount: modalPayload.approved_amount,
+                    approval_percentage: modalPayload.approval_percentage,
+                    approved_down_payment: modalPayload.approved_down_payment,
+                },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             if (selectedCredit?.id === creditId) {
-                setSelectedCredit((prev) => prev ? { ...prev, status: newStatus } : prev);
+                setSelectedCredit(response.data);
             }
+            setCredits((prev) => prev.map((credit) => credit.id === creditId ? response.data : credit));
         } catch (error) {
             console.error("Error updating status:", error);
-            Swal.fire('Error', 'No se pudo actualizar el estado', 'error');
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo actualizar el estado', 'error');
             fetchCredits(); // Revert
         }
     };
@@ -227,10 +393,13 @@ const CreditBoard = () => {
             );
             const items = normalizeCreditItems(response.data);
             if (items.length > 0) {
-                setCredits(items.map((item) => ({
-                    ...item,
-                    status: VALID_CREDIT_STATUSES.includes(item?.status) ? item.status : 'pending'
-                })));
+                setCredits(
+                    items
+                        .map((item) => ({
+                            ...item,
+                            status: VALID_CREDIT_STATUSES.includes(item?.status) ? item.status : 'pending'
+                        }))
+                );
             } else {
                 await fetchCredits();
             }
@@ -375,9 +544,12 @@ const CreditBoard = () => {
             credit.desired_vehicle
         ].some((value) => String(value || '').toLowerCase().includes(normalizedSearch));
 
-        const createdDate = credit.created_at ? String(credit.created_at).slice(0, 10) : '';
+        const createdDate = formatBogotaDateForInput(credit.created_at);
         const matchesDate = !dateFilter || createdDate === dateFilter;
-        const matchesMyCredits = !showMyCreditsOnly || credit.assigned_to_id === user?.id;
+        const supervisorIds = getCreditSupervisorIds(credit);
+        const matchesMyCredits = !showMyCreditsOnly
+            || credit.assigned_to_id === user?.id
+            || supervisorIds.includes(user?.id);
         const parsedUserFilter = userFilter ? parseInt(userFilter, 10) : null;
         const matchesUser = !parsedUserFilter || credit.assigned_to_id === parsedUserFilter;
         const isAssigned = !!credit.assigned_to_id;
@@ -403,7 +575,7 @@ const CreditBoard = () => {
             case 'in_review': return 'En estudio';
             case 'approved': return 'Aprobado';
             case 'rejected': return 'No viable';
-            case 'completed': return 'Finalizado';
+            case 'completed': return 'Vendido';
             default: return status || 'Sin estado';
         }
     };
@@ -521,7 +693,7 @@ const CreditBoard = () => {
                             setAssignedFilter('');
                             setUserFilter('');
                             setGlobalStatusFilter('');
-                            setShowMyCreditsOnly(false);
+            setShowMyCreditsOnly(true);
                         }}
                         className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
                     >
@@ -609,7 +781,7 @@ const CreditBoard = () => {
                                                                 {credit.occupation === 'employee' ? 'Empleado' : credit.occupation === 'independent' ? 'Independiente' : 'Pensionado'}
                                                             </span>
                                                             <span className="text-[10px] text-slate-400">
-                                                                {new Date(credit.created_at).toLocaleDateString()}
+                                                                {formatBogotaDate(credit.created_at) || 'Sin fecha'}
                                                             </span>
                                                         </div>
                                                     </div>
@@ -791,10 +963,11 @@ const CreditBoard = () => {
                                                 {creditLeadFiles.map((file) => (
                                                     <a
                                                         key={file.id}
-                                                        href={`https://autosqp.com/api${file.file_path}`}
+                                                        href={buildCreditFileUrl(file.file_path)}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 transition hover:border-blue-300 hover:bg-blue-50"
+                                                        title={`Abrir ${file.file_name}`}
+                                                        className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
                                                     >
                                                         {file.file_name}
                                                     </a>
@@ -818,7 +991,7 @@ const CreditBoard = () => {
                                                   </p>
                                                   <p className="text-sm text-slate-700">{note.content}</p>
                                                   <p className="mt-1 text-[11px] text-slate-400">
-                                                      {note.created_at ? new Date(note.created_at).toLocaleString() : 'Reciente'}
+                                                      {note.created_at ? formatBogotaDateTime(note.created_at) : 'Reciente'}
                                                   </p>
                                               </div>
                                         ))}

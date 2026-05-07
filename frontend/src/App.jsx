@@ -38,8 +38,12 @@ import SystemLogs from './pages/SystemLogs';
 import RolesConfig from './pages/RolesConfig';
 import { hasViewAccess, getRoleName } from './config/views';
 
+const routerBaseName = import.meta.env.BASE_URL === '/' ? '/' : import.meta.env.BASE_URL.replace(/\/$/, '');
+
 const PrivateRoute = ({ requiredView }) => {
-  const { user, loading } = useAuth();
+  const auth = useAuth();
+  const user = auth?.user ?? null;
+  const loading = auth?.loading ?? true;
 
   if (loading) return <div className="p-10 text-center">Cargando sesion...</div>;
 
@@ -75,9 +79,9 @@ const AuthenticatedAppShell = () => (
 );
 
 function App() {
-  return (
+    return (
     <AuthProvider>
-      <Router basename="/crm">
+      <Router basename={routerBaseName}>
         <Routes>
           {/* Public Routes */}
           <Route path="/autos" element={<PublicInventory />} />

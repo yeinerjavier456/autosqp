@@ -5,6 +5,7 @@ import { useAuth } from './AuthContext';
 import Swal from 'sweetalert2';
 
 const NotificationsContext = createContext();
+const API_BASE_URL = `${window.location.origin}/crm/api`;
 
 export const useNotifications = () => {
     return useContext(NotificationsContext);
@@ -19,10 +20,10 @@ export const NotificationsProvider = ({ children }) => {
     const maxNotifId = React.useRef(0);
 
     // Fetch Notifications
-    const fetchNotifications = async () => {
+    const fetchNotifications = async ({ silentToast = false } = {}) => {
         if (!user) return;
         try {
-            const response = await axios.get('https://autosqp.co/api/notifications/', {
+            const response = await axios.get(`${API_BASE_URL}/notifications/`, {
                 headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
             });
             const data = response.data;
@@ -32,7 +33,7 @@ export const NotificationsProvider = ({ children }) => {
             if (data.length > 0) {
                 let currentMaxId = Math.max(...data.map(n => n.id));
 
-                if (!isInitialFetch.current) {
+                if (!isInitialFetch.current && !silentToast) {
                     const newNotifs = data.filter(n => n.id > maxNotifId.current && n.is_read === 0);
                     if (newNotifs.length > 0) {
                         const latest = newNotifs[0]; // Mostrar la más reciente
@@ -83,7 +84,7 @@ export const NotificationsProvider = ({ children }) => {
     // Mark as Read
     const markAsRead = async (id) => {
         try {
-            await axios.post(`https://autosqp.co/api/notifications/read/${id}`, {}, {
+            await axios.post(`${API_BASE_URL}/notifications/read/${id}`, {}, {
                 headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
             });
             // Optimistic update
@@ -97,7 +98,7 @@ export const NotificationsProvider = ({ children }) => {
     // Mark All as Read
     const markAllAsRead = async () => {
         try {
-            await axios.post(`https://autosqp.co/api/notifications/mark-all-read`, {}, {
+            await axios.post(`${API_BASE_URL}/notifications/mark-all-read`, {}, {
                 headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
             });
             setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
@@ -110,7 +111,7 @@ export const NotificationsProvider = ({ children }) => {
     // Create Appointment
     const createAppointment = async (leadId, appointmentDate, note) => {
         try {
-            await axios.post(`https://autosqp.co/api/appointments/leads/${leadId}`, {
+            await axios.post(`${API_BASE_URL}/appointments/leads/${leadId}`, {
                 appointment_date: appointmentDate,
                 note: note,
                 title: note

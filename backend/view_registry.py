@@ -35,6 +35,9 @@ DEFAULT_ROLE_VIEW_ACCESS = {
     "asesor": [
         "dashboard", "inventory", "leads_board", "appointments_calendar", "my_sales", "credits", "gmail_credit_audit", "internal_chat"
     ],
+    "gestion_creditos": [
+        "dashboard", "leads_board", "appointments_calendar", "credits", "gmail_credit_audit", "internal_chat"
+    ],
     "aliado": [
         "dashboard", "ally_board", "appointments_calendar", "credits", "gmail_credit_audit", "internal_chat", "inventory"
     ],

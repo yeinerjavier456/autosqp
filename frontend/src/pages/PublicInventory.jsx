@@ -4,6 +4,15 @@ import { Link } from 'react-router-dom';
 import PublicSalesChatbot from '../components/PublicSalesChatbot';
 import { normalizeMediaUrl } from '../utils/media';
 
+const normalizeArrayPayload = (payload) => {
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.data)) return payload.data;
+    if (Array.isArray(payload?.items)) return payload.items;
+    if (Array.isArray(payload?.results)) return payload.results;
+    if (Array.isArray(payload?.makes)) return payload.makes;
+    return [];
+};
+
 const PublicInventory = () => {
     const [vehicles, setVehicles] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -25,6 +34,8 @@ const PublicInventory = () => {
     });
 
     const [showFilters, setShowFilters] = useState(false); // Mobile toggle
+    const safeMakes = normalizeArrayPayload(makes);
+    const safeVehicles = normalizeArrayPayload(vehicles);
 
     useEffect(() => {
         fetchMakes();
@@ -42,9 +53,10 @@ const PublicInventory = () => {
     const fetchMakes = async () => {
         try {
             const res = await axios.get('https://autosqp.co/api/vehicles/makes');
-            setMakes(res.data);
+            setMakes(normalizeArrayPayload(res.data));
         } catch (error) {
             console.error("Error fetching makes", error);
+            setMakes([]);
         }
     };
 
@@ -65,9 +77,10 @@ const PublicInventory = () => {
             if (filters.sort_by) params.sort_by = filters.sort_by;
 
             const res = await axios.get('https://autosqp.co/api/vehicles/public', { params });
-            setVehicles(res.data);
+            setVehicles(normalizeArrayPayload(res.data));
         } catch (error) {
             console.error("Error fetching vehicles", error);
+            setVehicles([]);
         } finally {
             setLoading(false);
         }
@@ -211,7 +224,7 @@ const PublicInventory = () => {
                                 value={filters.make}
                             >
                                 <option value="">Todas</option>
-                                {makes.map(m => (
+                                {safeMakes.map(m => (
                                     <option key={m} value={m}>{m}</option>
                                 ))}
                             </select>
@@ -324,7 +337,7 @@ const PublicInventory = () => {
                     <div className="flex justify-between items-center mb-6">
                         <h1 className="text-2xl font-bold text-gray-800">
                             {filters.make ? `${filters.make}` : 'Carros y Camionetas'}
-                            <span className="text-gray-500 font-normal text-base ml-2 bg-white px-2 py-1 rounded-full shadow-sm">{vehicles.length} resultados</span>
+                            <span className="text-gray-500 font-normal text-base ml-2 bg-white px-2 py-1 rounded-full shadow-sm">{safeVehicles.length} resultados</span>
                         </h1>
                         <div className="flex items-center gap-3">
                             <select
@@ -359,7 +372,7 @@ const PublicInventory = () => {
                     ) : (
                         <>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-                                {vehicles.map(vehicle => (
+                                {safeVehicles.map(vehicle => (
                                     <div
                                         key={vehicle.id}
                                         className="bg-white rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 group relative border-2 border-slate-100 hover:border-blue-500 flex flex-col"
@@ -438,7 +451,7 @@ const PublicInventory = () => {
                                 ))}
                             </div>
 
-                            {vehicles.length === 0 && (
+                            {safeVehicles.length === 0 && (
                                 <div className="col-span-full p-12 text-center text-gray-500">
                                     <p className="text-lg">No encontramos vehículos que coincidan con tu búsqueda.</p>
                                     <button

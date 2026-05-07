@@ -9,6 +9,7 @@ class UserRole(str, enum.Enum):
     ADMIN = "admin"
     INVENTARIO = "inventario"
     ASESOR = "asesor"
+    GESTION_CREDITOS = "gestion_creditos"
     USER = "user"
     # Legacy support
     USUARIO = "usuario"
@@ -75,12 +76,13 @@ class LeadSource(str, enum.Enum):
 class LeadStatus(str, enum.Enum):
     NEW = "new"
     CONTACTED = "contacted"
-    INTERESTED = "interested"
-    CREDIT_APPLICATION = "credit_application"
-    QUALIFIED = "qualified"
+    IN_PROCESS = "in_process"
+    CREDIT_STUDY = "credit_study"
+    APPROVALS = "approvals"
+    RESERVED = "reserved"
+    PREPARATION = "preparation"
     LOST = "lost"
     SOLD = "sold"
-    ALLY_MANAGED = "ally_managed"
 
 class Lead(Base):
     __tablename__ = "leads"
@@ -192,6 +194,8 @@ class LeadProcessDetail(Base):
     vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=True) # Si tiene el vehículo
     desired_vehicle = Column(String(200), nullable=True) # Si no lo tiene
     business_sheet_url = Column(String(500), nullable=True) # Ruta del archivo
+    reservation_amount = Column(Integer, nullable=True)
+    reservation_payment_method = Column(String(50), nullable=True)
     
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
@@ -230,6 +234,7 @@ class User(Base):
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
     is_active = Column(Integer, default=1)
+    auto_assign_leads = Column(Boolean, default=False, nullable=False)
     commission_percentage = Column(Integer, default=0) # e.g. 5 for 5%
     
     # New fields
@@ -540,12 +545,15 @@ class CreditApplication(Base):
     email = Column(String(100), nullable=True)
     
     # Financial Profile
-    desired_vehicle = Column(String(100)) # e.g. "Mazda 3 2020"
+    desired_vehicle = Column(Text, nullable=True) # e.g. "Mazda 3 2020"
     monthly_income = Column(Integer, nullable=True)
     other_income = Column(Integer, default=0)
     occupation = Column(String(50)) # Empleado, Independiente, Pensionado
     application_mode = Column(String(50), default="individual") # Individual, Conjoint
     down_payment = Column(Integer, default=0) # Cuota inicial disponible
+    approved_amount = Column(Integer, nullable=True)
+    approval_percentage = Column(Integer, nullable=True)
+    approved_down_payment = Column(Integer, nullable=True)
     
     status = Column(String(50), default=CreditStatus.PENDING)
     notes = Column(Text, nullable=True)

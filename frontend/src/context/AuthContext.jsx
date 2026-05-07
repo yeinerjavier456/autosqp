@@ -1,7 +1,15 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 
-const AuthContext = createContext(null);
+const defaultAuthContext = {
+    user: null,
+    loading: true,
+    login: async () => null,
+    logout: () => {},
+};
+
+const AuthContext = createContext(defaultAuthContext);
+const API_BASE_URL = import.meta.env.DEV ? '/crm/api' : 'https://autosqp.co/api';
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
@@ -27,7 +35,7 @@ export const AuthProvider = ({ children }) => {
 
         try {
             setLoading(true);
-            const response = await axios.get('https://autosqp.co/api/users/me', {
+            const response = await axios.get(`${API_BASE_URL}/users/me`, {
                 headers: { Authorization: `Bearer ${token}` },
                 timeout: 15000
             });
@@ -69,4 +77,4 @@ export const AuthProvider = ({ children }) => {
     );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => useContext(AuthContext) || defaultAuthContext;

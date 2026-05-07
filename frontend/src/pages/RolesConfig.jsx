@@ -22,7 +22,6 @@ const RolesConfig = () => {
         label: '',
         permissions: [],
         menu_order: [],
-        auto_assign_leads: false,
         assignable_role_ids: []
     });
 
@@ -98,14 +97,13 @@ const RolesConfig = () => {
 
     useEffect(() => {
         if (!selectedRole) {
-            setForm({ label: '', permissions: [], menu_order: [], auto_assign_leads: false, assignable_role_ids: [] });
+            setForm({ label: '', permissions: [], menu_order: [], assignable_role_ids: [] });
             return;
         }
         setForm({
             label: selectedRole.label || '',
             permissions: Array.isArray(selectedRole.permissions) ? selectedRole.permissions : [],
             menu_order: Array.isArray(selectedRole.menu_order) ? selectedRole.menu_order : [],
-            auto_assign_leads: Boolean(selectedRole.auto_assign_leads),
             assignable_role_ids: Array.isArray(selectedRole.assignable_role_ids) ? selectedRole.assignable_role_ids.map((id) => Number(id)).filter((id) => Number.isInteger(id)) : []
         });
     }, [selectedRole]);
@@ -150,7 +148,7 @@ const RolesConfig = () => {
 
     const handleNewRole = () => {
         setSelectedRoleId(null);
-        setForm({ label: '', permissions: [], menu_order: [], auto_assign_leads: false, assignable_role_ids: [] });
+        setForm({ label: '', permissions: [], menu_order: [], assignable_role_ids: [] });
     };
 
     const handleSave = async (e) => {
@@ -167,7 +165,6 @@ const RolesConfig = () => {
                 label: form.label.trim(),
                 permissions: form.permissions,
                 menu_order: syncMenuOrder(form.permissions, form.menu_order),
-                auto_assign_leads: Boolean(form.auto_assign_leads),
                 assignable_role_ids: form.assignable_role_ids
             };
 
@@ -283,26 +280,14 @@ const RolesConfig = () => {
                         </div>
 
                         <div>
-                            <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500 mb-3">Asignacion automatica</h3>
-                            <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 cursor-pointer transition hover:border-slate-300">
-                                <input
-                                    type="checkbox"
-                                    checked={Boolean(form.auto_assign_leads)}
-                                    onChange={(e) => setForm((prev) => ({ ...prev, auto_assign_leads: e.target.checked }))}
-                                    className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                />
-                                <div>
-                                    <p className="font-semibold text-slate-800">Participa en la asignacion automatica de leads</p>
-                                    <p className="text-xs text-slate-500 mt-1">
-                                        Si esta activo, los usuarios con este rol entran al reparto aleatorio de leads nuevos y manuales de la empresa.
-                                    </p>
-                                </div>
-                            </label>
-                        </div>
-
-                        <div>
                             <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500 mb-3">Reasignacion de leads</h3>
                             <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+                                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                                    <p className="text-sm font-semibold text-amber-800">La asignacion automatica ahora se configura por usuario.</p>
+                                    <p className="text-xs text-amber-700 mt-1">
+                                        Desde esta pantalla solo defines a que roles puede reasignar leads este rol. Los usuarios que reciben leads nuevos o redistribuciones automaticas se marcan individualmente en Usuarios.
+                                    </p>
+                                </div>
                                 <div>
                                     <label className="block text-sm font-semibold text-slate-800 mb-2">Roles a los que puede reasignar leads</label>
                                     <select

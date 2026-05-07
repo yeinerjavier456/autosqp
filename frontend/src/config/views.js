@@ -49,6 +49,9 @@ export const DEFAULT_ROLE_VIEW_ACCESS = {
     asesor: [
         'dashboard', 'inventory', 'leads_board', 'appointments_calendar', 'my_sales', 'credits', 'gmail_credit_audit', 'internal_chat'
     ],
+    gestion_creditos: [
+        'dashboard', 'leads_board', 'appointments_calendar', 'credits', 'gmail_credit_audit', 'internal_chat'
+    ],
     aliado: [
         'dashboard', 'ally_board', 'appointments_calendar', 'credits', 'gmail_credit_audit', 'internal_chat', 'inventory'
     ],
@@ -65,6 +68,7 @@ export const DEFAULT_ROLE_MENU_ORDER = {
     super_admin: DEFAULT_ROLE_VIEW_ACCESS.super_admin,
     admin: DEFAULT_ROLE_VIEW_ACCESS.admin,
     asesor: DEFAULT_ROLE_VIEW_ACCESS.asesor,
+    gestion_creditos: DEFAULT_ROLE_VIEW_ACCESS.gestion_creditos,
     aliado: DEFAULT_ROLE_VIEW_ACCESS.aliado,
     inventario: DEFAULT_ROLE_VIEW_ACCESS.inventario,
     compras: DEFAULT_ROLE_VIEW_ACCESS.compras,
