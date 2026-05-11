@@ -1,5 +1,6 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request, Query
 from fastapi.security import OAuth2PasswordBearer
+from typing import Optional
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session, joinedload
 from database import get_db
@@ -7,7 +8,7 @@ import models, auth_utils
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+async def _verify_token_and_get_user(token: str, db: Session):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -35,6 +36,23 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
             headers={"WWW-Authenticate": "Bearer"},
         )
     return user
+
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    return await _verify_token_and_get_user(token, db)
+
+async def get_user_from_anywhere(
+    request: Request,
+    token: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+    
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    return await _verify_token_and_get_user(token, db)
 
 
 def get_effective_role_name(user: models.User | None) -> str:

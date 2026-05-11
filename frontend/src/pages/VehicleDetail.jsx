@@ -15,7 +15,7 @@ const VehicleDetail = () => {
     useEffect(() => {
         const fetchVehicle = async () => {
             try {
-                const res = await axios.get(`https://autosqp.co/api/vehicles/public/${id}`);
+                const res = await axios.get(`/api/vehicles/public/${id}`);
                 const normalizedPhotos = (res.data.photos || []).map(normalizeMediaUrl);
                 const normalizedVehicle = { ...res.data, photos: normalizedPhotos };
                 setVehicle(normalizedVehicle);

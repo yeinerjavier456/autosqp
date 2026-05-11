@@ -196,6 +196,12 @@ class LeadProcessDetail(Base):
     business_sheet_url = Column(String(500), nullable=True) # Ruta del archivo
     reservation_amount = Column(Integer, nullable=True)
     reservation_payment_method = Column(String(50), nullable=True)
+    delivery_documents_complete = Column(Boolean, default=False, nullable=False)
+    delivery_road_kit = Column(Boolean, default=False, nullable=False)
+    delivery_basic_tools = Column(Boolean, default=False, nullable=False)
+    delivery_credit_disbursement = Column(Boolean, default=False, nullable=False)
+    delivery_scheduled_at = Column(DateTime, nullable=True)
+    delivery_scheduled_note = Column(String(255), nullable=True)
     
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
@@ -554,6 +560,15 @@ class CreditApplication(Base):
     approved_amount = Column(Integer, nullable=True)
     approval_percentage = Column(Integer, nullable=True)
     approved_down_payment = Column(Integer, nullable=True)
+    purchase_vehicle_name = Column(String(120), nullable=True)
+    purchase_vehicle_model = Column(String(120), nullable=True)
+    purchase_vehicle_year = Column(Integer, nullable=True)
+    purchase_vehicle_plate = Column(String(30), nullable=True)
+    purchase_vehicle_mileage = Column(Integer, nullable=True)
+    purchase_vehicle_location = Column(String(120), nullable=True)
+    purchase_price = Column(Integer, nullable=True)
+    purchase_sale_price = Column(Integer, nullable=True)
+    purchase_expenses = Column(JSON, nullable=True)
     
     status = Column(String(50), default=CreditStatus.PENDING)
     notes = Column(Text, nullable=True)

@@ -130,6 +130,13 @@ def _is_credit_manager_role(role: Optional[models.Role]) -> bool:
     }))
 
 
+def _can_manage_credit_requests(user: Optional[models.User]) -> bool:
+    effective_role_name = (_get_effective_role_name(user) or "").strip().lower()
+    if effective_role_name in {"admin", "super_admin"}:
+        return True
+    return _is_credit_manager_role(getattr(user, "role", None))
+
+
 def _is_active_user(user: Optional[models.User]) -> bool:
     return bool(user and (getattr(user, "is_active", True) or getattr(user, "is_active", None) is None))
 
@@ -560,6 +567,12 @@ def sync_credit_board(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    if not _can_manage_credit_requests(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Solo gestión de créditos o administradores pueden modificar solicitudes de crédito"
+        )
+
     if not current_user.company_id:
         raise HTTPException(status_code=400, detail="Company ID required")
 
@@ -642,6 +655,12 @@ def create_credit(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    if not _can_manage_credit_requests(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Solo gestión de créditos o administradores pueden modificar solicitudes de crédito"
+        )
+
     # Assign to current user's company if not provided
     company_id = credit.company_id or current_user.company_id
     
@@ -699,6 +718,12 @@ def update_credit(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    if not _can_manage_credit_requests(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Solo gestión de créditos o administradores pueden modificar solicitudes de crédito"
+        )
+
     credit = db.query(models.CreditApplication).filter(models.CreditApplication.id == credit_id).first()
     if not credit:
         raise HTTPException(status_code=404, detail="Credit Application not found")
@@ -822,6 +847,12 @@ def add_credit_note(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    if not _can_manage_credit_requests(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Solo gestión de créditos o administradores pueden modificar solicitudes de crédito"
+        )
+
     credit = db.query(models.CreditApplication).filter(models.CreditApplication.id == credit_id).first()
     if not credit:
         raise HTTPException(status_code=404, detail="Credit Application not found")
@@ -872,6 +903,12 @@ async def upload_credit_file(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    if not _can_manage_credit_requests(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Solo gestión de créditos o administradores pueden modificar solicitudes de crédito"
+        )
+
     credit = db.query(models.CreditApplication).filter(models.CreditApplication.id == credit_id).first()
     if not credit:
         raise HTTPException(status_code=404, detail="Credit Application not found")

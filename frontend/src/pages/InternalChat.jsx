@@ -54,7 +54,7 @@ const InternalChat = () => {
     const fetchUsers = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('https://autosqp.co/api/users/', {
+            const response = await axios.get('/api/users/', {
                 params: { limit: 500 },
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -67,7 +67,7 @@ const InternalChat = () => {
     const fetchMessages = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get(`https://autosqp.co/api/internal-messages?date=${selectedDate}`, {
+            const response = await axios.get(`/api/internal-messages?date=${selectedDate}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setMessages(response.data);
@@ -96,7 +96,7 @@ const InternalChat = () => {
                 }
 
                 await axios.post(
-                    'https://autosqp.co/api/internal-messages/upload',
+                    '/api/internal-messages/upload',
                     formData,
                     {
                         headers: {
@@ -106,7 +106,7 @@ const InternalChat = () => {
                     }
                 );
             } else {
-                await axios.post('https://autosqp.co/api/internal-messages',
+                await axios.post('/api/internal-messages',
                     {
                         content: newMessage,
                         recipient_id: recipientId ? parseInt(recipientId) : null

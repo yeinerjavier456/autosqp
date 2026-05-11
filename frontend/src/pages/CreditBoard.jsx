@@ -40,10 +40,33 @@ const calculateMinimumDownPaymentFromApproval = (approvedAmount, approvalPercent
     return Math.max(0, Math.round(safeApprovedAmount * ((100 - safeApprovalPercentage) / 100)));
 };
 
+const normalizeRoleName = (value) => {
+    if (!value) return '';
+    return String(value)
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[_-]/g, ' ')
+        .replace(/\s+/g, ' ');
+};
+
 const CreditBoard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const effectiveRoleName = user?.role?.base_role_name || user?.role?.name || user?.role;
+    const normalizedRoleName = normalizeRoleName(effectiveRoleName);
+    const isCompanyAdmin = normalizedRoleName === 'admin' || normalizedRoleName === 'super admin';
+    const isCreditManager = [
+        'gestion creditos',
+        'gestion de creditos',
+        'gestor creditos',
+        'gestor de creditos',
+        'coordinador credito',
+        'coordinador de credito',
+        'coordinador de creditos',
+    ].includes(normalizedRoleName);
+    const canManageCredits = isCompanyAdmin || isCreditManager;
     const leadBoardPath = effectiveRoleName === 'aliado' ? '/aliado/dashboard' : '/admin/leads';
     const [credits, setCredits] = useState([]);
     const [creditUsers, setCreditUsers] = useState([]);
@@ -110,7 +133,7 @@ const CreditBoard = () => {
             });
             let items = normalizeCreditItems(response.data);
 
-            if (items.length === 0) {
+            if (items.length === 0 && canManageCredits) {
                 const syncResponse = await axios.post(
                     `${API_BASE_URL}/credits/sync`,
                     {},
@@ -172,6 +195,11 @@ const CreditBoard = () => {
 
     const handleDragEnd = async (result) => {
         const { destination, source, draggableId } = result;
+
+        if (!canManageCredits) {
+            Swal.fire('Solo lectura', 'Los asesores o vendedores no pueden modificar solicitudes de crédito.', 'info');
+            return;
+        }
 
         if (!destination) return;
         if (
@@ -347,6 +375,10 @@ const CreditBoard = () => {
 
     const handleCreate = async (e) => {
         e.preventDefault();
+        if (!canManageCredits) {
+            Swal.fire('Solo lectura', 'Los asesores o vendedores no pueden modificar solicitudes de crédito.', 'info');
+            return;
+        }
         try {
             const token = localStorage.getItem('token');
 
@@ -384,6 +416,10 @@ const CreditBoard = () => {
     };
 
     const handleSyncCredits = async () => {
+        if (!canManageCredits) {
+            Swal.fire('Solo lectura', 'Los asesores o vendedores no pueden modificar solicitudes de crédito.', 'info');
+            return;
+        }
         try {
             const token = localStorage.getItem('token');
             const response = await axios.post(
@@ -423,6 +459,10 @@ const CreditBoard = () => {
     };
 
     const handleAnalyzeCreditEmails = async () => {
+        if (!canManageCredits) {
+            Swal.fire('Solo lectura', 'Los asesores o vendedores no pueden modificar solicitudes de crédito.', 'info');
+            return;
+        }
         if (!user?.company_id) return;
         setSyncingGmailCredits(true);
         try {
@@ -467,6 +507,10 @@ const CreditBoard = () => {
     };
 
     const handleCreditNoteSubmit = async () => {
+        if (!canManageCredits) {
+            Swal.fire('Solo lectura', 'Los asesores o vendedores no pueden modificar solicitudes de crédito.', 'info');
+            return;
+        }
         if (!selectedCredit?.id || !creditNoteInput.trim()) return;
         setSavingCreditNote(true);
         try {
@@ -500,6 +544,10 @@ const CreditBoard = () => {
     };
 
     const handleCreditFileUpload = async () => {
+        if (!canManageCredits) {
+            Swal.fire('Solo lectura', 'Los asesores o vendedores no pueden modificar solicitudes de crédito.', 'info');
+            return;
+        }
         if (!selectedCredit?.id || creditSelectedFiles.length === 0) return;
         setUploadingCreditFiles(true);
         try {
@@ -591,40 +639,47 @@ const CreditBoard = () => {
 
     return (
         <div className="p-8 min-h-screen">
+            {!canManageCredits && (
+                <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+                    Solo lectura: como asesor o vendedor puedes consultar las solicitudes de crédito relacionadas, pero no modificarlas.
+                </div>
+            )}
             <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                     <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Gestión de Créditos y Solicitudes</h1>
                     <p className="text-slate-500 mt-1 font-medium">Administra clientes en proceso de aprobación o búsqueda de vehículo.</p>
                 </div>
-                <div className="flex flex-wrap items-center gap-3">
-                    <button
-                        onClick={handleAnalyzeCreditEmails}
-                        disabled={syncingGmailCredits}
-                        className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700 transition hover:bg-amber-100 disabled:opacity-60"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4h16v16H4z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m4 7 8 6 8-6" />
-                        </svg>
-                        {syncingGmailCredits ? 'Analizando correos...' : 'Analizar correos de credito'}
-                    </button>
-                    <button
-                        onClick={handleSyncCredits}
-                        className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v6h6M20 20v-6h-6M5.64 18.36A9 9 0 0018.36 18.36M18.36 5.64A9 9 0 005.64 5.64" />
-                        </svg>
-                        Traer leads en credito
-                    </button>
-                    <button
-                        onClick={() => setShowAddModal(true)}
-                        className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-5 py-2.5 rounded-xl hover:shadow-lg hover:scale-105 transition-all font-bold text-sm"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
-                        Nueva Solicitud
-                    </button>
-                </div>
+                {canManageCredits && (
+                    <div className="flex flex-wrap items-center gap-3">
+                        <button
+                            onClick={handleAnalyzeCreditEmails}
+                            disabled={syncingGmailCredits}
+                            className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700 transition hover:bg-amber-100 disabled:opacity-60"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4h16v16H4z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m4 7 8 6 8-6" />
+                            </svg>
+                            {syncingGmailCredits ? 'Analizando correos...' : 'Analizar correos de credito'}
+                        </button>
+                        <button
+                            onClick={handleSyncCredits}
+                            className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v6h6M20 20v-6h-6M5.64 18.36A9 9 0 0018.36 18.36M18.36 5.64A9 9 0 005.64 5.64" />
+                            </svg>
+                            Traer leads en credito
+                        </button>
+                        <button
+                            onClick={() => setShowAddModal(true)}
+                            className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-5 py-2.5 rounded-xl hover:shadow-lg hover:scale-105 transition-all font-bold text-sm"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+                            Nueva Solicitud
+                        </button>
+                    </div>
+                )}
             </div>
 
             <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -725,12 +780,12 @@ const CreditBoard = () => {
                                         className="flex-1 overflow-y-auto custom-scrollbar px-1"
                                     >
                                         {getCreditsByStatus(col.id).map((credit, index) => (
-                                            <Draggable key={credit.id} draggableId={credit.id.toString()} index={index}>
+                                            <Draggable key={credit.id} draggableId={credit.id.toString()} index={index} isDragDisabled={!canManageCredits || credit.status === 'completed'}>
                                                 {(provided) => (
                                                     <div
                                                         ref={provided.innerRef}
                                                         {...provided.draggableProps}
-                                                        {...provided.dragHandleProps}
+                                                        {...(canManageCredits ? provided.dragHandleProps : {})}
                                                         onClick={() => setSelectedCredit(credit)}
                                                         className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-3 hover:shadow-md transition cursor-pointer group"
                                                     >
@@ -913,7 +968,9 @@ const CreditBoard = () => {
                         <div className="rounded-xl border border-slate-200 bg-white p-4 mb-6 space-y-4">
                             <div>
                                 <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Agregar nota desde créditos</p>
-                                {selectedCredit.lead_id ? (
+                                {!canManageCredits ? (
+                                    <p className="text-sm text-slate-500">Esta solicitud está en modo solo lectura para tu rol.</p>
+                                ) : selectedCredit.lead_id ? (
                                     <>
                                         <textarea
                                             rows="3"
@@ -940,7 +997,9 @@ const CreditBoard = () => {
 
                             <div className="border-t border-slate-100 pt-4">
                                 <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Documentos del proceso</p>
-                                {selectedCredit.lead_id ? (
+                                {!canManageCredits ? (
+                                    <p className="text-sm text-slate-500">Los documentos de crédito solo pueden ser gestionados por el equipo de créditos o administradores.</p>
+                                ) : selectedCredit.lead_id ? (
                                     <>
                                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                                             <input

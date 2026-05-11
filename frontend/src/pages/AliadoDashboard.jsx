@@ -35,7 +35,7 @@ const AliadoDashboard = () => {
         try {
             const token = localStorage.getItem('token');
             // Backend filters leads created by or assigned to this Aliado
-            const response = await axios.get('https://autosqp.co/api/leads', {
+            const response = await axios.get('/api/leads', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setLeads(Array.isArray(response.data.items) ? response.data.items : []);
@@ -49,7 +49,7 @@ const AliadoDashboard = () => {
     const fetchAdvisors = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('https://autosqp.co/api/users/', {
+            const response = await axios.get('/api/users/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             // Filter only advisors/sellers
@@ -79,7 +79,7 @@ const AliadoDashboard = () => {
                 return;
             }
 
-            const response = await axios.post('https://autosqp.co/api/leads', payload, {
+            const response = await axios.post('/api/leads', payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -150,7 +150,7 @@ const AliadoDashboard = () => {
             const lead = leads.find(l => l.id === leadId);
             if (!lead) return;
 
-            const response = await axios.put(`https://autosqp.co/api/leads/${leadId}`,
+            const response = await axios.put(`/api/leads/${leadId}`,
                 {
                     status: status || lead.status, // Keep same status if undefined
                     comment: comment
@@ -410,7 +410,7 @@ const HistoryModal = ({ lead, onClose, onAddNote }) => {
         setUploadingNote(true);
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.post(`https://autosqp.co/api/leads/${lead.id}/notes`, {
+            const res = await axios.post(`/api/leads/${lead.id}/notes`, {
                 content: noteContent
             }, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -446,7 +446,7 @@ const HistoryModal = ({ lead, onClose, onAddNote }) => {
             for (const file of selectedFiles) {
                 const formData = new FormData();
                 formData.append('file', file);
-                const res = await axios.post(`https://autosqp.co/api/leads/${lead.id}/files`, formData, {
+                const res = await axios.post(`/api/leads/${lead.id}/files`, formData, {
                     headers: {
                         Authorization: `Bearer ${token}`,
                         'Content-Type': 'multipart/form-data'
@@ -500,7 +500,7 @@ const HistoryModal = ({ lead, onClose, onAddNote }) => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.delete(`https://autosqp.co/api/leads/${lead.id}/files/${fileToDelete.id}`, {
+            await axios.delete(`/api/leads/${lead.id}/files/${fileToDelete.id}`, {
                 headers: { Authorization: `Bearer ${token}` },
                 data: { reason: reason.trim() }
             });
@@ -665,7 +665,7 @@ const HistoryModal = ({ lead, onClose, onAddNote }) => {
                                     <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
                                         {leadFiles.map((file) => (
                                             <div key={file.id} className="bg-white p-2 rounded border border-gray-200 shadow-sm flex flex-col gap-2">
-                                                <a href={`https://autosqp.com/api${file.file_path}`} target="_blank" rel="noopener noreferrer" className="hover:border-indigo-500 transition flex items-center gap-2 group">
+                                                <a href={`/api${file.file_path}`} target="_blank" rel="noopener noreferrer" className="hover:border-indigo-500 transition flex items-center gap-2 group">
                                                     <svg className="w-5 h-5 text-gray-400 group-hover:text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                                                     <span className="text-[10px] text-gray-600 truncate flex-1">{file.file_name}</span>
                                                 </a>

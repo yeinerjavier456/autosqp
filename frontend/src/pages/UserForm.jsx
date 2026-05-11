@@ -1,10 +1,10 @@
-Ôªøimport React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Swal from 'sweetalert2';
 
-const API_BASE_URL = import.meta.env.DEV ? '/crm/api' : 'https://autosqp.co/api';
+const API_BASE_URL = import.meta.env.DEV ? '/crm/api' : '/api';
 
 const UserForm = () => {
     const { id } = useParams();
@@ -28,12 +28,12 @@ const UserForm = () => {
     const ROLE_LABELS = {
         super_admin: 'Super Admin Global',
         admin: 'Administrador de Empresa',
-        inventario: 'Gestor de Inventario (crear/editar veh√≠culos)',
+        inventario: 'Gestor de Inventario (crear/editar vehÌculos)',
         asesor: 'Asesor / Vendedor',
-        gestion_creditos: 'Gesti√≥n de Cr√©ditos',
-        aliado: 'Aliado Estrat√©gico',
+        gestion_creditos: 'GestiÛn de CrÈditos',
+        aliado: 'Aliado EstratÈgico',
         compras: 'Gestor de Compras',
-        user: 'Usuario B√°sico',
+        user: 'Usuario B·sico',
     };
     const selectedRole = roles.find(r => String(r.id) === String(user.role_id));
     const isInventarioRoleSelected = (selectedRole?.base_role_name || selectedRole?.name) === 'inventario';
@@ -199,20 +199,20 @@ const UserForm = () => {
             title: 'Inhabilitar usuario',
             html: `
                 <div style="text-align:left">
-                    <p style="margin-bottom:12px;">El usuario no se eliminar√° f√≠sicamente. Se inhabilitar√° para conservar m√©tricas e historial.</p>
+                    <p style="margin-bottom:12px;">El usuario no se eliminar· fÌsicamente. Se inhabilitar· para conservar mÈtricas e historial.</p>
                     <label for="reassign-user-select" style="display:block;margin-bottom:6px;font-weight:600;">Reasignar todos sus leads a:</label>
                     <select id="reassign-user-select" class="swal2-select" style="display:flex;width:100%;margin:0;">
-                        <option value="">Sin reasignaci√≥n</option>
+                        <option value="">Sin reasignaciÛn</option>
                         ${reassignmentOptions}
                     </select>
-                    <p style="margin-top:10px;font-size:12px;color:#64748b;">Si el usuario tiene leads asignados, debes escoger aqu√≠ un Asesor / Vendedor activo como nuevo responsable.</p>
+                    <p style="margin-top:10px;font-size:12px;color:#64748b;">Si el usuario tiene leads asignados, debes escoger aquÌ un Asesor / Vendedor activo como nuevo responsable.</p>
                 </div>
             `,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#d33',
             cancelButtonColor: '#3085d6',
-            confirmButtonText: 'S√≠, inhabilitar',
+            confirmButtonText: 'SÌ, inhabilitar',
             cancelButtonText: 'Cancelar',
             focusConfirm: false,
             preConfirm: () => {
@@ -231,7 +231,7 @@ const UserForm = () => {
                     headers: { Authorization: `Bearer ${token}` },
                     data: result.value || {}
                 });
-                Swal.fire('Usuario inhabilitado', 'El usuario ya no estar√° visible ni podr√° iniciar sesi√≥n.', 'success');
+                Swal.fire('Usuario inhabilitado', 'El usuario ya no estar· visible ni podr· iniciar sesiÛn.', 'success');
                 navigate('/admin/users');
             } catch (error) {
                 console.error("Error deleting user", error);
@@ -268,7 +268,7 @@ const UserForm = () => {
                             name="full_name"
                             value={user.full_name || ''}
                             onChange={handleChange}
-                            placeholder="Ej: Juan P√©rez"
+                            placeholder="Ej: Juan PÈrez"
                             className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-black bg-white"
                         />
                     </div>
@@ -286,7 +286,7 @@ const UserForm = () => {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-600 mb-1">Contrase√±a {isEditing && '(Dejar en blanco para mantener actual)'}</label>
+                        <label className="block text-sm font-medium text-slate-600 mb-1">ContraseÒa {isEditing && '(Dejar en blanco para mantener actual)'}</label>
                         <input
                             type="password"
                             name="password"
@@ -353,9 +353,9 @@ const UserForm = () => {
                                                 className="mt-1 h-4 w-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
                                             />
                                             <div>
-                                                <span className="block text-sm font-semibold text-slate-700">Permitir asignaci√≥n autom√°tica</span>
+                                                <span className="block text-sm font-semibold text-slate-700">Permitir asignaciÛn autom·tica</span>
                                                 <span className="block text-xs text-slate-500 mt-1">
-                                                    Si est√° activo, este usuario podr√° recibir leads nuevos por asignaci√≥n autom√°tica y entrar en redistribuciones autom√°ticas cuando aplique.
+                                                    Si est· activo, este usuario podr· recibir leads nuevos por asignaciÛn autom·tica y entrar en redistribuciones autom·ticas cuando aplique.
                                                 </span>
                                             </div>
                                         </label>
@@ -364,7 +364,7 @@ const UserForm = () => {
 
                                 {/* Commission Field - Only for Admin/SuperAdmin to set on others */}
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-600 mb-1">Comisi√≥n (%)</label>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">ComisiÛn (%)</label>
                                     <input
                                         type="number"
                                         name="commission_percentage"

@@ -22,7 +22,7 @@ const DeletedLeads = () => {
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('https://autosqp.co/api/leads/deleted', {
+            const response = await axios.get('/api/leads/deleted', {
                 headers: { Authorization: `Bearer ${token}` },
                 params: search.trim() ? { q: search.trim() } : {}
             });
@@ -58,7 +58,7 @@ const DeletedLeads = () => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.post(`https://autosqp.co/api/leads/${lead.id}/restore`, {}, {
+            await axios.post(`/api/leads/${lead.id}/restore`, {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             Swal.fire('Restaurado', 'El lead fue restaurado correctamente.', 'success');

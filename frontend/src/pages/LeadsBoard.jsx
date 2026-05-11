@@ -115,6 +115,26 @@ const extractLatestPurchaseRejectionReason = (text) => {
     return String(matches[matches.length - 1]?.[1] || '').trim();
 };
 
+const getPurchaseOptionDecisionMeta = (decisionStatus) => {
+    const normalized = (decisionStatus || 'pending').toLowerCase();
+    if (normalized === 'accepted') {
+        return {
+            label: 'Opción aceptada',
+            className: 'border-emerald-200 bg-emerald-50 text-emerald-700'
+        };
+    }
+    if (normalized === 'rejected') {
+        return {
+            label: 'Opción rechazada',
+            className: 'border-rose-200 bg-rose-50 text-rose-700'
+        };
+    }
+    return {
+        label: 'Pendiente por decidir',
+        className: 'border-amber-200 bg-amber-50 text-amber-700'
+    };
+};
+
 // Draggable Lead Card Component
 const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = false, boardMode = 'general', canDrag = true }) => {
     const getLeadAgePalette = (createdAt) => {
@@ -695,6 +715,14 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     const [desiredVehicle, setDesiredVehicle] = useState(lead?.process_detail?.desired_vehicle || '');
     const [reservationAmount, setReservationAmount] = useState(lead?.process_detail?.reservation_amount ? String(lead.process_detail.reservation_amount) : '');
     const [reservationPaymentMethod, setReservationPaymentMethod] = useState(lead?.process_detail?.reservation_payment_method || '');
+    const [deliveryDocumentsComplete, setDeliveryDocumentsComplete] = useState(Boolean(lead?.process_detail?.delivery_documents_complete));
+    const [deliveryRoadKit, setDeliveryRoadKit] = useState(Boolean(lead?.process_detail?.delivery_road_kit));
+    const [deliveryBasicTools, setDeliveryBasicTools] = useState(Boolean(lead?.process_detail?.delivery_basic_tools));
+    const [deliveryCreditDisbursement, setDeliveryCreditDisbursement] = useState(Boolean(lead?.process_detail?.delivery_credit_disbursement));
+    const [deliveryScheduledAt, setDeliveryScheduledAt] = useState(lead?.process_detail?.delivery_scheduled_at || '');
+    const [deliveryScheduledNote, setDeliveryScheduledNote] = useState(lead?.process_detail?.delivery_scheduled_note || '');
+    const [savingDeliveryChecklist, setSavingDeliveryChecklist] = useState(false);
+    const [schedulingDelivery, setSchedulingDelivery] = useState(false);
 
     // Load Lead Messages
     const [messages, setMessages] = useState([]);
@@ -719,6 +747,8 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     const [leadNotes, setLeadNotes] = useState([]);
     const [leadFiles, setLeadFiles] = useState([]);
     const [purchaseOptions, setPurchaseOptions] = useState(Array.isArray(lead?.purchase_options) ? lead.purchase_options : []);
+    const [activeLeadPurchaseOptionTab, setActiveLeadPurchaseOptionTab] = useState('');
+    const [activeLeadPurchaseOptionGroup, setActiveLeadPurchaseOptionGroup] = useState('pending');
     const [creditDetail, setCreditDetail] = useState(null);
     const [loadingCreditDetail, setLoadingCreditDetail] = useState(false);
     const [purchaseDetail, setPurchaseDetail] = useState(null);
@@ -731,6 +761,8 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     const supervisorSyncKey = JSON.stringify(getLeadSupervisorIds(lead));
     useEffect(() => {
         setActiveDetailTab('resumen');
+        setActiveLeadPurchaseOptionTab('');
+        setActiveLeadPurchaseOptionGroup('pending');
     }, [lead?.id]);
 
     useEffect(() => {
@@ -746,6 +778,12 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         setDesiredVehicle(lead?.process_detail?.desired_vehicle || '');
         setReservationAmount(lead?.process_detail?.reservation_amount ? String(lead.process_detail.reservation_amount) : '');
         setReservationPaymentMethod(lead?.process_detail?.reservation_payment_method || '');
+        setDeliveryDocumentsComplete(Boolean(lead?.process_detail?.delivery_documents_complete));
+        setDeliveryRoadKit(Boolean(lead?.process_detail?.delivery_road_kit));
+        setDeliveryBasicTools(Boolean(lead?.process_detail?.delivery_basic_tools));
+        setDeliveryCreditDisbursement(Boolean(lead?.process_detail?.delivery_credit_disbursement));
+        setDeliveryScheduledAt(lead?.process_detail?.delivery_scheduled_at || '');
+        setDeliveryScheduledNote(lead?.process_detail?.delivery_scheduled_note || '');
     }, [lead?.id, lead?.assigned_to?.id, lead?.assigned_to_id, supervisorSyncKey]);
 
     useEffect(() => {
@@ -759,6 +797,43 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             fetchPurchaseDetail();
         }
     }, [lead]);
+
+    useEffect(() => {
+        if (!Array.isArray(purchaseOptions) || purchaseOptions.length === 0) {
+            setActiveLeadPurchaseOptionTab('');
+            return;
+        }
+        const groupedOptions = {
+            pending: purchaseOptions.filter((option) => (option?.decision_status || 'pending') === 'pending'),
+            accepted: purchaseOptions.filter((option) => option?.decision_status === 'accepted'),
+            rejected: purchaseOptions.filter((option) => option?.decision_status === 'rejected'),
+        };
+
+        setActiveLeadPurchaseOptionGroup((currentGroup) => {
+            if (groupedOptions[currentGroup]?.length > 0) return currentGroup;
+            if (groupedOptions.pending.length > 0) return 'pending';
+            if (groupedOptions.accepted.length > 0) return 'accepted';
+            if (groupedOptions.rejected.length > 0) return 'rejected';
+            return 'pending';
+        });
+    }, [purchaseOptions]);
+
+    useEffect(() => {
+        const groupedOptions = {
+            pending: purchaseOptions.filter((option) => (option?.decision_status || 'pending') === 'pending'),
+            accepted: purchaseOptions.filter((option) => option?.decision_status === 'accepted'),
+            rejected: purchaseOptions.filter((option) => option?.decision_status === 'rejected'),
+        };
+        const currentOptions = groupedOptions[activeLeadPurchaseOptionGroup] || [];
+        if (currentOptions.length === 0) {
+            setActiveLeadPurchaseOptionTab('');
+            return;
+        }
+        const exists = currentOptions.some((option) => String(option.id) === String(activeLeadPurchaseOptionTab));
+        if (!exists) {
+            setActiveLeadPurchaseOptionTab(String(currentOptions[0].id));
+        }
+    }, [purchaseOptions, activeLeadPurchaseOptionGroup, activeLeadPurchaseOptionTab]);
 
     const fetchMessages = async () => {
         setLoadingMessages(true);
@@ -1040,10 +1115,19 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         ...(Array.isArray(lead.history) ? lead.history : [])
     ];
 
+    const normalizedPurchaseStatus = String(purchaseDetail?.status || lead?.purchase_request_status || '').trim().toLowerCase();
+
+    const showPurchasedTabs = ['car_purchased', 'completed'].includes(normalizedPurchaseStatus)
+        || ['preparation', 'sold'].includes(normalizeLeadStatus(lead?.status));
+
     const detailTabs = [
         { id: 'resumen', label: 'Resumen' },
         { id: 'credito', label: 'Crédito' },
         { id: 'compras', label: 'Compras' },
+        ...(showPurchasedTabs ? [
+            { id: 'carro-comprado', label: 'Carro comprado' },
+            { id: 'entrega', label: 'Entrega' },
+        ] : []),
         { id: 'gestion', label: 'Gestión' },
         { id: 'citas', label: 'Citas' },
         { id: 'conversacion', label: 'Conversación' },
@@ -1140,7 +1224,6 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     };
     const creditAssignedName = creditDetail?.assigned_to?.full_name || creditDetail?.assigned_to?.email || 'Sin responsable';
     const purchaseRequestId = purchaseDetail?.id || lead?.purchase_request_id || null;
-    const normalizedPurchaseStatus = String(purchaseDetail?.status || lead?.purchase_request_status || '').trim().toLowerCase();
     const purchaseAssignedName = purchaseDetail?.assigned_to?.full_name
         || purchaseDetail?.assigned_to?.email
         || (
@@ -1152,14 +1235,14 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         isCompanyAdminRole(currentUserRole) ||
         normalizedCurrentUserRole === 'compras'
     );
+    const isAdvisorOrSellerRole = ['asesor', 'vendedor', 'asesor vendedor', 'aliado'].includes(normalizedCurrentUserRole);
     const canResubmitPurchaseRequest = (
         normalizedPurchaseStatus === 'rejected' &&
-        !canManagePurchaseRequest &&
         (
-            isAssignedLeadOwner ||
-            leadSupervisorIds.includes(currentUserId) ||
-            ['asesor', 'aliado'].includes(normalizedCurrentUserRole)
-        )
+            isCompanyAdmin ||
+            (isAdvisorOrSellerRole && isAssignedLeadOwner)
+        ) &&
+        normalizedCurrentUserRole !== 'compras'
     );
     const reservationAmountValue = lead?.process_detail?.reservation_amount ?? null;
     const reservationPaymentMethodValue = lead?.process_detail?.reservation_payment_method || '';
@@ -1169,9 +1252,154 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         ...purchaseRelatedNotes.map((note) => note?.content || ''),
     ].filter(Boolean).join('\n');
     const purchaseRejectionReason = extractLatestPurchaseRejectionReason(purchaseSummarySource);
+    const purchaseOptionGroups = {
+        pending: purchaseOptions.filter((option) => (option?.decision_status || 'pending') === 'pending'),
+        accepted: purchaseOptions.filter((option) => option?.decision_status === 'accepted'),
+        rejected: purchaseOptions.filter((option) => option?.decision_status === 'rejected'),
+    };
+    const activeLeadPurchaseOptions = purchaseOptionGroups[activeLeadPurchaseOptionGroup] || [];
+    const activeLeadPurchaseOption = activeLeadPurchaseOptions.find((option) => String(option.id) === String(activeLeadPurchaseOptionTab))
+        || activeLeadPurchaseOptions[0]
+        || null;
+    const purchaseExpenses = Array.isArray(purchaseDetail?.purchase_expenses) ? purchaseDetail.purchase_expenses : [];
+    const totalPurchaseExpenses = purchaseExpenses.reduce((sum, expense) => {
+        const value = Number(expense?.amount || expense?.value || 0);
+        return Number.isFinite(value) ? sum + value : sum;
+    }, 0);
+    const vehicleSaleValue = Number(purchaseDetail?.purchase_sale_price || 0);
+    const maxApprovedCredit = Number(approvalMetrics.approvedAmount || 0);
+    const reservationValueNumber = Number(reservationAmountValue || 0);
+    const approvedPercentage = Number(approvalMetrics.approvalPercentage || 0);
+    const downPayment = Number(approvalMetrics.minimumDownPayment || 0);
+    
+    let creditDisbursementTotal = maxApprovedCredit;
+    if (vehicleSaleValue > 0) {
+        if (approvedPercentage > 0 && approvedPercentage <= 100) {
+            creditDisbursementTotal = vehicleSaleValue * (approvedPercentage / 100);
+            if (maxApprovedCredit > 0) {
+                creditDisbursementTotal = Math.min(maxApprovedCredit, creditDisbursementTotal);
+            }
+        } else {
+            const amountNeeded = Math.max(0, vehicleSaleValue - reservationValueNumber - downPayment);
+            creditDisbursementTotal = Math.min(maxApprovedCredit, amountNeeded);
+        }
+    }
+    
+    const pendingPaymentValue = Math.max(0, vehicleSaleValue - creditDisbursementTotal - reservationValueNumber);
+
+    const creditDisbursementPct = vehicleSaleValue > 0 ? ((creditDisbursementTotal / vehicleSaleValue) * 100).toFixed(1) : 0;
+    const reservationPct = vehicleSaleValue > 0 ? ((reservationValueNumber / vehicleSaleValue) * 100).toFixed(1) : 0;
+    const pendingPaymentPct = vehicleSaleValue > 0 ? ((pendingPaymentValue / vehicleSaleValue) * 100).toFixed(1) : 0;
+    const deliveryChecklistComplete = [
+        deliveryDocumentsComplete,
+        deliveryRoadKit,
+        deliveryBasicTools,
+        deliveryCreditDisbursement,
+    ].every(Boolean);
+
+    useEffect(() => {
+        if (!detailTabs.some((tab) => tab.id === activeDetailTab)) {
+            setActiveDetailTab('resumen');
+        }
+    }, [activeDetailTab, detailTabs]);
 
     const showReadOnlyWarning = () => {
         Swal.fire('Solo lectura', 'Tienes este lead en supervisión. Puedes verlo, pero solo un administrador puede modificarlo.', 'info');
+    };
+
+    const buildCurrentProcessDetailPayload = (overrides = {}) => {
+        const parsedReservationAmount = Number(String(reservationAmount || '').replace(/[^\d]/g, ''));
+        return {
+            has_vehicle: typeof hasVehicle === 'boolean'
+                ? hasVehicle
+                : (typeof lead?.process_detail?.has_vehicle === 'boolean' ? lead.process_detail.has_vehicle : false),
+            vehicle_id: selectedVehicleId ? parseInt(selectedVehicleId, 10) : (lead?.process_detail?.vehicle_id || null),
+            desired_vehicle: desiredVehicle?.trim() || lead?.process_detail?.desired_vehicle || null,
+            reservation_amount: Number.isFinite(parsedReservationAmount) && parsedReservationAmount > 0
+                ? parsedReservationAmount
+                : (lead?.process_detail?.reservation_amount ?? null),
+            reservation_payment_method: reservationPaymentMethod || lead?.process_detail?.reservation_payment_method || null,
+            delivery_documents_complete: deliveryDocumentsComplete,
+            delivery_road_kit: deliveryRoadKit,
+            delivery_basic_tools: deliveryBasicTools,
+            delivery_credit_disbursement: deliveryCreditDisbursement,
+            delivery_scheduled_at: deliveryScheduledAt || null,
+            delivery_scheduled_note: deliveryScheduledNote?.trim() || null,
+            ...overrides,
+        };
+    };
+
+    const handleSaveDeliveryChecklist = async () => {
+        if (!canModifyLead) {
+            showReadOnlyWarning();
+            return;
+        }
+        setSavingDeliveryChecklist(true);
+        try {
+            const token = localStorage.getItem('token');
+            await axios.put(
+                `${API_BASE_URL}/leads/${lead.id}`,
+                {
+                    status: normalizeLeadStatus(lead?.status),
+                    comment: 'Checklist de entrega actualizado.',
+                    process_detail: buildCurrentProcessDetailPayload(),
+                },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            await refreshLeadDetailSnapshot();
+            Swal.fire('Éxito', 'El checklist de entrega fue actualizado.', 'success');
+        } catch (error) {
+            console.error('Error saving delivery checklist', error);
+            Swal.fire('Error', error?.response?.data?.detail || 'No se pudo guardar el checklist de entrega.', 'error');
+        } finally {
+            setSavingDeliveryChecklist(false);
+        }
+    };
+
+    const handleScheduleDelivery = async () => {
+        if (!canModifyLead) {
+            showReadOnlyWarning();
+            return;
+        }
+        if (!deliveryChecklistComplete) {
+            Swal.fire('Atención', 'Debes completar todo el checklist antes de agendar la entrega.', 'warning');
+            return;
+        }
+        if (!deliveryScheduledAt) {
+            Swal.fire('Atención', 'Debes seleccionar la fecha y hora de la entrega.', 'warning');
+            return;
+        }
+        setSchedulingDelivery(true);
+        try {
+            await createAppointment(
+                lead.id,
+                deliveryScheduledAt,
+                deliveryScheduledNote?.trim()
+                    ? `Entrega de vehículo: ${deliveryScheduledNote.trim()}`
+                    : 'Entrega de vehículo'
+            );
+            const token = localStorage.getItem('token');
+            await axios.put(
+                `${API_BASE_URL}/leads/${lead.id}`,
+                {
+                    status: normalizeLeadStatus(lead?.status),
+                    comment: 'Entrega del vehículo agendada.',
+                    process_detail: buildCurrentProcessDetailPayload({
+                        delivery_scheduled_at: deliveryScheduledAt,
+                        delivery_scheduled_note: deliveryScheduledNote?.trim() || null,
+                    }),
+                },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            await fetchLeadAppointments();
+            await refreshLeadDetailSnapshot();
+            Swal.fire('Éxito', 'La entrega fue agendada correctamente.', 'success');
+        } catch (error) {
+            console.error('Error scheduling delivery', error);
+            Swal.fire('Error', error?.response?.data?.detail || 'No se pudo agendar la entrega.', 'error');
+        } finally {
+            setSchedulingDelivery(false);
+        }
     };
 
     const refreshLeadDetailSnapshot = async () => {
@@ -1196,7 +1424,12 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
 
     const handlePurchaseRequestDecision = async (decision) => {
         if (!purchaseRequestId || processingPurchaseDecision) return;
-        if (!canManagePurchaseRequest) {
+        const isResubmitDecision = decision === 'resubmit';
+        if (isResubmitDecision && !canResubmitPurchaseRequest) {
+            Swal.fire('Sin permisos', 'Solo el asesor responsable del lead o un administrador pueden volver a solicitar compras.', 'warning');
+            return;
+        }
+        if (!isResubmitDecision && !canManagePurchaseRequest) {
             Swal.fire('Sin permisos', 'Solo el gestor de compras o un administrador pueden decidir esta solicitud.', 'warning');
             return;
         }
@@ -1394,6 +1627,17 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             }
         }
 
+        if (newStatus === 'sold') {
+            if (!deliveryChecklistComplete) {
+                Swal.fire('Atención', 'Debes completar todo el checklist de entrega antes de pasar el lead a Vendido.', 'warning');
+                return;
+            }
+            if (!deliveryScheduledAt) {
+                Swal.fire('Atención', 'Debes agendar la entrega antes de pasar el lead a Vendido.', 'warning');
+                return;
+            }
+        }
+
         setLoading(true);
         try {
             let processDetail = null;
@@ -1413,6 +1657,8 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                     reservation_amount: Number(String(reservationAmount || '').replace(/[^\d]/g, '')),
                     reservation_payment_method: String(reservationPaymentMethod || '').trim().toLowerCase(),
                 };
+            } else if (newStatus === 'sold') {
+                processDetail = buildCurrentProcessDetailPayload();
             }
             await onUpdate(lead.id, newStatus, newComment, processDetail, canManageSupervision ? selectedSupervisors : null);
             setNewComment('');
@@ -1588,6 +1834,8 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
 
             const updatedOption = response.data;
             setPurchaseOptions((prev) => prev.map((item) => item.id === updatedOption.id ? updatedOption : item));
+            setActiveLeadPurchaseOptionGroup(decisionStatus);
+            setActiveLeadPurchaseOptionTab(String(updatedOption.id));
             setLeadNotes((prevNotes) => [
                 ...prevNotes,
                 {
@@ -2434,12 +2682,335 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                                 )}
                                             </div>
                                         )}
+
+                                        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Opciones encontradas</p>
+                                                <span className="text-xs font-semibold text-slate-400">{purchaseOptions.length} opción(es)</span>
+                                            </div>
+                                            {purchaseOptions.length > 0 ? (
+                                                <div className="mt-4 space-y-4">
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {[
+                                                            { id: 'pending', label: 'Opciones', count: purchaseOptionGroups.pending.length },
+                                                            { id: 'accepted', label: 'Aceptadas', count: purchaseOptionGroups.accepted.length },
+                                                            { id: 'rejected', label: 'Rechazadas', count: purchaseOptionGroups.rejected.length },
+                                                        ].map((group) => {
+                                                            const isActive = activeLeadPurchaseOptionGroup === group.id;
+                                                            return (
+                                                                <button
+                                                                    key={group.id}
+                                                                    type="button"
+                                                                    onClick={() => setActiveLeadPurchaseOptionGroup(group.id)}
+                                                                    className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${
+                                                                        isActive
+                                                                            ? 'border-blue-200 bg-blue-50 text-blue-700 shadow-sm'
+                                                                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                                                                    }`}
+                                                                >
+                                                                    {group.label} <span className="ml-1 text-xs opacity-70">({group.count})</span>
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {activeLeadPurchaseOptions.map((option, index) => {
+                                                            const isActive = String(option.id) === String(activeLeadPurchaseOptionTab);
+                                                            return (
+                                                                <button
+                                                                    key={option.id || index}
+                                                                    type="button"
+                                                                    onClick={() => setActiveLeadPurchaseOptionTab(String(option.id))}
+                                                                    className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${
+                                                                        isActive
+                                                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm'
+                                                                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                                                                    }`}
+                                                                >
+                                                                    {option.title || `Opción ${index + 1}`}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+
+                                                    {activeLeadPurchaseOption && (
+                                                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                                            <div className="flex items-start justify-between gap-3">
+                                                                <div>
+                                                                    <h4 className="text-sm font-bold text-slate-800">
+                                                                        {activeLeadPurchaseOption.title || 'Opción'}
+                                                                    </h4>
+                                                                    {activeLeadPurchaseOption.description && (
+                                                                        <p className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">
+                                                                            {activeLeadPurchaseOption.description}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                                <span className="text-[11px] text-slate-400">
+                                                                    {activeLeadPurchaseOption.created_at
+                                                                        ? formatBogotaDateTime(activeLeadPurchaseOption.created_at, { day: '2-digit', month: '2-digit', year: 'numeric' })
+                                                                        : 'Reciente'}
+                                                                </span>
+                                                            </div>
+
+                                                            {Array.isArray(activeLeadPurchaseOption.photos) && activeLeadPurchaseOption.photos.length > 0 && (
+                                                                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                                                                    {activeLeadPurchaseOption.photos.map((photo, photoIndex) => (
+                                                                        <a
+                                                                            key={`${activeLeadPurchaseOption.id || activeLeadPurchaseOptionTab}-${photoIndex}`}
+                                                                            href={`${API_BASE_URL}${photo}`}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+                                                                        >
+                                                                            <img
+                                                                                src={`${API_BASE_URL}${photo}`}
+                                                                                alt={activeLeadPurchaseOption.title || 'Opción'}
+                                                                                className="h-44 w-full object-cover"
+                                                                            />
+                                                                        </a>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+
+                                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                                <span className={`inline-flex items-center rounded-full border px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide ${getPurchaseOptionDecisionMeta(activeLeadPurchaseOption.decision_status).className}`}>
+                                                                    {getPurchaseOptionDecisionMeta(activeLeadPurchaseOption.decision_status).label}
+                                                                </span>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleCopyPurchaseOptionText(activeLeadPurchaseOption)}
+                                                                    className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+                                                                >
+                                                                    Copiar texto
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleDownloadPurchaseOptionPhotos(activeLeadPurchaseOption)}
+                                                                    className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100"
+                                                                >
+                                                                    Descargar fotos
+                                                                </button>
+                                                                {canModifyLead && (!activeLeadPurchaseOption.decision_status || activeLeadPurchaseOption.decision_status === 'pending') && (
+                                                                    <>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handlePurchaseOptionDecision(activeLeadPurchaseOption, 'accepted')}
+                                                                            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-700"
+                                                                        >
+                                                                            Aceptar opción
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handlePurchaseOptionDecision(activeLeadPurchaseOption, 'rejected')}
+                                                                            className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-rose-700"
+                                                                        >
+                                                                            Rechazar opción
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {activeLeadPurchaseOptions.length === 0 && (
+                                                        <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                                                            No hay opciones en esta categoría.
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <p className="mt-3 text-sm text-slate-500">Aún no hay opciones registradas para esta solicitud de compra.</p>
+                                            )}
+                                        </div>
                                     </>
                                 ) : (
                                     <div className="mt-4 rounded-lg border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-400">
                                         Este lead todavía no tiene información relacionada en compras.
                                     </div>
                                 )}
+                            </div>
+                        </div>
+                    )}
+
+                    {activeDetailTab === 'carro-comprado' && (
+                        <div className="space-y-4">
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div>
+                                        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Carro comprado</p>
+                                        <p className="mt-1 text-sm text-slate-600">Datos finales del vehículo que compras consiguió para este lead.</p>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                    <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-4 shadow-sm">
+                                        <p className="text-sm font-medium text-cyan-700">Carro comprado</p>
+                                        <p className="mt-2 text-2xl font-bold text-cyan-950 break-words">
+                                            {[purchaseDetail?.purchase_vehicle_name, purchaseDetail?.purchase_vehicle_model, purchaseDetail?.purchase_vehicle_year].filter(Boolean).join(' ') || 'Sin definir'}
+                                        </p>
+                                    </div>
+                                    <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                                        <p className="text-sm font-medium text-slate-600">Placa</p>
+                                        <p className="mt-2 text-2xl font-bold text-slate-900">{purchaseDetail?.purchase_vehicle_plate || 'Sin definir'}</p>
+                                    </div>
+                                    <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                                        <p className="text-sm font-medium text-slate-600">Kilometraje</p>
+                                        <p className="mt-2 text-2xl font-bold text-slate-900">{purchaseDetail?.purchase_vehicle_mileage ?? 'Sin definir'}</p>
+                                    </div>
+                                    <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                                        <p className="text-sm font-medium text-slate-600">Ubicación</p>
+                                        <p className="mt-2 text-2xl font-bold text-slate-900 break-words">{purchaseDetail?.purchase_vehicle_location || 'Sin definir'}</p>
+                                    </div>
+                                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 shadow-sm">
+                                        <p className="text-sm font-medium text-emerald-700">Valor de compra</p>
+                                        <p className="mt-2 text-2xl font-bold text-emerald-950">{purchaseDetail?.purchase_price != null ? formatLeadCurrencyValue(purchaseDetail.purchase_price) : 'Sin definir'}</p>
+                                    </div>
+                                    <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-5 py-4 shadow-sm">
+                                        <p className="text-sm font-medium text-indigo-700">Valor de venta</p>
+                                        <p className="mt-2 text-2xl font-bold text-indigo-950">{purchaseDetail?.purchase_sale_price != null ? formatLeadCurrencyValue(purchaseDetail.purchase_sale_price) : 'Sin definir'}</p>
+                                    </div>
+                                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-sm">
+                                        <p className="text-sm font-medium text-amber-700">Total gastos</p>
+                                        <p className="mt-2 text-2xl font-bold text-amber-950">{formatLeadCurrencyValue(totalPurchaseExpenses)}</p>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Gastos registrados</p>
+                                    {purchaseExpenses.length > 0 ? (
+                                        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                            {purchaseExpenses.map((expense, index) => (
+                                                <div key={`${expense?.expense_type || 'expense'}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                                    <p className="text-sm font-bold text-slate-800">{expense?.expense_type || 'Gasto'}</p>
+                                                    <p className="mt-1 text-lg font-semibold text-slate-900">{formatLeadCurrencyValue(expense?.amount || expense?.value || 0)}</p>
+                                                    {expense?.notes && (
+                                                        <p className="mt-1 text-sm text-slate-600">{expense.notes}</p>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="mt-3 text-sm text-slate-500">Aún no hay gastos registrados para esta compra.</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeDetailTab === 'entrega' && (
+                        <div className="space-y-4">
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <div>
+                                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Checklist de entrega</p>
+                                    <p className="mt-1 text-sm text-slate-600">El vendedor debe completar este checklist antes de agendar la entrega o pasar el lead a vendido.</p>
+                                </div>
+
+                                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                    <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-5 py-4 shadow-sm">
+                                        <p className="text-sm font-medium text-indigo-700">Venta del vehículo</p>
+                                        <p className="mt-2 text-2xl font-bold text-indigo-950">
+                                            {vehicleSaleValue > 0 ? formatLeadCurrencyValue(vehicleSaleValue) : 'Sin definir'}
+                                            {vehicleSaleValue > 0 && <span className="text-sm font-medium ml-2 text-indigo-700">(100%)</span>}
+                                        </p>
+                                    </div>
+                                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 shadow-sm">
+                                        <p className="text-sm font-medium text-emerald-700">Total desembolso</p>
+                                        <p className="mt-2 text-2xl font-bold text-emerald-950">
+                                            {creditDisbursementTotal > 0 ? formatLeadCurrencyValue(creditDisbursementTotal) : 'Sin definir'}
+                                            {vehicleSaleValue > 0 && creditDisbursementTotal > 0 && <span className="text-sm font-medium ml-2 text-emerald-700">({creditDisbursementPct}%)</span>}
+                                        </p>
+                                    </div>
+                                    <div className="rounded-2xl border border-violet-200 bg-violet-50 px-5 py-4 shadow-sm">
+                                        <p className="text-sm font-medium text-violet-700">Separación</p>
+                                        <p className="mt-2 text-2xl font-bold text-violet-950">
+                                            {reservationValueNumber > 0 ? formatLeadCurrencyValue(reservationValueNumber) : 'Sin definir'}
+                                            {vehicleSaleValue > 0 && reservationValueNumber > 0 && <span className="text-sm font-medium ml-2 text-violet-700">({reservationPct}%)</span>}
+                                        </p>
+                                    </div>
+                                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-sm">
+                                        <p className="text-sm font-medium text-amber-700">Pago faltante</p>
+                                        <p className="mt-2 text-2xl font-bold text-amber-950">
+                                            {formatLeadCurrencyValue(pendingPaymentValue)}
+                                            {vehicleSaleValue > 0 && pendingPaymentValue > 0 && <span className="text-sm font-medium ml-2 text-amber-700">({pendingPaymentPct}%)</span>}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                        <label className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3">
+                                            <input type="checkbox" checked={deliveryDocumentsComplete} onChange={(e) => setDeliveryDocumentsComplete(e.target.checked)} disabled={!isCompanyAdmin} />
+                                            <span className="text-sm font-medium text-slate-700">Carpeta con documentos completos</span>
+                                        </label>
+                                        <label className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3">
+                                            <input type="checkbox" checked={deliveryRoadKit} onChange={(e) => setDeliveryRoadKit(e.target.checked)} disabled={!canModifyLead} />
+                                            <span className="text-sm font-medium text-slate-700">Kit de carretera</span>
+                                        </label>
+                                        <label className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3">
+                                            <input type="checkbox" checked={deliveryBasicTools} onChange={(e) => setDeliveryBasicTools(e.target.checked)} disabled={!canModifyLead} />
+                                            <span className="text-sm font-medium text-slate-700">Herramientas básicas</span>
+                                        </label>
+                                        <label className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3">
+                                            <input type="checkbox" checked={deliveryCreditDisbursement} onChange={(e) => setDeliveryCreditDisbursement(e.target.checked)} disabled={!isCompanyAdmin} />
+                                            <span className="text-sm font-medium text-slate-700">Desembolso de crédito</span>
+                                        </label>
+                                    </div>
+
+                                    <div className="mt-4 flex flex-wrap gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={handleSaveDeliveryChecklist}
+                                            disabled={!canModifyLead || savingDeliveryChecklist}
+                                            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                                        >
+                                            {savingDeliveryChecklist ? 'Guardando...' : 'Guardar checklist'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Entrega del vehículo</p>
+                                    {deliveryChecklistComplete ? (
+                                        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                                            <div className="md:col-span-1">
+                                                <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">Fecha y hora</label>
+                                                <input
+                                                    type="datetime-local"
+                                                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                                                    value={deliveryScheduledAt}
+                                                    onChange={(e) => setDeliveryScheduledAt(e.target.value)}
+                                                    disabled={!canModifyLead}
+                                                />
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">Detalle</label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                                                    placeholder="Ej: entrega en sala, firma final, revisión..."
+                                                    value={deliveryScheduledNote}
+                                                    onChange={(e) => setDeliveryScheduledNote(e.target.value)}
+                                                    disabled={!canModifyLead}
+                                                />
+                                            </div>
+                                            <div className="md:col-span-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleScheduleDelivery}
+                                                    disabled={!canModifyLead || schedulingDelivery}
+                                                    className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                                                >
+                                                    {schedulingDelivery ? 'Agendando...' : 'Agendar entrega'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p className="mt-3 text-sm text-amber-700">
+                                            Completa todo el checklist para habilitar la agenda de entrega y el cambio a vendido.
+                                        </p>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}
@@ -2598,6 +3169,9 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     // Modal State - Sales
     const [showSaleModal, setShowSaleModal] = useState(false);
     const [selectedLeadForSale, setSelectedLeadForSale] = useState(null);
+    const [salePurchaseDetail, setSalePurchaseDetail] = useState(null);
+    const [loadingSalePurchaseDetail, setLoadingSalePurchaseDetail] = useState(false);
+    const [saleDeliveryFiles, setSaleDeliveryFiles] = useState([]);
     const [availableVehicles, setAvailableVehicles] = useState([]);
     const [advisors, setAdvisors] = useState([]);
     const [saleForm, setSaleForm] = useState({ vehicle_id: '', sale_price: '', seller_id: '' });
@@ -2850,6 +3424,14 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         }
     };
 
+    const fetchPurchaseDetailByLead = async (leadId) => {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`${API_BASE_URL}/purchases/by-lead/${leadId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        return response.data || null;
+    };
+
     const fetchAdvisors = async () => {
         try {
             const token = localStorage.getItem('token');
@@ -2924,15 +3506,58 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         }
     };
 
-    const initiateSale = (leadId) => {
+    const initiateSale = async (leadId) => {
         const lead = leads.find(l => l.id === leadId);
         setSelectedLeadForSale(lead);
+        setSalePurchaseDetail(null);
+        setSaleDeliveryFiles([]);
         const defaultSellerId = getLeadAssignedUserId(lead) || '';
         setSaleForm({ vehicle_id: '', sale_price: '', seller_id: defaultSellerId });
         setShowSaleModal(true);
         fetchAvailableVehicles();
         if (currentRoleName === 'admin' || currentRoleName === 'super_admin') {
             fetchAdvisors();
+        }
+        if (!leadId) return;
+        setLoadingSalePurchaseDetail(true);
+        try {
+            const [detailedLead, purchaseDetail] = await Promise.all([
+                fetchLeadDetail(leadId).catch(() => null),
+                fetchPurchaseDetailByLead(leadId).catch(() => null),
+            ]);
+            const detailSource = detailedLead?.process_detail || lead?.process_detail || {};
+            const deliveryChecklistReady = [
+                Boolean(detailSource?.delivery_documents_complete),
+                Boolean(detailSource?.delivery_road_kit),
+                Boolean(detailSource?.delivery_basic_tools),
+                Boolean(detailSource?.delivery_credit_disbursement),
+            ].every(Boolean);
+            if (!deliveryChecklistReady || !detailSource?.delivery_scheduled_at) {
+                setShowSaleModal(false);
+                Swal.fire(
+                    'Atención',
+                    'Antes de cerrar la venta debes completar el checklist y agendar la entrega en el detalle del lead.',
+                    'warning'
+                );
+                return;
+            }
+            if (detailedLead) {
+                setSelectedLeadForSale(detailedLead);
+            }
+            setSalePurchaseDetail(purchaseDetail);
+            setSaleForm((prev) => ({
+                ...prev,
+                sale_price: String(
+                    purchaseDetail?.purchase_sale_price
+                    || purchaseDetail?.purchase_price
+                    || prev.sale_price
+                    || ''
+                ),
+            }));
+        } catch (error) {
+            console.error('Error loading sale purchase detail', error);
+        } finally {
+            setLoadingSalePurchaseDetail(false);
         }
     };
 
@@ -3274,9 +3899,12 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             const token = localStorage.getItem('token');
             const payload = {
                 lead_id: selectedLeadForSale.id,
-                vehicle_id: parseInt(saleForm.vehicle_id),
                 sale_price: parseInt(saleForm.sale_price)
             };
+
+            if (saleForm.vehicle_id) {
+                payload.vehicle_id = parseInt(saleForm.vehicle_id, 10);
+            }
 
             if (saleForm.seller_id) {
                 payload.seller_id = parseInt(saleForm.seller_id);
@@ -3287,12 +3915,36 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             });
 
             await axios.put(`${API_BASE_URL}/leads/${selectedLeadForSale.id}`,
-                { status: 'sold', comment: `Venta registrada: Vehículo ID ${saleForm.vehicle_id}` },
+                {
+                    status: 'sold',
+                    comment: `Venta registrada: ${salePurchaseDetail?.purchase_vehicle_name || salePurchaseDetail?.desired_vehicle || 'Vehículo vendido'}`
+                },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
+            if (saleDeliveryFiles.length > 0) {
+                await Promise.all(
+                    saleDeliveryFiles.map((file) => {
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        return axios.post(
+                            `${API_BASE_URL}/leads/${selectedLeadForSale.id}/files`,
+                            formData,
+                            {
+                                headers: {
+                                    Authorization: `Bearer ${token}`,
+                                    'Content-Type': 'multipart/form-data'
+                                }
+                            }
+                        );
+                    })
+                );
+            }
+
             setShowSaleModal(false);
             setSaleForm({ vehicle_id: '', sale_price: '', seller_id: '' });
+            setSalePurchaseDetail(null);
+            setSaleDeliveryFiles([]);
 
             setLeads(prev => prev.map(l => l.id === selectedLeadForSale.id ? { ...l, status: 'sold' } : l));
             fetchLeads();
@@ -3314,6 +3966,23 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             });
         }
     };
+
+    const hasPurchasedVehicleDataForSale = Boolean(
+        salePurchaseDetail?.purchase_vehicle_name
+        || salePurchaseDetail?.purchase_vehicle_model
+        || salePurchaseDetail?.purchase_vehicle_year
+        || salePurchaseDetail?.purchase_vehicle_plate
+    );
+    const purchasedVehicleLabelForSale = [
+        salePurchaseDetail?.purchase_vehicle_name,
+        salePurchaseDetail?.purchase_vehicle_model,
+        salePurchaseDetail?.purchase_vehicle_year,
+    ].filter(Boolean).join(' ');
+    const purchasedVehicleMetaForSale = [
+        salePurchaseDetail?.purchase_vehicle_plate ? `Placa: ${salePurchaseDetail.purchase_vehicle_plate}` : null,
+        salePurchaseDetail?.purchase_vehicle_mileage ? `Kilometraje: ${salePurchaseDetail.purchase_vehicle_mileage}` : null,
+        salePurchaseDetail?.purchase_vehicle_location ? `Ubicación: ${salePurchaseDetail.purchase_vehicle_location}` : null,
+    ].filter(Boolean).join(' | ');
 
     const filterByStatus = (status) => {
         return leads.filter(lead => {
@@ -3635,7 +4304,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     <div className="bg-white rounded-2xl p-8 w-full max-w-lg shadow-2xl animate-fade-in-up border border-gray-100">
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-2xl font-bold text-gray-800">Cerrar Venta</h2>
-                            <button onClick={() => setShowSaleModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                            <button onClick={() => { setShowSaleModal(false); setSalePurchaseDetail(null); }} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
                         </div>
 
                         <div className="bg-green-50 p-4 rounded-lg mb-6 flex items-start gap-3 border border-green-100">
@@ -3669,19 +4338,35 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 mb-2">Vehículo Vendido</label>
-                                <select
-                                    className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                                    value={saleForm.vehicle_id}
-                                    onChange={e => setSaleForm({ ...saleForm, vehicle_id: e.target.value })}
-                                    required
-                                >
-                                    <option value="">Seleccione un vehículo del inventario...</option>
-                                    {availableVehicles.map(v => (
-                                        <option key={v.id} value={v.id}>
-                                            {v.make} {v.model} ({v.plate}) - ${parseInt(v.price).toLocaleString()}
-                                        </option>
-                                    ))}
-                                </select>
+                                {loadingSalePurchaseDetail ? (
+                                    <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                                        Cargando información del carro comprado...
+                                    </div>
+                                ) : hasPurchasedVehicleDataForSale ? (
+                                    <div className="w-full rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+                                        <div className="font-bold text-emerald-900">{purchasedVehicleLabelForSale || salePurchaseDetail?.desired_vehicle || 'Vehículo comprado'}</div>
+                                        {purchasedVehicleMetaForSale && (
+                                            <p className="mt-1 text-sm text-emerald-700">{purchasedVehicleMetaForSale}</p>
+                                        )}
+                                        <p className="mt-2 text-xs text-emerald-700">
+                                            Este carro viene desde compras y ya no necesitas seleccionarlo manualmente.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <select
+                                        className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                        value={saleForm.vehicle_id}
+                                        onChange={e => setSaleForm({ ...saleForm, vehicle_id: e.target.value })}
+                                        required={!hasPurchasedVehicleDataForSale}
+                                    >
+                                        <option value="">Seleccione un vehículo del inventario...</option>
+                                        {availableVehicles.map(v => (
+                                            <option key={v.id} value={v.id}>
+                                                {v.make} {v.model} ({v.plate}) - ${parseInt(v.price).toLocaleString()}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
                             </div>
 
                             <div>
@@ -3697,6 +4382,29 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                                         required
                                     />
                                 </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">Fotos de la entrega</label>
+                                <input
+                                    type="file"
+                                    multiple
+                                    accept="image/*"
+                                    className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                    onChange={(e) => setSaleDeliveryFiles(Array.from(e.target.files || []))}
+                                />
+                                <p className="mt-2 text-xs text-slate-500">
+                                    Estas fotos se guardarán como documentos adjuntos del lead al confirmar la venta.
+                                </p>
+                                {saleDeliveryFiles.length > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        {saleDeliveryFiles.map((file, index) => (
+                                            <span key={`${file.name}-${index}`} className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                                                {file.name}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                         {(currentRoleName === 'admin' || currentRoleName === 'super_admin') && (

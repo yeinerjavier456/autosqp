@@ -41,7 +41,7 @@ const WhatsAppDashboard = () => {
     const fetchConversations = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('https://autosqp.co/api/whatsapp/conversations', {
+            const response = await axios.get('/api/whatsapp/conversations', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setConversations(response.data);
@@ -54,7 +54,7 @@ const WhatsAppDashboard = () => {
     const fetchMessages = async (conversationId) => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get(`https://autosqp.co/api/whatsapp/conversations/${conversationId}/messages`, {
+            const response = await axios.get(`/api/whatsapp/conversations/${conversationId}/messages`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             // verify if new messages to scroll? For now just set
@@ -89,7 +89,7 @@ const WhatsAppDashboard = () => {
                 message_type: 'text'
             };
 
-            await axios.post(`https://autosqp.co/api/whatsapp/conversations/${selectedConversation.id}/send`, payload, {
+            await axios.post(`/api/whatsapp/conversations/${selectedConversation.id}/send`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 

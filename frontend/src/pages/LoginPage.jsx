@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getOrderedMenuViews, hasViewAccess, getRoleName } from '../config/views';
 
-const API_BASE_URL = import.meta.env.DEV ? '/crm/api' : 'https://autosqp.co/api';
+const API_BASE_URL = import.meta.env.DEV ? '/crm/api' : '/api';
 
 const LoginPage = () => {
     const [email, setEmail] = useState('');

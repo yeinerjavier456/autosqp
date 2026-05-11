@@ -38,7 +38,7 @@ const PublicSalesChatbot = ({
     const ensureSession = async () => {
         let token = forceFreshSession ? '' : (browserStorage.getItem(sessionStorageKey) || '');
         if (!token) {
-            const res = await axios.post('https://autosqp.co/api/public-chat/session', {
+            const res = await axios.post('/api/public-chat/session', {
                 source_page: resolvedSourcePage
             });
             token = res.data.session_token;
@@ -50,7 +50,7 @@ const PublicSalesChatbot = ({
 
     const loadHistory = async (token) => {
         try {
-            const res = await axios.get(`https://autosqp.co/api/public-chat/${token}/messages`);
+            const res = await axios.get(`/api/public-chat/${token}/messages`);
             const apiMessages = (res.data || []).map(m => ({ role: m.role, content: m.content }));
             setMessages(apiMessages);
         } catch (error) {
@@ -60,7 +60,7 @@ const PublicSalesChatbot = ({
 
     const loadChatbotConfig = async (token) => {
         try {
-            const res = await axios.post('https://autosqp.co/api/public-chat/config', {
+            const res = await axios.post('/api/public-chat/config', {
                 session_token: token
             });
             if (res.data) {
@@ -94,7 +94,7 @@ const PublicSalesChatbot = ({
         if (!open || !sessionToken) return;
         const intervalId = setInterval(async () => {
             try {
-                const res = await axios.post('https://autosqp.co/api/public-chat/check-inactive', {
+                const res = await axios.post('/api/public-chat/check-inactive', {
                     session_token: sessionToken
                 });
                 if (res.data?.nudged) {
@@ -138,7 +138,7 @@ const PublicSalesChatbot = ({
         let assistantReply = 'Perdón, tuve un problema técnico. ¿Me repites tu mensaje?';
         try {
             const token = sessionToken || await ensureSession();
-            const res = await axios.post('https://autosqp.co/api/public-chat/message', {
+            const res = await axios.post('/api/public-chat/message', {
                 session_token: token,
                 message: text,
                 vehicle_id: vehicleId || undefined,

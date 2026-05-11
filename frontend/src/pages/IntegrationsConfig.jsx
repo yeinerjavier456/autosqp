@@ -59,7 +59,7 @@ const IntegrationsConfig = () => {
 
             try {
                 const token = localStorage.getItem('token');
-                const response = await axios.get(`https://autosqp.co/api/companies/${user.company_id}/integrations`, {
+                const response = await axios.get(`/api/companies/${user.company_id}/integrations`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 // Merge with defaults to ensure controlled inputs
@@ -105,7 +105,7 @@ const IntegrationsConfig = () => {
         try {
             const token = localStorage.getItem('token');
             await axios.put(
-                `https://autosqp.co/api/companies/${user.company_id}/integrations`,
+                `/api/companies/${user.company_id}/integrations`,
                 settings,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -130,7 +130,7 @@ const IntegrationsConfig = () => {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.post(
-                `https://autosqp.co/api/vehicles/upload`,
+                `/api/vehicles/upload`,
                 formData,
                 {
                     headers: {
@@ -162,7 +162,7 @@ const IntegrationsConfig = () => {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.get(
-                `https://autosqp.co/api/gmail/oauth/start`,
+                `/api/gmail/oauth/start`,
                 {
                     params: { company_id: user.company_id },
                     headers: { Authorization: `Bearer ${token}` }
@@ -193,7 +193,7 @@ const IntegrationsConfig = () => {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.get(
-                `https://autosqp.co/api/gmail/messages/preview`,
+                `/api/gmail/messages/preview`,
                 {
                     params: {
                         company_id: user.company_id,
@@ -470,7 +470,7 @@ const IntegrationsConfig = () => {
                                     name="gmail_redirect_uri"
                                     value={settings.gmail_redirect_uri || ''}
                                     onChange={handleChange}
-                                    placeholder="https://autosqp.com/api/gmail/oauth/callback"
+                                    placeholder="/api/gmail/oauth/callback"
                                     className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                                 <p className="text-xs text-slate-400 mt-1">

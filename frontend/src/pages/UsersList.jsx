@@ -22,7 +22,7 @@ const UsersList = () => {
             const params = { skip, limit };
             if (search) params.q = search;
 
-            const response = await axios.get('https://autosqp.co/api/users/', {
+            const response = await axios.get('/api/users/', {
                 params,
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -64,7 +64,7 @@ const UsersList = () => {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.post(
-                `https://autosqp.co/api/users/${targetUser.id}/redistribute-leads`,
+                `/api/users/${targetUser.id}/redistribute-leads`,
                 {},
                 { headers: { Authorization: `Bearer ${token}` } }
             );

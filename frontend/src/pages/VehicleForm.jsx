@@ -78,14 +78,14 @@ const VehicleForm = () => {
 
     const fetchBrands = async () => {
         try {
-            const response = await axios.get('https://autosqp.co/api/brands/');
+            const response = await axios.get('/api/brands/');
             const brandsData = response.data || [];
             setBrands(brandsData);
 
             if (brandsData.length === 0) {
-                await axios.post('https://autosqp.co/api/seed/brands/external?max_makes=100&max_models_per_make=120&include_models=true&only_common=true');
-                await axios.post('https://autosqp.co/api/seed/brands/from-vehicles');
-                const syncedResponse = await axios.get('https://autosqp.co/api/brands/');
+                await axios.post('/api/seed/brands/external?max_makes=100&max_models_per_make=120&include_models=true&only_common=true');
+                await axios.post('/api/seed/brands/from-vehicles');
+                const syncedResponse = await axios.get('/api/brands/');
                 setBrands(syncedResponse.data || []);
             }
         } catch (error) {
@@ -107,7 +107,7 @@ const VehicleForm = () => {
 
     const fetchModels = async (brandId) => {
         try {
-            const response = await axios.get(`https://autosqp.co/api/brands/${brandId}/models/`);
+            const response = await axios.get(`/api/brands/${brandId}/models/`);
             setModelsList(response.data);
         } catch (error) {
             console.error("Error fetching models", error);
@@ -118,7 +118,7 @@ const VehicleForm = () => {
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get(`https://autosqp.co/api/vehicles/${id}`, {
+            const response = await axios.get(`/api/vehicles/${id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = response.data;
@@ -164,8 +164,8 @@ const VehicleForm = () => {
     const handleSeedBrands = async () => {
         try {
             setLoading(true);
-            const externalResponse = await axios.post('https://autosqp.co/api/seed/brands/external?max_makes=100&max_models_per_make=120&include_models=true&only_common=true');
-            const localResponse = await axios.post('https://autosqp.co/api/seed/brands/from-vehicles');
+            const externalResponse = await axios.post('/api/seed/brands/external?max_makes=100&max_models_per_make=120&include_models=true&only_common=true');
+            const localResponse = await axios.post('/api/seed/brands/from-vehicles');
 
             Swal.fire(
                 'Catálogo actualizado',
@@ -209,7 +209,7 @@ const VehicleForm = () => {
             formData.append('file', file);
 
             try {
-                const response = await axios.post('https://autosqp.co/api/upload/', formData, {
+                const response = await axios.post('/api/upload/', formData, {
                     headers: {
                         'Content-Type': 'multipart/form-data',
                         Authorization: `Bearer ${token}`
@@ -281,13 +281,13 @@ const VehicleForm = () => {
         try {
             if (id) {
                 // Update
-                await axios.put(`https://autosqp.co/api/vehicles/${id}`, payload, {
+                await axios.put(`/api/vehicles/${id}`, payload, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 await Swal.fire('Éxito', "Vehículo actualizado correctamente", 'success');
             } else {
                 // Create
-                await axios.post('https://autosqp.co/api/vehicles/', payload, {
+                await axios.post('/api/vehicles/', payload, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 await Swal.fire('Éxito', "Vehículo creado correctamente", 'success');

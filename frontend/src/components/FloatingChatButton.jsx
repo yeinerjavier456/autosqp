@@ -25,7 +25,7 @@ const FloatingChatButton = () => {
         try {
             const token = localStorage.getItem('token');
             if (!token) return;
-            const response = await axios.get('https://autosqp.co/api/users/', {
+            const response = await axios.get('/api/users/', {
                 params: { limit: 500 },
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -40,7 +40,7 @@ const FloatingChatButton = () => {
             const token = localStorage.getItem('token');
             if (!token) return;
             const today = new Date().toISOString().split('T')[0];
-            const response = await axios.get(`https://autosqp.co/api/internal-messages?date=${today}`, {
+            const response = await axios.get(`/api/internal-messages?date=${today}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setMessages(response.data || []);
@@ -146,14 +146,14 @@ const FloatingChatButton = () => {
                 if (recipientId) formData.append('recipient_id', recipientId);
                 if (newMessage.trim()) formData.append('content', newMessage.trim());
 
-                await axios.post('https://autosqp.co/api/internal-messages/upload', formData, {
+                await axios.post('/api/internal-messages/upload', formData, {
                     headers: {
                         Authorization: `Bearer ${token}`,
                         'Content-Type': 'multipart/form-data'
                     }
                 });
             } else {
-                await axios.post('https://autosqp.co/api/internal-messages', {
+                await axios.post('/api/internal-messages', {
                     content: newMessage,
                     recipient_id: recipientId ? Number(recipientId) : null
                 }, {

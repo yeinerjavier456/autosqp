@@ -52,7 +52,7 @@ const PublicInventory = () => {
 
     const fetchMakes = async () => {
         try {
-            const res = await axios.get('https://autosqp.co/api/vehicles/makes');
+            const res = await axios.get('/api/vehicles/makes');
             setMakes(normalizeArrayPayload(res.data));
         } catch (error) {
             console.error("Error fetching makes", error);
@@ -76,7 +76,7 @@ const PublicInventory = () => {
             if (filters.color) params.color = filters.color;
             if (filters.sort_by) params.sort_by = filters.sort_by;
 
-            const res = await axios.get('https://autosqp.co/api/vehicles/public', { params });
+            const res = await axios.get('/api/vehicles/public', { params });
             setVehicles(normalizeArrayPayload(res.data));
         } catch (error) {
             console.error("Error fetching vehicles", error);

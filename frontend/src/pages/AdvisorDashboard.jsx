@@ -179,7 +179,7 @@ const AdvisorDashboard = () => {
                         start_date: startDate,
                         end_date: endDate
                     };
-                const response = await axios.get('https://autosqp.co/api/stats/advisor', {
+                const response = await axios.get('/api/stats/advisor', {
                     headers: { Authorization: `Bearer ${token}` },
                     params
                 });

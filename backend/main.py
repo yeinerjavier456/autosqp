@@ -888,6 +888,7 @@ def ping():
 
 from dependencies import (
     get_current_user,
+    get_user_from_anywhere,
     oauth2_scheme,
     ensure_can_modify_lead,
     ensure_can_manage_lead_supervision,
@@ -5843,6 +5844,25 @@ def approve_sale(
         
     # Finalize
     sale.status = "approved"
+    # Create Automatic Receipt for the Sale
+    try:
+        count = db.query(models.PaymentReceipt).filter(models.PaymentReceipt.company_id == sale.company_id).count()
+        receipt_number = f"REC-{count + 1}"
+        automatic_receipt = models.PaymentReceipt(
+            company_id=sale.company_id,
+            sale_id=sale.id,
+            user_id=current_user.id,
+            concept=f"Venta de vehiculo #{sale.id}",
+            movement_type="income",
+            receipt_number=receipt_number,
+            payment_date=datetime.datetime.utcnow(),
+            amount=sale.sale_price,
+            category="ingreso_venta",
+            notes=f"Recibo generado automaticamente al aprobar la venta #{sale.id}"
+        )
+        db.add(automatic_receipt)
+    except Exception as e:
+        print(f"Error creating automatic receipt: {e}")
     sale.approved_by_id = current_user.id
     sale.sale_date = datetime.datetime.utcnow()
     
@@ -6201,7 +6221,7 @@ async def create_payment_receipt(
 def download_payment_receipt_pdf(
     receipt_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(get_user_from_anywhere)
 ):
     if get_user_role_name(current_user) not in ["admin", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -6221,25 +6241,41 @@ def download_payment_receipt_pdf(
 
     y = height - 60
     pdf.setTitle(f"recibo_{receipt.id}.pdf")
-    pdf.setFillColor(HexColor("#0f172a"))
-    pdf.setFont("Helvetica-Bold", 20)
-    pdf.drawString(50, y, "Recibo de Contabilidad")
-    y -= 24
-
+    
+    # Header with background
+    pdf.setFillColor(HexColor("#1e293b"))
+    pdf.rect(0, height - 100, width, 100, fill=1, stroke=0)
+    
+    pdf.setFillColor(HexColor("#ffffff"))
+    pdf.setFont("Helvetica-Bold", 24)
+    pdf.drawString(50, height - 60, "AUTOS QP - COMPRA Y VENTA")
+    
     pdf.setFont("Helvetica", 10)
-    pdf.setFillColor(HexColor("#475569"))
-    pdf.drawString(50, y, f"Generado: {datetime.datetime.utcnow().strftime('%d/%m/%Y %H:%M')}")
-    y -= 36
+    pdf.drawString(50, height - 80, "Soporte de Contabilidad | Gestion Financiera")
+    
+    pdf.setFillColor(HexColor("#ffffff"))
+    pdf.setFont("Helvetica-Bold", 14)
+    pdf.drawRightString(width - 50, height - 60, f"No. {receipt.receipt_number or 'PROV'}")
+    pdf.setFont("Helvetica", 10)
+    pdf.drawRightString(width - 50, height - 80, f"Fecha: {receipt.payment_date.strftime('%d/%m/%Y') if receipt.payment_date else 'N/A'}")
 
-    lines = [
-        ("ID de recibo", str(receipt.id)),
-        ("Numero de recibo", receipt.receipt_number or "Sin consecutivo"),
-        ("Fecha de pago", receipt.payment_date.strftime("%d/%m/%Y") if receipt.payment_date else "Sin fecha"),
-        ("Categoria", (receipt.category or "sale_payment").replace("_", " ")),
-        ("Tipo", "Ingreso" if (receipt.movement_type or "income") == "income" else "Egreso"),
-        ("Concepto", receipt.concept or "Sin concepto"),
-        ("Valor", f"COP ${int(receipt.amount or 0):,}".replace(",", ".")),
-        ("Registrado por", getattr(receipt.user, "full_name", None) or getattr(receipt.user, "email", "") or "Usuario"),
+    y = height - 140
+    
+    # Main Content
+    pdf.setFillColor(HexColor("#0f172a"))
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.drawString(50, y, "Detalle del Movimiento")
+    y -= 10
+    
+    pdf.setStrokeColor(HexColor("#e2e8f0"))
+    pdf.line(50, y, width - 50, y)
+    y -= 30
+
+    display_lines = [
+        ("Concepto", (receipt.concept or "Sin concepto").upper()),
+        ("Tipo de Movimiento", "INGRESO" if (receipt.movement_type or "income") == "income" else "EGRESO"),
+        ("Cuenta Contable", (receipt.category or "ingreso_venta").replace("_", " ").upper()),
+        ("Valor Total", f"COP ${int(receipt.amount or 0):,}".replace(",", ".")),
     ]
 
     if receipt.sale:
@@ -6248,34 +6284,52 @@ def download_payment_receipt_pdf(
             getattr(receipt.sale.vehicle, "model", None),
             getattr(receipt.sale.vehicle, "plate", None)
         ])).strip()
-        lines.extend([
-            ("Venta asociada", f"#{receipt.sale.id}"),
-            ("Vehiculo", vehicle_label or "Sin vehiculo"),
-            ("Vendedor", getattr(receipt.sale.seller, "full_name", None) or getattr(receipt.sale.seller, "email", "") or "Sin vendedor")
+        display_lines.extend([
+            ("Referencia Venta", f"#{receipt.sale.id}"),
+            ("Vehiculo Asociado", (vehicle_label or "Sin datos de vehiculo").upper()),
+            ("Vendedor", (getattr(receipt.sale.seller, "full_name", None) or getattr(receipt.sale.seller, "email", "") or "N/A").upper())
         ])
-    else:
-        lines.append(("Venta asociada", "No"))
 
-    pdf.setFont("Helvetica", 12)
-    pdf.setFillColor(HexColor("#111827"))
-    for label, value in lines:
+    for label, value in display_lines:
         pdf.setFont("Helvetica-Bold", 11)
+        pdf.setFillColor(HexColor("#64748b"))
         pdf.drawString(50, y, f"{label}:")
+        
         pdf.setFont("Helvetica", 11)
-        pdf.drawString(190, y, str(value))
-        y -= 22
+        pdf.setFillColor(HexColor("#1e293b"))
+        pdf.drawString(180, y, str(value))
+        
+        y -= 6
+        pdf.setStrokeColor(HexColor("#f1f5f9"))
+        pdf.line(50, y, width - 50, y)
+        y -= 20
 
     if receipt.notes:
-        y -= 8
-        pdf.setFont("Helvetica-Bold", 11)
-        pdf.drawString(50, y, "Notas:")
-        y -= 18
-        pdf.setFont("Helvetica", 10)
-        text_object = pdf.beginText(50, y)
+        y -= 20
+        pdf.setFillColor(HexColor("#f8fafc"))
+        pdf.rect(50, y - 60, width - 100, 70, fill=1, stroke=1)
+        
+        pdf.setFillColor(HexColor("#475569"))
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(60, y, "NOTAS Y OBSERVACIONES:")
+        y -= 15
+        pdf.setFont("Helvetica", 9)
+        pdf.setFillColor(HexColor("#1e293b"))
+        text_object = pdf.beginText(60, y)
+        text_object.setLeading(12)
         for paragraph in str(receipt.notes).splitlines() or [""]:
-            safe_line = paragraph[:120]
-            text_object.textLine(safe_line)
+            text_object.textLine(paragraph[:100])
         pdf.drawText(text_object)
+        y -= 60
+
+    # Footer
+    pdf.setStrokeColor(HexColor("#cbd5e1"))
+    pdf.line(50, 100, width - 50, 100)
+    
+    pdf.setFont("Helvetica-Oblique", 8)
+    pdf.setFillColor(HexColor("#94a3b8"))
+    pdf.drawCentredString(width/2, 85, "Este documento es un soporte interno de contabilidad de AUTOS QP.")
+    pdf.drawCentredString(width/2, 75, f"Generado digitalmente el {datetime.datetime.utcnow().strftime('%d/%m/%Y %H:%M')}")
 
     pdf.showPage()
     pdf.save()

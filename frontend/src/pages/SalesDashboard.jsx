@@ -52,6 +52,7 @@ const SalesDashboard = () => {
     const [receiptForm, setReceiptForm] = useState({
         sale_id: '',
         concept: '',
+        concept_detail: '',
         movement_type: 'income',
         amount: '',
         payment_date: new Date().toISOString().slice(0, 10),
@@ -78,8 +79,8 @@ const SalesDashboard = () => {
                 };
 
             const [statsRes, salesRes, approvedSalesRes, receiptsRes] = await Promise.all([
-                axios.get('https://autosqp.co/api/finance/stats', { headers, params: rangeParams }),
-                axios.get('https://autosqp.co/api/sales/', {
+                axios.get('/api/finance/stats', { headers, params: rangeParams }),
+                axios.get('/api/sales/', {
                     headers,
                     params: {
                         status: filterStatus,
@@ -88,8 +89,8 @@ const SalesDashboard = () => {
                         ...rangeParams
                     }
                 }),
-                axios.get('https://autosqp.co/api/sales/?status=approved&limit=300', { headers }),
-                axios.get('https://autosqp.co/api/finance/receipts', {
+                axios.get('/api/sales/?status=approved&limit=300', { headers }),
+                axios.get('/api/finance/receipts', {
                     headers,
                     params: {
                         q: receiptSearch || undefined,
@@ -131,7 +132,7 @@ const SalesDashboard = () => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.put(`https://autosqp.co/api/sales/${saleId}/approve`, {}, {
+            await axios.put(`/api/sales/${saleId}/approve`, {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             Swal.fire('Exito', 'Venta aprobada exitosamente', 'success');
@@ -161,7 +162,7 @@ const SalesDashboard = () => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.put(`https://autosqp.co/api/sales/${saleId}/reject`, {}, {
+            await axios.put(`/api/sales/${saleId}/reject`, {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             Swal.fire('Exito', 'Venta negada y vehiculo liberado', 'success');
@@ -216,7 +217,7 @@ const SalesDashboard = () => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.put(`https://autosqp.co/api/sales/${sale.id}`, {
+            await axios.put(`/api/sales/${sale.id}`, {
                 sale_price: Number(salePrice)
             }, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -231,8 +232,8 @@ const SalesDashboard = () => {
 
     const handleCreateReceipt = async (e) => {
         e.preventDefault();
-        if ((!receiptForm.sale_id && !receiptForm.concept.trim()) || !receiptForm.amount || Number(receiptForm.amount) <= 0) {
-            Swal.fire('Atencion', 'Debes elegir una venta o escribir un concepto y poner un valor valido.', 'warning');
+        if (!receiptForm.concept.trim() || !receiptForm.amount || Number(receiptForm.amount) <= 0) {
+            Swal.fire('Atencion', 'Debes seleccionar un concepto y poner un valor valido.', 'warning');
             return;
         }
 
@@ -243,18 +244,17 @@ const SalesDashboard = () => {
             if (receiptForm.sale_id) {
                 formData.append('sale_id', receiptForm.sale_id);
             }
-            formData.append('concept', receiptForm.concept);
+            formData.append('concept', receiptForm.concept === 'Otros' ? (receiptForm.concept_detail || 'Otros') : receiptForm.concept);
             formData.append('movement_type', receiptForm.movement_type);
             formData.append('amount', receiptForm.amount);
             formData.append('payment_date', receiptForm.payment_date);
-            formData.append('receipt_number', receiptForm.receipt_number);
             formData.append('category', receiptForm.category);
             formData.append('notes', receiptForm.notes);
             if (receiptForm.file) {
                 formData.append('file', receiptForm.file);
             }
 
-            await axios.post('https://autosqp.co/api/finance/receipts', formData, {
+            await axios.post('/api/finance/receipts', formData, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                     'Content-Type': 'multipart/form-data'
@@ -264,6 +264,7 @@ const SalesDashboard = () => {
             setReceiptForm({
                 sale_id: '',
                 concept: '',
+                concept_detail: '',
                 movement_type: 'income',
                 amount: '',
                 payment_date: new Date().toISOString().slice(0, 10),
@@ -301,7 +302,7 @@ const SalesDashboard = () => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.delete(`https://autosqp.co/api/finance/receipts/${receiptId}`, {
+            await axios.delete(`/api/finance/receipts/${receiptId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             await fetchData();
@@ -315,6 +316,7 @@ const SalesDashboard = () => {
     const handleEditReceipt = async (receipt) => {
         const { value: updatedData } = await Swal.fire({
             title: 'Editar registro contable',
+            width: '80%',
             html: `
                 <div class="space-y-3 text-left">
                     <div>
@@ -329,8 +331,25 @@ const SalesDashboard = () => {
                         </select>
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Concepto</label>
-                            <input id="edit-receipt-concept" type="text" class="swal2-input" value="${escapeHtml(receipt.concept || '')}" placeholder="Concepto contable" />
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Concepto Contable</label>
+                        <select id="edit-receipt-concept" class="swal2-select">
+                            <option value="Venta de Vehiculo" ${receipt.concept === 'Venta de Vehiculo' ? 'selected' : ''}>Venta de Vehículo</option>
+                            <option value="Compra de Vehiculo" ${receipt.concept === 'Compra de Vehiculo' ? 'selected' : ''}>Compra de Vehículo</option>
+                            <option value="Traspaso / Tramites" ${receipt.concept === 'Traspaso / Tramites' ? 'selected' : ''}>Traspaso / Trámites</option>
+                            <option value="Peritaje" ${receipt.concept === 'Peritaje' ? 'selected' : ''}>Peritaje</option>
+                            <option value="Mantenimiento / Alistamiento" ${receipt.concept === 'Mantenimiento / Alistamiento' ? 'selected' : ''}>Mantenimiento / Alistamiento</option>
+                            <option value="Lavado" ${receipt.concept === 'Lavado' ? 'selected' : ''}>Lavado</option>
+                            <option value="Pago SOAT" ${receipt.concept === 'Pago SOAT' ? 'selected' : ''}>Pago SOAT</option>
+                            <option value="Pago Impuestos" ${receipt.concept === 'Pago Impuestos' ? 'selected' : ''}>Pago Impuestos</option>
+                            <option value="Pago Comision" ${receipt.concept === 'Pago Comision' ? 'selected' : ''}>Pago Comisión</option>
+                            <option value="Pago Arriendo" ${receipt.concept === 'Pago Arriendo' ? 'selected' : ''}>Pago Arriendo</option>
+                            <option value="Servicios Publicos" ${receipt.concept === 'Servicios Publicos' ? 'selected' : ''}>Servicios Públicos</option>
+                            <option value="Pago Nomina" ${receipt.concept === 'Pago Nomina' ? 'selected' : ''}>Pago Nómina</option>
+                            <option value="Caja Menor" ${receipt.concept === 'Caja Menor' ? 'selected' : ''}>Caja Menor</option>
+                            <option value="Publicidad" ${receipt.concept === 'Publicidad' ? 'selected' : ''}>Publicidad</option>
+                            <option value="Otros" ${!['Venta de Vehiculo', 'Compra de Vehiculo', 'Traspaso / Tramites', 'Peritaje', 'Mantenimiento / Alistamiento', 'Lavado', 'Pago SOAT', 'Pago Impuestos', 'Pago Comision', 'Pago Arriendo', 'Servicios Publicos', 'Pago Nomina', 'Caja Menor', 'Publicidad'].includes(receipt.concept) ? 'selected' : ''}>Otros</option>
+                        </select>
+                        <input id="edit-receipt-concept-detail" type="text" class="swal2-input" style="display: ${!['Venta de Vehiculo', 'Compra de Vehiculo', 'Traspaso / Tramites', 'Peritaje', 'Mantenimiento / Alistamiento', 'Lavado', 'Pago SOAT', 'Pago Impuestos', 'Pago Comision', 'Pago Arriendo', 'Servicios Publicos', 'Pago Nomina', 'Caja Menor', 'Publicidad'].includes(receipt.concept) ? 'block' : 'none'}" value="${escapeHtml(receipt.concept || '')}" placeholder="Especifique el concepto..." />
                     </div>
                     <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
                         <div>
@@ -350,18 +369,16 @@ const SalesDashboard = () => {
                             <label class="mb-1 block text-sm font-semibold text-gray-700">Fecha</label>
                             <input id="edit-receipt-payment-date" type="date" class="swal2-input" value="${receipt.payment_date ? new Date(receipt.payment_date).toISOString().slice(0, 10) : ''}" />
                         </div>
-                        <div>
-                            <label class="mb-1 block text-sm font-semibold text-gray-700">Numero de recibo</label>
-                            <input id="edit-receipt-number" type="text" class="swal2-input" value="${escapeHtml(receipt.receipt_number || '')}" placeholder="Consecutivo" />
-                        </div>
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Categoria</label>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Cuenta Contable</label>
                         <select id="edit-receipt-category" class="swal2-select">
-                            <option value="sale_payment" ${(receipt.category || 'sale_payment') === 'sale_payment' ? 'selected' : ''}>Pago de venta</option>
-                            <option value="other_income" ${(receipt.category || '') === 'other_income' ? 'selected' : ''}>Otro ingreso</option>
-                            <option value="commission_payment" ${(receipt.category || '') === 'commission_payment' ? 'selected' : ''}>Pago de comision</option>
-                            <option value="expense" ${(receipt.category || '') === 'expense' ? 'selected' : ''}>Egreso</option>
+                            <option value="ingreso_venta" ${(receipt.category || '') === 'ingreso_venta' ? 'selected' : ''}>Ingresos por Venta</option>
+                            <option value="costo_vehiculo" ${(receipt.category || '') === 'costo_vehiculo' ? 'selected' : ''}>Costo de Vehículo (Compra)</option>
+                            <option value="gasto_tramites" ${(receipt.category || '') === 'gasto_tramites' ? 'selected' : ''}>Gastos de Trámites y Alistamiento</option>
+                            <option value="gasto_operativo" ${(receipt.category || '') === 'gasto_operativo' ? 'selected' : ''}>Gastos Operativos y Administrativos</option>
+                            <option value="comisiones" ${(receipt.category || '') === 'comisiones' ? 'selected' : ''}>Pago de Comisiones</option>
+                            <option value="otros" ${(receipt.category || '') === 'otros' ? 'selected' : ''}>Otros Movimientos</option>
                         </select>
                     </div>
                     <div>
@@ -376,11 +393,12 @@ const SalesDashboard = () => {
             focusConfirm: false,
             preConfirm: () => {
                 const saleId = document.getElementById('edit-receipt-sale-id')?.value || '';
-                const concept = (document.getElementById('edit-receipt-concept')?.value || '').trim();
+                const conceptSelect = document.getElementById('edit-receipt-concept')?.value || '';
+                const conceptDetail = (document.getElementById('edit-receipt-concept-detail')?.value || '').trim();
+                const concept = conceptSelect === 'Otros' ? (conceptDetail || 'Otros') : conceptSelect;
                 const movementType = document.getElementById('edit-receipt-movement-type')?.value || 'income';
                 const amount = Number(document.getElementById('edit-receipt-amount')?.value || 0);
                 const paymentDate = document.getElementById('edit-receipt-payment-date')?.value || '';
-                const receiptNumber = (document.getElementById('edit-receipt-number')?.value || '').trim();
                 const category = document.getElementById('edit-receipt-category')?.value || 'sale_payment';
                 const notes = (document.getElementById('edit-receipt-notes')?.value || '').trim();
 
@@ -403,10 +421,21 @@ const SalesDashboard = () => {
                     movement_type: movementType,
                     amount,
                     payment_date: paymentDate,
-                    receipt_number: receiptNumber || null,
                     category,
                     notes: notes || null
                 };
+            },
+            didOpen: () => {
+                const conceptSelect = document.getElementById('edit-receipt-concept');
+                const conceptDetail = document.getElementById('edit-receipt-concept-detail');
+                if (conceptSelect && conceptDetail) {
+                    conceptSelect.addEventListener('change', (e) => {
+                        conceptDetail.style.display = e.target.value === 'Otros' ? 'block' : 'none';
+                        if (e.target.value !== 'Otros') {
+                            conceptDetail.value = e.target.value;
+                        }
+                    });
+                }
             },
             customClass: {
                 confirmButton: 'bg-blue-600 text-white px-4 py-2 rounded-lg ml-2',
@@ -419,7 +448,7 @@ const SalesDashboard = () => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.put(`https://autosqp.co/api/finance/receipts/${receipt.id}`, updatedData, {
+            await axios.put(`/api/finance/receipts/${receipt.id}`, updatedData, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             await fetchData();
@@ -627,6 +656,30 @@ const SalesDashboard = () => {
                                                     {sale.vehicle?.make} {sale.vehicle?.model}
                                                 </div>
                                                 <div className="text-xs text-gray-500">{sale.vehicle?.plate}</div>
+                                                <div className="mt-2 space-y-1">
+                                                    {(sale.payment_receipts || [])
+                                                        .filter(r => r.movement_type === "expense")
+                                                        .map(r => (
+                                                            <div key={r.id} className="flex items-center justify-between text-[10px] bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">
+                                                                <span className="text-gray-600 truncate max-w-[120px]">{r.concept || r.category.replace("_", " ")}</span>
+                                                                <span className="font-semibold text-rose-600 ml-2">${Number(r.amount || 0).toLocaleString()}</span>
+                                                            </div>
+                                                        ))}
+                                                    <button 
+                                                        onClick={() => {
+                                                            setReceiptForm({
+                                                                ...receiptForm,
+                                                                sale_id: String(sale.id),
+                                                                movement_type: "expense",
+                                                                category: "vehicle_expense"
+                                                            });
+                                                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                                                        }}
+                                                        className="text-[10px] text-blue-600 hover:underline flex items-center font-medium"
+                                                    >
+                                                        + Agregar gasto
+                                                    </button>
+                                                </div>
                                             </td>
                                             <td className="p-4 text-sm text-gray-600">{getSellerLabel(sale)}</td>
                                             <td className="p-4 font-bold text-gray-800">${sale.sale_price?.toLocaleString()}</td>
@@ -713,36 +766,71 @@ const SalesDashboard = () => {
 
                     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[420px,1fr]">
                         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                            <h3 className="text-lg font-bold text-gray-800">Agregar recibo de pago</h3>
-                            <p className="mt-1 text-sm text-gray-500">Registra soportes ligados a ventas o movimientos contables libres.</p>
+                            <h3 className="text-lg font-bold text-gray-800">Agregar recibo de compra / venta</h3>
+                            <p className="mt-1 text-sm text-gray-500">Registra soportes contables y operativos de la empresa.</p>
 
                             <form onSubmit={handleCreateReceipt} className="mt-5 space-y-4">
                                 <div>
-                                    <label className="mb-1 block text-sm font-semibold text-gray-700">Venta aprobada</label>
+                                    <label className="mb-1 block text-sm font-semibold text-gray-700">Concepto Contable</label>
                                     <select
-                                        value={receiptForm.sale_id}
-                                        onChange={(e) => setReceiptForm({ ...receiptForm, sale_id: e.target.value })}
-                                        className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
-                                    >
-                                        <option value="">Sin venta asociada</option>
-                                        {approvedSales.map((sale) => (
-                                            <option key={sale.id} value={sale.id}>
-                                                #{sale.id} - {sale.vehicle?.make} {sale.vehicle?.model} - {sale.vehicle?.plate}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="mb-1 block text-sm font-semibold text-gray-700">Concepto</label>
-                                    <input
-                                        type="text"
                                         value={receiptForm.concept}
-                                        onChange={(e) => setReceiptForm({ ...receiptForm, concept: e.target.value })}
-                                        className="w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder="Ej: pago de traspaso, caja menor, anticipo, gasto operativo"
-                                    />
-                                    <p className="mt-1 text-xs text-gray-500">Si no asocias una venta, este concepto sera obligatorio.</p>
+                                        onChange={(e) => {
+                                            const concept = e.target.value;
+                                            let category = 'otros';
+                                            let movementType = 'expense';
+
+                                            if (concept === 'Venta de Vehiculo') {
+                                                category = 'ingreso_venta';
+                                                movementType = 'income';
+                                            } else if (concept === 'Compra de Vehiculo') {
+                                                category = 'costo_vehiculo';
+                                                movementType = 'expense';
+                                            } else if (['Traspaso / Tramites', 'Peritaje', 'Mantenimiento / Alistamiento', 'Lavado', 'Pago SOAT', 'Pago Impuestos'].includes(concept)) {
+                                                category = 'gasto_tramites';
+                                                movementType = 'expense';
+                                            } else if (['Pago Arriendo', 'Servicios Publicos', 'Pago Nomina', 'Publicidad'].includes(concept)) {
+                                                category = 'gasto_operativo';
+                                                movementType = 'expense';
+                                            } else if (concept === 'Pago Comision') {
+                                                category = 'comisiones';
+                                                movementType = 'expense';
+                                            }
+
+                                            setReceiptForm({ 
+                                                ...receiptForm, 
+                                                concept: concept,
+                                                category: category,
+                                                movement_type: movementType
+                                            });
+                                        }}
+                                        className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                                        required
+                                    >
+                                        <option value="">Seleccione un concepto...</option>
+                                        <option value="Venta de Vehiculo">Venta de Vehículo</option>
+                                        <option value="Compra de Vehiculo">Compra de Vehículo</option>
+                                        <option value="Traspaso / Tramites">Traspaso / Trámites</option>
+                                        <option value="Peritaje">Peritaje</option>
+                                        <option value="Mantenimiento / Alistamiento">Mantenimiento / Alistamiento</option>
+                                        <option value="Lavado">Lavado</option>
+                                        <option value="Pago SOAT">Pago SOAT</option>
+                                        <option value="Pago Impuestos">Pago Impuestos</option>
+                                        <option value="Pago Comision">Pago Comisión</option>
+                                        <option value="Pago Arriendo">Pago Arriendo</option>
+                                        <option value="Servicios Publicos">Servicios Públicos</option>
+                                        <option value="Pago Nomina">Pago Nómina</option>
+                                        <option value="Caja Menor">Caja Menor</option>
+                                        <option value="Publicidad">Publicidad</option>
+                                        <option value="Otros">Otros</option>
+                                    </select>
+                                    {receiptForm.concept === 'Otros' && (
+                                        <input
+                                            type="text"
+                                            className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                                            placeholder="Especifique el concepto..."
+                                            onChange={(e) => setReceiptForm({ ...receiptForm, concept_detail: e.target.value })}
+                                        />
+                                    )}
                                 </div>
 
                                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -784,26 +872,18 @@ const SalesDashboard = () => {
 
                                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                     <div>
-                                        <label className="mb-1 block text-sm font-semibold text-gray-700">Numero de recibo</label>
-                                        <input
-                                            type="text"
-                                            value={receiptForm.receipt_number}
-                                            onChange={(e) => setReceiptForm({ ...receiptForm, receipt_number: e.target.value })}
-                                            className="w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
-                                            placeholder="Ej: RC-2026-001"
-                                        />
-                                    </div>
-                                    <div>
                                         <label className="mb-1 block text-sm font-semibold text-gray-700">Categoria</label>
                                         <select
                                             value={receiptForm.category}
                                             onChange={(e) => setReceiptForm({ ...receiptForm, category: e.target.value })}
                                             className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
                                         >
-                                            <option value="sale_payment">Pago de venta</option>
-                                            <option value="other_income">Otro ingreso</option>
-                                            <option value="commission_payment">Pago de comision</option>
-                                            <option value="expense">Egreso</option>
+                                            <option value="ingreso_venta">Ingresos por Venta</option>
+                                            <option value="costo_vehiculo">Costo de Vehículo (Compra)</option>
+                                            <option value="gasto_tramites">Gastos de Trámites y Alistamiento</option>
+                                            <option value="gasto_operativo">Gastos Operativos y Administrativos</option>
+                                            <option value="comisiones">Pago de Comisiones</option>
+                                            <option value="otros">Otros Movimientos</option>
                                         </select>
                                     </div>
                                 </div>
@@ -855,11 +935,13 @@ const SalesDashboard = () => {
                                         onChange={(e) => setReceiptCategory(e.target.value)}
                                         className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
                                     >
-                                        <option value="">Todas las categorías</option>
-                                        <option value="sale_payment">Pago de venta</option>
-                                        <option value="other_income">Otro ingreso</option>
-                                        <option value="commission_payment">Pago de comisión</option>
-                                        <option value="expense">Egreso</option>
+                                        <option value="">Todas las cuentas</option>
+                                        <option value="ingreso_venta">Ingresos por Venta</option>
+                                        <option value="costo_vehiculo">Costo de Vehículo (Compra)</option>
+                                        <option value="gasto_tramites">Gastos de Trámites y Alistamiento</option>
+                                        <option value="gasto_operativo">Gastos Operativos y Administrativos</option>
+                                        <option value="comisiones">Pago de Comisiones</option>
+                                        <option value="otros">Otros Movimientos</option>
                                     </select>
                                     <select
                                         value={receiptMovementType}
@@ -891,7 +973,7 @@ const SalesDashboard = () => {
                                             <th className="border-b p-4">Venta</th>
                                             <th className="border-b p-4">Recibo</th>
                                             <th className="border-b p-4">Tipo</th>
-                                            <th className="border-b p-4">Categoria</th>
+                                            <th className="border-b p-4">Cuenta</th>
                                             <th className="border-b p-4">Valor</th>
                                             <th className="border-b p-4">Soporte</th>
                                             <th className="border-b p-4 text-right">Acciones</th>
@@ -924,8 +1006,13 @@ const SalesDashboard = () => {
                                                         {receipt.movement_type === 'expense' ? 'Egreso' : 'Ingreso'}
                                                     </span>
                                                 </td>
-                                                <td className="p-4 text-sm capitalize text-gray-600">
-                                                    {(receipt.category || 'sale_payment').replaceAll('_', ' ')}
+                                                <td className="p-4 text-sm font-medium text-gray-600">
+                                                    {receipt.category === 'ingreso_venta' ? 'Ingresos por Venta' :
+                                                     receipt.category === 'costo_vehiculo' ? 'Costo de Vehículo (Compra)' :
+                                                     receipt.category === 'gasto_tramites' ? 'Gastos de Trámites y Alistamiento' :
+                                                     receipt.category === 'gasto_operativo' ? 'Gastos Operativos y Administrativos' :
+                                                     receipt.category === 'comisiones' ? 'Pago de Comisiones' :
+                                                     receipt.category === 'otros' ? 'Otros Movimientos' : (receipt.category || '').replaceAll('_', ' ')}
                                                 </td>
                                                 <td className={`p-4 font-semibold ${receipt.movement_type === 'expense' ? 'text-rose-600' : 'text-emerald-600'}`}>
                                                     ${Number(receipt.amount || 0).toLocaleString()}
@@ -933,7 +1020,7 @@ const SalesDashboard = () => {
                                                 <td className="p-4 text-sm">
                                                     {receipt.file_path ? (
                                                         <a
-                                                            href={`https://autosqp.com/api${receipt.file_path}`}
+                                                            href={`/api${receipt.file_path}?token=${localStorage.getItem('token')}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
                                                             className="inline-flex items-center rounded-lg bg-blue-50 px-3 py-1.5 font-medium text-blue-700 hover:bg-blue-100"
@@ -953,7 +1040,7 @@ const SalesDashboard = () => {
                                                             Editar
                                                         </button>
                                                         <a
-                                                            href={`https://autosqp.com/api/finance/receipts/${receipt.id}/pdf`}
+                                                            href={`/api/finance/receipts/${receipt.id}/pdf?token=${localStorage.getItem('token')}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
                                                             className="inline-flex items-center rounded-lg bg-emerald-50 px-3 py-1.5 font-medium text-emerald-700 hover:bg-emerald-100"

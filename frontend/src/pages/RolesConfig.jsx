@@ -75,7 +75,7 @@ const RolesConfig = () => {
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('https://autosqp.co/api/roles/', {
+            const response = await axios.get('/api/roles/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const items = Array.isArray(response.data) ? response.data : [];
@@ -169,11 +169,11 @@ const RolesConfig = () => {
             };
 
             if (selectedRoleId) {
-                await axios.put(`https://autosqp.co/api/roles/${selectedRoleId}`, payload, {
+                await axios.put(`/api/roles/${selectedRoleId}`, payload, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
             } else {
-                await axios.post('https://autosqp.co/api/roles/', payload, {
+                await axios.post('/api/roles/', payload, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
             }
@@ -202,7 +202,7 @@ const RolesConfig = () => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.delete(`https://autosqp.co/api/roles/${selectedRoleId}`, {
+            await axios.delete(`/api/roles/${selectedRoleId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setSelectedRoleId(null);

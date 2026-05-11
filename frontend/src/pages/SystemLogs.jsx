@@ -32,7 +32,7 @@ function SystemLogs() {
             const token = localStorage.getItem('token');
             const skip = (page - 1) * limit;
 
-            const response = await axios.get('https://autosqp.co/api/logs/', {
+            const response = await axios.get('/api/logs/', {
                 headers: { Authorization: `Bearer ${token}` },
                 params: {
                     skip,

@@ -28,7 +28,7 @@ const InventoryList = () => {
             const params = { skip, limit, status: effectiveStatus }; // Filter by status
             if (search) params.q = search;
 
-            const response = await axios.get('https://autosqp.co/api/vehicles/', {
+            const response = await axios.get('/api/vehicles/', {
                 params,
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -50,7 +50,7 @@ const InventoryList = () => {
             if (!canEditInventory) return;
             try {
                 const token = localStorage.getItem('token');
-                const response = await axios.get('https://autosqp.co/api/users/', {
+                const response = await axios.get('/api/users/', {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 const items = Array.isArray(response.data?.items) ? response.data.items : [];
@@ -189,7 +189,7 @@ const InventoryList = () => {
                     if (!soldData) return;
                     payload = { ...payload, ...soldData };
                 }
-                await axios.put(`https://autosqp.co/api/vehicles/${vehicle.id}`,
+                await axios.put(`/api/vehicles/${vehicle.id}`,
                     payload,
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
@@ -225,7 +225,7 @@ const InventoryList = () => {
         if (result.isConfirmed) {
             try {
                 const token = localStorage.getItem('token');
-                await axios.delete(`https://autosqp.co/api/vehicles/${vehicleId}`, {
+                await axios.delete(`/api/vehicles/${vehicleId}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 Swal.fire('Desactivado', 'El vehículo se ocultó correctamente.', 'success');
@@ -385,7 +385,7 @@ const InventoryList = () => {
                                 };
                                 try {
                                     const token = localStorage.getItem('token');
-                                    await axios.post('https://autosqp.co/api/vehicles/', demoVehicle, {
+                                    await axios.post('/api/vehicles/', demoVehicle, {
                                         headers: { Authorization: `Bearer ${token}` }
                                     });
                                     fetchVehicles();

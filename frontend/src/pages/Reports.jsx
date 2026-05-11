@@ -103,7 +103,7 @@ const Reports = () => {
         const fetchStats = async () => {
             try {
                 const token = localStorage.getItem('token');
-                const response = await axios.get('https://autosqp.co/api/reports/stats', {
+                const response = await axios.get('/api/reports/stats', {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 setStats(response.data);

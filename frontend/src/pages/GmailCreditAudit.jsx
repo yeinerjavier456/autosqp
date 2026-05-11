@@ -16,7 +16,7 @@ const GmailCreditAudit = () => {
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('https://autosqp.co/api/gmail/credits/processed', {
+            const response = await axios.get('/api/gmail/credits/processed', {
                 headers: { Authorization: `Bearer ${token}` },
                 params: {
                     company_id: user.company_id,

@@ -1,4 +1,4 @@
-﻿
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useNotifications } from '../context/NotificationsContext';
 import { useNavigate } from 'react-router-dom';
@@ -104,7 +104,7 @@ const NotificationBell = () => {
                                 onClick={markAllAsRead}
                                 className="text-xs text-blue-600 hover:text-blue-800 font-semibold hover:underline"
                             >
-                                Marcar todas leídas
+                                Marcar todas le�das
                             </button>
                         )}
                     </div>

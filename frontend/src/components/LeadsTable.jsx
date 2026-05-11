@@ -29,7 +29,7 @@ const LeadsTable = ({ source, title }) => {
             if (searchTerm) params.q = searchTerm;
             if (statusFilter) params.status = statusFilter;
 
-            const response = await axios.get('https://autosqp.co/api/leads', {
+            const response = await axios.get('/api/leads', {
                 params,
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -76,7 +76,7 @@ const LeadsTable = ({ source, title }) => {
         try {
             const token = localStorage.getItem('token');
             // 1. Get Roles to find 'asesor' id
-            const rolesRes = await axios.get('https://autosqp.co/api/roles/', {
+            const rolesRes = await axios.get('/api/roles/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const advisorRoleIds = (rolesRes.data || [])
@@ -85,7 +85,7 @@ const LeadsTable = ({ source, title }) => {
 
             if (advisorRoleIds.length > 0) {
                 // 2. Get Users and keep only advisor-role variants
-                const usersRes = await axios.get('https://autosqp.co/api/users/', {
+                const usersRes = await axios.get('/api/users/', {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 const advisorUsers = (usersRes.data.items || []).filter((user) =>
@@ -109,7 +109,7 @@ const LeadsTable = ({ source, title }) => {
         if (!selectedAdvisor) return;
         try {
             const token = localStorage.getItem('token');
-            await axios.put('https://autosqp.co/api/leads/bulk-assign', {
+            await axios.put('/api/leads/bulk-assign', {
                 lead_ids: selectedLeads,
                 assigned_to_id: parseInt(selectedAdvisor)
             }, {

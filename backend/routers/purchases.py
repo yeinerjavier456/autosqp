@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+﻿from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 from database import get_db
@@ -15,6 +15,22 @@ router = APIRouter(
     prefix="/purchases",
     tags=["purchases"]
 )
+
+PURCHASE_STATUS_RECEIVED = models.CreditStatus.PENDING.value
+PURCHASE_STATUS_SEARCH = models.CreditStatus.IN_REVIEW.value
+PURCHASE_STATUS_OPTIONS = models.CreditStatus.APPROVED.value
+PURCHASE_STATUS_REJECTED = models.CreditStatus.REJECTED.value
+PURCHASE_STATUS_CLOSED = models.CreditStatus.COMPLETED.value
+PURCHASE_STATUS_PURCHASE_PROCESS = "purchase_process"
+PURCHASE_STATUS_CAR_PURCHASED = "car_purchased"
+PURCHASE_EXPENSE_TYPES = {
+    "traspaso",
+    "peritaje",
+    "llantas",
+    "alistamiento",
+    "kit de carretera",
+    "arreglos",
+}
 
 
 def _is_purchase_request_record(record: Optional[models.CreditApplication]) -> bool:
@@ -135,17 +151,85 @@ def _can_manage_purchase_board(current_user: models.User) -> bool:
     return role_name in {"admin", "super_admin"} or "purchase_board" in permissions or _is_purchase_manager_role(role)
 
 VALID_PURCHASE_STATUSES = {
-    models.CreditStatus.PENDING.value,
-    models.CreditStatus.IN_REVIEW.value,
-    models.CreditStatus.APPROVED.value,
-    models.CreditStatus.REJECTED.value,
-    models.CreditStatus.COMPLETED.value,
+    PURCHASE_STATUS_RECEIVED,
+    PURCHASE_STATUS_SEARCH,
+    PURCHASE_STATUS_OPTIONS,
+    PURCHASE_STATUS_REJECTED,
+    PURCHASE_STATUS_CLOSED,
+    PURCHASE_STATUS_PURCHASE_PROCESS,
+    PURCHASE_STATUS_CAR_PURCHASED,
 }
 
 
 def _build_purchase_action_note(current_user: models.User, content: str) -> str:
     actor = current_user.full_name or current_user.email or "Sistema"
     return f"[{actor}] {content}".strip()
+
+
+def _format_currency(value: Optional[int]) -> str:
+    if value is None:
+        return "$0"
+    return f"${int(value):,}".replace(",", ".")
+
+
+def _normalize_purchase_expenses(expenses_payload) -> list[dict]:
+    if not expenses_payload:
+        return []
+
+    normalized_expenses = []
+    for expense in expenses_payload:
+        expense_type = str((expense or {}).get("expense_type") or "").strip()
+        if not expense_type:
+            raise HTTPException(status_code=400, detail="El tipo de gasto no puede estar vacío")
+
+        amount = (expense or {}).get("amount")
+        if amount is None:
+            raise HTTPException(status_code=400, detail=f"Debes indicar el valor para el gasto {expense_type}")
+
+        try:
+            normalized_amount = int(amount)
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"El valor del gasto {expense_type} no es válido")
+
+        if normalized_amount < 0:
+            raise HTTPException(status_code=400, detail=f"El valor del gasto {expense_type} no puede ser negativo")
+
+        normalized_expenses.append({
+            "expense_type": expense_type,
+            "amount": normalized_amount,
+            "notes": str((expense or {}).get("notes") or "").strip() or None,
+        })
+
+    return normalized_expenses
+
+
+def _build_car_purchased_note(purchase: models.CreditApplication) -> str:
+    expense_summary = ", ".join(
+        f"{str(item.get('expense_type', '')).capitalize()}: {_format_currency(item.get('amount', 0))}"
+        for item in (purchase.purchase_expenses or [])
+        if item
+    ) or "Sin gastos registrados"
+
+    vehicle_bits = [
+        purchase.purchase_vehicle_name,
+        purchase.purchase_vehicle_model,
+        str(purchase.purchase_vehicle_year or "").strip() or None,
+        purchase.purchase_vehicle_plate,
+    ]
+    vehicle_label = " ".join(str(part).strip() for part in vehicle_bits if part).strip() or purchase.desired_vehicle or "Vehículo sin definir"
+
+    detail_parts = [
+        f"Carro comprado registrado: {vehicle_label}",
+        f"Valor compra: {_format_currency(purchase.purchase_price)}",
+        f"Valor venta: {_format_currency(purchase.purchase_sale_price)}",
+        f"Gastos: {expense_summary}",
+    ]
+    if purchase.purchase_vehicle_mileage is not None:
+        detail_parts.append(f"Kilometraje: {purchase.purchase_vehicle_mileage}")
+    if purchase.purchase_vehicle_location:
+        detail_parts.append(f"Ubicación: {purchase.purchase_vehicle_location}")
+
+    return " | ".join(detail_parts)
 
 
 def _is_purchase_board_entry(purchase: models.CreditApplication) -> bool:
@@ -171,12 +255,19 @@ def _is_purchase_board_entry(purchase: models.CreditApplication) -> bool:
 
 def _purchase_status_label(status_value: Optional[str]) -> str:
     return {
-        models.CreditStatus.PENDING.value: "Solicitud recibida",
-        models.CreditStatus.IN_REVIEW.value: "En búsqueda",
-        models.CreditStatus.APPROVED.value: "Opciones encontradas",
-        models.CreditStatus.REJECTED.value: "Sin resultado",
-        models.CreditStatus.COMPLETED.value: "Cerrado",
+        PURCHASE_STATUS_RECEIVED: "Solicitud recibida",
+        PURCHASE_STATUS_SEARCH: "En búsqueda",
+        PURCHASE_STATUS_OPTIONS: "Opciones encontradas",
+        PURCHASE_STATUS_PURCHASE_PROCESS: "Proceso de compra",
+        PURCHASE_STATUS_CAR_PURCHASED: "Carro comprado",
+        PURCHASE_STATUS_REJECTED: "Sin resultado",
+        PURCHASE_STATUS_CLOSED: "Cerrado",
     }.get(status_value or "", status_value or "Sin estado")
+
+
+def _resolve_lead_status_for_history(lead: Optional[models.Lead], fallback: str = models.LeadStatus.RESERVED.value) -> str:
+    status_value = getattr(lead, "status", None)
+    return status_value or fallback
 
 
 def _store_purchase_option_photos(files):
@@ -204,12 +295,12 @@ def _refresh_purchase_status_from_options(db: Session, purchase: Optional[models
 
     statuses = [(option.decision_status or "pending").lower() for option in options]
     if any(status == "accepted" for status in statuses):
-        purchase.status = models.CreditStatus.APPROVED.value
+        purchase.status = PURCHASE_STATUS_PURCHASE_PROCESS
         return
     if all(status == "rejected" for status in statuses):
-        purchase.status = models.CreditStatus.REJECTED.value
+        purchase.status = PURCHASE_STATUS_REJECTED
         return
-    purchase.status = models.CreditStatus.APPROVED.value
+    purchase.status = PURCHASE_STATUS_OPTIONS
 
 
 def _eligible_purchase_leads(db: Session, company_id: int):
@@ -423,10 +514,13 @@ def read_purchase_by_lead(
     if not purchase or not _is_purchase_board_entry(purchase):
         return None
 
-    role_name = getattr(getattr(current_user, "role", None), "base_role_name", None) or getattr(getattr(current_user, "role", None), "name", None)
+    role_name = _normalize_role_text(
+        getattr(getattr(current_user, "role", None), "base_role_name", None)
+        or getattr(getattr(current_user, "role", None), "name", None)
+    )
     lead_supervisor_ids = {supervisor.id for supervisor in (lead.supervisors or []) if supervisor and supervisor.id}
     lead_assigned_to_id = getattr(lead, "assigned_to_id", None)
-    if role_name not in ["admin", "super_admin"]:
+    if role_name not in ["admin", "super admin"]:
         if (
             purchase.assigned_to_id != current_user.id
             and current_user.id not in lead_supervisor_ids
@@ -484,7 +578,7 @@ def create_manual_purchase_request(
         email=email,
         phone=phone,
         source="other",
-        status=models.LeadStatus.INTERESTED.value,
+        status=models.LeadStatus.RESERVED.value,
         message=notes or f"Solicitud manual de compra para buscar: {desired_vehicle}",
         company_id=current_user.company_id,
         assigned_to_id=current_user.id,
@@ -503,7 +597,7 @@ def create_manual_purchase_request(
         lead_id=lead.id,
         user_id=current_user.id,
         previous_status=None,
-        new_status=models.LeadStatus.INTERESTED.value,
+        new_status=models.LeadStatus.RESERVED.value,
         comment=notes or f"Solicitud manual creada desde compras. Vehiculo buscado: {desired_vehicle}"
     ))
     if notes:
@@ -557,11 +651,28 @@ def update_purchase(
     if requested_status and requested_status not in VALID_PURCHASE_STATUSES:
         raise HTTPException(status_code=400, detail="Estado de compra no válido")
 
-    if requested_status == models.CreditStatus.REJECTED.value and not status_note:
+    if requested_status == PURCHASE_STATUS_REJECTED and not status_note:
         raise HTTPException(status_code=400, detail="Debes indicar el motivo para cancelar la solicitud")
 
-    if previous_status == models.CreditStatus.PENDING.value and requested_status == models.CreditStatus.APPROVED.value:
+    if previous_status == PURCHASE_STATUS_RECEIVED and requested_status == PURCHASE_STATUS_OPTIONS:
         raise HTTPException(status_code=400, detail="La primera solicitud no puede pasar directo a opciones encontradas. Debes aceptarla primero.")
+
+    purchase_expenses_payload = purchase_update.purchase_expenses
+    normalized_purchase_expenses = None
+    if purchase_expenses_payload is not None:
+        normalized_purchase_expenses = _normalize_purchase_expenses(purchase_expenses_payload)
+
+    if requested_status == PURCHASE_STATUS_CAR_PURCHASED:
+        required_purchase_fields = {
+            "purchase_vehicle_name": purchase_update.purchase_vehicle_name,
+            "purchase_vehicle_model": purchase_update.purchase_vehicle_model,
+            "purchase_vehicle_year": purchase_update.purchase_vehicle_year,
+            "purchase_price": purchase_update.purchase_price,
+            "purchase_sale_price": purchase_update.purchase_sale_price,
+        }
+        missing_purchase_fields = [label for label, value in required_purchase_fields.items() if value in (None, "")]
+        if missing_purchase_fields:
+            raise HTTPException(status_code=400, detail="Debes completar los datos del carro, valor de compra y valor de venta para marcarlo como carro comprado")
 
     reservation_amount_payload = purchase_update.reservation_amount
     reservation_payment_method_payload = (purchase_update.reservation_payment_method or "").strip().lower() if purchase_update.reservation_payment_method is not None else None
@@ -571,21 +682,25 @@ def update_purchase(
             continue
         if field in {"reservation_amount", "reservation_payment_method"}:
             continue
+        if field == "purchase_expenses":
+            continue
         setattr(purchase, field, value)
+    if normalized_purchase_expenses is not None:
+        purchase.purchase_expenses = normalized_purchase_expenses
 
-    if requested_status == models.CreditStatus.IN_REVIEW.value and previous_status == models.CreditStatus.PENDING.value:
+    if requested_status == PURCHASE_STATUS_SEARCH and previous_status == PURCHASE_STATUS_RECEIVED:
         acceptance_note = _build_purchase_action_note(
             current_user,
             "Solicitud de compra aceptada y enviada a búsqueda."
         )
         purchase.notes = f"{purchase.notes}\n{acceptance_note}".strip() if purchase.notes else acceptance_note
-    elif requested_status == models.CreditStatus.REJECTED.value and status_note:
+    elif requested_status == PURCHASE_STATUS_REJECTED and status_note:
         rejection_note = _build_purchase_action_note(
             current_user,
             f"Solicitud de compra cancelada. Motivo: {status_note}"
         )
         purchase.notes = f"{purchase.notes}\n{rejection_note}".strip() if purchase.notes else rejection_note
-    elif requested_status == models.CreditStatus.PENDING.value and previous_status == models.CreditStatus.REJECTED.value:
+    elif requested_status == PURCHASE_STATUS_RECEIVED and previous_status == PURCHASE_STATUS_REJECTED:
         reassigned_manager = _choose_purchase_manager(db, purchase.company_id)
         if reassigned_manager:
             purchase.assigned_to_id = reassigned_manager.id
@@ -595,6 +710,9 @@ def update_purchase(
             reopen_note_content
         )
         purchase.notes = f"{purchase.notes}\n{reopen_note}".strip() if purchase.notes else reopen_note
+    elif requested_status == PURCHASE_STATUS_CAR_PURCHASED:
+        purchased_note = _build_purchase_action_note(current_user, _build_car_purchased_note(purchase))
+        purchase.notes = f"{purchase.notes}\n{purchased_note}".strip() if purchase.notes else purchased_note
 
     db.commit()
     db.refresh(purchase)
@@ -602,6 +720,7 @@ def update_purchase(
     if purchase.lead_id:
         lead = db.query(models.Lead).filter(models.Lead.id == purchase.lead_id).first()
         if lead:
+            lead_previous_status = lead.status
             detail = db.query(models.LeadProcessDetail).filter(
                 models.LeadProcessDetail.lead_id == lead.id
             ).first()
@@ -612,22 +731,105 @@ def update_purchase(
                     detail.reservation_amount = reservation_amount_payload
                 if reservation_payment_method_payload is not None:
                     detail.reservation_payment_method = reservation_payment_method_payload
-                if requested_status == models.CreditStatus.PENDING.value and previous_status == models.CreditStatus.REJECTED.value:
+                if requested_status == PURCHASE_STATUS_RECEIVED and previous_status == PURCHASE_STATUS_REJECTED:
                     detail.has_vehicle = False
+                elif requested_status == PURCHASE_STATUS_CAR_PURCHASED:
+                    detail.has_vehicle = True
+                    if not detail.vehicle_id:
+                        import datetime
+                        # Create new vehicle
+                        new_vehicle = models.Vehicle(
+                            make=purchase_update.purchase_vehicle_name or "Desconocido",
+                            model=purchase_update.purchase_vehicle_model,
+                            year=purchase_update.purchase_vehicle_year or datetime.datetime.utcnow().year,
+                            price=purchase_update.purchase_sale_price or 0,
+                            purchase_price=purchase_update.purchase_price or 0,
+                            plate=purchase_update.purchase_vehicle_plate,
+                            mileage=purchase_update.purchase_vehicle_mileage,
+                            location=purchase_update.purchase_vehicle_location,
+                            status=models.VehicleStatus.RESERVED.value,
+                            company_id=purchase.company_id
+                        )
+                        db.add(new_vehicle)
+                        db.flush()
+                        
+                        detail.vehicle_id = new_vehicle.id
+                        
+                        # Create Pending Sale record for finances
+                        sold_price = int(purchase_update.purchase_sale_price or 0)
+                        seller_user = lead.assigned_to
+                        commission_pct = seller_user.commission_percentage if seller_user and seller_user.commission_percentage else 0
+                        commission_amount = int(sold_price * (commission_pct / 100))
+                        car_cost = int(new_vehicle.purchase_price or 0)
+                        expenses_cost = 0
+                        for expense in normalized_purchase_expenses or []:
+                            expenses_cost += int(expense.get('amount') or 0)
+                        net_revenue = sold_price - commission_amount - car_cost - expenses_cost
+
+                        new_sale = models.Sale(
+                            vehicle_id=new_vehicle.id,
+                            seller_id=seller_user.id if seller_user else None,
+                            seller_type="internal",
+                            company_id=purchase.company_id,
+                            lead_id=lead.id,
+                            sale_price=sold_price,
+                            status=models.SaleStatus.PENDING.value,
+                            commission_percentage=commission_pct,
+                            commission_amount=commission_amount,
+                            net_revenue=net_revenue,
+                            sale_date=datetime.datetime.utcnow()
+                        )
+                        db.add(new_sale)
+                        db.flush()
+
+                        if new_vehicle.purchase_price and new_vehicle.purchase_price > 0:
+                            db.add(models.PaymentReceipt(
+                                company_id=purchase.company_id,
+                                sale_id=new_sale.id,
+                                user_id=current_user.id,
+                                concept=f"Compra de vehículo {new_vehicle.make} {new_vehicle.model} - {new_vehicle.plate or 'Sin placa'}",
+                                movement_type="expense",
+                                amount=new_vehicle.purchase_price,
+                                category="vehicle_purchase",
+                                payment_date=datetime.datetime.utcnow()
+                            ))
+                        
+                        for expense in normalized_purchase_expenses or []:
+                            expense_type = expense.get('expense_type', 'otro')
+                            amount = expense.get('amount', 0)
+                            if amount > 0:
+                                db.add(models.PaymentReceipt(
+                                    company_id=purchase.company_id,
+                                    sale_id=new_sale.id,
+                                    user_id=current_user.id,
+                                    concept=f"Gasto de compra: {expense_type}",
+                                    movement_type="expense",
+                                    amount=amount,
+                                    category="vehicle_expense",
+                                    notes=expense.get('notes'),
+                                    payment_date=datetime.datetime.utcnow()
+                                ))
             updates = []
             if previous_status != purchase.status:
                 status_message = f"Busqueda de vehiculo actualizada: {_purchase_status_label(previous_status)} -> {_purchase_status_label(purchase.status)}"
-                if purchase.status == models.CreditStatus.REJECTED.value and status_note:
+                if purchase.status == PURCHASE_STATUS_REJECTED and status_note:
                     status_message = f"Solicitud de compra rechazada. Motivo: {status_note}"
-                elif purchase.status == models.CreditStatus.IN_REVIEW.value and previous_status == models.CreditStatus.PENDING.value:
+                elif purchase.status == PURCHASE_STATUS_SEARCH and previous_status == PURCHASE_STATUS_RECEIVED:
                     status_message = "Solicitud de compra aceptada. Se inicia búsqueda de vehículo."
-                elif purchase.status == models.CreditStatus.PENDING.value and previous_status == models.CreditStatus.REJECTED.value:
+                elif purchase.status == PURCHASE_STATUS_RECEIVED and previous_status == PURCHASE_STATUS_REJECTED:
                     status_message = "Solicitud de compra reenviada a compras para nueva búsqueda."
+                elif purchase.status == PURCHASE_STATUS_PURCHASE_PROCESS:
+                    status_message = "Opción aceptada. La solicitud pasó a proceso de compra."
+                elif purchase.status == PURCHASE_STATUS_CAR_PURCHASED:
+                    status_message = (
+                        f"{_build_car_purchased_note(purchase)}. "
+                        "Vehículo asignado en inventario y venta registrada en finanzas."
+                    )
                 updates.append(status_message)
                 db.add(models.LeadHistory(
                     lead_id=lead.id,
                     user_id=current_user.id,
-                    previous_status=lead.status,
+                    previous_status=lead_previous_status,
                     new_status=lead.status,
                     comment=status_message
                 ))
@@ -669,6 +871,8 @@ def add_purchase_note(
 
     lead_note = None
     if purchase.lead_id:
+        lead = db.query(models.Lead).filter(models.Lead.id == purchase.lead_id).first()
+        lead_status_value = _resolve_lead_status_for_history(lead)
         lead_note = models.LeadNote(
             lead_id=purchase.lead_id,
             user_id=current_user.id,
@@ -678,8 +882,8 @@ def add_purchase_note(
         db.add(models.LeadHistory(
             lead_id=purchase.lead_id,
             user_id=current_user.id,
-            previous_status=models.LeadStatus.INTERESTED.value,
-            new_status=models.LeadStatus.INTERESTED.value,
+            previous_status=lead_status_value,
+            new_status=lead_status_value,
             comment=f"Se agregó nota en busqueda de vehiculo: {content}"
         ))
 
@@ -737,8 +941,8 @@ async def upload_purchase_file(
     db.add(models.LeadHistory(
         lead_id=purchase.lead_id,
         user_id=current_user.id,
-        previous_status=models.LeadStatus.INTERESTED.value,
-        new_status=models.LeadStatus.INTERESTED.value,
+        previous_status=_resolve_lead_status_for_history(getattr(purchase, "lead", None)),
+        new_status=_resolve_lead_status_for_history(getattr(purchase, "lead", None)),
         comment=f"Documento adjuntado en busqueda de vehiculo: {file.filename}"
     ))
     db.commit()
@@ -786,6 +990,11 @@ async def create_purchase_option(
     if len(photos) < 3:
         raise HTTPException(status_code=400, detail="Debes adjuntar minimo 3 fotos por opcion")
 
+    lead = db.query(models.Lead).options(
+        joinedload(models.Lead.assigned_to),
+        joinedload(models.Lead.supervisors).joinedload(models.User.role)
+    ).filter(models.Lead.id == purchase.lead_id).first()
+
     photo_paths = _store_purchase_option_photos(photos)
     option = models.PurchaseOption(
         lead_id=purchase.lead_id,
@@ -795,7 +1004,7 @@ async def create_purchase_option(
         photos=photo_paths
     )
     db.add(option)
-    purchase.status = models.CreditStatus.APPROVED.value
+    purchase.status = PURCHASE_STATUS_OPTIONS
     db.add(models.LeadNote(
         lead_id=purchase.lead_id,
         user_id=current_user.id,
@@ -804,14 +1013,10 @@ async def create_purchase_option(
     db.add(models.LeadHistory(
         lead_id=purchase.lead_id,
         user_id=current_user.id,
-        previous_status=models.LeadStatus.INTERESTED.value,
-        new_status=models.LeadStatus.INTERESTED.value,
+        previous_status=_resolve_lead_status_for_history(lead),
+        new_status=_resolve_lead_status_for_history(lead),
         comment=f"Se agregó opción de compra: {title.strip()}"
     ))
-    lead = db.query(models.Lead).options(
-        joinedload(models.Lead.assigned_to),
-        joinedload(models.Lead.supervisors).joinedload(models.User.role)
-    ).filter(models.Lead.id == purchase.lead_id).first()
     notified_user_ids = set()
     notification_targets = []
     if lead and lead.assigned_to_id and lead.assigned_to:
@@ -880,13 +1085,13 @@ def update_purchase_option_decision(
     db.add(models.LeadHistory(
         lead_id=option.lead_id,
         user_id=current_user.id,
-        previous_status=models.LeadStatus.INTERESTED.value,
-        new_status=models.LeadStatus.INTERESTED.value,
+        previous_status=_resolve_lead_status_for_history(lead),
+        new_status=_resolve_lead_status_for_history(lead),
         comment=f"Se {action_label} la opción '{option_label}'. Nota: {decision_note}"
     ))
 
     if purchase:
-        stamped_note = f"[{current_user.full_name or current_user.email}] Se {action_label} la opciÃ³n '{option_label}'. Nota: {decision_note}"
+        stamped_note = f"[{current_user.full_name or current_user.email}] Se {action_label} la opción '{option_label}'. Nota: {decision_note}"
         purchase.notes = f"{purchase.notes}\n{stamped_note}".strip() if purchase.notes else stamped_note
         _refresh_purchase_status_from_options(db, purchase)
 

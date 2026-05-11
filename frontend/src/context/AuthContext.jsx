@@ -9,7 +9,7 @@ const defaultAuthContext = {
 };
 
 const AuthContext = createContext(defaultAuthContext);
-const API_BASE_URL = import.meta.env.DEV ? '/crm/api' : 'https://autosqp.co/api';
+const API_BASE_URL = import.meta.env.DEV ? '/crm/api' : '/api';
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);

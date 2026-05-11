@@ -574,7 +574,7 @@ class CarModel(CarModelBase):
 # --- SALES ---
 
 class SaleBase(BaseModel):
-    vehicle_id: int
+    vehicle_id: Optional[int] = None
     lead_id: Optional[int] = None
     seller_id: Optional[int] = None # Optional override by admin
     sale_price: int
@@ -601,6 +601,7 @@ class Sale(SaleBase):
     lea: Optional[Lead] = None # Typo fixed
     lead: Optional[Lead] = None
     seller: Optional[User] = None
+    payment_receipts: List["PaymentReceiptMinimal"] = []
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -619,6 +620,17 @@ class PaymentReceiptBase(BaseModel):
     category: Optional[str] = "sale_payment"
     notes: Optional[str] = None
 
+class PaymentReceiptMinimal(PaymentReceiptBase):
+    id: int
+    company_id: int
+    user_id: int
+    file_name: Optional[str] = None
+    file_path: Optional[str] = None
+    file_type: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
 
 class PaymentReceiptCreate(PaymentReceiptBase):
     pass
@@ -635,14 +647,7 @@ class PaymentReceiptUpdate(BaseModel):
     notes: Optional[str] = None
 
 
-class PaymentReceipt(PaymentReceiptBase):
-    id: int
-    company_id: int
-    user_id: int
-    file_name: Optional[str] = None
-    file_path: Optional[str] = None
-    file_type: Optional[str] = None
-    created_at: datetime
+class PaymentReceipt(PaymentReceiptMinimal):
     sale: Optional[Sale] = None
     user: Optional[User] = None
 

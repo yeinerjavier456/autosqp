@@ -116,7 +116,7 @@ const GlobalNotifications = () => {
         try {
             const token = localStorage.getItem('token');
             if (!token) return;
-            const response = await axios.get('https://autosqp.co/api/users/', {
+            const response = await axios.get('/api/users/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setUsersList(response.data.items || []);
@@ -130,7 +130,7 @@ const GlobalNotifications = () => {
             const token = localStorage.getItem('token');
             // Always fetch TODAY's messages for notification purposes
             const today = new Date().toISOString().split('T')[0];
-            const response = await axios.get(`https://autosqp.co/api/internal-messages?date=${today}`, {
+            const response = await axios.get(`/api/internal-messages?date=${today}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setMessages(response.data);
