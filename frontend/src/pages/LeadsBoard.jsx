@@ -4035,6 +4035,20 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 payload.vehicle_id = parseInt(saleForm.vehicle_id, 10);
             }
 
+            if (!payload.vehicle_id) {
+                const fallbackVehicleId = selectedLeadForSale?.process_detail?.vehicle_id
+                    ? parseInt(selectedLeadForSale.process_detail.vehicle_id, 10)
+                    : null;
+                if (fallbackVehicleId) {
+                    payload.vehicle_id = fallbackVehicleId;
+                }
+            }
+
+            if (!payload.vehicle_id) {
+                Swal.fire('Error', 'No se encontró un vehículo para registrar la venta. Selecciona un vehículo o asegúrate de que compras haya asignado uno.', 'error');
+                return;
+            }
+
             if (saleForm.seller_id) {
                 payload.seller_id = parseInt(saleForm.seller_id);
             }
