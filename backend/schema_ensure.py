@@ -149,3 +149,41 @@ def ensure_mysql_schema(engine: Engine) -> None:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE credit_applications MODIFY COLUMN notes TEXT NULL"))
 
+    # Lead process details: delivery checklist fields.
+    if _mysql_table_exists(engine, "lead_process_details"):
+        _ensure_column(
+            engine,
+            "lead_process_details",
+            "delivery_documents_complete",
+            "ALTER TABLE lead_process_details ADD COLUMN delivery_documents_complete TINYINT(1) NOT NULL DEFAULT 0",
+        )
+        _ensure_column(
+            engine,
+            "lead_process_details",
+            "delivery_road_kit",
+            "ALTER TABLE lead_process_details ADD COLUMN delivery_road_kit TINYINT(1) NOT NULL DEFAULT 0",
+        )
+        _ensure_column(
+            engine,
+            "lead_process_details",
+            "delivery_basic_tools",
+            "ALTER TABLE lead_process_details ADD COLUMN delivery_basic_tools TINYINT(1) NOT NULL DEFAULT 0",
+        )
+        _ensure_column(
+            engine,
+            "lead_process_details",
+            "delivery_credit_disbursement",
+            "ALTER TABLE lead_process_details ADD COLUMN delivery_credit_disbursement TINYINT(1) NOT NULL DEFAULT 0",
+        )
+        _ensure_column(
+            engine,
+            "lead_process_details",
+            "delivery_scheduled_at",
+            "ALTER TABLE lead_process_details ADD COLUMN delivery_scheduled_at DATETIME NULL",
+        )
+        _ensure_column(
+            engine,
+            "lead_process_details",
+            "delivery_scheduled_note",
+            "ALTER TABLE lead_process_details ADD COLUMN delivery_scheduled_note VARCHAR(255) NULL",
+        )

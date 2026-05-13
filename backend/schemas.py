@@ -353,6 +353,12 @@ class LeadProcessDetailBase(BaseModel):
     reservation_amount: Optional[int] = None
     credit_used_amount: Optional[int] = None
     reservation_payment_method: Optional[str] = None
+    delivery_documents_complete: Optional[bool] = None
+    delivery_road_kit: Optional[bool] = None
+    delivery_basic_tools: Optional[bool] = None
+    delivery_credit_disbursement: Optional[bool] = None
+    delivery_scheduled_at: Optional[datetime] = None
+    delivery_scheduled_note: Optional[str] = None
 
 class LeadProcessDetailCreate(LeadProcessDetailBase):
     pass
