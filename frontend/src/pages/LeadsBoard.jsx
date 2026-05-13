@@ -688,8 +688,10 @@ const buildPublicStaticUrl = (filePath) => {
     if (/^https?:\/\//i.test(filePath)) return filePath;
     let normalized = String(filePath).trim();
     if (!normalized.startsWith('/')) normalized = `/${normalized}`;
+    if (normalized.startsWith('/crm/api/')) normalized = normalized.replace('/crm/api/', '/');
     if (normalized.startsWith('/api/static/')) normalized = normalized.replace('/api/static/', '/static/');
-    return `${window.location.origin}${normalized}`;
+    // In dev the Vite proxy is configured for /crm/api (not /static), so serve static through the API prefix.
+    return `${window.location.origin}/crm/api${normalized}`;
 };
 
 const buildPurchaseOptionShareText = (lead, option) => {

@@ -43,10 +43,11 @@ const buildPurchasePhotoUrl = (filePath) => {
     // Backend serves uploads via app.mount("/static", ...). Older rows may still contain "/api/static/...".
     let normalized = String(filePath).trim();
     if (!normalized.startsWith('/')) normalized = `/${normalized}`;
+    if (normalized.startsWith('/crm/api/')) normalized = normalized.replace('/crm/api/', '/');
     if (normalized.startsWith('/api/static/')) normalized = normalized.replace('/api/static/', '/static/');
 
-    // Static files are public and don't need Authorization headers, so avoid /crm/api proxy path.
-    return `${window.location.origin}${normalized}`;
+    // In dev the Vite proxy is configured for /crm/api (not /static), so serve static through the API prefix.
+    return `${API_BASE_URL}${normalized}`;
 };
 
 const getApiErrorMessage = (error, fallbackMessage) => {
