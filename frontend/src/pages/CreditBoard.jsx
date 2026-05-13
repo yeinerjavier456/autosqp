@@ -173,6 +173,25 @@ const CreditBoard = () => {
         });
     }, [selectedCredit?.id]);
 
+    useEffect(() => {
+        if (!creditEditMode || !creditEditData) return;
+
+        const approvedAmount = Number(creditEditData.approved_amount);
+        const approvalPercentage = Number(creditEditData.approval_percentage);
+
+        if (!approvedAmount || !approvalPercentage || approvalPercentage <= 0 || approvalPercentage > 100) {
+            if (creditEditData.approved_down_payment !== '') {
+                setCreditEditData((prev) => ({ ...prev, approved_down_payment: '' }));
+            }
+            return;
+        }
+
+        const minimumDownPayment = calculateMinimumDownPaymentFromApproval(approvedAmount, approvalPercentage);
+        if (Number(creditEditData.approved_down_payment) !== minimumDownPayment) {
+            setCreditEditData((prev) => ({ ...prev, approved_down_payment: minimumDownPayment }));
+        }
+    }, [creditEditMode, creditEditData?.approved_amount, creditEditData?.approval_percentage]);
+
     const handleSaveCreditEdit = async () => {
         if (!selectedCredit?.id || !creditEditData || savingCreditEdit) return;
         if (!canManageCredits) {
@@ -1263,12 +1282,12 @@ const CreditBoard = () => {
                                         <input
                                             type="number"
                                             value={creditEditData.approved_down_payment}
-                                            onChange={(e) => setCreditEditData((prev) => ({ ...prev, approved_down_payment: e.target.value }))}
-                                            className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                            readOnly
+                                            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
                                             placeholder="(Opcional)"
                                         />
                                         <p className="mt-1 text-xs text-slate-500">
-                                            Si cambias monto aprobado o porcentaje financiado, la cuota inicial minima debe corresponder a ese calculo.
+                                            Se recalcula automaticamente segun el monto aprobado y el porcentaje financiado.
                                         </p>
                                     </div>
 
