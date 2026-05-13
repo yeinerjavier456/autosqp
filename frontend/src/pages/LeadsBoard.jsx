@@ -619,6 +619,17 @@ const getLeadApprovalMetrics = (lead) => {
     };
 };
 
+const calculateMinimumDownPaymentFromApproval = (approvedAmount, approvalPercentage) => {
+    const safeApprovedAmount = Number(approvedAmount) || 0;
+    const safeApprovalPercentage = Number(approvalPercentage) || 0;
+
+    if (!safeApprovedAmount || !safeApprovalPercentage || safeApprovalPercentage <= 0 || safeApprovalPercentage > 100) {
+        return null;
+    }
+
+    return Math.max(0, Math.round(safeApprovedAmount * ((100 - safeApprovalPercentage) / 100)));
+};
+
 const getLeadAssignedUserId = (lead) => parseUserId(lead?.assigned_to?.id ?? lead?.assigned_to_id);
 
 const isCompanyAdminRole = (role) => {
@@ -1277,11 +1288,17 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         latestSalesApprovalNote?.content || '',
         ...creditRelatedNotes.map((note) => note?.content || ''),
     ].find((content) => extractApprovalMetrics(content)) || '';
-    const approvalMetrics = extractApprovalMetrics(creditSummarySource) || {
+    let approvalMetrics = extractApprovalMetrics(creditSummarySource) || {
         approvedAmount: effectiveCreditDetail?.approved_amount ?? salesApprovalSummary?.approvedAmount ?? null,
         approvalPercentage: effectiveCreditDetail?.approval_percentage ?? salesApprovalSummary?.approvalPercentage ?? null,
         minimumDownPayment: effectiveCreditDetail?.approved_down_payment ?? salesApprovalSummary?.minimumDownPayment ?? null,
     };
+    if (approvalMetrics.minimumDownPayment == null && approvalMetrics.approvedAmount != null && approvalMetrics.approvalPercentage != null) {
+        const calculatedMinimum = calculateMinimumDownPaymentFromApproval(approvalMetrics.approvedAmount, approvalMetrics.approvalPercentage);
+        if (calculatedMinimum != null) {
+            approvalMetrics = { ...approvalMetrics, minimumDownPayment: calculatedMinimum };
+        }
+    }
     const creditAssignedName = creditDetail?.assigned_to?.full_name || creditDetail?.assigned_to?.email || 'Sin responsable';
     const purchaseRequestId = purchaseDetail?.id || lead?.purchase_request_id || null;
     const purchaseAssignedName = purchaseDetail?.assigned_to?.full_name
