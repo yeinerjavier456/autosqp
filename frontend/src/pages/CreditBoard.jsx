@@ -96,6 +96,10 @@ const CreditBoard = () => {
     const [savingCreditNote, setSavingCreditNote] = useState(false);
     const [uploadingCreditFiles, setUploadingCreditFiles] = useState(false);
     const [syncingGmailCredits, setSyncingGmailCredits] = useState(false);
+    const [creditEditMode, setCreditEditMode] = useState(false);
+    const [savingCreditEdit, setSavingCreditEdit] = useState(false);
+    const [creditEditStatusNote, setCreditEditStatusNote] = useState('');
+    const [creditEditData, setCreditEditData] = useState(null);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -129,10 +133,97 @@ const CreditBoard = () => {
             setCreditLeadFiles([]);
             setCreditNoteInput('');
             setCreditSelectedFiles([]);
+            setCreditEditMode(false);
+            setSavingCreditEdit(false);
+            setCreditEditStatusNote('');
+            setCreditEditData(null);
             return;
         }
         fetchSelectedCreditResources(selectedCredit.lead_id);
     }, [selectedCredit?.id, selectedCredit?.lead_id]);
+
+    useEffect(() => {
+        if (!selectedCredit?.id) {
+            setCreditEditMode(false);
+            setSavingCreditEdit(false);
+            setCreditEditStatusNote('');
+            setCreditEditData(null);
+            return;
+        }
+
+        setCreditEditMode(false);
+        setSavingCreditEdit(false);
+        setCreditEditStatusNote('');
+        setCreditEditData({
+            client_name: selectedCredit.client_name || '',
+            phone: selectedCredit.phone || '',
+            email: selectedCredit.email || '',
+            desired_vehicle: selectedCredit.desired_vehicle || '',
+            monthly_income: selectedCredit.monthly_income ?? 0,
+            other_income: selectedCredit.other_income ?? 0,
+            occupation: selectedCredit.occupation || 'employee',
+            application_mode: selectedCredit.application_mode || 'individual',
+            down_payment: selectedCredit.down_payment ?? 0,
+            approved_amount: selectedCredit.approved_amount ?? '',
+            approval_percentage: selectedCredit.approval_percentage ?? '',
+            approved_down_payment: selectedCredit.approved_down_payment ?? '',
+            status: selectedCredit.status || 'pending',
+            assigned_to_id: selectedCredit.assigned_to_id || '',
+            notes: selectedCredit.notes || '',
+        });
+    }, [selectedCredit?.id]);
+
+    const handleSaveCreditEdit = async () => {
+        if (!selectedCredit?.id || !creditEditData || savingCreditEdit) return;
+        if (!canManageCredits) {
+            Swal.fire('Solo lectura', 'No tienes permisos para modificar solicitudes de crédito.', 'info');
+            return;
+        }
+
+        const statusChanged = String(creditEditData.status || '').trim() !== String(selectedCredit.status || '').trim();
+        if (statusChanged && String(creditEditStatusNote || '').trim().length < 4) {
+            Swal.fire('Error', 'Debes escribir una nota para cambiar el estado de la solicitud.', 'warning');
+            return;
+        }
+
+        setSavingCreditEdit(true);
+        try {
+            const token = localStorage.getItem('token');
+            const payload = {
+                client_name: creditEditData.client_name?.trim() || null,
+                phone: creditEditData.phone?.trim() || null,
+                email: creditEditData.email?.trim() || null,
+                desired_vehicle: creditEditData.desired_vehicle?.trim() || null,
+                monthly_income: creditEditData.monthly_income === '' ? null : Number(creditEditData.monthly_income),
+                other_income: creditEditData.other_income === '' ? null : Number(creditEditData.other_income),
+                occupation: creditEditData.occupation || null,
+                application_mode: creditEditData.application_mode || null,
+                down_payment: creditEditData.down_payment === '' ? null : Number(creditEditData.down_payment),
+                approved_amount: creditEditData.approved_amount === '' ? null : Number(creditEditData.approved_amount),
+                approval_percentage: creditEditData.approval_percentage === '' ? null : Number(creditEditData.approval_percentage),
+                approved_down_payment: creditEditData.approved_down_payment === '' ? null : Number(creditEditData.approved_down_payment),
+                status: creditEditData.status || null,
+                assigned_to_id: creditEditData.assigned_to_id ? Number(creditEditData.assigned_to_id) : null,
+                notes: creditEditData.notes ?? null,
+                ...(statusChanged ? { status_note: creditEditStatusNote.trim() } : {}),
+            };
+
+            const response = await axios.put(`${API_BASE_URL}/credits/${selectedCredit.id}`, payload, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            setCredits((prev) => prev.map((credit) => credit.id === selectedCredit.id ? response.data : credit));
+            setSelectedCredit(response.data);
+            setCreditEditMode(false);
+            setCreditEditStatusNote('');
+            Swal.fire('Éxito', 'Solicitud de crédito actualizada.', 'success');
+        } catch (error) {
+            console.error('Error saving credit edit', error);
+            Swal.fire('Error', error?.response?.data?.detail || error?.response?.data?.error || 'No se pudo actualizar la solicitud de crédito.', 'error');
+        } finally {
+            setSavingCreditEdit(false);
+        }
+    };
 
     const fetchCredits = async () => {
         try {
@@ -947,33 +1038,280 @@ const CreditBoard = () => {
                                     Gestionado por <span className="text-slate-700">{getResponsibleName(selectedCredit)}</span>
                                 </p>
                             </div>
-                            <button onClick={() => setSelectedCredit(null)} className="text-2xl text-gray-400 hover:text-gray-600">&times;</button>
+                            <div className="flex items-center gap-2">
+                                {canManageCredits && (
+                                    creditEditMode ? (
+                                        <>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setCreditEditMode(false);
+                                                    setCreditEditStatusNote('');
+                                                    setCreditEditData({
+                                                        client_name: selectedCredit.client_name || '',
+                                                        phone: selectedCredit.phone || '',
+                                                        email: selectedCredit.email || '',
+                                                        desired_vehicle: selectedCredit.desired_vehicle || '',
+                                                        monthly_income: selectedCredit.monthly_income ?? 0,
+                                                        other_income: selectedCredit.other_income ?? 0,
+                                                        occupation: selectedCredit.occupation || 'employee',
+                                                        application_mode: selectedCredit.application_mode || 'individual',
+                                                        down_payment: selectedCredit.down_payment ?? 0,
+                                                        approved_amount: selectedCredit.approved_amount ?? '',
+                                                        approval_percentage: selectedCredit.approval_percentage ?? '',
+                                                        approved_down_payment: selectedCredit.approved_down_payment ?? '',
+                                                        status: selectedCredit.status || 'pending',
+                                                        assigned_to_id: selectedCredit.assigned_to_id || '',
+                                                        notes: selectedCredit.notes || '',
+                                                    });
+                                                }}
+                                                disabled={savingCreditEdit}
+                                                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                                            >
+                                                Cancelar
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleSaveCreditEdit}
+                                                disabled={savingCreditEdit}
+                                                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                                            >
+                                                {savingCreditEdit ? 'Guardando...' : 'Guardar cambios'}
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => setCreditEditMode(true)}
+                                            className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-900"
+                                        >
+                                            Editar
+                                        </button>
+                                    )
+                                )}
+                                <button
+                                    onClick={() => setSelectedCredit(null)}
+                                    className="text-2xl text-gray-400 hover:text-gray-600"
+                                    aria-label="Cerrar"
+                                >
+                                    &times;
+                                </button>
+                            </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Cliente</p>
-                                <div className="space-y-2 text-sm text-slate-700">
-                                    <p><span className="font-semibold">Telefono:</span> {selectedCredit.phone || 'Sin telefono'}</p>
-                                    <p><span className="font-semibold">Email:</span> {selectedCredit.email || 'Sin email'}</p>
-                                    <p><span className="font-semibold">Vehiculo:</span> {selectedCredit.desired_vehicle}</p>
-                                </div>
-                            </div>
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Proceso</p>
-                                <div className="space-y-2 text-sm text-slate-700">
-                                    <p><span className="font-semibold">Estado:</span> {getCreditStatusLabel(selectedCredit.status)}</p>
-                                    <p><span className="font-semibold">Ingresos:</span> {formatCurrency(selectedCredit.monthly_income || 0)}</p>
-                                    <p><span className="font-semibold">Cuota inicial:</span> {formatCurrency(selectedCredit.down_payment || 0)}</p>
-                                    <p><span className="font-semibold">Ocupacion:</span> {selectedCredit.occupation}</p>
-                                </div>
-                            </div>
-                        </div>
+                        {creditEditMode && creditEditData ? (
+                            <div className="rounded-2xl border border-slate-200 bg-white p-4 mb-6">
+                                <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-4">Editar solicitud</p>
 
-                        <div className="rounded-xl border border-slate-200 bg-white p-4 mb-6">
-                            <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Notas de la solicitud</p>
-                            <p className="text-sm text-slate-700 whitespace-pre-wrap">{selectedCredit.notes || 'Sin notas registradas.'}</p>
-                        </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1">Cliente</label>
+                                        <input
+                                            value={creditEditData.client_name}
+                                            onChange={(e) => setCreditEditData((prev) => ({ ...prev, client_name: e.target.value }))}
+                                            className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                            placeholder="Nombre del cliente"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1">Responsable</label>
+                                        <select
+                                            value={creditEditData.assigned_to_id || ''}
+                                            onChange={(e) => setCreditEditData((prev) => ({ ...prev, assigned_to_id: e.target.value }))}
+                                            className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            <option value="">Sin asignar</option>
+                                            {creditUsers
+                                                .filter((u) => u?.is_active !== false)
+                                                .map((u) => (
+                                                    <option key={u.id} value={u.id}>
+                                                        {u.full_name} - {u.role?.label || u.role?.name || u.role}
+                                                    </option>
+                                                ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1">Telefono</label>
+                                        <input
+                                            value={creditEditData.phone}
+                                            onChange={(e) => setCreditEditData((prev) => ({ ...prev, phone: e.target.value }))}
+                                            className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                            placeholder="Telefono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1">Email</label>
+                                        <input
+                                            value={creditEditData.email}
+                                            onChange={(e) => setCreditEditData((prev) => ({ ...prev, email: e.target.value }))}
+                                            className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                            placeholder="Correo"
+                                        />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1">Vehiculo deseado</label>
+                                        <input
+                                            value={creditEditData.desired_vehicle}
+                                            onChange={(e) => setCreditEditData((prev) => ({ ...prev, desired_vehicle: e.target.value }))}
+                                            className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                            placeholder="Vehiculo"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1">Estado</label>
+                                        <select
+                                            value={creditEditData.status || 'pending'}
+                                            onChange={(e) => setCreditEditData((prev) => ({ ...prev, status: e.target.value }))}
+                                            className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            {VALID_CREDIT_STATUSES.map((status) => (
+                                                <option key={status} value={status}>
+                                                    {getCreditStatusLabel(status)}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {String(creditEditData.status || '').trim() !== String(selectedCredit.status || '').trim() && (
+                                            <div className="mt-3">
+                                                <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1">Nota obligatoria (cambio de estado)</label>
+                                                <textarea
+                                                    rows={3}
+                                                    value={creditEditStatusNote}
+                                                    onChange={(e) => setCreditEditStatusNote(e.target.value)}
+                                                    className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Ej: Aprobado con condiciones..."
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1">Ocupacion</label>
+                                        <select
+                                            value={creditEditData.occupation || 'employee'}
+                                            onChange={(e) => setCreditEditData((prev) => ({ ...prev, occupation: e.target.value }))}
+                                            className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            <option value="employee">Empleado</option>
+                                            <option value="self_employed">Independiente</option>
+                                            <option value="pensioner">Pensionado</option>
+                                            <option value="student">Estudiante</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1">Modalidad</label>
+                                        <select
+                                            value={creditEditData.application_mode || 'individual'}
+                                            onChange={(e) => setCreditEditData((prev) => ({ ...prev, application_mode: e.target.value }))}
+                                            className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            <option value="individual">Individual</option>
+                                            <option value="co_signer">Codeudor</option>
+                                            <option value="company">Empresa</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1">Ingresos mensuales</label>
+                                        <input
+                                            type="number"
+                                            value={creditEditData.monthly_income}
+                                            onChange={(e) => setCreditEditData((prev) => ({ ...prev, monthly_income: e.target.value }))}
+                                            className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1">Otros ingresos</label>
+                                        <input
+                                            type="number"
+                                            value={creditEditData.other_income}
+                                            onChange={(e) => setCreditEditData((prev) => ({ ...prev, other_income: e.target.value }))}
+                                            className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1">Cuota inicial disponible</label>
+                                        <input
+                                            type="number"
+                                            value={creditEditData.down_payment}
+                                            onChange={(e) => setCreditEditData((prev) => ({ ...prev, down_payment: e.target.value }))}
+                                            className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1">Monto aprobado</label>
+                                        <input
+                                            type="number"
+                                            value={creditEditData.approved_amount}
+                                            onChange={(e) => setCreditEditData((prev) => ({ ...prev, approved_amount: e.target.value }))}
+                                            className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                            placeholder="(Opcional)"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1">% financiado</label>
+                                        <input
+                                            type="number"
+                                            value={creditEditData.approval_percentage}
+                                            onChange={(e) => setCreditEditData((prev) => ({ ...prev, approval_percentage: e.target.value }))}
+                                            className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                            placeholder="(Opcional)"
+                                        />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1">Cuota inicial minima (calculada)</label>
+                                        <input
+                                            type="number"
+                                            value={creditEditData.approved_down_payment}
+                                            onChange={(e) => setCreditEditData((prev) => ({ ...prev, approved_down_payment: e.target.value }))}
+                                            className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                            placeholder="(Opcional)"
+                                        />
+                                        <p className="mt-1 text-xs text-slate-500">
+                                            Si cambias monto aprobado o porcentaje financiado, la cuota inicial minima debe corresponder a ese calculo.
+                                        </p>
+                                    </div>
+
+                                    <div className="md:col-span-2">
+                                        <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1">Notas</label>
+                                        <textarea
+                                            rows={4}
+                                            value={creditEditData.notes || ''}
+                                            onChange={(e) => setCreditEditData((prev) => ({ ...prev, notes: e.target.value }))}
+                                            className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                                            placeholder="Notas internas del credito..."
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Cliente</p>
+                                        <div className="space-y-2 text-sm text-slate-700">
+                                            <p><span className="font-semibold">Telefono:</span> {selectedCredit.phone || 'Sin telefono'}</p>
+                                            <p><span className="font-semibold">Email:</span> {selectedCredit.email || 'Sin email'}</p>
+                                            <p><span className="font-semibold">Vehiculo:</span> {selectedCredit.desired_vehicle}</p>
+                                        </div>
+                                    </div>
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Proceso</p>
+                                        <div className="space-y-2 text-sm text-slate-700">
+                                            <p><span className="font-semibold">Estado:</span> {getCreditStatusLabel(selectedCredit.status)}</p>
+                                            <p><span className="font-semibold">Ingresos:</span> {formatCurrency(selectedCredit.monthly_income || 0)}</p>
+                                            <p><span className="font-semibold">Cuota inicial:</span> {formatCurrency(selectedCredit.down_payment || 0)}</p>
+                                            <p><span className="font-semibold">Ocupacion:</span> {selectedCredit.occupation}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="rounded-xl border border-slate-200 bg-white p-4 mb-6">
+                                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Notas de la solicitud</p>
+                                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{selectedCredit.notes || 'Sin notas registradas.'}</p>
+                                </div>
+                            </>
+                        )}
 
                         <div className="rounded-xl border border-slate-200 bg-white p-4 mb-6 space-y-4">
                             <div>

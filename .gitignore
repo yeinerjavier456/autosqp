@@ -17,6 +17,7 @@ build/
 
 # Backend static uploads (optional, depending on requirement)
 backend/static/
+static/
 
 frontend/nohup.out
 tatus
