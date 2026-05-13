@@ -84,6 +84,30 @@ def is_purchase_stage_status(status: Optional[str]) -> bool:
     }
 
 
+def should_attach_purchase_request(lead: Optional[models.Lead], purchase: Optional[models.CreditApplication]) -> bool:
+    """
+    Expose purchase request snapshot fields in lead responses.
+
+    We attach it when the lead is in the purchase flow OR when the purchase record
+    itself already progressed (e.g. car_purchased) so the UI can show "Carro comprado"
+    even after `has_vehicle=True`.
+    """
+    if not purchase:
+        return False
+    if lead and is_purchase_stage_status(getattr(lead, "status", None)):
+        return True
+    purchase_status = (getattr(purchase, "status", None) or "").strip().lower()
+    return purchase_status in {
+        "purchase_process",
+        "car_purchased",
+        models.CreditStatus.COMPLETED.value,
+        models.CreditStatus.REJECTED.value,
+        models.CreditStatus.IN_REVIEW.value,
+        models.CreditStatus.APPROVED.value,
+        models.CreditStatus.PENDING.value,
+    }
+
+
 def is_purchase_request_record(record: Optional[models.CreditApplication]) -> bool:
     if not record:
         return False
@@ -2956,7 +2980,7 @@ def read_leads(
             lead.credit_application_id = related_credit.id
             lead.credit_application_status = related_credit.status
             lead.credit_application_updated_at = related_credit.updated_at
-        if related_purchase and is_purchase_stage_status(lead.status):
+        if related_purchase and should_attach_purchase_request(lead, related_purchase):
             lead.purchase_request_id = related_purchase.id
             lead.purchase_request_status = related_purchase.status
             lead.purchase_request_updated_at = related_purchase.updated_at
@@ -3003,7 +3027,7 @@ def get_lead_detail(
         lead.credit_application_id = related_credit.id
         lead.credit_application_status = related_credit.status
         lead.credit_application_updated_at = related_credit.updated_at
-    if related_purchase and is_purchase_stage_status(lead.status):
+    if related_purchase and should_attach_purchase_request(lead, related_purchase):
         lead.purchase_request_id = related_purchase.id
         lead.purchase_request_status = related_purchase.status
         lead.purchase_request_updated_at = related_purchase.updated_at
