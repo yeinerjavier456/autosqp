@@ -5793,6 +5793,11 @@ def create_sale(
         
     if vehicle.status == "sold":
         raise HTTPException(status_code=400, detail="Vehicle is already sold")
+
+    # If purchases already created a pending sale for this vehicle, reuse it instead of inserting a duplicate.
+    existing_sale = db.query(models.Sale).filter(models.Sale.vehicle_id == sale.vehicle_id).first()
+    if existing_sale and existing_sale.status in {"approved"}:
+        raise HTTPException(status_code=400, detail="Vehicle is already sold")
     
     # 2. Resolve who sold it
     seller_type, seller, external_seller_name = resolve_sale_seller(
@@ -5806,22 +5811,34 @@ def create_sale(
     # 3. Calculate Commission
     commission_pct, commission_amount, net_revenue = compute_sale_numbers(sale.sale_price, seller)
     
-    # 4. Create Sale Record
-    new_sale = models.Sale(
-        vehicle_id=sale.vehicle_id,
-        lead_id=sale.lead_id,
-        seller_id=seller.id if seller else None,
-        seller_type=seller_type,
-        external_seller_name=external_seller_name,
-        company_id=current_user.company_id or vehicle.company_id,
-        sale_price=sale.sale_price,
-        commission_percentage=commission_pct,
-        commission_amount=commission_amount,
-        net_revenue=net_revenue,
-        status="pending"
-    )
-    
-    db.add(new_sale)
+    # 4. Create or Update Sale Record
+    if existing_sale:
+        existing_sale.lead_id = sale.lead_id
+        existing_sale.seller_id = seller.id if seller else None
+        existing_sale.seller_type = seller_type
+        existing_sale.external_seller_name = external_seller_name
+        existing_sale.company_id = current_user.company_id or vehicle.company_id
+        existing_sale.sale_price = sale.sale_price
+        existing_sale.commission_percentage = commission_pct
+        existing_sale.commission_amount = commission_amount
+        existing_sale.net_revenue = net_revenue
+        existing_sale.status = "pending"
+        new_sale = existing_sale
+    else:
+        new_sale = models.Sale(
+            vehicle_id=sale.vehicle_id,
+            lead_id=sale.lead_id,
+            seller_id=seller.id if seller else None,
+            seller_type=seller_type,
+            external_seller_name=external_seller_name,
+            company_id=current_user.company_id or vehicle.company_id,
+            sale_price=sale.sale_price,
+            commission_percentage=commission_pct,
+            commission_amount=commission_amount,
+            net_revenue=net_revenue,
+            status="pending"
+        )
+        db.add(new_sale)
     
     # 5. Lock Vehicle (Reserve it until approved)
     vehicle.status = "reserved"
