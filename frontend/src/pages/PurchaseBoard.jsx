@@ -31,7 +31,7 @@ const buildOptionShareText = (option) => {
     if (Array.isArray(option.photos) && option.photos.length > 0) {
         lines.push('');
         lines.push('Fotos:');
-        option.photos.forEach((photo) => lines.push(`${API_BASE_URL}${photo}`));
+        option.photos.forEach((photo) => lines.push(buildPurchasePhotoUrl(photo)));
     }
     return lines.join('\n');
 };
@@ -39,7 +39,14 @@ const buildOptionShareText = (option) => {
 const buildPurchasePhotoUrl = (filePath) => {
     if (!filePath) return '#';
     if (/^https?:\/\//i.test(filePath)) return filePath;
-    return `${API_BASE_URL}${filePath.startsWith('/') ? filePath : `/${filePath}`}`;
+
+    // Backend serves uploads via app.mount("/static", ...). Older rows may still contain "/api/static/...".
+    let normalized = String(filePath).trim();
+    if (!normalized.startsWith('/')) normalized = `/${normalized}`;
+    if (normalized.startsWith('/api/static/')) normalized = normalized.replace('/api/static/', '/static/');
+
+    // Static files are public and don't need Authorization headers, so avoid /crm/api proxy path.
+    return `${window.location.origin}${normalized}`;
 };
 
 const getApiErrorMessage = (error, fallbackMessage) => {
@@ -1109,6 +1116,17 @@ const PurchaseBoard = () => {
                                             className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
                                         >
                                             {processingInitialDecision ? 'Procesando...' : 'Cancelar'}
+                                        </button>
+                                    </div>
+                                )}
+                                {canManagePurchaseOptions && selectedPurchase.status === 'car_purchased' && (
+                                    <div className="flex flex-wrap gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => openCarPurchasedModal(selectedPurchase)}
+                                            className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                                        >
+                                            Editar compra
                                         </button>
                                     </div>
                                 )}
