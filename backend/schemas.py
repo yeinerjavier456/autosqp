@@ -756,6 +756,15 @@ class CreditApplicationBase(BaseModel):
     approved_amount: Optional[int] = None
     approval_percentage: Optional[int] = None
     approved_down_payment: Optional[int] = None
+    purchase_vehicle_name: Optional[str] = None
+    purchase_vehicle_model: Optional[str] = None
+    purchase_vehicle_year: Optional[int] = None
+    purchase_vehicle_plate: Optional[str] = None
+    purchase_vehicle_mileage: Optional[int] = None
+    purchase_vehicle_location: Optional[str] = None
+    purchase_price: Optional[int] = None
+    purchase_sale_price: Optional[int] = None
+    purchase_expenses: Optional[List['PurchaseExpenseItem']] = None
     notes: Optional[str] = None
     status: Optional[str] = "pending"
 
@@ -775,6 +784,10 @@ class PurchaseExpenseItem(BaseModel):
     expense_type: str
     amount: int
     notes: Optional[str] = None
+
+
+# Resolve forward refs (CreditApplicationBase references PurchaseExpenseItem)
+CreditApplicationBase.model_rebuild()
 
 class CreditApplicationUpdate(BaseModel):
     lead_id: Optional[int] = None
