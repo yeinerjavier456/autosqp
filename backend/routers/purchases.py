@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 from database import get_db
@@ -178,11 +178,20 @@ def _normalize_purchase_expenses(expenses_payload) -> list[dict]:
 
     normalized_expenses = []
     for expense in expenses_payload:
-        expense_type = str((expense or {}).get("expense_type") or "").strip()
+        if hasattr(expense, "model_dump"):
+            exp_dict = expense.model_dump()
+        elif hasattr(expense, "dict"):
+            exp_dict = expense.dict()
+        elif isinstance(expense, dict):
+            exp_dict = expense
+        else:
+            exp_dict = vars(expense) if hasattr(expense, "__dict__") else {}
+
+        expense_type = str(exp_dict.get("expense_type") or "").strip()
         if not expense_type:
             raise HTTPException(status_code=400, detail="El tipo de gasto no puede estar vacío")
 
-        amount = (expense or {}).get("amount")
+        amount = exp_dict.get("amount")
         if amount is None:
             raise HTTPException(status_code=400, detail=f"Debes indicar el valor para el gasto {expense_type}")
 
@@ -197,18 +206,19 @@ def _normalize_purchase_expenses(expenses_payload) -> list[dict]:
         normalized_expenses.append({
             "expense_type": expense_type,
             "amount": normalized_amount,
-            "notes": str((expense or {}).get("notes") or "").strip() or None,
+            "notes": str(exp_dict.get("notes") or "").strip() or None,
         })
 
     return normalized_expenses
 
 
 def _build_car_purchased_note(purchase: models.CreditApplication) -> str:
-    expense_summary = ", ".join(
-        f"{str(item.get('expense_type', '')).capitalize()}: {_format_currency(item.get('amount', 0))}"
-        for item in (purchase.purchase_expenses or [])
-        if item
-    ) or "Sin gastos registrados"
+    summary_items = []
+    for item in (purchase.purchase_expenses or []):
+        if not item: continue
+        i_dict = item.model_dump() if hasattr(item, "model_dump") else item.dict() if hasattr(item, "dict") else item if isinstance(item, dict) else vars(item)
+        summary_items.append(f"{str(i_dict.get('expense_type', '')).capitalize()}: {_format_currency(i_dict.get('amount', 0))}")
+    expense_summary = ", ".join(summary_items) or "Sin gastos registrados"
 
     vehicle_bits = [
         purchase.purchase_vehicle_name,
@@ -237,6 +247,9 @@ def _is_purchase_board_entry(purchase: models.CreditApplication) -> bool:
         return False
     lead = getattr(purchase, "lead", None)
     if not lead:
+        return True
+
+    if getattr(purchase, "status", None) in {PURCHASE_STATUS_CAR_PURCHASED, PURCHASE_STATUS_CLOSED, PURCHASE_STATUS_REJECTED}:
         return True
 
     detail = getattr(lead, "process_detail", None)

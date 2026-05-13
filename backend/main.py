@@ -24,9 +24,11 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi.responses import FileResponse
 from fastapi.responses import StreamingResponse
+from schema_ensure import ensure_mysql_schema
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
+ensure_mysql_schema(engine)
 
 BOGOTA_TZ = ZoneInfo("America/Bogota")
 
