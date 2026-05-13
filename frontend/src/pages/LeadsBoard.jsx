@@ -911,7 +911,21 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             const response = await axios.get(`${API_BASE_URL}/purchases/by-lead/${lead.id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setPurchaseDetail(response.data || null);
+            if (response.data) {
+                setPurchaseDetail(response.data || null);
+                return;
+            }
+
+            const purchaseRequestId = lead?.purchase_request_id ? parseInt(lead.purchase_request_id, 10) : null;
+            if (!purchaseRequestId) {
+                setPurchaseDetail(null);
+                return;
+            }
+
+            const fallback = await axios.get(`${API_BASE_URL}/purchases/${purchaseRequestId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setPurchaseDetail(fallback.data || null);
         } catch (error) {
             console.error('Error fetching purchase detail', error);
             setPurchaseDetail(null);
@@ -1124,6 +1138,8 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             case 'pending': return 'Solicitud recibida';
             case 'in_review': return 'En búsqueda';
             case 'approved': return 'Opciones encontradas';
+            case 'purchase_process': return 'Proceso de compra';
+            case 'car_purchased': return 'Carro comprado';
             case 'rejected': return 'Solicitud rechazada';
             case 'completed': return 'Cerrado';
             default: return purchaseStatus || '';

@@ -582,6 +582,45 @@ def read_purchase_by_lead(
     return purchase
 
 
+@router.get("/{purchase_id}", response_model=schemas.CreditApplication)
+def read_purchase_by_id(
+    purchase_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    purchase = db.query(models.CreditApplication).options(
+        joinedload(models.CreditApplication.assigned_to),
+        joinedload(models.CreditApplication.lead).joinedload(models.Lead.process_detail),
+        joinedload(models.CreditApplication.lead).joinedload(models.Lead.supervisors),
+    ).filter(models.CreditApplication.id == purchase_id).first()
+
+    if not purchase or not _is_purchase_request_record(purchase):
+        raise HTTPException(status_code=404, detail="Solicitud de compra no encontrada")
+
+    lead = purchase.lead
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead relacionado no encontrado")
+
+    if current_user.company_id and lead.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    role_name = _normalize_role_text(
+        getattr(getattr(current_user, "role", None), "base_role_name", None)
+        or getattr(getattr(current_user, "role", None), "name", None)
+    )
+    lead_supervisor_ids = {supervisor.id for supervisor in (lead.supervisors or []) if supervisor and supervisor.id}
+    lead_assigned_to_id = getattr(lead, "assigned_to_id", None)
+    if role_name not in ["admin", "super admin"]:
+        if (
+            purchase.assigned_to_id != current_user.id
+            and current_user.id not in lead_supervisor_ids
+            and lead_assigned_to_id != current_user.id
+        ):
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+    return purchase
+
+
 @router.post("/sync")
 def sync_purchase_board(
     db: Session = Depends(get_db),
