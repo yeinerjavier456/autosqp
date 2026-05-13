@@ -812,6 +812,11 @@ def update_purchase(
         lead = db.query(models.Lead).filter(models.Lead.id == purchase.lead_id).first()
         if lead:
             lead_previous_status = lead.status
+            if requested_status == PURCHASE_STATUS_CAR_PURCHASED:
+                # When a vehicle is purchased, the lead should move to preparation (alistamientos).
+                # Avoid overwriting terminal states.
+                if lead.status not in {models.LeadStatus.SOLD.value, models.LeadStatus.LOST.value}:
+                    lead.status = models.LeadStatus.PREPARATION.value
             detail = db.query(models.LeadProcessDetail).filter(
                 models.LeadProcessDetail.lead_id == lead.id
             ).first()
