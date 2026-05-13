@@ -672,6 +672,15 @@ const sanitizeSupervisorIds = (supervisorIds, advisors) => {
         .filter((id) => id !== null && activeAdvisorIds.has(id));
 };
 
+const buildPublicStaticUrl = (filePath) => {
+    if (!filePath) return '#';
+    if (/^https?:\/\//i.test(filePath)) return filePath;
+    let normalized = String(filePath).trim();
+    if (!normalized.startsWith('/')) normalized = `/${normalized}`;
+    if (normalized.startsWith('/api/static/')) normalized = normalized.replace('/api/static/', '/static/');
+    return `${window.location.origin}${normalized}`;
+};
+
 const buildPurchaseOptionShareText = (lead, option) => {
     const lines = [
         `Lead: ${lead?.name || 'Cliente'}`,
@@ -686,7 +695,7 @@ const buildPurchaseOptionShareText = (lead, option) => {
     if (Array.isArray(option?.photos) && option.photos.length > 0) {
         lines.push('');
         lines.push('Fotos:');
-        option.photos.forEach((photo) => lines.push(`${API_BASE_URL}${photo}`));
+        option.photos.forEach((photo) => lines.push(buildPublicStaticUrl(photo)));
     }
 
     return lines.join('\n');
@@ -1842,7 +1851,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
 
         option.photos.forEach((photo, index) => {
             const link = document.createElement('a');
-            link.href = `${API_BASE_URL}${photo}`;
+            link.href = buildPublicStaticUrl(photo);
             link.download = `${option.title || 'opcion'}-${index + 1}.jpg`;
             document.body.appendChild(link);
             link.click();
@@ -2834,13 +2843,13 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                                                     {activeLeadPurchaseOption.photos.map((photo, photoIndex) => (
                                                                         <a
                                                                             key={`${activeLeadPurchaseOption.id || activeLeadPurchaseOptionTab}-${photoIndex}`}
-                                                                            href={`${API_BASE_URL}${photo}`}
+                                                                            href={buildPublicStaticUrl(photo)}
                                                                             target="_blank"
                                                                             rel="noopener noreferrer"
                                                                             className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
                                                                         >
                                                                             <img
-                                                                                src={`${API_BASE_URL}${photo}`}
+                                                                                src={buildPublicStaticUrl(photo)}
                                                                                 alt={activeLeadPurchaseOption.title || 'Opción'}
                                                                                 className="h-44 w-full object-cover"
                                                                             />
