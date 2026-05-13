@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+Ôªøimport React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -24,21 +24,32 @@ const UserForm = () => {
     const [availableUsers, setAvailableUsers] = useState([]);
     const [isEditing, setIsEditing] = useState(false);
     const [status, setStatus] = useState({ type: '', message: '' });
+    const [showPassword, setShowPassword] = useState(false);
 
     const ROLE_LABELS = {
         super_admin: 'Super Admin Global',
         admin: 'Administrador de Empresa',
-        inventario: 'Gestor de Inventario (crear/editar vehÌculos)',
+        inventario: 'Gestor de Inventario (crear/editar veh√≠culos)',
         asesor: 'Asesor / Vendedor',
-        gestion_creditos: 'GestiÛn de CrÈditos',
-        aliado: 'Aliado EstratÈgico',
+        gestion_creditos: 'Gesti√≥n de Cr√©ditos',
+        aliado: 'Aliado Estrat√©gico',
         compras: 'Gestor de Compras',
-        user: 'Usuario B·sico',
+        user: 'Usuario B√°sico',
     };
     const selectedRole = roles.find(r => String(r.id) === String(user.role_id));
     const isInventarioRoleSelected = (selectedRole?.base_role_name || selectedRole?.name) === 'inventario';
     const isAdvisorRoleSelected = (selectedRole?.base_role_name || selectedRole?.name) === 'asesor';
     const currentRoleName = currentUser?.role?.base_role_name || currentUser?.role?.name;
+
+    const generateTemporaryPassword = () => {
+        const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+        const nextPassword = Array.from({ length: 12 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
+        setUser((current) => ({
+            ...current,
+            password: nextPassword,
+        }));
+        setShowPassword(true);
+    };
 
     const isAdvisorCandidate = (candidate) => {
         const roleName = (
@@ -199,20 +210,20 @@ const UserForm = () => {
             title: 'Inhabilitar usuario',
             html: `
                 <div style="text-align:left">
-                    <p style="margin-bottom:12px;">El usuario no se eliminar· fÌsicamente. Se inhabilitar· para conservar mÈtricas e historial.</p>
+                    <p style="margin-bottom:12px;">El usuario no se eliminar√° f√≠sicamente. Se inhabilitar√° para conservar m√©tricas e historial.</p>
                     <label for="reassign-user-select" style="display:block;margin-bottom:6px;font-weight:600;">Reasignar todos sus leads a:</label>
                     <select id="reassign-user-select" class="swal2-select" style="display:flex;width:100%;margin:0;">
-                        <option value="">Sin reasignaciÛn</option>
+                        <option value="">Sin reasignaci√≥n</option>
                         ${reassignmentOptions}
                     </select>
-                    <p style="margin-top:10px;font-size:12px;color:#64748b;">Si el usuario tiene leads asignados, debes escoger aquÌ un Asesor / Vendedor activo como nuevo responsable.</p>
+                    <p style="margin-top:10px;font-size:12px;color:#64748b;">Si el usuario tiene leads asignados, debes escoger aqu√≠ un Asesor / Vendedor activo como nuevo responsable.</p>
                 </div>
             `,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#d33',
             cancelButtonColor: '#3085d6',
-            confirmButtonText: 'SÌ, inhabilitar',
+            confirmButtonText: 'S√≠, inhabilitar',
             cancelButtonText: 'Cancelar',
             focusConfirm: false,
             preConfirm: () => {
@@ -231,7 +242,7 @@ const UserForm = () => {
                     headers: { Authorization: `Bearer ${token}` },
                     data: result.value || {}
                 });
-                Swal.fire('Usuario inhabilitado', 'El usuario ya no estar· visible ni podr· iniciar sesiÛn.', 'success');
+                Swal.fire('Usuario inhabilitado', 'El usuario ya no estar√° visible ni podr√° iniciar sesi√≥n.', 'success');
                 navigate('/admin/users');
             } catch (error) {
                 console.error("Error deleting user", error);
@@ -268,7 +279,7 @@ const UserForm = () => {
                             name="full_name"
                             value={user.full_name || ''}
                             onChange={handleChange}
-                            placeholder="Ej: Juan PÈrez"
+                            placeholder="Ej: Juan P√©rez"
                             className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-black bg-white"
                         />
                     </div>
@@ -286,15 +297,51 @@ const UserForm = () => {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-600 mb-1">ContraseÒa {isEditing && '(Dejar en blanco para mantener actual)'}</label>
-                        <input
-                            type="password"
-                            name="password"
-                            required={!isEditing}
-                            value={user.password}
-                            onChange={handleChange}
-                            className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
-                        />
+                        <label className="block text-sm font-medium text-slate-600 mb-1">Contrase√±a {isEditing && '(Dejar en blanco para mantener actual)'}</label>
+                        <div className="relative">
+                            <input
+                                type={showPassword ? 'text' : 'password'}
+                                name="password"
+                                required={!isEditing}
+                                value={user.password}
+                                onChange={handleChange}
+                                className="w-full px-4 py-2 pr-12 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword((current) => !current)}
+                                className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-500 transition hover:text-blue-600"
+                                aria-label={showPassword ? 'Ocultar contrase√±a' : 'Mostrar contrase√±a'}
+                                title={showPassword ? 'Ocultar contrase√±a' : 'Mostrar contrase√±a'}
+                            >
+                                {showPassword ? (
+                                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M3 3l18 18" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M10.584 10.587A2 2 0 0013.414 13.417" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M9.88 5.09A9.953 9.953 0 0112 4.8c5.05 0 9.27 3.11 10.8 7.5a11.827 11.827 0 01-4.04 5.58M6.61 6.61A11.836 11.836 0 001.2 12.3a11.817 11.817 0 005.6 6.3 9.954 9.954 0 005.2 1.4 9.948 9.948 0 003.07-.48" />
+                                    </svg>
+                                ) : (
+                                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M1.5 12S5.5 4.5 12 4.5 22.5 12 22.5 12 18.5 19.5 12 19.5 1.5 12 1.5 12z" />
+                                        <circle cx="12" cy="12" r="3" strokeWidth="1.8" />
+                                    </svg>
+                                )}
+                            </button>
+                        </div>
+                        {isEditing && (
+                            <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                <p className="text-sm text-slate-500">
+                                    La contrase√±a actual no se puede mostrar porque se guarda encriptada con hash seguro.
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={generateTemporaryPassword}
+                                    className="inline-flex items-center justify-center rounded-lg border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-50"
+                                >
+                                    Generar contrase√±a temporal
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -353,9 +400,9 @@ const UserForm = () => {
                                                 className="mt-1 h-4 w-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
                                             />
                                             <div>
-                                                <span className="block text-sm font-semibold text-slate-700">Permitir asignaciÛn autom·tica</span>
+                                                <span className="block text-sm font-semibold text-slate-700">Permitir asignaci√≥n autom√°tica</span>
                                                 <span className="block text-xs text-slate-500 mt-1">
-                                                    Si est· activo, este usuario podr· recibir leads nuevos por asignaciÛn autom·tica y entrar en redistribuciones autom·ticas cuando aplique.
+                                                    Si est√° activo, este usuario podr√° recibir leads nuevos por asignaci√≥n autom√°tica y entrar en redistribuciones autom√°ticas cuando aplique.
                                                 </span>
                                             </div>
                                         </label>
@@ -364,7 +411,7 @@ const UserForm = () => {
 
                                 {/* Commission Field - Only for Admin/SuperAdmin to set on others */}
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-600 mb-1">ComisiÛn (%)</label>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Comisi√≥n (%)</label>
                                     <input
                                         type="number"
                                         name="commission_percentage"
@@ -435,4 +482,5 @@ const UserForm = () => {
 };
 
 export default UserForm;
+
 

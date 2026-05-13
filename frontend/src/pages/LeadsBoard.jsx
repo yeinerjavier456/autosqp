@@ -586,6 +586,39 @@ const normalizeLeadRecord = (lead) => {
     };
 };
 
+const getLeadApprovalMetrics = (lead) => {
+    if (!lead) {
+        return { approvedAmount: null, approvalPercentage: null, minimumDownPayment: null };
+    }
+
+    const extracted = [
+        ...(Array.isArray(lead?.notes) ? lead.notes.map((note) => note?.content || '') : []),
+        ...(Array.isArray(lead?.history) ? lead.history.map((entry) => entry?.comment || '') : []),
+        lead?.message || '',
+    ]
+        .map((content) => extractApprovalMetrics(content))
+        .find(Boolean);
+
+    const approvedAmount = extracted?.approvedAmount
+        ?? lead?.credit_application?.approved_amount
+        ?? lead?.credit_application_approved_amount
+        ?? null;
+    const approvalPercentage = extracted?.approvalPercentage
+        ?? lead?.credit_application?.approval_percentage
+        ?? lead?.credit_application_approval_percentage
+        ?? null;
+    const minimumDownPayment = extracted?.minimumDownPayment
+        ?? lead?.credit_application?.approved_down_payment
+        ?? lead?.credit_application_approved_down_payment
+        ?? null;
+
+    return {
+        approvedAmount,
+        approvalPercentage,
+        minimumDownPayment,
+    };
+};
+
 const getLeadAssignedUserId = (lead) => parseUserId(lead?.assigned_to?.id ?? lead?.assigned_to_id);
 
 const isCompanyAdminRole = (role) => {
@@ -714,6 +747,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     const [selectedVehicleId, setSelectedVehicleId] = useState(lead?.process_detail?.vehicle_id || '');
     const [desiredVehicle, setDesiredVehicle] = useState(lead?.process_detail?.desired_vehicle || '');
     const [reservationAmount, setReservationAmount] = useState(lead?.process_detail?.reservation_amount ? String(lead.process_detail.reservation_amount) : '');
+    const [reservationCreditUsedAmount, setReservationCreditUsedAmount] = useState(lead?.process_detail?.credit_used_amount ? String(lead.process_detail.credit_used_amount) : '');
     const [reservationPaymentMethod, setReservationPaymentMethod] = useState(lead?.process_detail?.reservation_payment_method || '');
     const [deliveryDocumentsComplete, setDeliveryDocumentsComplete] = useState(Boolean(lead?.process_detail?.delivery_documents_complete));
     const [deliveryRoadKit, setDeliveryRoadKit] = useState(Boolean(lead?.process_detail?.delivery_road_kit));
@@ -777,6 +811,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         setSelectedVehicleId(lead?.process_detail?.vehicle_id || '');
         setDesiredVehicle(lead?.process_detail?.desired_vehicle || '');
         setReservationAmount(lead?.process_detail?.reservation_amount ? String(lead.process_detail.reservation_amount) : '');
+        setReservationCreditUsedAmount(lead?.process_detail?.credit_used_amount ? String(lead.process_detail.credit_used_amount) : '');
         setReservationPaymentMethod(lead?.process_detail?.reservation_payment_method || '');
         setDeliveryDocumentsComplete(Boolean(lead?.process_detail?.delivery_documents_complete));
         setDeliveryRoadKit(Boolean(lead?.process_detail?.delivery_road_kit));
@@ -1245,6 +1280,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         normalizedCurrentUserRole !== 'compras'
     );
     const reservationAmountValue = lead?.process_detail?.reservation_amount ?? null;
+    const reservationCreditUsedAmountValue = lead?.process_detail?.credit_used_amount ?? null;
     const reservationPaymentMethodValue = lead?.process_detail?.reservation_payment_method || '';
     const purchaseSummarySource = [
         purchaseDetail?.notes || '',
@@ -1309,6 +1345,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
 
     const buildCurrentProcessDetailPayload = (overrides = {}) => {
         const parsedReservationAmount = Number(String(reservationAmount || '').replace(/[^\d]/g, ''));
+        const parsedCreditUsedAmount = Number(String(reservationCreditUsedAmount || '').replace(/[^\d]/g, ''));
         return {
             has_vehicle: typeof hasVehicle === 'boolean'
                 ? hasVehicle
@@ -1318,6 +1355,9 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             reservation_amount: Number.isFinite(parsedReservationAmount) && parsedReservationAmount > 0
                 ? parsedReservationAmount
                 : (lead?.process_detail?.reservation_amount ?? null),
+            credit_used_amount: Number.isFinite(parsedCreditUsedAmount) && parsedCreditUsedAmount > 0
+                ? parsedCreditUsedAmount
+                : (lead?.process_detail?.credit_used_amount ?? null),
             reservation_payment_method: reservationPaymentMethod || lead?.process_detail?.reservation_payment_method || null,
             delivery_documents_complete: deliveryDocumentsComplete,
             delivery_road_kit: deliveryRoadKit,
@@ -1563,6 +1603,9 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                 if (statusPayload.reservation_amount != null) {
                     setReservationAmount(String(statusPayload.reservation_amount));
                 }
+                if (statusPayload.credit_used_amount != null) {
+                    setReservationCreditUsedAmount(String(statusPayload.credit_used_amount));
+                }
                 if (statusPayload.reservation_payment_method) {
                     setReservationPaymentMethod(statusPayload.reservation_payment_method);
                 }
@@ -1616,6 +1659,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
 
         if (newStatus === 'reserved') {
             const parsedReservationAmount = Number(String(reservationAmount || '').replace(/[^\d]/g, ''));
+            const parsedCreditUsedAmount = Number(String(reservationCreditUsedAmount || '').replace(/[^\d]/g, ''));
             const normalizedPaymentMethod = String(reservationPaymentMethod || '').trim().toLowerCase();
             if (!Number.isFinite(parsedReservationAmount) || parsedReservationAmount <= 0) {
                 Swal.fire('Atención', 'Debes indicar el monto de la separación para pasar el lead a Reservas.', 'warning');
@@ -1650,11 +1694,13 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                     desired_vehicle: (!hasVehicle || shouldMoveToPurchaseSearch) ? desiredVehicleFallback : null
                 };
             } else if (newStatus === 'reserved') {
+                const parsedCreditUsedAmount = Number(String(reservationCreditUsedAmount || '').replace(/[^\d]/g, ''));
                 processDetail = {
                     has_vehicle: typeof lead?.process_detail?.has_vehicle === 'boolean' ? lead.process_detail.has_vehicle : false,
                     vehicle_id: lead?.process_detail?.vehicle_id || null,
                     desired_vehicle: lead?.process_detail?.desired_vehicle || desiredVehicle.trim() || lead?.message?.trim() || 'Por definir',
                     reservation_amount: Number(String(reservationAmount || '').replace(/[^\d]/g, '')),
+                    credit_used_amount: Number.isFinite(parsedCreditUsedAmount) && parsedCreditUsedAmount > 0 ? parsedCreditUsedAmount : null,
                     reservation_payment_method: String(reservationPaymentMethod || '').trim().toLowerCase(),
                 };
             } else if (newStatus === 'sold') {
@@ -1753,6 +1799,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                 name: normalizedName,
                 email: normalizedEmail || null,
                 phone: normalizedPhone || null,
+                ...(canModifyLead ? { process_detail: buildCurrentProcessDetailPayload() } : {}),
             });
         } catch (error) {
             console.error('Error updating lead contact info', error);
@@ -2337,7 +2384,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
 
                             {newStatus === 'reserved' && (
                                 <div className="p-3 bg-violet-50 rounded-lg border border-violet-100 flex flex-col gap-3 animate-fade-in shadow-sm">
-                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                                         <div>
                                             <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Monto de la separación</label>
                                             <input
@@ -2348,6 +2395,18 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                                 onChange={(e) => setReservationAmount(e.target.value.replace(/[^\d]/g, ''))}
                                                 className="w-full text-sm border border-violet-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500 bg-white shadow-inner"
                                                 placeholder="Ej: 2000000"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Monto del crÃ©dito a usar</label>
+                                            <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                value={reservationCreditUsedAmount}
+                                                disabled={!canModifyLead}
+                                                onChange={(e) => setReservationCreditUsedAmount(e.target.value.replace(/[^\d]/g, ''))}
+                                                className="w-full text-sm border border-violet-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500 bg-white shadow-inner"
+                                                placeholder="Ej: 25000000"
                                             />
                                         </div>
                                         <div>
@@ -3184,7 +3243,11 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const [dragSelectedVehicleId, setDragSelectedVehicleId] = useState('');
     const [dragDesiredVehicle, setDragDesiredVehicle] = useState('');
     const [dragReservationAmount, setDragReservationAmount] = useState('');
+    const [dragCreditUsedAmount, setDragCreditUsedAmount] = useState('');
     const [dragReservationPaymentMethod, setDragReservationPaymentMethod] = useState('');
+    const [dragApprovedAmount, setDragApprovedAmount] = useState('');
+    const [dragApprovalPercentage, setDragApprovalPercentage] = useState('');
+    const [dragApprovedDownPayment, setDragApprovedDownPayment] = useState('');
 
     // Modal State - History View
     const [selectedLeadForHistory, setSelectedLeadForHistory] = useState(null);
@@ -3232,7 +3295,11 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         setDragSelectedVehicleId('');
         setDragDesiredVehicle('');
         setDragReservationAmount('');
+        setDragCreditUsedAmount('');
         setDragReservationPaymentMethod('');
+        setDragApprovedAmount('');
+        setDragApprovalPercentage('');
+        setDragApprovedDownPayment('');
         setNewLeadForm({
             name: '',
             email: '',
@@ -3496,7 +3563,12 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             setDragSelectedVehicleId('');
             setDragDesiredVehicle('');
             setDragReservationAmount('');
+            setDragCreditUsedAmount(lead?.process_detail?.credit_used_amount ? String(lead.process_detail.credit_used_amount) : '');
             setDragReservationPaymentMethod('');
+            const leadApprovalMetrics = getLeadApprovalMetrics(lead);
+            setDragApprovedAmount(leadApprovalMetrics.approvedAmount ? String(leadApprovalMetrics.approvedAmount) : '');
+            setDragApprovalPercentage(leadApprovalMetrics.approvalPercentage ? String(leadApprovalMetrics.approvalPercentage) : '');
+            setDragApprovedDownPayment(leadApprovalMetrics.minimumDownPayment ? String(leadApprovalMetrics.minimumDownPayment) : '');
 
             if (newStatus === 'sold') {
                 initiateSale(id);
@@ -3578,6 +3650,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         const { leadId, newStatus } = pendingStatusChange;
 
         let processDetail = null;
+        let reservedApprovalPayload = null;
         if (newStatus === 'in_process') {
             if (dragHasVehicle === null) {
                 Swal.fire('Atención', 'Debes indicar si el vehiculo está disponible en inventario o si toca conseguirlo.', 'warning');
@@ -3596,22 +3669,55 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             };
         } else if (newStatus === 'reserved') {
             const parsedReservationAmount = Number(String(dragReservationAmount || '').replace(/[^\d]/g, ''));
+            const parsedCreditUsedAmount = Number(String(dragCreditUsedAmount || '').replace(/[^\d]/g, ''));
+            const parsedApprovedAmount = Number(String(dragApprovedAmount || '').replace(/[^\d]/g, ''));
+            const parsedApprovalPercentage = Number(String(dragApprovalPercentage || '').replace(/[^\d]/g, ''));
+            const parsedApprovedDownPayment = Number(String(dragApprovedDownPayment || '').replace(/[^\d]/g, ''));
             const normalizedPaymentMethod = String(dragReservationPaymentMethod || '').trim().toLowerCase();
+            const leadRef = leads.find((item) => item.id === leadId);
+            const leadApprovalMetrics = getLeadApprovalMetrics(leadRef);
+            const leadApprovedAmount = Number(leadApprovalMetrics.approvedAmount || 0) || 0;
+            const leadApprovalPercentage = Number(leadApprovalMetrics.approvalPercentage || 0) || 0;
+            const leadApprovedDownPayment = Number(leadApprovalMetrics.minimumDownPayment || 0) || 0;
+            const finalApprovedAmount = leadApprovedAmount > 0 ? leadApprovedAmount : (Number.isFinite(parsedApprovedAmount) && parsedApprovedAmount > 0 ? parsedApprovedAmount : null);
+            const finalApprovalPercentage = leadApprovalPercentage > 0 ? leadApprovalPercentage : (Number.isFinite(parsedApprovalPercentage) && parsedApprovalPercentage > 0 ? parsedApprovalPercentage : null);
+            const finalApprovedDownPayment = leadApprovedDownPayment > 0 ? leadApprovedDownPayment : (Number.isFinite(parsedApprovedDownPayment) && parsedApprovedDownPayment > 0 ? parsedApprovedDownPayment : null);
             if (!Number.isFinite(parsedReservationAmount) || parsedReservationAmount <= 0) {
                 Swal.fire('Atención', 'Debes indicar el monto de la separación para pasar el lead a Reservas.', 'warning');
+                return;
+            }
+            if (!finalApprovedAmount) {
+                Swal.fire('Atención', 'Debes indicar el monto aprobado del crédito para este lead.', 'warning');
+                return;
+            }
+            if (!finalApprovalPercentage || finalApprovalPercentage <= 0 || finalApprovalPercentage > 100) {
+                Swal.fire('Atención', 'Debes indicar el porcentaje aprobado del crédito.', 'warning');
+                return;
+            }
+            if (!finalApprovedDownPayment) {
+                Swal.fire('Atención', 'Debes indicar la cuota inicial mínima aprobada.', 'warning');
+                return;
+            }
+            if (finalApprovedAmount > 0 && (!Number.isFinite(parsedCreditUsedAmount) || parsedCreditUsedAmount <= 0)) {
+                Swal.fire('Atención', 'Debes indicar el monto del crédito a usar para pasar el lead a Reservas.', 'warning');
                 return;
             }
             if (!['efectivo', 'transferencia'].includes(normalizedPaymentMethod)) {
                 Swal.fire('Atención', 'Debes indicar si la separación fue en efectivo o transferencia.', 'warning');
                 return;
             }
-            const leadRef = leads.find((item) => item.id === leadId);
             processDetail = {
                 has_vehicle: typeof leadRef?.process_detail?.has_vehicle === 'boolean' ? leadRef.process_detail.has_vehicle : false,
                 vehicle_id: leadRef?.process_detail?.vehicle_id || null,
                 desired_vehicle: leadRef?.process_detail?.desired_vehicle || leadRef?.message?.trim() || 'Por definir',
                 reservation_amount: parsedReservationAmount,
+                credit_used_amount: Number.isFinite(parsedCreditUsedAmount) && parsedCreditUsedAmount > 0 ? parsedCreditUsedAmount : null,
                 reservation_payment_method: normalizedPaymentMethod,
+            };
+            reservedApprovalPayload = {
+                approved_amount: finalApprovedAmount,
+                approval_percentage: finalApprovalPercentage,
+                approved_down_payment: finalApprovedDownPayment,
             };
         }
 
@@ -3627,6 +3733,11 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             };
             if (processDetail) {
                 payload.process_detail = processDetail;
+            }
+            if (newStatus === 'reserved' && reservedApprovalPayload) {
+                payload.approved_amount = reservedApprovalPayload.approved_amount;
+                payload.approval_percentage = reservedApprovalPayload.approval_percentage;
+                payload.approved_down_payment = reservedApprovalPayload.approved_down_payment;
             }
             await axios.put(`${API_BASE_URL}/leads/${leadId}`,
                 payload,
@@ -3723,6 +3834,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                         name: updatedLead.name,
                         email: updatedLead.email,
                         phone: updatedLead.phone,
+                        process_detail: updatedLead.process_detail ?? lead.process_detail,
                     }
                     : lead
             )));
@@ -3733,6 +3845,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                         name: updatedLead.name,
                         email: updatedLead.email,
                         phone: updatedLead.phone,
+                        process_detail: updatedLead.process_detail ?? prev.process_detail,
                     }
                     : prev
             ));
@@ -3966,6 +4079,11 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             });
         }
     };
+
+    const pendingLeadForStatusChange = pendingStatusChange
+        ? leads.find((item) => item.id === pendingStatusChange.leadId) || null
+        : null;
+    const pendingLeadApprovalMetrics = getLeadApprovalMetrics(pendingLeadForStatusChange);
 
     const hasPurchasedVehicleDataForSale = Boolean(
         salePurchaseDetail?.purchase_vehicle_name
@@ -4245,6 +4363,57 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                             <div className="mb-4 bg-violet-50 p-4 rounded-lg border border-violet-200">
                                 <label className="block text-sm font-bold text-gray-700 mb-3">Información obligatoria de la reserva</label>
                                 <div className="space-y-3">
+                                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                        <div className="rounded-lg border border-violet-200 bg-white px-3 py-2">
+                                            <p className="text-[10px] font-bold uppercase tracking-wide text-violet-600">Monto aprobado</p>
+                                            <p className="mt-1 text-sm font-semibold text-slate-800">
+                                                {pendingLeadApprovalMetrics.approvedAmount != null ? formatLeadCurrencyValue(pendingLeadApprovalMetrics.approvedAmount) : 'Sin definir'}
+                                            </p>
+                                        </div>
+                                        <div className="rounded-lg border border-violet-200 bg-white px-3 py-2">
+                                            <p className="text-[10px] font-bold uppercase tracking-wide text-violet-600">Porcentaje aprobado</p>
+                                            <p className="mt-1 text-sm font-semibold text-slate-800">
+                                                {pendingLeadApprovalMetrics.approvalPercentage != null ? `${pendingLeadApprovalMetrics.approvalPercentage}%` : 'Sin definir'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {(pendingLeadApprovalMetrics.approvedAmount == null || pendingLeadApprovalMetrics.approvalPercentage == null || pendingLeadApprovalMetrics.minimumDownPayment == null) && (
+                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Monto aprobado</label>
+                                                <input
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    className="w-full border border-violet-200 rounded p-2 text-sm focus:ring-2 focus:ring-violet-500 outline-none"
+                                                    placeholder="Ej: 70000000"
+                                                    value={dragApprovedAmount}
+                                                    onChange={(e) => setDragApprovedAmount(e.target.value.replace(/[^\d]/g, ''))}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Porcentaje aprobado</label>
+                                                <input
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    className="w-full border border-violet-200 rounded p-2 text-sm focus:ring-2 focus:ring-violet-500 outline-none"
+                                                    placeholder="Ej: 90"
+                                                    value={dragApprovalPercentage}
+                                                    onChange={(e) => setDragApprovalPercentage(e.target.value.replace(/[^\d]/g, ''))}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cuota inicial mínima</label>
+                                                <input
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    className="w-full border border-violet-200 rounded p-2 text-sm focus:ring-2 focus:ring-violet-500 outline-none"
+                                                    placeholder="Ej: 7000000"
+                                                    value={dragApprovedDownPayment}
+                                                    onChange={(e) => setDragApprovedDownPayment(e.target.value.replace(/[^\d]/g, ''))}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
                                     <div>
                                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Monto de la separación</label>
                                         <input
@@ -4254,6 +4423,17 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                                             placeholder="Ej: 2000000"
                                             value={dragReservationAmount}
                                             onChange={(e) => setDragReservationAmount(e.target.value.replace(/[^\d]/g, ''))}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Monto del crédito a usar</label>
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            className="w-full border border-violet-200 rounded p-2 text-sm focus:ring-2 focus:ring-violet-500 outline-none"
+                                            placeholder="Ej: 25000000"
+                                            value={dragCreditUsedAmount}
+                                            onChange={(e) => setDragCreditUsedAmount(e.target.value.replace(/[^\d]/g, ''))}
                                         />
                                     </div>
                                     <div>
@@ -4281,6 +4461,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                                     setShowCommentModal(false);
                                     setStatusComment('');
                                     setDragReservationAmount('');
+                                    setDragCreditUsedAmount('');
                                     setDragReservationPaymentMethod('');
                                 }}
                                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50"

@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import Swal from 'sweetalert2';
 import { useNavigate } from 'react-router-dom';
 import { formatBogotaDate, formatBogotaDateForInput, formatBogotaDateTime } from '../utils/dateTime';
+import { getRolePermissions } from '../config/views';
 
 const VALID_CREDIT_STATUSES = ['pending', 'in_review', 'approved', 'rejected', 'completed'];
 const API_BASE_URL = `${window.location.origin}/crm/api`;
@@ -54,8 +55,11 @@ const normalizeRoleName = (value) => {
 const CreditBoard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
+    const normalizedBaseRoleName = normalizeRoleName(user?.role?.base_role_name);
+    const normalizedSystemRoleName = normalizeRoleName(user?.role?.name || user?.role);
     const effectiveRoleName = user?.role?.base_role_name || user?.role?.name || user?.role;
-    const normalizedRoleName = normalizeRoleName(effectiveRoleName);
+    const normalizedRoleName = normalizedBaseRoleName || normalizedSystemRoleName;
+    const rolePermissions = new Set(getRolePermissions(user?.role || {}));
     const isCompanyAdmin = normalizedRoleName === 'admin' || normalizedRoleName === 'super admin';
     const isCreditManager = [
         'gestion creditos',
@@ -65,8 +69,14 @@ const CreditBoard = () => {
         'coordinador credito',
         'coordinador de credito',
         'coordinador de creditos',
-    ].includes(normalizedRoleName);
-    const canManageCredits = isCompanyAdmin || isCreditManager;
+    ].includes(normalizedRoleName) || [
+        'gestion creditos',
+        'gestion de creditos',
+        'coordinador de creditos',
+        'coordinador de credito',
+    ].includes(normalizedSystemRoleName);
+    const isReadOnlyCreditRole = ['asesor', 'asesor vendedor', 'vendedor', 'aliado', 'aliado estrategico'].includes(normalizedBaseRoleName);
+    const canManageCredits = isCompanyAdmin || isCreditManager || (rolePermissions.has('credits') && !isReadOnlyCreditRole);
     const leadBoardPath = effectiveRoleName === 'aliado' ? '/aliado/dashboard' : '/admin/leads';
     const [credits, setCredits] = useState([]);
     const [creditUsers, setCreditUsers] = useState([]);

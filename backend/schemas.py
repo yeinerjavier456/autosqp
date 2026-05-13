@@ -351,6 +351,7 @@ class LeadProcessDetailBase(BaseModel):
     desired_vehicle: Optional[str] = None
     business_sheet_url: Optional[str] = None
     reservation_amount: Optional[int] = None
+    credit_used_amount: Optional[int] = None
     reservation_payment_method: Optional[str] = None
 
 class LeadProcessDetailCreate(LeadProcessDetailBase):
@@ -450,6 +451,9 @@ class LeadUpdate(BaseModel):
     supervisor_ids: Optional[List[int]] = None
     comment: Optional[str] = None # Virtual field for history
     process_detail: Optional[LeadProcessDetailCreate] = None # Para recibir los detalles de proceso
+    approved_amount: Optional[int] = None
+    approval_percentage: Optional[int] = None
+    approved_down_payment: Optional[int] = None
 
 class LeadDeleteRequest(BaseModel):
     reason: str
@@ -761,6 +765,11 @@ class ManualPurchaseRequestCreate(BaseModel):
     desired_vehicle: str
     notes: Optional[str] = None
 
+class PurchaseExpenseItem(BaseModel):
+    expense_type: str
+    amount: int
+    notes: Optional[str] = None
+
 class CreditApplicationUpdate(BaseModel):
     lead_id: Optional[int] = None
     client_name: Optional[str] = None
@@ -768,6 +777,7 @@ class CreditApplicationUpdate(BaseModel):
     email: Optional[str] = None
     desired_vehicle: Optional[str] = None
     reservation_amount: Optional[int] = None
+    credit_used_amount: Optional[int] = None
     reservation_payment_method: Optional[str] = None
     monthly_income: Optional[int] = None
     other_income: Optional[int] = None
@@ -777,6 +787,15 @@ class CreditApplicationUpdate(BaseModel):
     approved_amount: Optional[int] = None
     approval_percentage: Optional[int] = None
     approved_down_payment: Optional[int] = None
+    purchase_vehicle_name: Optional[str] = None
+    purchase_vehicle_model: Optional[str] = None
+    purchase_vehicle_year: Optional[int] = None
+    purchase_vehicle_plate: Optional[str] = None
+    purchase_vehicle_mileage: Optional[int] = None
+    purchase_vehicle_location: Optional[str] = None
+    purchase_price: Optional[int] = None
+    purchase_sale_price: Optional[int] = None
+    purchase_expenses: Optional[List[PurchaseExpenseItem]] = None
     notes: Optional[str] = None
     status: Optional[str] = None
     status_note: Optional[str] = None

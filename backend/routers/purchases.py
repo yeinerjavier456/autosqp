@@ -319,6 +319,24 @@ def _eligible_purchase_leads(db: Session, company_id: int):
     ).all()
 
 
+def _get_linked_credit_request(db: Session, lead: Optional[models.Lead]) -> Optional[models.CreditApplication]:
+    if not lead:
+        return None
+
+    credit_candidates = db.query(models.CreditApplication).filter(
+        models.CreditApplication.company_id == lead.company_id,
+        models.CreditApplication.lead_id == lead.id
+    ).order_by(
+        models.CreditApplication.updated_at.desc(),
+        models.CreditApplication.created_at.desc()
+    ).all()
+
+    return next(
+        (record for record in credit_candidates if not _is_purchase_request_record(record)),
+        None
+    )
+
+
 def _sync_purchase_requests_for_company(db: Session, company_id: int):
     leads = _eligible_purchase_leads(db, company_id)
     if not leads:
@@ -337,6 +355,11 @@ def _sync_purchase_requests_for_company(db: Session, company_id: int):
         desired_vehicle = ((lead.process_detail.desired_vehicle if lead.process_detail else "") or "").strip()
         if not desired_vehicle:
             continue
+
+        credit_request = _get_linked_credit_request(db, lead)
+        approved_amount = getattr(credit_request, "approved_amount", None)
+        approval_percentage = getattr(credit_request, "approval_percentage", None)
+        approved_down_payment = getattr(credit_request, "approved_down_payment", None)
 
         processed += 1
         safe_phone = (lead.phone or "").strip() or f"lead-{lead.id}"
@@ -379,6 +402,18 @@ def _sync_purchase_requests_for_company(db: Session, company_id: int):
                 purchase_request.company_id = lead.company_id
                 changed = True
                 updated += 1
+            if purchase_request.approved_amount != approved_amount:
+                purchase_request.approved_amount = approved_amount
+                changed = True
+                updated += 1
+            if purchase_request.approval_percentage != approval_percentage:
+                purchase_request.approval_percentage = approval_percentage
+                changed = True
+                updated += 1
+            if purchase_request.approved_down_payment != approved_down_payment:
+                purchase_request.approved_down_payment = approved_down_payment
+                changed = True
+                updated += 1
             if assigned_compras_id and purchase_request.assigned_to_id != assigned_compras_id:
                 purchase_request.assigned_to_id = assigned_compras_id
                 changed = True
@@ -404,6 +439,9 @@ def _sync_purchase_requests_for_company(db: Session, company_id: int):
             occupation="employee",
             application_mode="individual",
             down_payment=0,
+            approved_amount=approved_amount,
+            approval_percentage=approval_percentage,
+            approved_down_payment=approved_down_payment,
             status=models.CreditStatus.PENDING.value,
             notes=auto_note,
             company_id=lead.company_id,
@@ -675,12 +713,13 @@ def update_purchase(
             raise HTTPException(status_code=400, detail="Debes completar los datos del carro, valor de compra y valor de venta para marcarlo como carro comprado")
 
     reservation_amount_payload = purchase_update.reservation_amount
+    credit_used_amount_payload = purchase_update.credit_used_amount
     reservation_payment_method_payload = (purchase_update.reservation_payment_method or "").strip().lower() if purchase_update.reservation_payment_method is not None else None
 
     for field, value in purchase_update.dict(exclude_unset=True).items():
         if field == "status_note":
             continue
-        if field in {"reservation_amount", "reservation_payment_method"}:
+        if field in {"reservation_amount", "credit_used_amount", "reservation_payment_method"}:
             continue
         if field == "purchase_expenses":
             continue
@@ -729,6 +768,8 @@ def update_purchase(
                     detail.desired_vehicle = (purchase_update.desired_vehicle or "").strip() or detail.desired_vehicle
                 if reservation_amount_payload is not None:
                     detail.reservation_amount = reservation_amount_payload
+                if credit_used_amount_payload is not None:
+                    detail.credit_used_amount = credit_used_amount_payload
                 if reservation_payment_method_payload is not None:
                     detail.reservation_payment_method = reservation_payment_method_payload
                 if requested_status == PURCHASE_STATUS_RECEIVED and previous_status == PURCHASE_STATUS_REJECTED:

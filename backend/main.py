@@ -683,6 +683,11 @@ def ensure_lead_process_detail_reservation_columns():
                     "ALTER TABLE lead_process_details "
                     "ADD COLUMN reservation_amount INTEGER NULL"
                 ))
+            if "credit_used_amount" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE lead_process_details "
+                    "ADD COLUMN credit_used_amount INTEGER NULL"
+                ))
             if "reservation_payment_method" not in existing_cols:
                 conn.execute(text(
                     "ALTER TABLE lead_process_details "
@@ -2034,6 +2039,82 @@ def upsert_credit_application_from_lead(
     ))
 
 
+def upsert_credit_approval_data_for_lead(
+    db: Session,
+    lead: models.Lead,
+    lead_update: schemas.LeadUpdate,
+):
+    approved_amount = lead_update.approved_amount
+    approval_percentage = lead_update.approval_percentage
+    approved_down_payment = lead_update.approved_down_payment
+
+    if approved_amount is None and approval_percentage is None and approved_down_payment is None:
+        return
+
+    related_credit_records = db.query(models.CreditApplication).filter(
+        models.CreditApplication.lead_id == lead.id
+    ).order_by(
+        models.CreditApplication.updated_at.desc(),
+        models.CreditApplication.created_at.desc()
+    ).all()
+    related_credit = next(
+        (record for record in related_credit_records if not is_purchase_request_record(record)),
+        None
+    )
+
+    detail = db.query(models.LeadProcessDetail).filter(
+        models.LeadProcessDetail.lead_id == lead.id
+    ).first()
+    vehicle_context = get_lead_credit_vehicle_context(db, lead, detail)
+    desired_vehicle = vehicle_context["vehicle"]
+
+    if not related_credit:
+        credit_assignee_id = lead.assigned_to_id
+        if not (lead.assigned_to and is_credit_coordinator_role(getattr(lead.assigned_to, "role", None))):
+            for supervisor in getattr(lead, "supervisors", []) or []:
+                if is_active_user(supervisor) and is_credit_coordinator_role(getattr(supervisor, "role", None)):
+                    credit_assignee_id = supervisor.id
+                    break
+            else:
+                credit_coordinator = choose_credit_coordinator(db, lead.company_id)
+                if credit_coordinator:
+                    credit_assignee_id = credit_coordinator.id
+
+        related_credit = models.CreditApplication(
+            lead_id=lead.id,
+            client_name=lead.name or f"Lead {lead.id}",
+            phone=(lead.phone or "").strip() or f"lead-{lead.id}",
+            email=lead.email,
+            desired_vehicle=desired_vehicle,
+            monthly_income=0,
+            other_income=0,
+            occupation="employee",
+            application_mode="individual",
+            down_payment=0,
+            status=models.CreditStatus.APPROVED.value,
+            notes=f"[CREDIT_REQUEST] Actualizado desde lead #{lead.id}.",
+            company_id=lead.company_id,
+            assigned_to_id=credit_assignee_id
+        )
+        db.add(related_credit)
+        db.flush()
+
+    if approved_amount is not None:
+        related_credit.approved_amount = approved_amount
+    if approval_percentage is not None:
+        related_credit.approval_percentage = approval_percentage
+    if approved_down_payment is not None:
+        related_credit.approved_down_payment = approved_down_payment
+
+    normalized_lead_status = normalize_lead_status_value(lead.status)
+    if normalized_lead_status in {
+        models.LeadStatus.APPROVALS.value,
+        models.LeadStatus.RESERVED.value,
+        models.LeadStatus.PREPARATION.value,
+    }:
+        related_credit.status = models.CreditStatus.APPROVED.value
+
+
 
 # --- USER ENDPOINTS ---
 
@@ -2052,6 +2133,11 @@ def read_users(
 
     # Update current user last_active
     current_user.last_active = today
+    if related_credit:
+        lead.credit_application_id = related_credit.id
+        lead.credit_application_status = related_credit.status
+        lead.credit_application_updated_at = related_credit.updated_at
+
     db.commit()
 
     query = db.query(models.User)
@@ -3177,7 +3263,7 @@ def get_reports_stats(db: Session = Depends(get_db), current_user: models.User =
             models.CreditApplication.lead_id.isnot(None),
             models.CreditApplication.lead.has(
                 and_(
-                    models.Lead.status == models.LeadStatus.INTERESTED.value,
+                    models.Lead.status == models.LeadStatus.IN_PROCESS.value,
                     models.Lead.process_detail.has(models.LeadProcessDetail.has_vehicle == False),  # noqa: E712
                     models.Lead.process_detail.has(models.LeadProcessDetail.desired_vehicle.isnot(None))
                 )
@@ -5122,6 +5208,7 @@ def update_lead(
 
     # Auto-create/update credit request queue when lead enters credit stage
     upsert_credit_application_from_lead(db, lead, lead_update.comment)
+    upsert_credit_approval_data_for_lead(db, lead, lead_update)
 
     # Auto-create/update purchase request queue for role "compras"
     upsert_purchase_request_from_lead(db, lead)

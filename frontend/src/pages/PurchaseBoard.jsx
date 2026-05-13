@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+﻿import React, { useRef, useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -65,6 +65,36 @@ const formatPurchaseCurrency = (value) => {
         currency: 'COP',
         maximumFractionDigits: 0,
     }).format(numericValue);
+};
+
+const getPurchaseCreditUsedAmount = (purchase) => {
+    const numericValue = Number(purchase?.lead?.process_detail?.credit_used_amount);
+    return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : null;
+};
+
+const getPurchaseMinimumPayment = (purchase) => {
+    const approvedAmount = Number(purchase?.approved_amount);
+    const approvedDownPayment = Number(purchase?.approved_down_payment);
+    const approvalPercentage = Number(purchase?.approval_percentage);
+    const creditUsedAmount = getPurchaseCreditUsedAmount(purchase);
+
+    const baseDownPayment = Number.isFinite(approvedDownPayment) && approvedDownPayment > 0 ? approvedDownPayment : 0;
+    if (!Number.isFinite(creditUsedAmount) || creditUsedAmount <= 0) {
+        return baseDownPayment || null;
+    }
+
+    if (Number.isFinite(approvalPercentage) && approvalPercentage > 0 && approvalPercentage < 100) {
+        const remainingPercentage = 1 - (approvalPercentage / 100);
+        const remainingCashNeeded = Math.max(creditUsedAmount * remainingPercentage, 0);
+        return Math.round(remainingCashNeeded);
+    }
+
+    if (Number.isFinite(approvedAmount) && approvedAmount > 0) {
+        const remainingCashNeeded = Math.max(approvedAmount - creditUsedAmount, 0);
+        return Math.round(remainingCashNeeded);
+    }
+
+    return baseDownPayment || null;
 };
 
 const STATUS_LABELS = {
@@ -1016,7 +1046,7 @@ const PurchaseBoard = () => {
                             <button onClick={() => setSelectedPurchase(null)} className="text-2xl text-gray-400 hover:text-gray-600">&times;</button>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 mb-6">
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5 mb-6">
                             <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-4 shadow-sm">
                                 <p className="text-sm font-medium text-cyan-700">Vehículo solicitado</p>
                                 <p className="mt-2 text-2xl font-bold text-cyan-950 break-words">{selectedPurchase.desired_vehicle || 'Sin definir'}</p>
@@ -1025,9 +1055,18 @@ const PurchaseBoard = () => {
                                 <p className="text-sm font-medium text-emerald-700">Monto aprobado</p>
                                 <p className="mt-2 text-2xl font-bold text-emerald-950">{formatPurchaseCurrency(selectedPurchase.approved_amount)}</p>
                             </div>
+                            <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-5 py-4 shadow-sm">
+                                <p className="text-sm font-medium text-indigo-700">Credito a usar</p>
+                                <p className="mt-2 text-2xl font-bold text-indigo-950">{formatPurchaseCurrency(getPurchaseCreditUsedAmount(selectedPurchase))}</p>
+                            </div>
                             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-sm">
                                 <p className="text-sm font-medium text-amber-700">Pago mínimo</p>
-                                <p className="mt-2 text-2xl font-bold text-amber-950">{formatPurchaseCurrency(selectedPurchase.approved_down_payment)}</p>
+                                <p className="mt-2 text-2xl font-bold text-amber-950">{formatPurchaseCurrency(getPurchaseMinimumPayment(selectedPurchase))}</p>
+                                {getPurchaseCreditUsedAmount(selectedPurchase) ? (
+                                    <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-amber-700">
+                                        Recalculado con el credito a usar
+                                    </p>
+                                ) : null}
                             </div>
                             <div className="rounded-2xl border border-violet-200 bg-violet-50 px-5 py-4 shadow-sm">
                                 <p className="text-sm font-medium text-violet-700">Separación</p>
@@ -1767,3 +1806,4 @@ const PurchaseBoard = () => {
 };
 
 export default PurchaseBoard;
+

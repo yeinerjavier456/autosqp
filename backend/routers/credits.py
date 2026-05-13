@@ -9,6 +9,7 @@ from dependencies import get_current_user
 import os
 import shutil
 import uuid
+import json
 
 router = APIRouter(
     prefix="/credits",
@@ -131,10 +132,29 @@ def _is_credit_manager_role(role: Optional[models.Role]) -> bool:
 
 
 def _can_manage_credit_requests(user: Optional[models.User]) -> bool:
-    effective_role_name = (_get_effective_role_name(user) or "").strip().lower()
+    role = getattr(user, "role", None)
+    base_role_name = (getattr(role, "base_role_name", None) or "").strip().lower().replace("_", " ")
+    system_role_name = (getattr(role, "name", None) or "").strip().lower().replace("_", " ")
+    effective_role_name = base_role_name or system_role_name
     if effective_role_name in {"admin", "super_admin"}:
         return True
-    return _is_credit_manager_role(getattr(user, "role", None))
+    if _is_credit_manager_role(role):
+        return True
+
+    if not role:
+        return False
+
+    permissions_raw = getattr(role, "permissions_json", None)
+    try:
+        permissions = json.loads(permissions_raw) if permissions_raw else []
+    except Exception:
+        permissions = []
+
+    if not isinstance(permissions, list):
+        permissions = []
+
+    read_only_roles = {"asesor", "vendedor", "asesor vendedor", "aliado", "aliado estrategico"}
+    return "credits" in permissions and base_role_name not in read_only_roles
 
 
 def _is_active_user(user: Optional[models.User]) -> bool:

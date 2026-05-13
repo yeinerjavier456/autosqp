@@ -195,6 +195,7 @@ class LeadProcessDetail(Base):
     desired_vehicle = Column(String(200), nullable=True) # Si no lo tiene
     business_sheet_url = Column(String(500), nullable=True) # Ruta del archivo
     reservation_amount = Column(Integer, nullable=True)
+    credit_used_amount = Column(Integer, nullable=True)
     reservation_payment_method = Column(String(50), nullable=True)
     delivery_documents_complete = Column(Boolean, default=False, nullable=False)
     delivery_road_kit = Column(Boolean, default=False, nullable=False)
