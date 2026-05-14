@@ -3,6 +3,7 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 from database import get_db
 from dependencies import get_current_user
+import lead_assignment
 import models, schemas_whatsapp
 import datetime
 import json
@@ -555,15 +556,8 @@ def sync_historical_messages(
                 ).first()
 
                 if not lead:
-                    import random
-                    assigned_user_id = None
-                    potential_agents = db.query(models.User).join(models.Role).filter(
-                        models.User.company_id == target_company_id,
-                        models.Role.name.in_(["asesor", "vendedor"])
-                    ).all()
-
-                    if potential_agents:
-                        assigned_user_id = random.choice(potential_agents).id
+                    assigned_user = lead_assignment.choose_auto_assign_user(db, target_company_id)
+                    assigned_user_id = assigned_user.id if assigned_user else None
 
                     lead = models.Lead(
                         name=sender_name,

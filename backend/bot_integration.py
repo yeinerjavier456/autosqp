@@ -1,13 +1,13 @@
 import datetime
 import json
 import os
-import random
 import re
 from typing import Any, Dict, Optional
 
 import requests
 from sqlalchemy.orm import Session
 
+import lead_assignment
 import models
 
 
@@ -426,13 +426,8 @@ def maybe_create_channel_lead(
         db.commit()
         return existing_lead.id
 
-    assigned_user_id = None
-    advisors = db.query(models.User).join(models.Role).filter(
-        models.User.company_id == chat_session.company_id,
-        models.Role.name == "asesor",
-    ).all()
-    if advisors:
-        assigned_user_id = random.choice(advisors).id
+    assigned_user = lead_assignment.choose_auto_assign_user(db, chat_session.company_id)
+    assigned_user_id = assigned_user.id if assigned_user else None
 
     new_lead = models.Lead(
         source=chat_session.source,

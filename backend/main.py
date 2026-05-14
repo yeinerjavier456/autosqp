@@ -6,6 +6,7 @@ from sqlalchemy import or_, and_, func, text, false
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, get_db
 import models, schemas, auth_utils
+import lead_assignment
 from models import LeadNote, LeadFile # Explicitly for create_all to see them
 from routers import whatsapp, credits, purchases, notifications, rules, vehicles, meta, tiktok, gmail, appointments # Import the new routers
 from jose import JWTError, jwt
@@ -1255,12 +1256,7 @@ def is_active_user(user: Optional[models.User]) -> bool:
 
 
 def can_user_receive_auto_assigned_leads(user: Optional[models.User]) -> bool:
-    if not user or not is_active_user(user):
-        return False
-    role = getattr(user, "role", None)
-    if not is_advisor_role(role):
-        return False
-    return bool(getattr(user, "auto_assign_leads", False))
+    return lead_assignment.can_user_receive_auto_assigned_leads(user)
 
 
 def is_valid_lead_assignee(user: Optional[models.User], company_id: Optional[int] = None) -> bool:
@@ -1398,26 +1394,11 @@ def choose_purchase_manager(db: Session, company_id: Optional[int]) -> Optional[
 
 
 def get_auto_assign_candidate_users(db: Session, company_id: Optional[int]) -> List[models.User]:
-    if not company_id:
-        return []
-
-    candidates = db.query(models.User).join(models.Role, isouter=True).filter(
-        models.User.company_id == company_id
-    ).all()
-
-    eligible_users = []
-    for user in candidates:
-        if can_user_receive_auto_assigned_leads(user):
-            eligible_users.append(user)
-
-    return eligible_users
+    return lead_assignment.get_auto_assign_candidate_users(db, company_id)
 
 
 def choose_auto_assign_user(db: Session, company_id: Optional[int]) -> Optional[models.User]:
-    candidates = get_auto_assign_candidate_users(db, company_id)
-    if not candidates:
-        return None
-    return random.choice(candidates)
+    return lead_assignment.choose_auto_assign_user(db, company_id)
 
 
 def get_active_reassignment_candidates(
@@ -3195,15 +3176,11 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
     if supervisor_ids and not is_company_admin(current_user):
         raise HTTPException(status_code=403, detail="Solo un administrador puede agregar o quitar supervisores de un lead.")
     
-    # Automatic Assignment if not provided
+    # Automatic random assignment if not provided
     if not assigned_user_id:
-        if should_self_assign_manual_lead(current_user):
-            assigned_user_id = current_user.id
-
-        if not assigned_user_id:
-            auto_assigned_user = choose_auto_assign_user(db, company_id)
-            if auto_assigned_user:
-                assigned_user_id = auto_assigned_user.id
+        auto_assigned_user = choose_auto_assign_user(db, company_id)
+        if auto_assigned_user:
+            assigned_user_id = auto_assigned_user.id
     else:
         target_user = db.query(models.User).join(models.Role, isouter=True).filter(models.User.id == assigned_user_id).first()
         if not target_user or target_user.company_id != company_id:
@@ -4964,15 +4941,11 @@ def _legacy_create_lead_unused(
     # Manual Assignment by Aliado/Admin
     assigned_to_id = lead.assigned_to_id
     
-    # Automatic Assignment Logic (Fallback if not manually assigned)
+    # Automatic random assignment logic (fallback if not manually assigned)
     if not assigned_to_id:
-        if should_self_assign_manual_lead(current_user):
-            assigned_to_id = current_user.id
-
-        if not assigned_to_id:
-            auto_assigned_user = choose_auto_assign_user(db, company_id)
-            if auto_assigned_user:
-                assigned_to_id = auto_assigned_user.id
+        auto_assigned_user = choose_auto_assign_user(db, company_id)
+        if auto_assigned_user:
+            assigned_to_id = auto_assigned_user.id
     
     # Verify the manually assigned user belongs to the company
     elif assigned_to_id:
