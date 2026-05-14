@@ -117,7 +117,8 @@ def _is_purchase_manager_role(role: Optional[models.Role]) -> bool:
 
 def _get_purchase_manager_users(db: Session, company_id: int):
     candidates = db.query(models.User).join(models.Role, isouter=True).filter(
-        models.User.company_id == company_id
+        models.User.company_id == company_id,
+        models.User.is_active == True,
     ).all()
 
     purchase_users = []
@@ -142,6 +143,35 @@ def _choose_purchase_manager(db: Session, company_id: int) -> Optional[models.Us
     if not candidates:
         return None
     return random.choice(candidates)
+
+def _ensure_purchase_has_active_assignee(db: Session, purchase: models.CreditApplication) -> None:
+    """Self-heal purchases assigned to inactive/deleted users by reassigning to an active purchase manager."""
+    assigned_user = getattr(purchase, "assigned_to", None)
+    if assigned_user is not None and getattr(assigned_user, "is_active", True):
+        return
+
+    if getattr(purchase, "assigned_to_id", None):
+        candidate = db.query(models.User).filter(models.User.id == purchase.assigned_to_id).first()
+        if candidate is not None and getattr(candidate, "is_active", True):
+            purchase.assigned_to = candidate
+            return
+
+    reassigned = _choose_purchase_manager(db, purchase.company_id)
+    if reassigned is None:
+        if purchase.assigned_to_id is not None or purchase.assigned_to is not None:
+            purchase.assigned_to_id = None
+            purchase.assigned_to = None
+            db.add(purchase)
+            db.commit()
+            db.refresh(purchase)
+        return
+
+    if purchase.assigned_to_id != reassigned.id:
+        purchase.assigned_to_id = reassigned.id
+        purchase.assigned_to = reassigned
+        db.add(purchase)
+        db.commit()
+        db.refresh(purchase)
 
 
 def _can_manage_purchase_board(current_user: models.User) -> bool:
@@ -519,6 +549,7 @@ def _build_purchase_feed(
     for item in purchases:
         if item.status not in VALID_PURCHASE_STATUSES:
             item.status = models.CreditStatus.PENDING.value
+        _ensure_purchase_has_active_assignee(db, item)
     return {"items": purchases, "total": total}
 
 
@@ -579,6 +610,7 @@ def read_purchase_by_lead(
         ):
             raise HTTPException(status_code=403, detail="Not authorized")
 
+    _ensure_purchase_has_active_assignee(db, purchase)
     return purchase
 
 
@@ -618,6 +650,7 @@ def read_purchase_by_id(
         ):
             raise HTTPException(status_code=403, detail="Not authorized")
 
+    _ensure_purchase_has_active_assignee(db, purchase)
     return purchase
 
 
@@ -733,6 +766,8 @@ def update_purchase(
     if current_user.company_id and purchase.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
+    _ensure_purchase_has_active_assignee(db, purchase)
+
     previous_status = purchase.status
     previous_notes = purchase.notes or ""
     requested_status = (purchase_update.status or "").strip().lower() if purchase_update.status is not None else None
@@ -746,6 +781,26 @@ def update_purchase(
 
     if previous_status == PURCHASE_STATUS_RECEIVED and requested_status == PURCHASE_STATUS_OPTIONS:
         raise HTTPException(status_code=400, detail="La primera solicitud no puede pasar directo a opciones encontradas. Debes aceptarla primero.")
+
+    # Permissions:
+    # - Only the assigned purchase manager (or company admin) can accept/cancel/advance the purchase workflow.
+    # - Advisors (or lead supervisors/assignee) can only "resubmit" a rejected request back to received.
+    if requested_status and requested_status != previous_status:
+        role_name = _normalize_role_text(
+            getattr(getattr(current_user, "role", None), "base_role_name", None)
+            or getattr(getattr(current_user, "role", None), "name", None)
+        )
+        is_admin_like = role_name in {"admin", "super admin"}
+        if not is_admin_like:
+            if requested_status == PURCHASE_STATUS_RECEIVED and previous_status == PURCHASE_STATUS_REJECTED:
+                lead = db.query(models.Lead).options(joinedload(models.Lead.supervisors)).filter(models.Lead.id == purchase.lead_id).first() if purchase.lead_id else None
+                lead_supervisor_ids = {supervisor.id for supervisor in (lead.supervisors or []) if supervisor and supervisor.id} if lead else set()
+                lead_assigned_to_id = getattr(lead, "assigned_to_id", None) if lead else None
+                if current_user.id != lead_assigned_to_id and current_user.id not in lead_supervisor_ids:
+                    raise HTTPException(status_code=403, detail="No autorizado para reenviar esta solicitud.")
+            else:
+                if purchase.assigned_to_id != current_user.id:
+                    raise HTTPException(status_code=403, detail="Solo el responsable de compras puede realizar esta acciÃ³n.")
 
     purchase_expenses_payload = purchase_update.purchase_expenses
     normalized_purchase_expenses = None

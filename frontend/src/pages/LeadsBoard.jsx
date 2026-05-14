@@ -1303,16 +1303,22 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     }
     const creditAssignedName = creditDetail?.assigned_to?.full_name || creditDetail?.assigned_to?.email || 'Sin responsable';
     const purchaseRequestId = purchaseDetail?.id || lead?.purchase_request_id || null;
-    const purchaseAssignedName = purchaseDetail?.assigned_to?.full_name
-        || purchaseDetail?.assigned_to?.email
+    const purchaseAssignedToId = purchaseDetail?.assigned_to_id ?? purchaseDetail?.assigned_to?.id ?? null;
+    const purchaseAssignedIsActive = purchaseDetail?.assigned_to ? purchaseDetail.assigned_to.is_active !== false : true;
+    const purchaseAssignedName = (purchaseAssignedIsActive ? (purchaseDetail?.assigned_to?.full_name || purchaseDetail?.assigned_to?.email) : null)
         || (
             normalizedPurchaseStatus
-                ? 'Equipo de compras'
+                ? 'Sin asignar'
                 : 'Sin responsable'
         );
     const canManagePurchaseRequest = (
         isCompanyAdminRole(currentUserRole) ||
-        normalizedCurrentUserRole === 'compras'
+        (
+            normalizedCurrentUserRole === 'compras' &&
+            purchaseAssignedToId != null &&
+            currentUser?.id != null &&
+            Number(purchaseAssignedToId) === Number(currentUser.id)
+        )
     );
     const isAdvisorOrSellerRole = ['asesor', 'vendedor', 'asesor vendedor', 'aliado'].includes(normalizedCurrentUserRole);
     const canResubmitPurchaseRequest = (
@@ -1326,6 +1332,9 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     const reservationAmountValue = lead?.process_detail?.reservation_amount ?? null;
     const reservationCreditUsedAmountValue = lead?.process_detail?.credit_used_amount ?? null;
     const reservationPaymentMethodValue = lead?.process_detail?.reservation_payment_method || '';
+    const creditUsedAmountValue = reservationCreditUsedAmountValue != null
+        ? reservationCreditUsedAmountValue
+        : (purchaseDetail?.credit_used_amount ?? null);
     const purchaseSummarySource = [
         purchaseDetail?.notes || '',
         lead?.purchase_request_notes || '',
@@ -1558,6 +1567,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                 status_note: rejectionReason.trim()
             };
         } else if (decision === 'resubmit') {
+            const currentApprovedAmount = approvalMetrics?.approvedAmount ?? '';
+            const currentApprovalPercentage = approvalMetrics?.approvalPercentage ?? '';
+            const currentApprovedDownPayment = approvalMetrics?.minimumDownPayment ?? '';
+            const currentCreditUsedAmount = reservationCreditUsedAmountValue ?? '';
             const { value: resubmitPayload } = await Swal.fire({
                 title: 'Volver a solicitar búsqueda',
                 html: `
@@ -1578,6 +1591,31 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                 <option value="transferencia" ${reservationPaymentMethodValue === 'transferencia' ? 'selected' : ''}>Transferencia</option>
                             </select>
                         </div>
+                        <div style="margin-top:6px; padding-top:12px; border-top:1px solid #e2e8f0;">
+                            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px;">
+                                <div style="font-size:12px; font-weight:800; color:#0f172a;">Datos del crédito</div>
+                                <div style="font-size:11px; color:#64748b;">Puedes corregir aprobación, cuota y crédito a usar.</div>
+                            </div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                                <div>
+                                    <label style="display:block; font-size:12px; font-weight:700; color:#475569; margin-bottom:6px;">Monto aprobado</label>
+                                    <input id="swal-credit-approved-amount" type="number" min="0" class="swal2-input" style="margin:0; width:100%;" value="${currentApprovedAmount}" placeholder="Ej: 70000000" />
+                                </div>
+                                <div>
+                                    <label style="display:block; font-size:12px; font-weight:700; color:#475569; margin-bottom:6px;">Porcentaje aprobado</label>
+                                    <input id="swal-credit-approval-percentage" type="number" min="0" max="100" class="swal2-input" style="margin:0; width:100%;" value="${currentApprovalPercentage}" placeholder="Ej: 90" />
+                                </div>
+                                <div>
+                                    <label style="display:block; font-size:12px; font-weight:700; color:#475569; margin-bottom:6px;">Cuota inicial mínima</label>
+                                    <input id="swal-credit-approved-down-payment" type="number" min="0" class="swal2-input" style="margin:0; width:100%;" value="${currentApprovedDownPayment}" placeholder="Ej: 7000000" />
+                                    <div style="font-size:11px; color:#64748b; margin-top:4px;">Si la dejas vacía, se calcula con monto y porcentaje.</div>
+                                </div>
+                                <div>
+                                    <label style="display:block; font-size:12px; font-weight:700; color:#475569; margin-bottom:6px;">Crédito a usar</label>
+                                    <input id="swal-credit-used-amount" type="number" min="0" class="swal2-input" style="margin:0; width:100%;" value="${currentCreditUsedAmount}" placeholder="Ej: 50000000" />
+                                </div>
+                            </div>
+                        </div>
                         <div>
                             <label style="display:block; font-size:12px; font-weight:700; color:#475569; margin-bottom:6px;">Motivo para volver a solicitar</label>
                             <textarea id="swal-purchase-resubmit-reason" class="swal2-textarea" style="margin:0; width:100%;" placeholder="Explica por qué se debe volver a solicitar la búsqueda..."></textarea>
@@ -1594,6 +1632,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                     const reservationAmountRaw = document.getElementById('swal-purchase-separation')?.value?.trim() || '';
                     const reservationPaymentMethodValue = document.getElementById('swal-purchase-payment-method')?.value?.trim() || '';
                     const resubmitReasonValue = document.getElementById('swal-purchase-resubmit-reason')?.value?.trim() || '';
+                    const approvedAmountRaw = document.getElementById('swal-credit-approved-amount')?.value?.trim() || '';
+                    const approvalPercentageRaw = document.getElementById('swal-credit-approval-percentage')?.value?.trim() || '';
+                    const approvedDownPaymentRaw = document.getElementById('swal-credit-approved-down-payment')?.value?.trim() || '';
+                    const creditUsedAmountRaw = document.getElementById('swal-credit-used-amount')?.value?.trim() || '';
 
                     if (!desiredVehicleValue) {
                         Swal.showValidationMessage('Debes indicar el vehículo solicitado');
@@ -1612,11 +1654,43 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                         return false;
                     }
 
+                    const parsedApprovedAmount = approvedAmountRaw ? Number(approvedAmountRaw) : null;
+                    const parsedApprovalPercentage = approvalPercentageRaw ? Number(approvalPercentageRaw) : null;
+                    let parsedApprovedDownPayment = approvedDownPaymentRaw ? Number(approvedDownPaymentRaw) : null;
+                    const parsedCreditUsedAmount = creditUsedAmountRaw ? Number(creditUsedAmountRaw) : null;
+
+                    if (parsedApprovedAmount != null && (!Number.isFinite(parsedApprovedAmount) || parsedApprovedAmount < 0)) {
+                        Swal.showValidationMessage('El monto aprobado debe ser un número válido');
+                        return false;
+                    }
+                    if (parsedApprovalPercentage != null && (!Number.isFinite(parsedApprovalPercentage) || parsedApprovalPercentage < 0 || parsedApprovalPercentage > 100)) {
+                        Swal.showValidationMessage('El porcentaje aprobado debe estar entre 0 y 100');
+                        return false;
+                    }
+                    if (parsedApprovedDownPayment != null && (!Number.isFinite(parsedApprovedDownPayment) || parsedApprovedDownPayment < 0)) {
+                        Swal.showValidationMessage('La cuota inicial mínima debe ser un número válido');
+                        return false;
+                    }
+                    if (parsedCreditUsedAmount != null && (!Number.isFinite(parsedCreditUsedAmount) || parsedCreditUsedAmount < 0)) {
+                        Swal.showValidationMessage('El crédito a usar debe ser un número válido');
+                        return false;
+                    }
+
+                    // Auto-calculate minimum down payment if omitted but amount + percentage are provided.
+                    if ((parsedApprovedDownPayment == null || parsedApprovedDownPayment === 0) && parsedApprovedAmount && parsedApprovalPercentage) {
+                        const calculated = calculateMinimumDownPaymentFromApproval(parsedApprovedAmount, parsedApprovalPercentage);
+                        if (calculated != null) parsedApprovedDownPayment = calculated;
+                    }
+
                     return {
                         desired_vehicle: desiredVehicleValue,
                         reservation_amount: Number(reservationAmountRaw),
                         reservation_payment_method: reservationPaymentMethodValue,
                         reason: resubmitReasonValue,
+                        approved_amount: parsedApprovedAmount,
+                        approval_percentage: parsedApprovalPercentage,
+                        approved_down_payment: parsedApprovedDownPayment,
+                        credit_used_amount: parsedCreditUsedAmount,
                     };
                 }
             });
@@ -1627,6 +1701,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                 desired_vehicle: resubmitPayload.desired_vehicle,
                 reservation_amount: resubmitPayload.reservation_amount,
                 reservation_payment_method: resubmitPayload.reservation_payment_method,
+                credit_used_amount: resubmitPayload.credit_used_amount,
+                approved_amount: resubmitPayload.approved_amount,
+                approval_percentage: resubmitPayload.approval_percentage,
+                approved_down_payment: resubmitPayload.approved_down_payment,
             };
         } else {
             return;
@@ -1641,6 +1719,28 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             if (decision === 'resubmit') {
+                // Keep lead and purchase request in sync for credit/reservation data.
+                try {
+                    await axios.put(
+                        `${API_BASE_URL}/leads/${lead.id}`,
+                        {
+                            status: normalizeLeadStatus(lead?.status),
+                            comment: 'Datos actualizados al reenviar solicitud de compra.',
+                            process_detail: buildCurrentProcessDetailPayload({
+                                desired_vehicle: statusPayload.desired_vehicle,
+                                reservation_amount: statusPayload.reservation_amount,
+                                reservation_payment_method: statusPayload.reservation_payment_method,
+                                credit_used_amount: statusPayload.credit_used_amount ?? null,
+                            }),
+                            ...(statusPayload.approved_amount != null ? { approved_amount: statusPayload.approved_amount } : {}),
+                            ...(statusPayload.approval_percentage != null ? { approval_percentage: statusPayload.approval_percentage } : {}),
+                            ...(statusPayload.approved_down_payment != null ? { approved_down_payment: statusPayload.approved_down_payment } : {}),
+                        },
+                        { headers: { Authorization: `Bearer ${token}` } }
+                    );
+                } catch (leadSyncError) {
+                    console.error('Error syncing lead after resubmit', leadSyncError);
+                }
                 if (statusPayload.desired_vehicle) {
                     setDesiredVehicle(statusPayload.desired_vehicle);
                 }
@@ -2702,7 +2802,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                 </div>
                                 {(purchaseDetail || normalizedPurchaseStatus || purchaseRelatedNotes.length > 0 || lead?.purchase_request_notes) ? (
                                     <>
-                                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
                                             <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-4 shadow-sm">
                                                 <p className="text-sm font-medium text-cyan-700">Vehículo solicitado</p>
                                                 <p className="mt-2 text-2xl font-bold text-cyan-950 break-words">
@@ -2713,6 +2813,12 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                                 <p className="text-sm font-medium text-emerald-700">Monto aprobado</p>
                                                 <p className="mt-2 text-2xl font-bold text-emerald-950">
                                                     {approvalMetrics.approvedAmount != null ? formatLeadCurrencyValue(approvalMetrics.approvedAmount) : 'Sin definir'}
+                                                </p>
+                                            </div>
+                                            <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-5 py-4 shadow-sm">
+                                                <p className="text-sm font-medium text-indigo-700">Crédito a usar</p>
+                                                <p className="mt-2 text-2xl font-bold text-indigo-950">
+                                                    {creditUsedAmountValue != null ? formatLeadCurrencyValue(creditUsedAmountValue) : 'Sin definir'}
                                                 </p>
                                             </div>
                                             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-sm">
