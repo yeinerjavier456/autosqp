@@ -2159,11 +2159,6 @@ def read_users(
 
     # Update current user last_active
     current_user.last_active = today
-    if related_credit:
-        lead.credit_application_id = related_credit.id
-        lead.credit_application_status = related_credit.status
-        lead.credit_application_updated_at = related_credit.updated_at
-
     db.commit()
 
     query = db.query(models.User)
