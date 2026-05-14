@@ -3292,6 +3292,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const [dragApprovedAmount, setDragApprovedAmount] = useState('');
     const [dragApprovalPercentage, setDragApprovalPercentage] = useState('');
     const [dragApprovedDownPayment, setDragApprovedDownPayment] = useState('');
+    // Board list payload doesn't always include credit approval details; for "Reservas" we fetch full lead detail to prefill.
+    const [pendingLeadDetailOverride, setPendingLeadDetailOverride] = useState(null);
 
     // Modal State - History View
     const [selectedLeadForHistory, setSelectedLeadForHistory] = useState(null);
@@ -3344,6 +3346,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         setDragApprovedAmount('');
         setDragApprovalPercentage('');
         setDragApprovedDownPayment('');
+        setPendingLeadDetailOverride(null);
         setNewLeadForm({
             name: '',
             email: '',
@@ -3587,7 +3590,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         e.preventDefault();
     };
 
-    const handleDrop = (e, newStatus) => {
+    const handleDrop = async (e, newStatus) => {
         const leadId = e.dataTransfer.getData("leadId");
         if (leadId) {
             const id = parseInt(leadId);
@@ -3603,6 +3606,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
             setPendingStatusChange({ leadId: id, newStatus });
             setStatusComment('');
+            setPendingLeadDetailOverride(null);
             setDragHasVehicle(null);
             setDragSelectedVehicleId('');
             setDragDesiredVehicle('');
@@ -3618,6 +3622,33 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 initiateSale(id);
             } else {
                 setShowCommentModal(true);
+                if (normalizeLeadStatus(newStatus) === 'reserved') {
+                    try {
+                        const detailedLead = await fetchLeadDetail(id);
+                        if (detailedLead && detailedLead.id === id) {
+                            setPendingLeadDetailOverride(detailedLead);
+                            const detailedMetrics = getLeadApprovalMetrics(detailedLead);
+                            if (detailedMetrics.approvedAmount != null) setDragApprovedAmount(String(detailedMetrics.approvedAmount));
+                            if (detailedMetrics.approvalPercentage != null) setDragApprovalPercentage(String(detailedMetrics.approvalPercentage));
+                            if (detailedMetrics.minimumDownPayment != null) setDragApprovedDownPayment(String(detailedMetrics.minimumDownPayment));
+
+                            const existingReservationAmount = detailedLead?.process_detail?.reservation_amount;
+                            const existingPaymentMethod = detailedLead?.process_detail?.reservation_payment_method;
+                            const existingCreditUsedAmount = detailedLead?.process_detail?.credit_used_amount;
+                            if (existingReservationAmount != null && Number(existingReservationAmount) > 0) {
+                                setDragReservationAmount(String(existingReservationAmount));
+                            }
+                            if (existingPaymentMethod) {
+                                setDragReservationPaymentMethod(String(existingPaymentMethod));
+                            }
+                            if (existingCreditUsedAmount != null && Number(existingCreditUsedAmount) > 0) {
+                                setDragCreditUsedAmount(String(existingCreditUsedAmount));
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error fetching detailed lead for Reservas', error);
+                    }
+                }
             }
         }
     };
@@ -3718,7 +3749,9 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             const parsedApprovalPercentage = Number(String(dragApprovalPercentage || '').replace(/[^\d]/g, ''));
             const parsedApprovedDownPayment = Number(String(dragApprovedDownPayment || '').replace(/[^\d]/g, ''));
             const normalizedPaymentMethod = String(dragReservationPaymentMethod || '').trim().toLowerCase();
-            const leadRef = leads.find((item) => item.id === leadId);
+            const leadRef = (pendingLeadDetailOverride?.id === leadId)
+                ? pendingLeadDetailOverride
+                : leads.find((item) => item.id === leadId);
             const leadApprovalMetrics = getLeadApprovalMetrics(leadRef);
             const leadApprovedAmount = Number(leadApprovalMetrics.approvedAmount || 0) || 0;
             const leadApprovalPercentage = Number(leadApprovalMetrics.approvalPercentage || 0) || 0;
@@ -4139,7 +4172,11 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     };
 
     const pendingLeadForStatusChange = pendingStatusChange
-        ? leads.find((item) => item.id === pendingStatusChange.leadId) || null
+        ? (
+            pendingLeadDetailOverride?.id === pendingStatusChange.leadId
+                ? pendingLeadDetailOverride
+                : (leads.find((item) => item.id === pendingStatusChange.leadId) || null)
+        )
         : null;
     const pendingLeadApprovalMetrics = getLeadApprovalMetrics(pendingLeadForStatusChange);
 
