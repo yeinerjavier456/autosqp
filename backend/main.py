@@ -1437,11 +1437,13 @@ def get_active_reassignment_candidates(
 
 def should_self_assign_manual_lead(current_user: models.User) -> bool:
     current_role = getattr(current_user, "role", None)
-    if is_ally_role(current_role):
-        return False
     if is_advisor_role(current_role):
         return True
-    return is_purchase_manager_role(current_role)
+    return False
+
+
+def should_auto_assign_manual_lead(current_user: models.User) -> bool:
+    return get_user_role_name(current_user) == "super_admin"
 
 
 def normalize_supervisor_ids(supervisor_ids: Optional[List[int]]) -> List[int]:
@@ -3160,7 +3162,6 @@ def bulk_assign_leads(
 @app.post("/leads", response_model=schemas.Lead)
 def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     import datetime
-    import random
     
     # 1. Determine Company
     company_id = lead.company_id
@@ -3176,11 +3177,15 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
     if supervisor_ids and not is_company_admin(current_user):
         raise HTTPException(status_code=403, detail="Solo un administrador puede agregar o quitar supervisores de un lead.")
     
-    # Automatic random assignment if not provided
+    # Manual leads created by advisors stay assigned to themselves. Random
+    # assignment here is only for super admin-created leads.
     if not assigned_user_id:
-        auto_assigned_user = choose_auto_assign_user(db, company_id)
-        if auto_assigned_user:
-            assigned_user_id = auto_assigned_user.id
+        if should_self_assign_manual_lead(current_user):
+            assigned_user_id = current_user.id
+        elif should_auto_assign_manual_lead(current_user):
+            auto_assigned_user = choose_auto_assign_user(db, company_id)
+            if auto_assigned_user:
+                assigned_user_id = auto_assigned_user.id
     else:
         target_user = db.query(models.User).join(models.Role, isouter=True).filter(models.User.id == assigned_user_id).first()
         if not target_user or target_user.company_id != company_id:
@@ -4941,11 +4946,15 @@ def _legacy_create_lead_unused(
     # Manual Assignment by Aliado/Admin
     assigned_to_id = lead.assigned_to_id
     
-    # Automatic random assignment logic (fallback if not manually assigned)
+    # Manual leads created by advisors stay assigned to themselves. Random
+    # assignment here is only for super admin-created leads.
     if not assigned_to_id:
-        auto_assigned_user = choose_auto_assign_user(db, company_id)
-        if auto_assigned_user:
-            assigned_to_id = auto_assigned_user.id
+        if should_self_assign_manual_lead(current_user):
+            assigned_to_id = current_user.id
+        elif should_auto_assign_manual_lead(current_user):
+            auto_assigned_user = choose_auto_assign_user(db, company_id)
+            if auto_assigned_user:
+                assigned_to_id = auto_assigned_user.id
     
     # Verify the manually assigned user belongs to the company
     elif assigned_to_id:
