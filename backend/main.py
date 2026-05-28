@@ -1431,6 +1431,31 @@ def get_active_reassignment_candidates(
     return valid_users
 
 
+def get_active_advisor_users_for_redistribution(
+    db: Session,
+    company_id: Optional[int],
+    exclude_user_id: Optional[int] = None
+) -> List[models.User]:
+    if not company_id:
+        return []
+
+    candidates = db.query(models.User).join(models.Role, isouter=True).filter(
+        models.User.company_id == company_id
+    ).all()
+
+    valid_users = []
+    for user in candidates:
+        if exclude_user_id and user.id == exclude_user_id:
+            continue
+        if not is_active_user(user):
+            continue
+        if not is_advisor_role(getattr(user, "role", None)):
+            continue
+        valid_users.append(user)
+
+    return valid_users
+
+
 def should_self_assign_manual_lead(current_user: models.User) -> bool:
     current_role = getattr(current_user, "role", None)
     if is_advisor_role(current_role):
@@ -2389,13 +2414,10 @@ def redistribute_user_leads(
     if source_user.id == current_user.id:
         raise HTTPException(status_code=400, detail="No puedes redistribuir tus propios leads desde esta accion")
 
-    recipient_users = get_active_reassignment_candidates(
+    recipient_users = get_active_advisor_users_for_redistribution(
         db=db,
         company_id=source_user.company_id,
-        current_user=current_user,
         exclude_user_id=source_user.id,
-        advisor_only=True,
-        auto_assign_only=True,
     )
     if not recipient_users:
         raise HTTPException(status_code=400, detail="No hay usuarios activos disponibles para redistribuir estos leads")
@@ -2421,11 +2443,15 @@ def redistribute_user_leads(
         previous_assigned_to_id = lead.assigned_to_id
         lead.assigned_to_id = target_user.id
 
-        supervisor_ids = normalize_supervisor_ids(getattr(lead, "supervisor_ids", []))
-        if previous_assigned_to_id:
-            supervisor_ids = ensure_user_in_supervisors(supervisor_ids, previous_assigned_to_id)
-        if should_keep_assigner_as_supervisor(current_user.id, target_user.id):
-            supervisor_ids = ensure_user_in_supervisors(supervisor_ids, current_user.id)
+        supervisor_ids = [
+            supervisor.id
+            for supervisor in (getattr(lead, "supervisors", None) or [])
+            if (
+                supervisor
+                and supervisor.id != source_user.id
+                and is_active_user(supervisor)
+            )
+        ]
         sync_lead_supervisors(db, lead, supervisor_ids, current_user.id)
 
         db.add(models.LeadHistory(
