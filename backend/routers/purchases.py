@@ -122,20 +122,14 @@ def _get_purchase_manager_users(db: Session, company_id: int):
     ).all()
 
     purchase_users = []
-    purchase_enabled_users = []
     for user in candidates:
         role = getattr(user, "role", None)
         if not role:
             continue
-        permissions = _parse_role_permissions(role)
-        has_purchase_access = "purchase_board" in permissions or _is_purchase_manager_role(role)
-        if not has_purchase_access:
-            continue
-        purchase_enabled_users.append(user)
         if _is_purchase_manager_role(role):
             purchase_users.append(user)
 
-    return purchase_users or purchase_enabled_users
+    return purchase_users
 
 
 def _choose_purchase_manager(db: Session, company_id: int) -> Optional[models.User]:
@@ -152,7 +146,11 @@ def _ensure_purchase_has_active_assignee(db: Session, purchase: models.CreditApp
 
     if getattr(purchase, "assigned_to_id", None):
         candidate = db.query(models.User).filter(models.User.id == purchase.assigned_to_id).first()
-        if candidate is not None and getattr(candidate, "is_active", True):
+        if (
+            candidate is not None
+            and getattr(candidate, "is_active", True)
+            and _is_purchase_manager_role(getattr(candidate, "role", None))
+        ):
             purchase.assigned_to = candidate
             return
 

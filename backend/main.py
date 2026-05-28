@@ -1370,20 +1370,16 @@ def get_purchase_manager_users(db: Session, company_id: Optional[int]) -> List[m
     ).all()
 
     purchase_users = []
-    purchase_enabled_users = []
     for user in candidates:
         if not is_active_user(user):
             continue
         role = getattr(user, "role", None)
         if not role:
             continue
-        if "purchase_board" not in get_role_permissions(role):
-            continue
-        purchase_enabled_users.append(user)
         if is_purchase_manager_role(role):
             purchase_users.append(user)
 
-    return purchase_users or purchase_enabled_users
+    return purchase_users
 
 
 def choose_purchase_manager(db: Session, company_id: Optional[int]) -> Optional[models.User]:
