@@ -56,6 +56,25 @@ def _ensure_column(engine: Engine, table_name: str, column_name: str, add_column
     return True
 
 
+def _mysql_index_exists(engine: Engine, table_name: str, index_name: str) -> bool:
+    db_name = _mysql_db_name(engine)
+    if not db_name:
+        return False
+    sql = text(
+        """
+        SELECT 1
+        FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = :db
+          AND TABLE_NAME = :table
+          AND INDEX_NAME = :index_name
+        LIMIT 1
+        """
+    )
+    with engine.connect() as conn:
+        row = conn.execute(sql, {"db": db_name, "table": table_name, "index_name": index_name}).first()
+        return bool(row)
+
+
 def ensure_mysql_schema(engine: Engine) -> None:
     """
     Idempotent schema fixes for MySQL restores.
@@ -65,6 +84,24 @@ def ensure_mysql_schema(engine: Engine) -> None:
     """
     if engine.url.get_backend_name() != "mysql":
         return
+
+    if _mysql_table_exists(engine, "system_logs"):
+        _ensure_column(
+            engine,
+            "system_logs",
+            "company_id",
+            "ALTER TABLE system_logs ADD COLUMN company_id INT NULL",
+        )
+        if not _mysql_index_exists(engine, "system_logs", "ix_system_logs_company_id"):
+            with engine.begin() as conn:
+                conn.execute(text("CREATE INDEX ix_system_logs_company_id ON system_logs (company_id)"))
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE system_logs sl "
+                "JOIN users u ON u.id = sl.user_id "
+                "SET sl.company_id = u.company_id "
+                "WHERE sl.company_id IS NULL AND u.company_id IS NOT NULL"
+            ))
 
     if not _mysql_table_exists(engine, "credit_applications"):
         return

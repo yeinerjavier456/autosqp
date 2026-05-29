@@ -953,7 +953,13 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 
 def log_action_to_db(db: Session, user_id: int, action: str, entity_type: str, entity_id: int, details: str = None, ip_address: str = None):
     try:
+        company_id = None
+        if user_id:
+            log_user = db.query(models.User.company_id).filter(models.User.id == user_id).first()
+            company_id = log_user[0] if log_user else None
+
         new_log = models.SystemLog(
+            company_id=company_id,
             user_id=user_id,
             action=action,
             entity_type=entity_type,
@@ -2507,10 +2513,22 @@ def read_system_logs(
     Restricted to Admins and Super Admins.
     """
     role_obj = db.query(models.Role).filter(models.Role.id == current_user.role_id).first()
-    if not role_obj or role_obj.name not in ["super_admin", "admin"]:
+    effective_role_name = getattr(role_obj, "base_role_name", None) or getattr(role_obj, "name", None)
+    if not role_obj or effective_role_name not in ["super_admin", "admin"]:
         raise HTTPException(status_code=403, detail="No tienes permisos para ver auditoría")
 
     query = db.query(models.SystemLog).outerjoin(models.User, models.SystemLog.user_id == models.User.id)
+
+    if current_user.company_id:
+        query = query.filter(
+            or_(
+                models.SystemLog.company_id == current_user.company_id,
+                and_(
+                    models.SystemLog.company_id.is_(None),
+                    models.User.company_id == current_user.company_id
+                )
+            )
+        )
 
     if user_query:
         like_value = f"%{user_query.strip()}%"

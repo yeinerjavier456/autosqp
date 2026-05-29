@@ -892,6 +892,7 @@ class PublicChatMessageResponse(BaseModel):
     messages: List[PublicChatMessageItem] = []
 
 class SystemLogBase(BaseModel):
+    company_id: Optional[int] = None
     user_id: Optional[int] = None
     action: str
     entity_type: Optional[str] = None

@@ -648,6 +648,7 @@ class SystemLog(Base):
     __tablename__ = "system_logs"
 
     id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True) # Que usuario hizo la accion. Null = Sistema
     action = Column(String(50)) # e.g. "LOGIN", "CREATE_VEHICLE", "UPDATE_LEAD", "DELETE_USER"
     entity_type = Column(String(50), nullable=True) # e.g. "Vehicle", "Lead", "User", "Auth"
@@ -657,3 +658,4 @@ class SystemLog(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     user = relationship("User")
+    company = relationship("Company")

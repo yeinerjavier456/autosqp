@@ -13,7 +13,13 @@ from import_vehicles_from_excel import import_inventory
 
 def log_action_to_db(db: Session, user_id: int, action: str, entity_type: str, entity_id: int, details: str = None, ip_address: str = None):
     try:
+        company_id = None
+        if user_id:
+            log_user = db.query(models.User.company_id).filter(models.User.id == user_id).first()
+            company_id = log_user[0] if log_user else None
+
         new_log = models.SystemLog(
+            company_id=company_id,
             user_id=user_id,
             action=action,
             entity_type=entity_type,
