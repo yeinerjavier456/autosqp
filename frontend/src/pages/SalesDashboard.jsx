@@ -47,6 +47,7 @@ const SalesDashboard = () => {
     const [receiptCategory, setReceiptCategory] = useState('');
     const [receiptMovementType, setReceiptMovementType] = useState('');
     const [selectedReceiptGroup, setSelectedReceiptGroup] = useState(null);
+    const [saleAttachments, setSaleAttachments] = useState([]);
     const [periodPreset, setPeriodPreset] = useState('last_month');
     const [startDate, setStartDate] = useState(defaultRange.start);
     const [endDate, setEndDate] = useState(defaultRange.end);
@@ -129,6 +130,14 @@ const SalesDashboard = () => {
     useEffect(() => {
         fetchData();
     }, [filterStatus, salesSearch, receiptSearch, receiptCategory, receiptMovementType, startDate, endDate]);
+
+    useEffect(() => {
+        if (selectedReceiptGroup?.sale?.id) {
+            fetchSaleAttachments(selectedReceiptGroup.sale.id);
+        } else {
+            setSaleAttachments([]);
+        }
+    }, [selectedReceiptGroup?.sale?.id]);
 
     const fetchData = async () => {
         setLoading(true);
@@ -336,10 +345,11 @@ const SalesDashboard = () => {
         window.open(`/api/finance/tax-report.xlsx?year=${activeYear}&token=${token}`, '_blank');
     };
 
-    const handleDownloadProjectionReport = () => {
+    const handleDownloadReceiptsReport = () => {
         const token = localStorage.getItem('token');
-        const activeYear = startDate ? Number(startDate.slice(0, 4)) : new Date().getFullYear();
-        window.open(`/api/finance/projection.xlsx?year=${activeYear}&token=${token}`, '_blank');
+        const params = new URLSearchParams();
+        params.set('token', token);
+        window.open(`/api/finance/receipts.xlsx?${params.toString()}`, '_blank');
     };
 
     const handleEditTaxInfo = async (row = null) => {
@@ -694,6 +704,109 @@ const SalesDashboard = () => {
             Swal.fire('Error', error.response?.data?.detail || 'No se pudo registrar el recibo.', 'error');
         } finally {
             setCreatingReceipt(false);
+        }
+    };
+
+    const fetchSaleAttachments = async (saleId) => {
+        if (!saleId) return;
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.get(`/api/finance/sales/${saleId}/attachments`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setSaleAttachments(Array.isArray(response.data?.items) ? response.data.items : []);
+        } catch (error) {
+            console.error('Error loading sale attachments', error);
+            setSaleAttachments([]);
+        }
+    };
+
+    const handleUploadSaleAttachment = async (sale) => {
+        if (!sale?.id) return;
+        const { value } = await Swal.fire({
+            title: 'Adjuntar comprobante',
+            width: 520,
+            html: `
+                <div class="space-y-4 text-left">
+                    <label class="block text-sm font-semibold text-slate-700">
+                        Archivo
+                        <input id="sale-attachment-file" type="file" class="swal2-file" />
+                    </label>
+                    <label class="block text-sm font-semibold text-slate-700">
+                        Nota
+                        <textarea id="sale-attachment-note" class="swal2-textarea" placeholder="Nombre, detalle u observación del comprobante"></textarea>
+                    </label>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Subir comprobante',
+            cancelButtonText: 'Cancelar',
+            focusConfirm: false,
+            preConfirm: () => {
+                const file = document.getElementById('sale-attachment-file')?.files?.[0];
+                if (!file) {
+                    Swal.showValidationMessage('Debes seleccionar un archivo');
+                    return false;
+                }
+                return {
+                    file,
+                    note: (document.getElementById('sale-attachment-note')?.value || '').trim()
+                };
+            },
+            customClass: {
+                confirmButton: 'bg-blue-600 text-white px-4 py-2 rounded-lg ml-2',
+                cancelButton: 'bg-gray-400 text-white px-4 py-2 rounded-lg'
+            },
+            buttonsStyling: false
+        });
+
+        if (!value) return;
+        try {
+            const token = localStorage.getItem('token');
+            const formData = new FormData();
+            formData.append('file', value.file);
+            formData.append('note', value.note || '');
+            await axios.post(`/api/finance/sales/${sale.id}/attachments`, formData, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+            await fetchSaleAttachments(sale.id);
+            Swal.fire('Exito', 'Comprobante adjuntado a la venta.', 'success');
+        } catch (error) {
+            console.error('Error uploading sale attachment', error);
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo subir el comprobante.', 'error');
+        }
+    };
+
+    const handleDeleteSaleAttachment = async (attachment) => {
+        if (!selectedReceiptGroup?.sale?.id || !attachment?.id) return;
+        const result = await Swal.fire({
+            title: 'Eliminar comprobante',
+            text: 'El archivo se quitará de esta venta.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Si, eliminar',
+            cancelButtonText: 'Cancelar',
+            customClass: {
+                confirmButton: 'bg-red-600 text-white px-4 py-2 rounded-lg ml-2',
+                cancelButton: 'bg-slate-600 text-white px-4 py-2 rounded-lg'
+            },
+            buttonsStyling: false
+        });
+        if (!result.isConfirmed) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            await axios.delete(`/api/finance/sales/${selectedReceiptGroup.sale.id}/attachments/${attachment.id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            await fetchSaleAttachments(selectedReceiptGroup.sale.id);
+            Swal.fire('Exito', 'Comprobante eliminado.', 'success');
+        } catch (error) {
+            console.error('Error deleting sale attachment', error);
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo eliminar el comprobante.', 'error');
         }
     };
 
@@ -1160,12 +1273,6 @@ const SalesDashboard = () => {
                 >
                     Tributación
                 </button>
-                <button
-                    onClick={() => setActiveTab('projection')}
-                    className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === 'projection' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
-                >
-                    Proyección
-                </button>
             </div>
 
             <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
@@ -1535,8 +1642,19 @@ const SalesDashboard = () => {
 
                         <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
                             <div className="border-b border-gray-100 bg-gray-50 px-6 py-4">
-                                <h3 className="text-lg font-bold text-gray-800">Libro de recibos</h3>
-                                <p className="text-sm text-gray-500">Soportes cargados desde contabilidad.</p>
+                                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                    <div>
+                                        <h3 className="text-lg font-bold text-gray-800">Libro de recibos</h3>
+                                        <p className="text-sm text-gray-500">Soportes cargados desde contabilidad.</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleDownloadReceiptsReport}
+                                        className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+                                    >
+                                        Descargar Excel
+                                    </button>
+                                </div>
                                 <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_200px_200px_auto]">
                                     <input
                                         type="text"
@@ -1813,37 +1931,7 @@ const SalesDashboard = () => {
                         </table>
                     </div>
                 </div>
-            ) : (
-                <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-                    <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 px-6 py-4 md:flex-row md:items-center md:justify-between">
-                        <div>
-                            <h3 className="text-lg font-bold text-gray-800">Proyección contable</h3>
-                            <p className="text-sm text-gray-500">Genera el libro con costos por vehículo, gastos, ventas en proceso, pagos por carro y estado de ventas.</p>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={handleDownloadProjectionReport}
-                            className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
-                        >
-                            Descargar proyección Excel
-                        </button>
-                    </div>
-                    <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-5">
-                        {[
-                            ['Costos x vehículo', 'Compra, gastos, costos totales, venta, saldos y utilidad por carro.'],
-                            ['Gastos', 'Egresos registrados en contabilidad durante el año seleccionado.'],
-                            ['Ventas en proceso', 'Solicitudes de crédito/compra activas y datos de financiación.'],
-                            ['Pagos x carro', 'Ingresos, abonos, gastos, diferencia, base de impuesto e IVA por venta.'],
-                            ['Estado ventas', 'Pendientes y observaciones del proceso comercial.']
-                        ].map(([title, description]) => (
-                            <div key={title} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                                <p className="font-semibold text-slate-900">{title}</p>
-                                <p className="mt-2 text-sm text-slate-500">{description}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+            ) : null}
             {selectedReceiptGroup && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
                     <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl">
@@ -1872,6 +1960,13 @@ const SalesDashboard = () => {
                                 </button>
                                 <button
                                     type="button"
+                                    onClick={() => handleUploadSaleAttachment(selectedReceiptGroup.sale)}
+                                    className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100"
+                                >
+                                    Adjuntar comprobante
+                                </button>
+                                <button
+                                    type="button"
                                     onClick={() => setSelectedReceiptGroup(null)}
                                     className="rounded-full bg-slate-100 px-3 py-1 text-lg font-bold text-slate-600 hover:bg-slate-200"
                                 >
@@ -1892,6 +1987,50 @@ const SalesDashboard = () => {
                                 <div className="rounded-xl bg-blue-50 p-4">
                                     <p className="text-xs font-semibold uppercase text-blue-700">Neto</p>
                                     <p className={`mt-1 text-xl font-bold ${selectedReceiptGroupTotals.balanceTotal >= 0 ? 'text-blue-700' : 'text-red-700'}`}>${selectedReceiptGroupTotals.balanceTotal.toLocaleString()}</p>
+                                </div>
+                            </div>
+                            <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                    <div>
+                                        <p className="text-sm font-bold text-slate-800">Comprobantes de la venta</p>
+                                        <p className="text-xs text-slate-500">Archivos generales asociados a esta venta, separados de los movimientos contables.</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleUploadSaleAttachment(selectedReceiptGroup.sale)}
+                                        className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-blue-700 shadow-sm hover:bg-blue-50"
+                                    >
+                                        Adjuntar archivo
+                                    </button>
+                                </div>
+                                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                                    {saleAttachments.map((attachment) => (
+                                        <div key={attachment.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                                            <div className="min-w-0">
+                                                <a
+                                                    href={`/api${attachment.file_path}?token=${localStorage.getItem('token')}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="block truncate text-sm font-semibold text-blue-700 hover:underline"
+                                                >
+                                                    {attachment.file_name}
+                                                </a>
+                                                <p className="truncate text-xs text-slate-500">{attachment.note || 'Sin nota'}</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDeleteSaleAttachment(attachment)}
+                                                className="shrink-0 rounded-md bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+                                            >
+                                                Eliminar
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {saleAttachments.length === 0 && (
+                                        <div className="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-4 text-center text-sm text-slate-400 md:col-span-2">
+                                            No hay comprobantes generales adjuntos a esta venta.
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             <table className="w-full border-collapse text-left">

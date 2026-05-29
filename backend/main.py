@@ -6851,6 +6851,112 @@ def read_payment_receipts(
     return {"items": items, "total": total}
 
 
+@app.get("/finance/receipts.xlsx")
+def download_payment_receipts_xlsx(
+    category: Optional[str] = None,
+    movement_type: Optional[str] = None,
+    q: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_user_from_anywhere)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill
+    except ImportError:
+        raise HTTPException(status_code=500, detail="La libreria openpyxl no esta instalada en el servidor")
+
+    query = db.query(models.PaymentReceipt).options(
+        joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.vehicle),
+        joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.seller),
+        joinedload(models.PaymentReceipt.user)
+    )
+    if current_user.company_id:
+        query = query.filter(models.PaymentReceipt.company_id == current_user.company_id)
+    if category:
+        query = query.filter(models.PaymentReceipt.category == category)
+    if movement_type:
+        query = query.filter(models.PaymentReceipt.movement_type == movement_type)
+    if start_date and end_date:
+        try:
+            range_start = datetime.datetime.combine(datetime.date.fromisoformat(start_date), datetime.time.min)
+            range_end = datetime.datetime.combine(datetime.date.fromisoformat(end_date) + datetime.timedelta(days=1), datetime.time.min)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Las fechas deben usar formato YYYY-MM-DD")
+        receipt_date_field = func.coalesce(models.PaymentReceipt.payment_date, models.PaymentReceipt.created_at)
+        query = query.filter(receipt_date_field >= range_start, receipt_date_field < range_end)
+    if q:
+        search = f"%{q}%"
+        query = query.join(models.Sale, models.PaymentReceipt.sale_id == models.Sale.id, isouter=True).join(
+            models.Vehicle, models.Sale.vehicle_id == models.Vehicle.id, isouter=True
+        ).filter(
+            or_(
+                models.PaymentReceipt.concept.ilike(search),
+                models.PaymentReceipt.receipt_number.ilike(search),
+                models.PaymentReceipt.notes.ilike(search),
+                models.PaymentReceipt.payment_method.ilike(search),
+                models.PaymentReceipt.bank.ilike(search),
+                models.Vehicle.make.ilike(search),
+                models.Vehicle.model.ilike(search),
+                models.Vehicle.plate.ilike(search)
+            )
+        )
+
+    receipts = query.order_by(models.PaymentReceipt.payment_date.desc(), models.PaymentReceipt.id.desc()).all()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Contabilidad"
+    headers = [
+        "FECHA", "VENTA", "VEHICULO", "PLACA", "CONCEPTO", "RECIBO", "TIPO", "CUENTA",
+        "VALOR", "EFECTIVO", "TRANSFERENCIA", "BANCO", "NOTA", "SOPORTE", "CREADO POR"
+    ]
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="1F2937")
+
+    for receipt in receipts:
+        vehicle = getattr(receipt.sale, "vehicle", None)
+        vehicle_label = " ".join(filter(None, [getattr(vehicle, "make", None), getattr(vehicle, "model", None)])).strip()
+        payment_method = (receipt.payment_method or "").lower()
+        ws.append([
+            receipt.payment_date or receipt.created_at,
+            getattr(receipt.sale, "id", None),
+            vehicle_label,
+            getattr(vehicle, "plate", None),
+            receipt.concept,
+            receipt.receipt_number,
+            "EGRESO" if (receipt.movement_type or "income") == "expense" else "INGRESO",
+            receipt.category,
+            int(receipt.amount or 0),
+            "X" if payment_method == "efectivo" else "",
+            "X" if payment_method == "transferencia" else "",
+            receipt.bank,
+            receipt.notes,
+            receipt.file_name or "",
+            getattr(receipt.user, "full_name", None) or getattr(receipt.user, "email", None)
+        ])
+
+    for column_cells in ws.columns:
+        width = 12
+        for cell in column_cells:
+            width = max(width, min(len(str(cell.value or "")) + 2, 45))
+        ws.column_dimensions[column_cells[0].column_letter].width = width
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="contabilidad_recibos.xlsx"'}
+    )
+
+
 def _get_receipt_with_access(
     db: Session,
     receipt_id: int,
@@ -6866,6 +6972,27 @@ def _get_receipt_with_access(
     if current_user.company_id and receipt.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Not authorized")
     return receipt
+
+
+def _get_sale_with_finance_access(
+    db: Session,
+    sale_id: int,
+    current_user: models.User,
+    include_attachments: bool = False
+) -> models.Sale:
+    options = [
+        joinedload(models.Sale.vehicle),
+        joinedload(models.Sale.seller),
+        joinedload(models.Sale.lead)
+    ]
+    if include_attachments:
+        options.append(joinedload(models.Sale.attachments).joinedload(models.SaleAttachment.user))
+    sale = db.query(models.Sale).options(*options).filter(models.Sale.id == sale_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+    if current_user.company_id and sale.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return sale
 
 
 def _normalize_receipt_payment_method(payment_method: Optional[str]) -> Optional[str]:
@@ -7022,6 +7149,93 @@ async def create_payment_receipt(
         joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.seller),
         joinedload(models.PaymentReceipt.user)
     ).filter(models.PaymentReceipt.id == receipt.id).first()
+
+
+@app.get("/finance/sales/{sale_id}/attachments", response_model=schemas.SaleAttachmentList)
+def read_sale_attachments(
+    sale_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    _get_sale_with_finance_access(db, sale_id, current_user)
+    query = db.query(models.SaleAttachment).options(joinedload(models.SaleAttachment.user)).filter(
+        models.SaleAttachment.sale_id == sale_id
+    )
+    if current_user.company_id:
+        query = query.filter(models.SaleAttachment.company_id == current_user.company_id)
+    items = query.order_by(models.SaleAttachment.created_at.desc(), models.SaleAttachment.id.desc()).all()
+    return {"items": items, "total": len(items)}
+
+
+@app.post("/finance/sales/{sale_id}/attachments", response_model=schemas.SaleAttachment)
+async def upload_sale_attachment(
+    sale_id: int,
+    note: Optional[str] = Form(None),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    sale = _get_sale_with_finance_access(db, sale_id, current_user)
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="Debes adjuntar un archivo")
+
+    os.makedirs("static/sale-attachments", exist_ok=True)
+    safe_name = os.path.basename(file.filename)
+    extension = safe_name.split(".")[-1] if "." in safe_name else "bin"
+    unique_filename = f"{uuid.uuid4()}.{extension}"
+    file_path = f"static/sale-attachments/{unique_filename}"
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    attachment = models.SaleAttachment(
+        company_id=sale.company_id,
+        sale_id=sale.id,
+        user_id=current_user.id,
+        file_name=safe_name,
+        file_path=f"/{file_path.replace('\\', '/')}",
+        file_type=file.content_type,
+        note=(note or "").strip() or None
+    )
+    db.add(attachment)
+    db.commit()
+    db.refresh(attachment)
+    return db.query(models.SaleAttachment).options(
+        joinedload(models.SaleAttachment.user)
+    ).filter(models.SaleAttachment.id == attachment.id).first()
+
+
+@app.delete("/finance/sales/{sale_id}/attachments/{attachment_id}")
+def delete_sale_attachment(
+    sale_id: int,
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    _get_sale_with_finance_access(db, sale_id, current_user)
+    attachment = db.query(models.SaleAttachment).filter(
+        models.SaleAttachment.id == attachment_id,
+        models.SaleAttachment.sale_id == sale_id
+    ).first()
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    if current_user.company_id and attachment.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    local_path = attachment.file_path.lstrip("/").replace("/", os.sep)
+    db.delete(attachment)
+    db.commit()
+    if local_path and os.path.exists(local_path):
+        try:
+            os.remove(local_path)
+        except OSError:
+            pass
+    return {"message": "Comprobante eliminado"}
 
 
 @app.get("/finance/sales/{sale_id}/invoice.pdf")

@@ -722,6 +722,26 @@ class SaleList(BaseModel):
     total: int
 
 
+class SaleAttachment(BaseModel):
+    id: int
+    company_id: int
+    sale_id: int
+    user_id: int
+    file_name: str
+    file_path: str
+    file_type: Optional[str] = None
+    note: Optional[str] = None
+    created_at: datetime
+    user: Optional[User] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SaleAttachmentList(BaseModel):
+    items: List[SaleAttachment]
+    total: int
+
+
 class PaymentReceiptBase(BaseModel):
     sale_id: Optional[int] = None
     concept: Optional[str] = None

@@ -310,6 +310,7 @@ class Sale(Base):
     company = relationship("Company")
     approved_by = relationship("User", foreign_keys=[approved_by_id])
     payment_receipts = relationship("PaymentReceipt", back_populates="sale", cascade="all, delete-orphan")
+    attachments = relationship("SaleAttachment", back_populates="sale", cascade="all, delete-orphan")
 
 
 class PaymentReceipt(Base):
@@ -334,6 +335,24 @@ class PaymentReceipt(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     sale = relationship("Sale", back_populates="payment_receipts")
+    company = relationship("Company")
+    user = relationship("User")
+
+
+class SaleAttachment(Base):
+    __tablename__ = "sale_attachments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), index=True, nullable=False)
+    sale_id = Column(Integer, ForeignKey("sales.id"), index=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    file_name = Column(String(255), nullable=False)
+    file_path = Column(String(500), nullable=False)
+    file_type = Column(String(120), nullable=True)
+    note = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    sale = relationship("Sale", back_populates="attachments")
     company = relationship("Company")
     user = relationship("User")
 
