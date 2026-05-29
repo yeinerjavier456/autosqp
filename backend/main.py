@@ -6587,6 +6587,31 @@ def _first_receipt(receipts, movement_type=None, categories=None):
     return None
 
 
+def _accounting_category_label(category: Optional[str]) -> str:
+    labels = {
+        "ingreso_venta": "Ingresos por venta",
+        "sale_payment": "Ingresos por venta",
+        "other_income": "Otros ingresos",
+        "costo_vehiculo": "Costo de vehículo",
+        "vehicle_purchase": "Compra de vehículo",
+        "purchase_payment": "Abono compra",
+        "vehicle_separation": "Separación del vehículo",
+        "gasto_tramites": "Gastos de trámites y alistamiento",
+        "vehicle_expense": "Gastos del vehículo",
+        "expense": "Gastos generales",
+        "gasto_operativo": "Gastos operativos y administrativos",
+        "comisiones": "Pago de comisiones",
+        "otros": "Otros movimientos",
+    }
+    if not category:
+        return "Sin cuenta"
+    return labels.get(category, category.replace("_", " ").capitalize())
+
+
+def _accounting_movement_label(movement_type: Optional[str]) -> str:
+    return "Egreso" if (movement_type or "income") == "expense" else "Ingreso"
+
+
 def _projection_sales_query(db: Session, current_user: models.User):
     query = db.query(models.Sale).options(
         joinedload(models.Sale.vehicle),
@@ -6694,7 +6719,10 @@ def download_finance_projection_xlsx(
         if (receipt.movement_type or "income") != "expense":
             continue
         expenses.append([
-            receipt.payment_date or receipt.created_at, receipt.concept, receipt.category, "EGRESO",
+            receipt.payment_date or receipt.created_at,
+            receipt.concept,
+            _accounting_category_label(receipt.category),
+            _accounting_movement_label(receipt.movement_type),
             _projection_money(receipt.amount),
             "X" if (receipt.payment_method or "").lower() == "efectivo" else "",
             "X" if (receipt.payment_method or "").lower() == "transferencia" else "",
@@ -6930,8 +6958,8 @@ def download_payment_receipts_xlsx(
             getattr(vehicle, "plate", None),
             receipt.concept,
             receipt.receipt_number,
-            "EGRESO" if (receipt.movement_type or "income") == "expense" else "INGRESO",
-            receipt.category,
+            _accounting_movement_label(receipt.movement_type),
+            _accounting_category_label(receipt.category),
             int(receipt.amount or 0),
             "X" if payment_method == "efectivo" else "",
             "X" if payment_method == "transferencia" else "",
@@ -7374,8 +7402,8 @@ def download_sale_invoice_pdf(
             [
                 receipt.payment_date.strftime("%d/%m/%Y") if receipt.payment_date else "-",
                 receipt.concept or receipt.notes or "Movimiento contable",
-                (receipt.category or "sin_cuenta").replace("_", " "),
-                "Egreso" if is_expense else "Ingreso",
+                _accounting_category_label(receipt.category),
+                _accounting_movement_label(receipt.movement_type),
                 money(receipt.amount)
             ],
             [None, None, None, HexColor("#dc2626") if is_expense else HexColor("#059669"), HexColor("#dc2626") if is_expense else HexColor("#059669")]
@@ -7481,9 +7509,9 @@ def download_payment_receipt_pdf(
 
     display_lines = [
         ("Concepto", (receipt.concept or "Sin concepto").upper()),
-        ("Tipo de Movimiento", "INGRESO" if (receipt.movement_type or "income") == "income" else "EGRESO"),
-        ("Cuenta Contable", (receipt.category or "ingreso_venta").replace("_", " ").upper()),
-        ("Forma de Pago", (receipt.payment_method or "Sin definir").upper()),
+        ("Tipo de Movimiento", _accounting_movement_label(receipt.movement_type).upper()),
+        ("Cuenta Contable", _accounting_category_label(receipt.category).upper()),
+        ("Forma de Pago", (receipt.payment_method or "Sin definir").capitalize()),
         ("Banco / Cuenta", (receipt.bank or "Sin definir").upper()),
         ("Valor Total", f"COP ${int(receipt.amount or 0):,}".replace(",", ".")),
     ]
