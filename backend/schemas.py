@@ -640,7 +640,9 @@ class SaleTaxInfoUpdate(BaseModel):
     tax_buyer_financing_entity: Optional[str] = None
 
 class TaxReportRow(BaseModel):
-    sale_id: int
+    source: str = "sale"
+    sale_id: Optional[int] = None
+    manual_entry_id: Optional[int] = None
     month: Optional[str] = None
     year: Optional[int] = None
     make: Optional[str] = None
@@ -671,6 +673,31 @@ class TaxReportRow(BaseModel):
 class TaxReportList(BaseModel):
     items: List[TaxReportRow]
     total: int
+
+class TaxReportManualEntryCreate(BaseModel):
+    month: Optional[str] = None
+    year: Optional[int] = None
+    make: Optional[str] = None
+    reference: Optional[str] = None
+    plate: Optional[str] = None
+    model_year: Optional[int] = None
+    purchase_price: Optional[int] = 0
+    sale_price: Optional[int] = 0
+    transaction_type: Optional[str] = None
+    transfer_to_cars: Optional[str] = None
+    seller_name: Optional[str] = None
+    seller_document: Optional[str] = None
+    seller_email: Optional[str] = None
+    seller_address: Optional[str] = None
+    seller_phone: Optional[str] = None
+    seller_payment_method: Optional[str] = None
+    buyer_name: Optional[str] = None
+    buyer_document: Optional[str] = None
+    buyer_email: Optional[str] = None
+    buyer_address: Optional[str] = None
+    buyer_phone: Optional[str] = None
+    buyer_payment_method: Optional[str] = None
+    buyer_financing_entity: Optional[str] = None
 
 class Sale(SaleBase):
     id: int

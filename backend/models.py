@@ -335,6 +335,40 @@ class PaymentReceipt(Base):
     company = relationship("Company")
     user = relationship("User")
 
+
+class TaxReportEntry(Base):
+    __tablename__ = "tax_report_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), index=True, nullable=False)
+    month = Column(String(20), nullable=True)
+    year = Column(Integer, nullable=True)
+    make = Column(String(120), nullable=True)
+    reference = Column(String(160), nullable=True)
+    plate = Column(String(30), nullable=True)
+    model_year = Column(Integer, nullable=True)
+    purchase_price = Column(Integer, default=0)
+    sale_price = Column(Integer, default=0)
+    transaction_type = Column(String(50), nullable=True)
+    transfer_to_cars = Column(String(20), nullable=True)
+    seller_name = Column(String(180), nullable=True)
+    seller_document = Column(String(60), nullable=True)
+    seller_email = Column(String(150), nullable=True)
+    seller_address = Column(String(250), nullable=True)
+    seller_phone = Column(String(60), nullable=True)
+    seller_payment_method = Column(String(120), nullable=True)
+    buyer_name = Column(String(180), nullable=True)
+    buyer_document = Column(String(60), nullable=True)
+    buyer_email = Column(String(150), nullable=True)
+    buyer_address = Column(String(250), nullable=True)
+    buyer_phone = Column(String(60), nullable=True)
+    buyer_payment_method = Column(String(120), nullable=True)
+    buyer_financing_entity = Column(String(150), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    company = relationship("Company")
+
 class NotificationType(str, enum.Enum):
     INFO = "info"
     WARNING = "warning"

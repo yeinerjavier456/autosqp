@@ -410,6 +410,48 @@ def ensure_sales_metadata_columns():
 
 ensure_sales_metadata_columns()
 
+
+def ensure_tax_report_entries_table():
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS tax_report_entries (
+                    id INTEGER PRIMARY KEY AUTO_INCREMENT,
+                    company_id INTEGER NOT NULL,
+                    month VARCHAR(20) NULL,
+                    year INTEGER NULL,
+                    make VARCHAR(120) NULL,
+                    reference VARCHAR(160) NULL,
+                    plate VARCHAR(30) NULL,
+                    model_year INTEGER NULL,
+                    purchase_price INTEGER DEFAULT 0,
+                    sale_price INTEGER DEFAULT 0,
+                    transaction_type VARCHAR(50) NULL,
+                    transfer_to_cars VARCHAR(20) NULL,
+                    seller_name VARCHAR(180) NULL,
+                    seller_document VARCHAR(60) NULL,
+                    seller_email VARCHAR(150) NULL,
+                    seller_address VARCHAR(250) NULL,
+                    seller_phone VARCHAR(60) NULL,
+                    seller_payment_method VARCHAR(120) NULL,
+                    buyer_name VARCHAR(180) NULL,
+                    buyer_document VARCHAR(60) NULL,
+                    buyer_email VARCHAR(150) NULL,
+                    buyer_address VARCHAR(250) NULL,
+                    buyer_phone VARCHAR(60) NULL,
+                    buyer_payment_method VARCHAR(120) NULL,
+                    buyer_financing_entity VARCHAR(150) NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX ix_tax_report_entries_company_id (company_id)
+                )
+            """))
+    except Exception as exc:
+        print(f"Warning: could not ensure tax report entries table: {exc}", flush=True)
+
+
+ensure_tax_report_entries_table()
+
 def ensure_gmail_settings_columns():
     """
     Backward-compatible bootstrap for Gmail integration settings.
@@ -6034,7 +6076,9 @@ def _sale_tax_row(sale: models.Sale) -> dict:
     tax_iva = int(round(commission_base * 0.19))
 
     return {
+        "source": "sale",
         "sale_id": sale.id,
+        "manual_entry_id": None,
         "month": TAX_MONTH_LABELS.get(sale_date.month),
         "year": sale_date.year,
         "make": getattr(vehicle, "make", None),
@@ -6064,6 +6108,64 @@ def _sale_tax_row(sale: models.Sale) -> dict:
     }
 
 
+def _manual_tax_row(entry: models.TaxReportEntry) -> dict:
+    purchase_price = int(entry.purchase_price or 0)
+    commission_base = int(round(purchase_price * 0.03))
+    tax_iva = int(round(commission_base * 0.19))
+    return {
+        "source": "manual",
+        "sale_id": None,
+        "manual_entry_id": entry.id,
+        "month": _tax_clean(entry.month),
+        "year": entry.year,
+        "make": _tax_clean(entry.make),
+        "reference": _tax_clean(entry.reference),
+        "plate": _tax_clean(entry.plate),
+        "model_year": entry.model_year,
+        "purchase_price": purchase_price,
+        "commission_base": commission_base,
+        "tax_iva": tax_iva,
+        "sale_price": int(entry.sale_price or 0),
+        "iva_base": commission_base,
+        "transaction_type": _tax_clean(entry.transaction_type) or "INTERMEDIACION",
+        "transfer_to_cars": _tax_clean(entry.transfer_to_cars),
+        "seller_name": _tax_clean(entry.seller_name),
+        "seller_document": _tax_clean(entry.seller_document),
+        "seller_email": _tax_clean(entry.seller_email),
+        "seller_address": _tax_clean(entry.seller_address),
+        "seller_phone": _tax_clean(entry.seller_phone),
+        "seller_payment_method": _tax_clean(entry.seller_payment_method),
+        "buyer_name": _tax_clean(entry.buyer_name),
+        "buyer_document": _tax_clean(entry.buyer_document),
+        "buyer_email": _tax_clean(entry.buyer_email),
+        "buyer_address": _tax_clean(entry.buyer_address),
+        "buyer_phone": _tax_clean(entry.buyer_phone),
+        "buyer_payment_method": _tax_clean(entry.buyer_payment_method),
+        "buyer_financing_entity": _tax_clean(entry.buyer_financing_entity),
+    }
+
+
+def _manual_tax_query(db: Session, current_user: models.User):
+    query = db.query(models.TaxReportEntry)
+    if current_user.company_id:
+        query = query.filter(models.TaxReportEntry.company_id == current_user.company_id)
+    return query
+
+
+def _tax_row_matches(row: dict, q: Optional[str]) -> bool:
+    if not q:
+        return True
+    needle = q.strip().lower()
+    return any(needle in str(row.get(field) or "").lower() for field in [
+        "make", "reference", "plate", "seller_name", "buyer_name", "seller_document", "buyer_document"
+    ])
+
+
+def _tax_row_sort_key(row: dict):
+    month_index = {label: number for number, label in TAX_MONTH_LABELS.items()}.get((row.get("month") or "").upper(), 13)
+    return (row.get("year") or 9999, month_index, row.get("sale_id") or row.get("manual_entry_id") or 0)
+
+
 @app.get("/finance/tax-report", response_model=schemas.TaxReportList)
 def read_tax_report(
     year: Optional[int] = None,
@@ -6081,22 +6183,15 @@ def read_tax_report(
         start = datetime.datetime(year, 1, 1)
         end = datetime.datetime(year + 1, 1, 1)
         query = query.filter(models.Sale.sale_date >= start, models.Sale.sale_date < end)
-    if q:
-        search = f"%{q}%"
-        query = query.join(models.Vehicle, models.Sale.vehicle_id == models.Vehicle.id, isouter=True).join(
-            models.Lead, models.Sale.lead_id == models.Lead.id, isouter=True
-        ).filter(or_(
-            models.Vehicle.make.ilike(search),
-            models.Vehicle.model.ilike(search),
-            models.Vehicle.plate.ilike(search),
-            models.Lead.name.ilike(search),
-            models.Sale.tax_seller_name.ilike(search),
-            models.Sale.tax_buyer_name.ilike(search),
-        ))
+    rows = [_sale_tax_row(sale) for sale in query.all()]
 
-    total = query.count()
-    sales = query.order_by(models.Sale.sale_date.asc(), models.Sale.id.asc()).offset(skip).limit(limit).all()
-    return {"items": [_sale_tax_row(sale) for sale in sales], "total": total}
+    manual_query = _manual_tax_query(db, current_user)
+    if year:
+        manual_query = manual_query.filter(models.TaxReportEntry.year == year)
+    rows.extend(_manual_tax_row(entry) for entry in manual_query.all())
+    rows = [row for row in rows if _tax_row_matches(row, q)]
+    rows.sort(key=_tax_row_sort_key)
+    return {"items": rows[skip:skip + limit], "total": len(rows)}
 
 
 @app.put("/sales/{sale_id}/tax-info", response_model=schemas.TaxReportRow)
@@ -6121,6 +6216,68 @@ def update_sale_tax_info(
     return _sale_tax_row(sale)
 
 
+def _apply_manual_tax_payload(entry: models.TaxReportEntry, payload: schemas.TaxReportManualEntryCreate):
+    numeric_fields = {"year", "model_year", "purchase_price", "sale_price"}
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        if field in numeric_fields:
+            setattr(entry, field, int(value or 0) if value is not None else None)
+        else:
+            setattr(entry, field, _tax_clean(value))
+
+
+@app.post("/finance/tax-report/manual", response_model=schemas.TaxReportRow)
+def create_manual_tax_report_entry(
+    payload: schemas.TaxReportManualEntryCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Solo un administrador puede crear tributacion manual")
+    company_id = current_user.company_id
+    if not company_id:
+        raise HTTPException(status_code=400, detail="Debes estar asociado a una empresa")
+    entry = models.TaxReportEntry(company_id=company_id)
+    _apply_manual_tax_payload(entry, payload)
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return _manual_tax_row(entry)
+
+
+@app.put("/finance/tax-report/manual/{entry_id}", response_model=schemas.TaxReportRow)
+def update_manual_tax_report_entry(
+    entry_id: int,
+    payload: schemas.TaxReportManualEntryCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Solo un administrador puede editar tributacion manual")
+    entry = _manual_tax_query(db, current_user).filter(models.TaxReportEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Registro manual no encontrado")
+    _apply_manual_tax_payload(entry, payload)
+    db.commit()
+    db.refresh(entry)
+    return _manual_tax_row(entry)
+
+
+@app.delete("/finance/tax-report/manual/{entry_id}")
+def delete_manual_tax_report_entry(
+    entry_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Solo un administrador puede eliminar tributacion manual")
+    entry = _manual_tax_query(db, current_user).filter(models.TaxReportEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Registro manual no encontrado")
+    db.delete(entry)
+    db.commit()
+    return {"status": "success"}
+
+
 @app.get("/finance/tax-report.xlsx")
 def download_tax_report_xlsx(
     year: Optional[int] = None,
@@ -6135,7 +6292,12 @@ def download_tax_report_xlsx(
         start = datetime.datetime(year, 1, 1)
         end = datetime.datetime(year + 1, 1, 1)
         query = query.filter(models.Sale.sale_date >= start, models.Sale.sale_date < end)
-    rows = [_sale_tax_row(sale) for sale in query.order_by(models.Sale.sale_date.asc(), models.Sale.id.asc()).all()]
+    rows = [_sale_tax_row(sale) for sale in query.all()]
+    manual_query = _manual_tax_query(db, current_user)
+    if year:
+        manual_query = manual_query.filter(models.TaxReportEntry.year == year)
+    rows.extend(_manual_tax_row(entry) for entry in manual_query.all())
+    rows.sort(key=_tax_row_sort_key)
 
     try:
         from openpyxl import Workbook

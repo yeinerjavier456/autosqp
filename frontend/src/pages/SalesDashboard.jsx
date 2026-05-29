@@ -261,44 +261,63 @@ const SalesDashboard = () => {
         window.open(`/api/finance/tax-report.xlsx?year=${activeYear}&token=${token}`, '_blank');
     };
 
-    const handleEditTaxInfo = async (row) => {
+    const handleEditTaxInfo = async (row = null) => {
+        const isManual = row?.source === 'manual' || !row;
         const fieldLabels = [
-            ['tax_transaction_type', 'Intermediación o venta completa'],
-            ['tax_transfer_to_cars', 'Traspaso a Cars SI/NO'],
-            ['tax_seller_name', 'Vendedor del carro - Nombre o razón social'],
-            ['tax_seller_document', 'Vendedor del carro - Documento/NIT'],
-            ['tax_seller_email', 'Vendedor del carro - Email'],
-            ['tax_seller_address', 'Vendedor del carro - Dirección'],
-            ['tax_seller_phone', 'Vendedor del carro - Teléfono'],
-            ['tax_seller_payment_method', 'Forma de pago al vendedor'],
-            ['tax_buyer_name', 'Comprador - Nombre'],
-            ['tax_buyer_document', 'Comprador - Documento'],
-            ['tax_buyer_email', 'Comprador - Email'],
-            ['tax_buyer_address', 'Comprador - Dirección'],
-            ['tax_buyer_phone', 'Comprador - Teléfono'],
-            ['tax_buyer_payment_method', 'Forma de pago del comprador'],
-            ['tax_buyer_financing_entity', 'Entidad / observación']
+            ...(isManual ? [
+                ['month', 'Mes'],
+                ['year', 'Año'],
+                ['make', 'Marca'],
+                ['reference', 'Referencia'],
+                ['plate', 'Placa'],
+                ['model_year', 'Modelo'],
+                ['purchase_price', 'Precio compra / consignación'],
+                ['sale_price', 'Precio venta']
+            ] : []),
+            ['transaction_type', 'Intermediación o venta completa'],
+            ['transfer_to_cars', 'Traspaso a Cars SI/NO'],
+            ['seller_name', 'Vendedor del carro - Nombre o razón social'],
+            ['seller_document', 'Vendedor del carro - Documento/NIT'],
+            ['seller_email', 'Vendedor del carro - Email'],
+            ['seller_address', 'Vendedor del carro - Dirección'],
+            ['seller_phone', 'Vendedor del carro - Teléfono'],
+            ['seller_payment_method', 'Forma de pago al vendedor'],
+            ['buyer_name', 'Comprador - Nombre'],
+            ['buyer_document', 'Comprador - Documento'],
+            ['buyer_email', 'Comprador - Email'],
+            ['buyer_address', 'Comprador - Dirección'],
+            ['buyer_phone', 'Comprador - Teléfono'],
+            ['buyer_payment_method', 'Forma de pago del comprador'],
+            ['buyer_financing_entity', 'Entidad / observación']
         ];
         const valueByField = {
-            tax_transaction_type: row.transaction_type || 'INTERMEDIACION',
-            tax_transfer_to_cars: row.transfer_to_cars || '',
-            tax_seller_name: row.seller_name || '',
-            tax_seller_document: row.seller_document || '',
-            tax_seller_email: row.seller_email || '',
-            tax_seller_address: row.seller_address || '',
-            tax_seller_phone: row.seller_phone || '',
-            tax_seller_payment_method: row.seller_payment_method || '',
-            tax_buyer_name: row.buyer_name || '',
-            tax_buyer_document: row.buyer_document || '',
-            tax_buyer_email: row.buyer_email || '',
-            tax_buyer_address: row.buyer_address || '',
-            tax_buyer_phone: row.buyer_phone || '',
-            tax_buyer_payment_method: row.buyer_payment_method || '',
-            tax_buyer_financing_entity: row.buyer_financing_entity || ''
+            month: row?.month || '',
+            year: row?.year || (startDate ? Number(startDate.slice(0, 4)) : new Date().getFullYear()),
+            make: row?.make || '',
+            reference: row?.reference || '',
+            plate: row?.plate || '',
+            model_year: row?.model_year || '',
+            purchase_price: row?.purchase_price || '',
+            sale_price: row?.sale_price || '',
+            transaction_type: row?.transaction_type || 'INTERMEDIACION',
+            transfer_to_cars: row?.transfer_to_cars || '',
+            seller_name: row?.seller_name || '',
+            seller_document: row?.seller_document || '',
+            seller_email: row?.seller_email || '',
+            seller_address: row?.seller_address || '',
+            seller_phone: row?.seller_phone || '',
+            seller_payment_method: row?.seller_payment_method || '',
+            buyer_name: row?.buyer_name || '',
+            buyer_document: row?.buyer_document || '',
+            buyer_email: row?.buyer_email || '',
+            buyer_address: row?.buyer_address || '',
+            buyer_phone: row?.buyer_phone || '',
+            buyer_payment_method: row?.buyer_payment_method || '',
+            buyer_financing_entity: row?.buyer_financing_entity || ''
         };
 
         const { value } = await Swal.fire({
-            title: `Editar tributación venta #${row.sale_id}`,
+            title: row ? `Editar tributación ${isManual ? 'manual' : `venta #${row.sale_id}`}` : 'Agregar tributación manual',
             width: '80%',
             html: `
                 <div class="grid grid-cols-1 gap-3 text-left md:grid-cols-2">
@@ -329,14 +348,50 @@ const SalesDashboard = () => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.put(`/api/sales/${row.sale_id}/tax-info`, value, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            if (!row) {
+                await axios.post('/api/finance/tax-report/manual', value, { headers: { Authorization: `Bearer ${token}` } });
+            } else if (isManual) {
+                await axios.put(`/api/finance/tax-report/manual/${row.manual_entry_id}`, value, { headers: { Authorization: `Bearer ${token}` } });
+            } else {
+                const salePayload = {};
+                Object.entries(value).forEach(([field, fieldValue]) => {
+                    salePayload[`tax_${field}`] = fieldValue;
+                });
+                await axios.put(`/api/sales/${row.sale_id}/tax-info`, salePayload, { headers: { Authorization: `Bearer ${token}` } });
+            }
             await fetchData();
             Swal.fire('Exito', 'Datos de tributación actualizados.', 'success');
         } catch (error) {
             console.error('Error updating tax info', error);
             Swal.fire('Error', error.response?.data?.detail || 'No se pudo actualizar tributación.', 'error');
+        }
+    };
+
+    const handleDeleteManualTaxInfo = async (row) => {
+        const result = await Swal.fire({
+            title: 'Eliminar registro manual',
+            text: 'Este registro saldrá del cuadro de tributación y del Excel.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Eliminar',
+            cancelButtonText: 'Cancelar',
+            customClass: {
+                confirmButton: 'bg-red-600 text-white px-4 py-2 rounded-lg ml-2',
+                cancelButton: 'bg-gray-400 text-white px-4 py-2 rounded-lg'
+            },
+            buttonsStyling: false
+        });
+        if (!result.isConfirmed) return;
+        try {
+            const token = localStorage.getItem('token');
+            await axios.delete(`/api/finance/tax-report/manual/${row.manual_entry_id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            await fetchData();
+            Swal.fire('Exito', 'Registro manual eliminado.', 'success');
+        } catch (error) {
+            console.error('Error deleting manual tax info', error);
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo eliminar el registro.', 'error');
         }
     };
 
@@ -1273,13 +1328,22 @@ const SalesDashboard = () => {
                             <h3 className="text-lg font-bold text-gray-800">Cuadro de tributación</h3>
                             <p className="text-sm text-gray-500">Información anual para comisión, IVA y datos de comprador/vendedor.</p>
                         </div>
-                        <button
-                            type="button"
-                            onClick={handleDownloadTaxReport}
-                            className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
-                        >
-                            Descargar Excel
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                onClick={() => handleEditTaxInfo()}
+                                className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                            >
+                                Agregar manual
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleDownloadTaxReport}
+                                className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+                            >
+                                Descargar Excel
+                            </button>
+                        </div>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full border-collapse text-left">
@@ -1298,10 +1362,12 @@ const SalesDashboard = () => {
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {taxRows.map((row) => (
-                                    <tr key={row.sale_id} className="hover:bg-gray-50">
+                                    <tr key={`${row.source}-${row.sale_id || row.manual_entry_id}`} className="hover:bg-gray-50">
                                         <td className="p-4 text-sm text-gray-600">{row.month} {row.year}</td>
                                         <td className="p-4">
-                                            <div className="font-medium text-gray-800">#{row.sale_id} - {row.make} {row.reference}</div>
+                                            <div className="font-medium text-gray-800">
+                                                {row.source === 'manual' ? `Manual #${row.manual_entry_id}` : `#${row.sale_id}`} - {row.make} {row.reference}
+                                            </div>
                                             <div className="text-xs text-gray-500">{row.plate || 'Sin placa'} · Modelo {row.model_year || '-'}</div>
                                         </td>
                                         <td className="p-4 font-semibold text-slate-700">${Number(row.purchase_price || 0).toLocaleString()}</td>
@@ -1317,20 +1383,31 @@ const SalesDashboard = () => {
                                             <div className="text-xs text-gray-500">{row.buyer_document || row.buyer_phone || ''}</div>
                                         </td>
                                         <td className="p-4 text-right">
-                                            <button
-                                                type="button"
-                                                onClick={() => handleEditTaxInfo(row)}
-                                                className="rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100"
-                                            >
-                                                Editar datos
-                                            </button>
+                                            <div className="flex justify-end gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleEditTaxInfo(row)}
+                                                    className="rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100"
+                                                >
+                                                    Editar datos
+                                                </button>
+                                                {row.source === 'manual' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDeleteManualTaxInfo(row)}
+                                                        className="rounded-lg bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
+                                                    >
+                                                        Eliminar
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
                                 {taxRows.length === 0 && (
                                     <tr>
                                         <td colSpan="9" className="p-8 text-center italic text-gray-400">
-                                            No hay ventas aprobadas para el cuadro de tributación.
+                                            No hay registros para el cuadro de tributación.
                                         </td>
                                     </tr>
                                 )}
