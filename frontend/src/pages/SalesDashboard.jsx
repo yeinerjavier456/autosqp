@@ -254,6 +254,17 @@ const SalesDashboard = () => {
     };
 
     const receiptGroups = buildReceiptGroups(receipts);
+    const selectedReceiptGroupTotals = selectedReceiptGroup ? {
+        incomeTotal: selectedReceiptGroup.receipts
+            .filter((receipt) => (receipt.movement_type || 'income') === 'income')
+            .reduce((sum, receipt) => sum + Number(receipt.amount || 0), 0),
+        expenseTotal: selectedReceiptGroup.receipts
+            .filter((receipt) => (receipt.movement_type || 'income') === 'expense')
+            .reduce((sum, receipt) => sum + Number(receipt.amount || 0), 0)
+    } : null;
+    if (selectedReceiptGroupTotals) {
+        selectedReceiptGroupTotals.balanceTotal = selectedReceiptGroupTotals.incomeTotal - selectedReceiptGroupTotals.expenseTotal;
+    }
 
     const handleDownloadTaxReport = () => {
         const token = localStorage.getItem('token');
@@ -488,6 +499,135 @@ const SalesDashboard = () => {
             Swal.fire('Error', error.response?.data?.detail || 'No se pudo registrar el recibo.', 'error');
         } finally {
             setCreatingReceipt(false);
+        }
+    };
+
+    const handleCreateReceiptForSale = async (sale) => {
+        if (!sale?.id) return;
+        const conceptOptions = [
+            'Venta de Vehiculo',
+            'Compra de Vehiculo',
+            'Traspaso / Tramites',
+            'Peritaje',
+            'Mantenimiento / Alistamiento',
+            'Lavado',
+            'Pago SOAT',
+            'Pago Impuestos',
+            'Pago Comision',
+            'Pago Arriendo',
+            'Servicios Publicos',
+            'Pago Nomina',
+            'Caja Menor',
+            'Publicidad',
+            'Otros'
+        ];
+        const categoryOptions = [
+            ['ingreso_venta', 'Ingresos por Venta'],
+            ['costo_vehiculo', 'Costo de Vehículo (Compra)'],
+            ['vehicle_purchase', 'Compra de Vehículo'],
+            ['gasto_tramites', 'Gastos de Trámites y Alistamiento'],
+            ['vehicle_expense', 'Gastos del Vehículo'],
+            ['gasto_operativo', 'Gastos Operativos y Administrativos'],
+            ['comisiones', 'Pago de Comisiones'],
+            ['otros', 'Otros Movimientos']
+        ];
+
+        const { value } = await Swal.fire({
+            title: 'Agregar ítem a la venta',
+            width: '70%',
+            html: `
+                <div class="grid grid-cols-1 gap-3 text-left md:grid-cols-2">
+                    <label class="block text-sm font-semibold text-gray-700">
+                        Concepto
+                        <select id="new-receipt-concept" class="swal2-select">
+                            ${conceptOptions.map((option) => `<option value="${option}">${option}</option>`).join('')}
+                        </select>
+                    </label>
+                    <label class="block text-sm font-semibold text-gray-700">
+                        Tipo
+                        <select id="new-receipt-movement-type" class="swal2-select">
+                            <option value="expense">Egreso</option>
+                            <option value="income">Ingreso</option>
+                        </select>
+                    </label>
+                    <label class="block text-sm font-semibold text-gray-700">
+                        Valor
+                        <input id="new-receipt-amount" type="number" min="1" class="swal2-input" />
+                    </label>
+                    <label class="block text-sm font-semibold text-gray-700">
+                        Fecha
+                        <input id="new-receipt-payment-date" type="date" class="swal2-input" value="${new Date().toISOString().slice(0, 10)}" />
+                    </label>
+                    <label class="block text-sm font-semibold text-gray-700 md:col-span-2">
+                        Cuenta contable
+                        <select id="new-receipt-category" class="swal2-select">
+                            ${categoryOptions.map(([value, label]) => `<option value="${value}" ${value === 'vehicle_expense' ? 'selected' : ''}>${label}</option>`).join('')}
+                        </select>
+                    </label>
+                    <label class="block text-sm font-semibold text-gray-700 md:col-span-2">
+                        Nota
+                        <textarea id="new-receipt-notes" class="swal2-textarea" placeholder="Detalle, referencia u observación"></textarea>
+                    </label>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Guardar ítem',
+            cancelButtonText: 'Cancelar',
+            focusConfirm: false,
+            preConfirm: () => {
+                const amount = Number(document.getElementById('new-receipt-amount')?.value || 0);
+                const paymentDate = document.getElementById('new-receipt-payment-date')?.value || '';
+                if (!amount || amount <= 0) {
+                    Swal.showValidationMessage('Debes ingresar un valor válido');
+                    return false;
+                }
+                if (!paymentDate) {
+                    Swal.showValidationMessage('Debes indicar la fecha');
+                    return false;
+                }
+                return {
+                    concept: document.getElementById('new-receipt-concept')?.value || 'Otros',
+                    movement_type: document.getElementById('new-receipt-movement-type')?.value || 'expense',
+                    amount,
+                    payment_date: paymentDate,
+                    category: document.getElementById('new-receipt-category')?.value || 'vehicle_expense',
+                    notes: (document.getElementById('new-receipt-notes')?.value || '').trim()
+                };
+            },
+            customClass: {
+                confirmButton: 'bg-blue-600 text-white px-4 py-2 rounded-lg ml-2',
+                cancelButton: 'bg-gray-400 text-white px-4 py-2 rounded-lg'
+            },
+            buttonsStyling: false
+        });
+
+        if (!value) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            const formData = new FormData();
+            formData.append('sale_id', String(sale.id));
+            formData.append('concept', value.concept);
+            formData.append('movement_type', value.movement_type);
+            formData.append('amount', String(value.amount));
+            formData.append('payment_date', value.payment_date);
+            formData.append('category', value.category);
+            formData.append('notes', value.notes || '');
+            const response = await axios.post('/api/finance/receipts', formData, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+            await fetchData();
+            setSelectedReceiptGroup((current) => current ? {
+                ...current,
+                receipts: [...current.receipts, response.data]
+            } : current);
+            Swal.fire('Exito', 'Ítem agregado a la venta.', 'success');
+        } catch (error) {
+            console.error('Error creating sale receipt item', error);
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo agregar el ítem.', 'error');
         }
     };
 
@@ -1437,6 +1577,13 @@ const SalesDashboard = () => {
                                 </a>
                                 <button
                                     type="button"
+                                    onClick={() => handleCreateReceiptForSale(selectedReceiptGroup.sale)}
+                                    className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+                                >
+                                    Agregar ítem
+                                </button>
+                                <button
+                                    type="button"
                                     onClick={() => setSelectedReceiptGroup(null)}
                                     className="rounded-full bg-slate-100 px-3 py-1 text-lg font-bold text-slate-600 hover:bg-slate-200"
                                 >
@@ -1448,15 +1595,15 @@ const SalesDashboard = () => {
                             <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
                                 <div className="rounded-xl bg-emerald-50 p-4">
                                     <p className="text-xs font-semibold uppercase text-emerald-700">Ingresos</p>
-                                    <p className="mt-1 text-xl font-bold text-emerald-700">${selectedReceiptGroup.incomeTotal.toLocaleString()}</p>
+                                    <p className="mt-1 text-xl font-bold text-emerald-700">${selectedReceiptGroupTotals.incomeTotal.toLocaleString()}</p>
                                 </div>
                                 <div className="rounded-xl bg-rose-50 p-4">
                                     <p className="text-xs font-semibold uppercase text-rose-700">Egresos</p>
-                                    <p className="mt-1 text-xl font-bold text-rose-700">${selectedReceiptGroup.expenseTotal.toLocaleString()}</p>
+                                    <p className="mt-1 text-xl font-bold text-rose-700">${selectedReceiptGroupTotals.expenseTotal.toLocaleString()}</p>
                                 </div>
                                 <div className="rounded-xl bg-blue-50 p-4">
                                     <p className="text-xs font-semibold uppercase text-blue-700">Neto</p>
-                                    <p className={`mt-1 text-xl font-bold ${selectedReceiptGroup.balanceTotal >= 0 ? 'text-blue-700' : 'text-red-700'}`}>${selectedReceiptGroup.balanceTotal.toLocaleString()}</p>
+                                    <p className={`mt-1 text-xl font-bold ${selectedReceiptGroupTotals.balanceTotal >= 0 ? 'text-blue-700' : 'text-red-700'}`}>${selectedReceiptGroupTotals.balanceTotal.toLocaleString()}</p>
                                 </div>
                             </div>
                             <table className="w-full border-collapse text-left">
