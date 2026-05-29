@@ -100,10 +100,20 @@ class UserLeadRedistributeResponse(BaseModel):
     redistributed_leads: int
     recipient_users: int
 
+class UserCompany(BaseModel):
+    id: int
+    name: str
+    logo_url: Optional[str] = None
+    primary_color: Optional[str] = "#000000"
+    secondary_color: Optional[str] = "#ffffff"
+
+    model_config = ConfigDict(from_attributes=True)
+
 class User(UserBase):
     id: int
     created_at: Optional[datetime] = None
     role: Optional[Role] = None
+    company: Optional[UserCompany] = None
     last_active: Optional[datetime] = None
     is_active: Optional[int] = 1
     is_online: Optional[bool] = False
