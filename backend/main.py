@@ -5901,7 +5901,8 @@ def read_sales(
     query = db.query(models.Sale).options(
         joinedload(models.Sale.vehicle),
         joinedload(models.Sale.lead),
-        joinedload(models.Sale.seller)
+        joinedload(models.Sale.seller),
+        joinedload(models.Sale.payment_receipts)
     )
     
     # Permission Logic

@@ -45,6 +45,7 @@ const SalesDashboard = () => {
     const [receiptSearch, setReceiptSearch] = useState('');
     const [receiptCategory, setReceiptCategory] = useState('');
     const [receiptMovementType, setReceiptMovementType] = useState('');
+    const [selectedReceiptGroup, setSelectedReceiptGroup] = useState(null);
     const [periodPreset, setPeriodPreset] = useState('last_month');
     const [startDate, setStartDate] = useState(defaultRange.start);
     const [endDate, setEndDate] = useState(defaultRange.end);
@@ -186,6 +187,63 @@ const SalesDashboard = () => {
         }
         return sale?.seller?.full_name || sale?.seller?.email || 'Sin asesor';
     };
+
+    const getCategoryLabel = (category) => {
+        if (category === 'ingreso_venta') return 'Ingresos por Venta';
+        if (category === 'costo_vehiculo') return 'Costo de Vehículo (Compra)';
+        if (category === 'vehicle_purchase') return 'Compra de Vehículo';
+        if (category === 'gasto_tramites') return 'Gastos de Trámites y Alistamiento';
+        if (category === 'vehicle_expense') return 'Gastos del Vehículo';
+        if (category === 'gasto_operativo') return 'Gastos Operativos y Administrativos';
+        if (category === 'comisiones') return 'Pago de Comisiones';
+        if (category === 'otros') return 'Otros Movimientos';
+        return (category || 'Sin cuenta').replaceAll('_', ' ');
+    };
+
+    const buildReceiptGroups = (receiptItems) => {
+        const groupsByKey = new Map();
+
+        receiptItems.forEach((receipt) => {
+            const saleId = receipt.sale?.id || receipt.sale_id;
+            const key = saleId ? `sale-${saleId}` : `receipt-${receipt.id}`;
+            const existing = groupsByKey.get(key);
+
+            if (existing) {
+                existing.receipts.push(receipt);
+                return;
+            }
+
+            groupsByKey.set(key, {
+                key,
+                sale: receipt.sale || null,
+                receipts: [receipt]
+            });
+        });
+
+        return Array.from(groupsByKey.values()).map((group) => {
+            const latestReceipt = group.receipts.reduce((latest, receipt) => {
+                const latestTime = new Date(latest.payment_date || latest.created_at || 0).getTime();
+                const receiptTime = new Date(receipt.payment_date || receipt.created_at || 0).getTime();
+                return receiptTime > latestTime ? receipt : latest;
+            }, group.receipts[0]);
+            const incomeTotal = group.receipts
+                .filter((receipt) => (receipt.movement_type || 'income') === 'income')
+                .reduce((sum, receipt) => sum + Number(receipt.amount || 0), 0);
+            const expenseTotal = group.receipts
+                .filter((receipt) => (receipt.movement_type || 'income') === 'expense')
+                .reduce((sum, receipt) => sum + Number(receipt.amount || 0), 0);
+
+            return {
+                ...group,
+                latestReceipt,
+                incomeTotal,
+                expenseTotal,
+                balanceTotal: incomeTotal - expenseTotal
+            };
+        });
+    };
+
+    const receiptGroups = buildReceiptGroups(receipts);
 
     const handleEditSalePrice = async (sale) => {
         const { value: salePrice } = await Swal.fire({
@@ -980,45 +1038,68 @@ const SalesDashboard = () => {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {receipts.map((receipt) => (
-                                            <tr key={receipt.id} className="hover:bg-gray-50">
+                                        {receiptGroups.map((group) => {
+                                            const receipt = group.latestReceipt;
+                                            const isGroupedSale = Boolean(group.sale?.id) && group.receipts.length > 1;
+                                            return (
+                                            <tr key={group.key} className="hover:bg-gray-50">
                                                 <td className="p-4 text-sm text-gray-600">
                                                     {receipt.payment_date ? new Date(receipt.payment_date).toLocaleDateString() : '-'}
                                                 </td>
                                                 <td className="p-4">
                                                     <div className="font-medium text-gray-800">
-                                                        {receipt.sale?.id
-                                                            ? `#${receipt.sale.id} - ${receipt.sale?.vehicle?.make || ''} ${receipt.sale?.vehicle?.model || ''}`.trim()
+                                                        {group.sale?.id
+                                                            ? `#${group.sale.id} - ${group.sale?.vehicle?.make || ''} ${group.sale?.vehicle?.model || ''}`.trim()
                                                             : (receipt.concept || 'Movimiento contable')}
                                                     </div>
                                                     <div className="text-xs text-gray-500">
-                                                        {receipt.sale?.id
-                                                            ? `${receipt.sale?.vehicle?.plate || ''} · ${receipt.sale?.seller?.full_name || receipt.sale?.seller?.email || ''}`
+                                                        {group.sale?.id
+                                                            ? `${group.sale?.vehicle?.plate || ''} · ${group.sale?.seller?.full_name || group.sale?.seller?.email || ''}`
                                                             : 'Sin venta asociada'}
                                                     </div>
+                                                    {isGroupedSale && (
+                                                        <div className="mt-1 text-xs font-semibold text-blue-600">
+                                                            {group.receipts.length} movimientos relacionados
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="p-4 text-sm text-gray-600">
-                                                    <div className="font-medium">{receipt.receipt_number || 'Sin consecutivo'}</div>
-                                                    <div className="line-clamp-2 text-xs text-gray-500">{receipt.notes || 'Sin nota'}</div>
+                                                    <div className="font-medium">
+                                                        {isGroupedSale ? 'Registro consolidado' : (receipt.receipt_number || 'Sin consecutivo')}
+                                                    </div>
+                                                    <div className="line-clamp-2 text-xs text-gray-500">
+                                                        {isGroupedSale
+                                                            ? group.receipts.map((item) => item.concept || item.notes || getCategoryLabel(item.category)).filter(Boolean).slice(0, 3).join(' · ')
+                                                            : (receipt.notes || 'Sin nota')}
+                                                    </div>
                                                 </td>
                                                 <td className="p-4 text-sm">
-                                                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${receipt.movement_type === 'expense' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                                        {receipt.movement_type === 'expense' ? 'Egreso' : 'Ingreso'}
+                                                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${group.incomeTotal > 0 && group.expenseTotal > 0 ? 'bg-blue-100 text-blue-700' : receipt.movement_type === 'expense' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                        {group.incomeTotal > 0 && group.expenseTotal > 0 ? 'Mixto' : receipt.movement_type === 'expense' ? 'Egreso' : 'Ingreso'}
                                                     </span>
                                                 </td>
                                                 <td className="p-4 text-sm font-medium text-gray-600">
-                                                    {receipt.category === 'ingreso_venta' ? 'Ingresos por Venta' :
-                                                     receipt.category === 'costo_vehiculo' ? 'Costo de Vehículo (Compra)' :
-                                                     receipt.category === 'gasto_tramites' ? 'Gastos de Trámites y Alistamiento' :
-                                                     receipt.category === 'gasto_operativo' ? 'Gastos Operativos y Administrativos' :
-                                                     receipt.category === 'comisiones' ? 'Pago de Comisiones' :
-                                                     receipt.category === 'otros' ? 'Otros Movimientos' : (receipt.category || '').replaceAll('_', ' ')}
-                                                </td>
-                                                <td className={`p-4 font-semibold ${receipt.movement_type === 'expense' ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                                    ${Number(receipt.amount || 0).toLocaleString()}
+                                                    {isGroupedSale ? 'Venta consolidada' : getCategoryLabel(receipt.category)}
                                                 </td>
                                                 <td className="p-4 text-sm">
-                                                    {receipt.file_path ? (
+                                                    {isGroupedSale ? (
+                                                        <div className="space-y-1">
+                                                            <div className="font-semibold text-emerald-600">Ingresos: ${group.incomeTotal.toLocaleString()}</div>
+                                                            <div className="font-semibold text-rose-600">Egresos: ${group.expenseTotal.toLocaleString()}</div>
+                                                            <div className={`font-bold ${group.balanceTotal >= 0 ? 'text-blue-600' : 'text-red-600'}`}>Neto: ${group.balanceTotal.toLocaleString()}</div>
+                                                        </div>
+                                                    ) : (
+                                                        <span className={`font-semibold ${receipt.movement_type === 'expense' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                                            ${Number(receipt.amount || 0).toLocaleString()}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="p-4 text-sm">
+                                                    {isGroupedSale ? (
+                                                        <span className="text-gray-500">
+                                                            {group.receipts.filter((item) => item.file_path).length} adjuntos
+                                                        </span>
+                                                    ) : receipt.file_path ? (
                                                         <a
                                                             href={`/api${receipt.file_path}?token=${localStorage.getItem('token')}`}
                                                             target="_blank"
@@ -1034,30 +1115,34 @@ const SalesDashboard = () => {
                                                 <td className="p-4">
                                                     <div className="flex justify-end gap-2">
                                                         <button
-                                                            onClick={() => handleEditReceipt(receipt)}
+                                                            onClick={() => isGroupedSale ? setSelectedReceiptGroup(group) : handleEditReceipt(receipt)}
                                                             className="inline-flex items-center rounded-lg bg-blue-50 px-3 py-1.5 font-medium text-blue-700 hover:bg-blue-100"
                                                         >
                                                             Editar
                                                         </button>
-                                                        <a
-                                                            href={`/api/finance/receipts/${receipt.id}/pdf?token=${localStorage.getItem('token')}`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="inline-flex items-center rounded-lg bg-emerald-50 px-3 py-1.5 font-medium text-emerald-700 hover:bg-emerald-100"
-                                                        >
-                                                            PDF
-                                                        </a>
-                                                        <button
-                                                            onClick={() => handleDeleteReceipt(receipt.id)}
-                                                            className="inline-flex items-center rounded-lg bg-red-50 px-3 py-1.5 font-medium text-red-700 hover:bg-red-100"
-                                                        >
-                                                            Eliminar
-                                                        </button>
+                                                        {!isGroupedSale && (
+                                                            <>
+                                                                <a
+                                                                    href={`/api/finance/receipts/${receipt.id}/pdf?token=${localStorage.getItem('token')}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center rounded-lg bg-emerald-50 px-3 py-1.5 font-medium text-emerald-700 hover:bg-emerald-100"
+                                                                >
+                                                                    PDF
+                                                                </a>
+                                                                <button
+                                                                    onClick={() => handleDeleteReceipt(receipt.id)}
+                                                                    className="inline-flex items-center rounded-lg bg-red-50 px-3 py-1.5 font-medium text-red-700 hover:bg-red-100"
+                                                                >
+                                                                    Eliminar
+                                                                </button>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
-                                        ))}
-                                        {receipts.length === 0 && (
+                                        )})}
+                                        {receiptGroups.length === 0 && (
                                             <tr>
                                                 <td colSpan="8" className="p-8 text-center italic text-gray-400">
                                                     Aun no hay recibos registrados en contabilidad.
@@ -1067,6 +1152,122 @@ const SalesDashboard = () => {
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {selectedReceiptGroup && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+                    <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+                        <div className="flex items-start justify-between border-b border-slate-200 px-6 py-4">
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-900">Editar movimientos de la venta</h3>
+                                <p className="mt-1 text-sm text-slate-500">
+                                    #{selectedReceiptGroup.sale?.id} - {selectedReceiptGroup.sale?.vehicle?.make} {selectedReceiptGroup.sale?.vehicle?.model} · {selectedReceiptGroup.sale?.vehicle?.plate || 'Sin placa'}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedReceiptGroup(null)}
+                                className="rounded-full bg-slate-100 px-3 py-1 text-lg font-bold text-slate-600 hover:bg-slate-200"
+                            >
+                                ×
+                            </button>
+                        </div>
+                        <div className="max-h-[70vh] overflow-y-auto px-6 py-4">
+                            <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                                <div className="rounded-xl bg-emerald-50 p-4">
+                                    <p className="text-xs font-semibold uppercase text-emerald-700">Ingresos</p>
+                                    <p className="mt-1 text-xl font-bold text-emerald-700">${selectedReceiptGroup.incomeTotal.toLocaleString()}</p>
+                                </div>
+                                <div className="rounded-xl bg-rose-50 p-4">
+                                    <p className="text-xs font-semibold uppercase text-rose-700">Egresos</p>
+                                    <p className="mt-1 text-xl font-bold text-rose-700">${selectedReceiptGroup.expenseTotal.toLocaleString()}</p>
+                                </div>
+                                <div className="rounded-xl bg-blue-50 p-4">
+                                    <p className="text-xs font-semibold uppercase text-blue-700">Neto</p>
+                                    <p className={`mt-1 text-xl font-bold ${selectedReceiptGroup.balanceTotal >= 0 ? 'text-blue-700' : 'text-red-700'}`}>${selectedReceiptGroup.balanceTotal.toLocaleString()}</p>
+                                </div>
+                            </div>
+                            <table className="w-full border-collapse text-left">
+                                <thead>
+                                    <tr className="bg-slate-50 text-xs uppercase tracking-wider text-slate-600">
+                                        <th className="border-b p-3">Fecha</th>
+                                        <th className="border-b p-3">Concepto</th>
+                                        <th className="border-b p-3">Cuenta</th>
+                                        <th className="border-b p-3">Tipo</th>
+                                        <th className="border-b p-3">Valor</th>
+                                        <th className="border-b p-3">Soporte</th>
+                                        <th className="border-b p-3 text-right">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {selectedReceiptGroup.receipts.map((receipt) => (
+                                        <tr key={receipt.id}>
+                                            <td className="p-3 text-sm text-slate-600">{receipt.payment_date ? new Date(receipt.payment_date).toLocaleDateString() : '-'}</td>
+                                            <td className="p-3">
+                                                <div className="font-medium text-slate-800">{receipt.concept || 'Movimiento contable'}</div>
+                                                <div className="text-xs text-slate-500">{receipt.notes || receipt.receipt_number || 'Sin nota'}</div>
+                                            </td>
+                                            <td className="p-3 text-sm text-slate-600">{getCategoryLabel(receipt.category)}</td>
+                                            <td className="p-3 text-sm">
+                                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${receipt.movement_type === 'expense' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                    {receipt.movement_type === 'expense' ? 'Egreso' : 'Ingreso'}
+                                                </span>
+                                            </td>
+                                            <td className={`p-3 font-semibold ${receipt.movement_type === 'expense' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                                ${Number(receipt.amount || 0).toLocaleString()}
+                                            </td>
+                                            <td className="p-3 text-sm">
+                                                {receipt.file_path ? (
+                                                    <a
+                                                        href={`/api${receipt.file_path}?token=${localStorage.getItem('token')}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="font-medium text-blue-700 hover:underline"
+                                                    >
+                                                        Ver adjunto
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-slate-400">Sin archivo</span>
+                                                )}
+                                            </td>
+                                            <td className="p-3">
+                                                <div className="flex justify-end gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedReceiptGroup(null);
+                                                            handleEditReceipt(receipt);
+                                                        }}
+                                                        className="rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100"
+                                                    >
+                                                        Editar
+                                                    </button>
+                                                    <a
+                                                        href={`/api/finance/receipts/${receipt.id}/pdf?token=${localStorage.getItem('token')}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
+                                                    >
+                                                        PDF
+                                                    </a>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedReceiptGroup(null);
+                                                            handleDeleteReceipt(receipt.id);
+                                                        }}
+                                                        className="rounded-lg bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
+                                                    >
+                                                        Eliminar
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
