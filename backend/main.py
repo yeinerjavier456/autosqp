@@ -6380,6 +6380,193 @@ async def create_payment_receipt(
     ).filter(models.PaymentReceipt.id == receipt.id).first()
 
 
+@app.get("/finance/sales/{sale_id}/invoice.pdf")
+def download_sale_invoice_pdf(
+    sale_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_user_from_anywhere)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    sale = db.query(models.Sale).options(
+        joinedload(models.Sale.vehicle),
+        joinedload(models.Sale.seller),
+        joinedload(models.Sale.lead),
+        joinedload(models.Sale.payment_receipts)
+    ).filter(models.Sale.id == sale_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+    if current_user.company_id and sale.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    receipts = sorted(
+        sale.payment_receipts or [],
+        key=lambda item: (item.payment_date or item.created_at or datetime.datetime.min, item.id or 0)
+    )
+
+    try:
+        from reportlab.lib.colors import HexColor
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        raise HTTPException(status_code=500, detail="La libreria reportlab no esta instalada en el servidor")
+
+    def money(value: int) -> str:
+        return f"COP ${int(value or 0):,}".replace(",", ".")
+
+    def write_row(pdf_doc, y_pos, values, fills=None):
+        x_positions = [50, 115, 290, 390, 470]
+        widths = [58, 165, 90, 70, 85]
+        for index, value in enumerate(values):
+            pdf_doc.setFillColor(fills[index] if fills and fills[index] else HexColor("#1e293b"))
+            pdf_doc.drawString(x_positions[index], y_pos, str(value)[: int(widths[index] / 4.8)])
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+    pdf.setTitle(f"factura_venta_{sale.id}.pdf")
+
+    def draw_header():
+        pdf.setFillColor(HexColor("#1e293b"))
+        pdf.rect(0, height - 100, width, 100, fill=1, stroke=0)
+        pdf.setFillColor(HexColor("#ffffff"))
+        pdf.setFont("Helvetica-Bold", 22)
+        pdf.drawString(50, height - 58, "AUTOS QP - FACTURA CONSOLIDADA")
+        pdf.setFont("Helvetica", 10)
+        pdf.drawString(50, height - 78, "Resumen contable de venta y movimientos relacionados")
+        pdf.setFont("Helvetica-Bold", 14)
+        pdf.drawRightString(width - 50, height - 58, f"Venta #{sale.id}")
+        pdf.setFont("Helvetica", 10)
+        pdf.drawRightString(width - 50, height - 78, f"Fecha: {datetime.datetime.utcnow().strftime('%d/%m/%Y')}")
+
+    draw_header()
+    y = height - 135
+
+    vehicle_label = " ".join(filter(None, [
+        getattr(sale.vehicle, "make", None),
+        getattr(sale.vehicle, "model", None),
+        getattr(sale.vehicle, "plate", None)
+    ])).strip() or "Sin datos de vehiculo"
+    seller_label = (
+        getattr(sale.seller, "full_name", None)
+        or getattr(sale.seller, "email", None)
+        or sale.external_seller_name
+        or "Sin vendedor"
+    )
+    lead_label = getattr(sale.lead, "name", None) or "Sin cliente asociado"
+
+    pdf.setFont("Helvetica-Bold", 14)
+    pdf.setFillColor(HexColor("#0f172a"))
+    pdf.drawString(50, y, "Datos de la venta")
+    y -= 22
+    for label, value in [
+        ("Vehiculo", vehicle_label),
+        ("Cliente", lead_label),
+        ("Vendedor", seller_label),
+        ("Valor de venta", money(sale.sale_price)),
+        ("Estado", (sale.status or "pending").upper())
+    ]:
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.setFillColor(HexColor("#64748b"))
+        pdf.drawString(50, y, f"{label}:")
+        pdf.setFont("Helvetica", 10)
+        pdf.setFillColor(HexColor("#1e293b"))
+        pdf.drawString(150, y, str(value)[:80])
+        y -= 18
+
+    y -= 10
+    pdf.setFont("Helvetica-Bold", 14)
+    pdf.setFillColor(HexColor("#0f172a"))
+    pdf.drawString(50, y, "Movimientos relacionados")
+    y -= 24
+
+    pdf.setFillColor(HexColor("#f1f5f9"))
+    pdf.rect(45, y - 6, width - 90, 22, fill=1, stroke=0)
+    pdf.setFont("Helvetica-Bold", 9)
+    write_row(pdf, y, ["Fecha", "Concepto", "Cuenta", "Tipo", "Valor"])
+    y -= 22
+
+    income_total = 0
+    expense_total = 0
+    pdf.setFont("Helvetica", 9)
+    for receipt in receipts:
+        if y < 95:
+            pdf.showPage()
+            draw_header()
+            y = height - 135
+            pdf.setFillColor(HexColor("#f1f5f9"))
+            pdf.rect(45, y - 6, width - 90, 22, fill=1, stroke=0)
+            pdf.setFont("Helvetica-Bold", 9)
+            write_row(pdf, y, ["Fecha", "Concepto", "Cuenta", "Tipo", "Valor"])
+            y -= 22
+            pdf.setFont("Helvetica", 9)
+
+        is_expense = (receipt.movement_type or "income") == "expense"
+        if is_expense:
+            expense_total += int(receipt.amount or 0)
+        else:
+            income_total += int(receipt.amount or 0)
+
+        pdf.setStrokeColor(HexColor("#e2e8f0"))
+        pdf.line(45, y - 6, width - 45, y - 6)
+        write_row(
+            pdf,
+            y,
+            [
+                receipt.payment_date.strftime("%d/%m/%Y") if receipt.payment_date else "-",
+                receipt.concept or receipt.notes or "Movimiento contable",
+                (receipt.category or "sin_cuenta").replace("_", " "),
+                "Egreso" if is_expense else "Ingreso",
+                money(receipt.amount)
+            ],
+            [None, None, None, HexColor("#dc2626") if is_expense else HexColor("#059669"), HexColor("#dc2626") if is_expense else HexColor("#059669")]
+        )
+        y -= 20
+
+    if not receipts:
+        pdf.setFont("Helvetica-Oblique", 10)
+        pdf.setFillColor(HexColor("#64748b"))
+        pdf.drawString(50, y, "Esta venta no tiene movimientos contables asociados.")
+        y -= 24
+
+    y -= 16
+    if y < 150:
+        pdf.showPage()
+        draw_header()
+        y = height - 150
+
+    balance_total = income_total - expense_total
+    pdf.setFillColor(HexColor("#f8fafc"))
+    pdf.rect(330, y - 70, width - 380, 88, fill=1, stroke=1)
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.setFillColor(HexColor("#059669"))
+    pdf.drawString(350, y, f"Ingresos: {money(income_total)}")
+    y -= 20
+    pdf.setFillColor(HexColor("#dc2626"))
+    pdf.drawString(350, y, f"Egresos: {money(expense_total)}")
+    y -= 20
+    pdf.setFillColor(HexColor("#1d4ed8") if balance_total >= 0 else HexColor("#dc2626"))
+    pdf.drawString(350, y, f"Neto: {money(balance_total)}")
+
+    pdf.setStrokeColor(HexColor("#cbd5e1"))
+    pdf.line(50, 80, width - 50, 80)
+    pdf.setFont("Helvetica-Oblique", 8)
+    pdf.setFillColor(HexColor("#94a3b8"))
+    pdf.drawCentredString(width / 2, 63, "Este documento consolida los movimientos contables relacionados con la venta.")
+    pdf.drawCentredString(width / 2, 51, f"Generado digitalmente el {datetime.datetime.utcnow().strftime('%d/%m/%Y %H:%M')}")
+
+    pdf.showPage()
+    pdf.save()
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="factura_venta_{sale.id}.pdf"'}
+    )
+
+
 @app.get("/finance/receipts/{receipt_id}/pdf")
 def download_payment_receipt_pdf(
     receipt_id: int,
