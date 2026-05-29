@@ -6541,6 +6541,249 @@ def get_finance_stats(
     }
 
 
+def _projection_money(value) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _projection_date(value):
+    if not value:
+        return None
+    if isinstance(value, datetime.datetime):
+        return value
+    return None
+
+
+def _projection_month_label(value):
+    date_value = _projection_date(value) or datetime.datetime.utcnow()
+    return TAX_MONTH_LABELS.get(date_value.month, "")
+
+
+def _receipt_sum(receipts, movement_type=None, categories=None):
+    total = 0
+    category_set = set(categories or [])
+    for receipt in receipts or []:
+        if movement_type and (receipt.movement_type or "income") != movement_type:
+            continue
+        if category_set and receipt.category not in category_set:
+            continue
+        total += _projection_money(receipt.amount)
+    return total
+
+
+def _first_receipt(receipts, movement_type=None, categories=None):
+    category_set = set(categories or [])
+    ordered = sorted(receipts or [], key=lambda item: item.payment_date or item.created_at or datetime.datetime.min)
+    for receipt in ordered:
+        if movement_type and (receipt.movement_type or "income") != movement_type:
+            continue
+        if category_set and receipt.category not in category_set:
+            continue
+        return receipt
+    return None
+
+
+def _projection_sales_query(db: Session, current_user: models.User):
+    query = db.query(models.Sale).options(
+        joinedload(models.Sale.vehicle),
+        joinedload(models.Sale.lead),
+        joinedload(models.Sale.seller),
+        joinedload(models.Sale.payment_receipts),
+    )
+    if current_user.company_id:
+        query = query.filter(models.Sale.company_id == current_user.company_id)
+    return query
+
+
+@app.get("/finance/projection.xlsx")
+def download_finance_projection_xlsx(
+    year: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_user_from_anywhere)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    report_year = year or datetime.datetime.utcnow().year
+    start = datetime.datetime(report_year, 1, 1)
+    end = datetime.datetime(report_year + 1, 1, 1)
+    sales = _projection_sales_query(db, current_user).filter(
+        models.Sale.sale_date >= start,
+        models.Sale.sale_date < end
+    ).order_by(models.Sale.sale_date.asc(), models.Sale.id.asc()).all()
+
+    receipts_query = db.query(models.PaymentReceipt).options(
+        joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.vehicle),
+        joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.lead),
+        joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.seller),
+    )
+    if current_user.company_id:
+        receipts_query = receipts_query.filter(models.PaymentReceipt.company_id == current_user.company_id)
+    receipt_date = func.coalesce(models.PaymentReceipt.payment_date, models.PaymentReceipt.created_at)
+    receipts = receipts_query.filter(receipt_date >= start, receipt_date < end).all()
+
+    credits_query = db.query(models.CreditApplication).options(joinedload(models.CreditApplication.lead))
+    if current_user.company_id:
+        credits_query = credits_query.filter(models.CreditApplication.company_id == current_user.company_id)
+    credits = credits_query.filter(models.CreditApplication.created_at >= start, models.CreditApplication.created_at < end).all()
+
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Font, PatternFill
+    except ImportError:
+        raise HTTPException(status_code=500, detail="La libreria openpyxl no esta instalada en el servidor")
+
+    wb = Workbook()
+    header_fill = PatternFill("solid", fgColor="1E293B")
+
+    def style_header(ws, row=1):
+        for cell in ws[row]:
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    def autosize(ws, max_width=34):
+        for column_cells in ws.columns:
+            length = 10
+            for cell in column_cells:
+                length = max(length, min(len(str(cell.value or "")) + 2, max_width))
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+            ws.column_dimensions[column_cells[0].column_letter].width = length
+
+    costs = wb.active
+    costs.title = "COSTOS X VH"
+    costs.append([
+        "MES", "ITEM", "ASESOR VENTA", "EQUIPO", "ESTADO", "CONTINUA CON EL NEGOCIO",
+        "NOMBRE DEL CLIENTE", "REFERENCIA", "PLACA", "TIPO DE TRANSACCION", "MODELO",
+        "COSTO VEHICULO", "GASTOS VEHICULO", "COSTOS TOTALES", "VALOR DE VENTA",
+        "SEPARACION / CUOTA INICIAL", "SALDO", "DESEMBOLSO", "COMISION CREDITO",
+        "UTILIDAD NETA"
+    ])
+    style_header(costs)
+    for index, sale in enumerate(sales, start=1):
+        vehicle = sale.vehicle
+        lead = sale.lead
+        sale_receipts = sale.payment_receipts or []
+        purchase_cost = _projection_money(getattr(vehicle, "purchase_price", None))
+        vehicle_expenses = _receipt_sum(sale_receipts, "expense", ["vehicle_expense", "gasto_tramites", "gasto_operativo"])
+        purchase_receipts = _receipt_sum(sale_receipts, "expense", ["vehicle_purchase", "costo_vehiculo"])
+        sale_income = _receipt_sum(sale_receipts, "income")
+        down_payment = _projection_money(getattr(getattr(lead, "process_detail", None), "reservation_amount", None))
+        credit_amount = _projection_money(getattr(getattr(lead, "process_detail", None), "credit_used_amount", None))
+        sale_value = _projection_money(sale.sale_price)
+        total_cost = purchase_cost + purchase_receipts + vehicle_expenses
+        costs.append([
+            _projection_month_label(sale.sale_date), index, get_sale_display_name(sale), getattr(sale.company, "name", None),
+            sale.status, "CONTINUA" if sale.status != models.SaleStatus.REJECTED.value else "DESISTE",
+            getattr(lead, "name", None), " ".join(filter(None, [getattr(vehicle, "make", None), getattr(vehicle, "model", None)])),
+            getattr(vehicle, "plate", None), getattr(sale, "tax_transaction_type", None) or "COMPRA",
+            getattr(vehicle, "year", None), purchase_cost, vehicle_expenses, total_cost, sale_value,
+            down_payment, max(sale_value - down_payment - credit_amount, 0), credit_amount,
+            _projection_money(sale.commission_amount), sale_value - total_cost - _projection_money(sale.commission_amount)
+        ])
+    autosize(costs)
+
+    expenses = wb.create_sheet("GASTOS")
+    expenses.append(["FECHA", "CONCEPTO", "CUENTA", "TIPO", "VALOR", "VENTA", "PLACA", "NOTA"])
+    style_header(expenses)
+    for receipt in receipts:
+        if (receipt.movement_type or "income") != "expense":
+            continue
+        expenses.append([
+            receipt.payment_date or receipt.created_at, receipt.concept, receipt.category, "EGRESO",
+            _projection_money(receipt.amount), getattr(receipt.sale, "id", None),
+            getattr(getattr(receipt.sale, "vehicle", None), "plate", None), receipt.notes
+        ])
+    autosize(expenses)
+
+    process = wb.create_sheet("VENTAS EN PROCESO")
+    process.append([
+        "ITEM", "FECHA INGRESO", "ESTADO", "NOMBRE DEL EJECUTIVO", "NOMBRE DEL CLIENTE",
+        "TELEFONO", "FECHA DE RADICACION", "BANCO", "RTA BANCO", "CARRO", "PLACA",
+        "% DE FINANCIACION", "VALOR DEL VH", "CUANTO LE PRESTAN", "VALOR CUOTA INICIAL", "OBSERVACION"
+    ])
+    style_header(process)
+    for index, credit in enumerate(credits, start=1):
+        lead = credit.lead
+        process_detail = getattr(lead, "process_detail", None)
+        vehicle_value = _projection_money(credit.purchase_sale_price or credit.approved_amount)
+        approved_amount = _projection_money(credit.approved_amount)
+        financing_pct = round(approved_amount / vehicle_value, 2) if vehicle_value else None
+        process.append([
+            index, credit.created_at, credit.status, getattr(getattr(lead, "assigned_to", None), "full_name", None),
+            credit.client_name or getattr(lead, "name", None), credit.phone or getattr(lead, "phone", None),
+            credit.updated_at, getattr(process_detail, "reservation_payment_method", None), credit.notes,
+            credit.purchase_vehicle_name or credit.desired_vehicle, credit.purchase_vehicle_plate,
+            financing_pct, vehicle_value, approved_amount,
+            _projection_money(getattr(process_detail, "reservation_amount", None) or credit.down_payment or credit.approved_down_payment),
+            credit.notes
+        ])
+    autosize(process)
+
+    payments = wb.create_sheet("RELACION DE PAGOS X CARRO")
+    payments.append([
+        "FECHA", "VEHICULO", "PLACA", "MODELO", "VENDEDOR", "CEDULA", "CORREO", "DIRECCION",
+        "CELULAR", "OBSERVACIONES", "VALOR COMPRA", "SEPARACION", "VALOR", "BANCO",
+        "ABONOS / PAGOS", "GASTOS", "PRECIO FINAL", "CLIENTE", "VALOR VENTA", "TOTAL INGRESOS",
+        "TOTAL GASTOS", "DIFERENCIA", "BASE IMPUESTO", "IVA"
+    ])
+    style_header(payments)
+    for sale in sales:
+        vehicle = sale.vehicle
+        lead = sale.lead
+        sale_receipts = sorted(sale.payment_receipts or [], key=lambda item: item.payment_date or item.created_at or datetime.datetime.min)
+        first_income = _first_receipt(sale_receipts, "income")
+        total_income = _receipt_sum(sale_receipts, "income")
+        total_expense = _receipt_sum(sale_receipts, "expense")
+        difference = total_income - total_expense
+        base_tax = int(difference / 1.19) if difference else 0
+        iva = int(base_tax * 0.19)
+        payments.append([
+            _projection_month_label(sale.sale_date),
+            " ".join(filter(None, [getattr(vehicle, "make", None), getattr(vehicle, "model", None)])),
+            getattr(vehicle, "plate", None), getattr(vehicle, "year", None),
+            getattr(sale, "tax_seller_name", None) or get_sale_display_name(sale),
+            getattr(sale, "tax_seller_document", None), getattr(sale, "tax_seller_email", None),
+            getattr(sale, "tax_seller_address", None), getattr(sale, "tax_seller_phone", None),
+            getattr(sale, "tax_seller_payment_method", None), _projection_money(getattr(vehicle, "purchase_price", None)),
+            getattr(first_income, "payment_date", None), _projection_money(getattr(first_income, "amount", None)),
+            getattr(first_income, "receipt_number", None),
+            " | ".join(f"{r.payment_date:%d/%m/%Y}: {r.concept or r.category} ${_projection_money(r.amount):,}" for r in sale_receipts if (r.movement_type or "income") == "income"),
+            total_expense, _projection_money(sale.sale_price), getattr(lead, "name", None),
+            _projection_money(sale.sale_price), total_income, total_expense, difference, base_tax, iva
+        ])
+    autosize(payments)
+
+    status_ws = wb.create_sheet("ESTADO VENTAS")
+    status_ws.append(["FECHA", "ASESOR", "CLIENTE", "ACTIVIDAD PENDIENTE", "RESPONSABLE", "FECHA DE COMPROMISO", "ESTADO"])
+    style_header(status_ws)
+    for credit in credits:
+        lead = credit.lead
+        status_ws.append([
+            credit.updated_at, getattr(getattr(lead, "assigned_to", None), "full_name", None),
+            credit.client_name or getattr(lead, "name", None), credit.notes or credit.status,
+            getattr(getattr(credit, "assigned_to", None), "full_name", None), credit.updated_at, credit.status
+        ])
+    autosize(status_ws)
+
+    for ws in wb.worksheets:
+        for row in ws.iter_rows(min_row=2):
+            for cell in row:
+                if isinstance(cell.value, (int, float)) and cell.column >= 10:
+                    cell.number_format = '"$"#,##0'
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="proyeccion_contable_{report_year}.xlsx"'}
+    )
+
+
 @app.get("/finance/receipts", response_model=schemas.PaymentReceiptList)
 def read_payment_receipts(
     sale_id: Optional[int] = None,

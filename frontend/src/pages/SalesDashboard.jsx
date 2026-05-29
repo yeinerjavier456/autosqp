@@ -272,6 +272,12 @@ const SalesDashboard = () => {
         window.open(`/api/finance/tax-report.xlsx?year=${activeYear}&token=${token}`, '_blank');
     };
 
+    const handleDownloadProjectionReport = () => {
+        const token = localStorage.getItem('token');
+        const activeYear = startDate ? Number(startDate.slice(0, 4)) : new Date().getFullYear();
+        window.open(`/api/finance/projection.xlsx?year=${activeYear}&token=${token}`, '_blank');
+    };
+
     const handleEditTaxInfo = async (row = null) => {
         const isManual = row?.source === 'manual' || !row;
         const fieldLabels = [
@@ -905,6 +911,12 @@ const SalesDashboard = () => {
                 >
                     Tributación
                 </button>
+                <button
+                    onClick={() => setActiveTab('projection')}
+                    className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === 'projection' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
+                >
+                    Proyección
+                </button>
             </div>
 
             <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
@@ -1461,7 +1473,7 @@ const SalesDashboard = () => {
                         </div>
                     </div>
                 </div>
-            ) : (
+            ) : activeTab === 'tax' ? (
                 <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
                     <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 px-6 py-4 md:flex-row md:items-center md:justify-between">
                         <div>
@@ -1553,6 +1565,36 @@ const SalesDashboard = () => {
                                 )}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            ) : (
+                <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+                    <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 px-6 py-4 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-800">Proyección contable</h3>
+                            <p className="text-sm text-gray-500">Genera el libro con costos por vehículo, gastos, ventas en proceso, pagos por carro y estado de ventas.</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleDownloadProjectionReport}
+                            className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+                        >
+                            Descargar proyección Excel
+                        </button>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-5">
+                        {[
+                            ['Costos x vehículo', 'Compra, gastos, costos totales, venta, saldos y utilidad por carro.'],
+                            ['Gastos', 'Egresos registrados en contabilidad durante el año seleccionado.'],
+                            ['Ventas en proceso', 'Solicitudes de crédito/compra activas y datos de financiación.'],
+                            ['Pagos x carro', 'Ingresos, abonos, gastos, diferencia, base de impuesto e IVA por venta.'],
+                            ['Estado ventas', 'Pendientes y observaciones del proceso comercial.']
+                        ].map(([title, description]) => (
+                            <div key={title} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                                <p className="font-semibold text-slate-900">{title}</p>
+                                <p className="mt-2 text-sm text-slate-500">{description}</p>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
