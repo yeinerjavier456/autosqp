@@ -43,10 +43,7 @@ def can_user_receive_auto_assigned_leads(user: Optional[models.User]) -> bool:
     if not is_advisor_role(role):
         return False
 
-    return bool(
-        getattr(user, "auto_assign_leads", False)
-        or getattr(role, "auto_assign_leads", False)
-    )
+    return bool(getattr(user, "auto_assign_leads", False))
 
 
 def get_auto_assign_candidate_users(db: Session, company_id: Optional[int]) -> List[models.User]:
@@ -57,16 +54,7 @@ def get_auto_assign_candidate_users(db: Session, company_id: Optional[int]) -> L
         models.User.company_id == company_id
     ).all()
 
-    enabled_users = [user for user in users if can_user_receive_auto_assigned_leads(user)]
-    if enabled_users:
-        return enabled_users
-
-    # If no advisor has the flag configured yet, do not leave new leads orphaned.
-    return [
-        user
-        for user in users
-        if is_active_user(user) and is_advisor_role(getattr(user, "role", None))
-    ]
+    return [user for user in users if can_user_receive_auto_assigned_leads(user)]
 
 
 def choose_auto_assign_user(db: Session, company_id: Optional[int]) -> Optional[models.User]:

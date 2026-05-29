@@ -1056,7 +1056,15 @@ def get_user_role_name(user: Optional[models.User]) -> Optional[str]:
 def is_advisor_role(role: Optional[models.Role]) -> bool:
     if not role:
         return False
-    return (getattr(role, "base_role_name", None) or getattr(role, "name", None)) == "asesor"
+
+    role_names = {
+        normalize_role_text(getattr(role, "name", None)),
+        normalize_role_text(getattr(role, "base_role_name", None)),
+        normalize_role_text(getattr(role, "label", None)),
+    }
+    role_names.discard("")
+
+    return bool(role_names & {"asesor", "vendedor", "asesor_vendedor"})
 
 
 def is_ally_role(role: Optional[models.Role]) -> bool:
@@ -1463,14 +1471,11 @@ def get_active_advisor_users_for_redistribution(
 
 
 def should_self_assign_manual_lead(current_user: models.User) -> bool:
-    current_role = getattr(current_user, "role", None)
-    if is_advisor_role(current_role):
-        return True
-    return False
+    return get_user_role_name(current_user) == "asesor"
 
 
 def should_auto_assign_manual_lead(current_user: models.User) -> bool:
-    return get_user_role_name(current_user) == "super_admin"
+    return get_user_role_name(current_user) in {"admin", "super_admin"}
 
 
 def normalize_supervisor_ids(supervisor_ids: Optional[List[int]]) -> List[int]:
@@ -3226,6 +3231,11 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
             auto_assigned_user = choose_auto_assign_user(db, company_id)
             if auto_assigned_user:
                 assigned_user_id = auto_assigned_user.id
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No hay asesores vendedores activos con asignacion automatica habilitada"
+                )
     else:
         target_user = db.query(models.User).join(models.Role, isouter=True).filter(models.User.id == assigned_user_id).first()
         if not target_user or target_user.company_id != company_id:
@@ -4995,6 +5005,11 @@ def _legacy_create_lead_unused(
             auto_assigned_user = choose_auto_assign_user(db, company_id)
             if auto_assigned_user:
                 assigned_to_id = auto_assigned_user.id
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No hay asesores vendedores activos con asignacion automatica habilitada"
+                )
     
     # Verify the manually assigned user belongs to the company
     elif assigned_to_id:
