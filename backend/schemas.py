@@ -600,12 +600,77 @@ class SaleBase(BaseModel):
     sale_price: int
     seller_type: Optional[str] = "internal"
     external_seller_name: Optional[str] = None
+    tax_transaction_type: Optional[str] = "intermediacion"
+    tax_transfer_to_cars: Optional[str] = None
+    tax_seller_name: Optional[str] = None
+    tax_seller_document: Optional[str] = None
+    tax_seller_email: Optional[str] = None
+    tax_seller_address: Optional[str] = None
+    tax_seller_phone: Optional[str] = None
+    tax_seller_payment_method: Optional[str] = None
+    tax_buyer_name: Optional[str] = None
+    tax_buyer_document: Optional[str] = None
+    tax_buyer_email: Optional[str] = None
+    tax_buyer_address: Optional[str] = None
+    tax_buyer_phone: Optional[str] = None
+    tax_buyer_payment_method: Optional[str] = None
+    tax_buyer_financing_entity: Optional[str] = None
     
 class SaleCreate(SaleBase):
     pass
 
 class SaleUpdate(BaseModel):
     sale_price: int
+
+class SaleTaxInfoUpdate(BaseModel):
+    tax_transaction_type: Optional[str] = None
+    tax_transfer_to_cars: Optional[str] = None
+    tax_seller_name: Optional[str] = None
+    tax_seller_document: Optional[str] = None
+    tax_seller_email: Optional[str] = None
+    tax_seller_address: Optional[str] = None
+    tax_seller_phone: Optional[str] = None
+    tax_seller_payment_method: Optional[str] = None
+    tax_buyer_name: Optional[str] = None
+    tax_buyer_document: Optional[str] = None
+    tax_buyer_email: Optional[str] = None
+    tax_buyer_address: Optional[str] = None
+    tax_buyer_phone: Optional[str] = None
+    tax_buyer_payment_method: Optional[str] = None
+    tax_buyer_financing_entity: Optional[str] = None
+
+class TaxReportRow(BaseModel):
+    sale_id: int
+    month: Optional[str] = None
+    year: Optional[int] = None
+    make: Optional[str] = None
+    reference: Optional[str] = None
+    plate: Optional[str] = None
+    model_year: Optional[int] = None
+    purchase_price: int = 0
+    commission_base: int = 0
+    tax_iva: int = 0
+    sale_price: int = 0
+    iva_base: int = 0
+    transaction_type: Optional[str] = None
+    transfer_to_cars: Optional[str] = None
+    seller_name: Optional[str] = None
+    seller_document: Optional[str] = None
+    seller_email: Optional[str] = None
+    seller_address: Optional[str] = None
+    seller_phone: Optional[str] = None
+    seller_payment_method: Optional[str] = None
+    buyer_name: Optional[str] = None
+    buyer_document: Optional[str] = None
+    buyer_email: Optional[str] = None
+    buyer_address: Optional[str] = None
+    buyer_phone: Optional[str] = None
+    buyer_payment_method: Optional[str] = None
+    buyer_financing_entity: Optional[str] = None
+
+class TaxReportList(BaseModel):
+    items: List[TaxReportRow]
+    total: int
 
 class Sale(SaleBase):
     id: int

@@ -373,6 +373,21 @@ def ensure_sales_metadata_columns():
             sales_columns = {
                 "seller_type": "ALTER TABLE sales ADD COLUMN seller_type VARCHAR(20) NOT NULL DEFAULT 'internal'",
                 "external_seller_name": "ALTER TABLE sales ADD COLUMN external_seller_name VARCHAR(150) NULL",
+                "tax_transaction_type": "ALTER TABLE sales ADD COLUMN tax_transaction_type VARCHAR(50) NULL DEFAULT 'intermediacion'",
+                "tax_transfer_to_cars": "ALTER TABLE sales ADD COLUMN tax_transfer_to_cars VARCHAR(20) NULL",
+                "tax_seller_name": "ALTER TABLE sales ADD COLUMN tax_seller_name VARCHAR(180) NULL",
+                "tax_seller_document": "ALTER TABLE sales ADD COLUMN tax_seller_document VARCHAR(60) NULL",
+                "tax_seller_email": "ALTER TABLE sales ADD COLUMN tax_seller_email VARCHAR(150) NULL",
+                "tax_seller_address": "ALTER TABLE sales ADD COLUMN tax_seller_address VARCHAR(250) NULL",
+                "tax_seller_phone": "ALTER TABLE sales ADD COLUMN tax_seller_phone VARCHAR(60) NULL",
+                "tax_seller_payment_method": "ALTER TABLE sales ADD COLUMN tax_seller_payment_method VARCHAR(120) NULL",
+                "tax_buyer_name": "ALTER TABLE sales ADD COLUMN tax_buyer_name VARCHAR(180) NULL",
+                "tax_buyer_document": "ALTER TABLE sales ADD COLUMN tax_buyer_document VARCHAR(60) NULL",
+                "tax_buyer_email": "ALTER TABLE sales ADD COLUMN tax_buyer_email VARCHAR(150) NULL",
+                "tax_buyer_address": "ALTER TABLE sales ADD COLUMN tax_buyer_address VARCHAR(250) NULL",
+                "tax_buyer_phone": "ALTER TABLE sales ADD COLUMN tax_buyer_phone VARCHAR(60) NULL",
+                "tax_buyer_payment_method": "ALTER TABLE sales ADD COLUMN tax_buyer_payment_method VARCHAR(120) NULL",
+                "tax_buyer_financing_entity": "ALTER TABLE sales ADD COLUMN tax_buyer_financing_entity VARCHAR(150) NULL",
             }
             for column_name, ddl in sales_columns.items():
                 exists = conn.execute(text(
@@ -5987,6 +6002,207 @@ def update_sale(
     db.commit()
     db.refresh(sale)
     return sale
+
+TAX_MONTH_LABELS = {
+    1: "ENE", 2: "FEB", 3: "MARZO", 4: "ABRIL", 5: "MAYO", 6: "JUNIO",
+    7: "JULIO", 8: "AGOSTO", 9: "SEPT", 10: "OCT", 11: "NOV", 12: "DIC",
+}
+
+
+def _tax_clean(value: Optional[str]) -> Optional[str]:
+    cleaned = (value or "").strip()
+    return cleaned or None
+
+
+def _get_sale_tax_query(db: Session, current_user: models.User):
+    query = db.query(models.Sale).options(
+        joinedload(models.Sale.vehicle),
+        joinedload(models.Sale.lead),
+        joinedload(models.Sale.seller),
+    )
+    if current_user.company_id:
+        query = query.filter(models.Sale.company_id == current_user.company_id)
+    return query
+
+
+def _sale_tax_row(sale: models.Sale) -> dict:
+    sale_date = sale.sale_date or datetime.datetime.utcnow()
+    vehicle = sale.vehicle
+    lead = sale.lead
+    purchase_price = int(getattr(vehicle, "purchase_price", None) or 0)
+    commission_base = int(round(purchase_price * 0.03))
+    tax_iva = int(round(commission_base * 0.19))
+
+    return {
+        "sale_id": sale.id,
+        "month": TAX_MONTH_LABELS.get(sale_date.month),
+        "year": sale_date.year,
+        "make": getattr(vehicle, "make", None),
+        "reference": getattr(vehicle, "model", None),
+        "plate": getattr(vehicle, "plate", None),
+        "model_year": getattr(vehicle, "year", None),
+        "purchase_price": purchase_price,
+        "commission_base": commission_base,
+        "tax_iva": tax_iva,
+        "sale_price": int(sale.sale_price or 0),
+        "iva_base": commission_base,
+        "transaction_type": _tax_clean(getattr(sale, "tax_transaction_type", None)) or "INTERMEDIACION",
+        "transfer_to_cars": _tax_clean(getattr(sale, "tax_transfer_to_cars", None)),
+        "seller_name": _tax_clean(getattr(sale, "tax_seller_name", None)) or _tax_clean(getattr(sale, "external_seller_name", None)),
+        "seller_document": _tax_clean(getattr(sale, "tax_seller_document", None)),
+        "seller_email": _tax_clean(getattr(sale, "tax_seller_email", None)),
+        "seller_address": _tax_clean(getattr(sale, "tax_seller_address", None)),
+        "seller_phone": _tax_clean(getattr(sale, "tax_seller_phone", None)),
+        "seller_payment_method": _tax_clean(getattr(sale, "tax_seller_payment_method", None)),
+        "buyer_name": _tax_clean(getattr(sale, "tax_buyer_name", None)) or _tax_clean(getattr(lead, "name", None)),
+        "buyer_document": _tax_clean(getattr(sale, "tax_buyer_document", None)),
+        "buyer_email": _tax_clean(getattr(sale, "tax_buyer_email", None)) or _tax_clean(getattr(lead, "email", None)),
+        "buyer_address": _tax_clean(getattr(sale, "tax_buyer_address", None)),
+        "buyer_phone": _tax_clean(getattr(sale, "tax_buyer_phone", None)) or _tax_clean(getattr(lead, "phone", None)),
+        "buyer_payment_method": _tax_clean(getattr(sale, "tax_buyer_payment_method", None)),
+        "buyer_financing_entity": _tax_clean(getattr(sale, "tax_buyer_financing_entity", None)),
+    }
+
+
+@app.get("/finance/tax-report", response_model=schemas.TaxReportList)
+def read_tax_report(
+    year: Optional[int] = None,
+    q: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 300,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    query = _get_sale_tax_query(db, current_user).filter(models.Sale.status == models.SaleStatus.APPROVED.value)
+    if year:
+        start = datetime.datetime(year, 1, 1)
+        end = datetime.datetime(year + 1, 1, 1)
+        query = query.filter(models.Sale.sale_date >= start, models.Sale.sale_date < end)
+    if q:
+        search = f"%{q}%"
+        query = query.join(models.Vehicle, models.Sale.vehicle_id == models.Vehicle.id, isouter=True).join(
+            models.Lead, models.Sale.lead_id == models.Lead.id, isouter=True
+        ).filter(or_(
+            models.Vehicle.make.ilike(search),
+            models.Vehicle.model.ilike(search),
+            models.Vehicle.plate.ilike(search),
+            models.Lead.name.ilike(search),
+            models.Sale.tax_seller_name.ilike(search),
+            models.Sale.tax_buyer_name.ilike(search),
+        ))
+
+    total = query.count()
+    sales = query.order_by(models.Sale.sale_date.asc(), models.Sale.id.asc()).offset(skip).limit(limit).all()
+    return {"items": [_sale_tax_row(sale) for sale in sales], "total": total}
+
+
+@app.put("/sales/{sale_id}/tax-info", response_model=schemas.TaxReportRow)
+def update_sale_tax_info(
+    sale_id: int,
+    payload: schemas.SaleTaxInfoUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Solo un administrador puede editar tributacion")
+
+    sale = _get_sale_tax_query(db, current_user).filter(models.Sale.id == sale_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(sale, field, _tax_clean(value))
+
+    db.commit()
+    db.refresh(sale)
+    return _sale_tax_row(sale)
+
+
+@app.get("/finance/tax-report.xlsx")
+def download_tax_report_xlsx(
+    year: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_user_from_anywhere)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    query = _get_sale_tax_query(db, current_user).filter(models.Sale.status == models.SaleStatus.APPROVED.value)
+    if year:
+        start = datetime.datetime(year, 1, 1)
+        end = datetime.datetime(year + 1, 1, 1)
+        query = query.filter(models.Sale.sale_date >= start, models.Sale.sale_date < end)
+    rows = [_sale_tax_row(sale) for sale in query.order_by(models.Sale.sale_date.asc(), models.Sale.id.asc()).all()]
+
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Font, PatternFill
+    except ImportError:
+        raise HTTPException(status_code=500, detail="La libreria openpyxl no esta instalada en el servidor")
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"ANUAL {year or datetime.datetime.utcnow().year}"
+    ws.merge_cells("A1:N2")
+    ws.merge_cells("O1:T1")
+    ws.merge_cells("O2:T2")
+    ws.merge_cells("U1:AA1")
+    ws.merge_cells("U2:AA2")
+    ws["A1"] = "QUIEN ME VENDIO EL CARRO"
+    ws["O1"] = "A QUIEN LE COMPRE EL CARRO"
+    ws["O2"] = "DATOS CLIENTE"
+    ws["U1"] = "A QUIEN LE VENDI EL CARRO"
+    ws["U2"] = "DATOS CLIENTE"
+    headers = [
+        "MES", "AÑO", "MARCA", "REFERENCIA", "PLACA", "MODELO",
+        "PRECIO COMPRA / CONSIGNACIÓN", "COMISION", "IVA", "PRECIO VENTA",
+        "BASE DEL IVA", "IVA", "INTERMEDIACION O VENTA COMPLETA", "TRASPASO A CARS SI /NO",
+        "NOMBRES O RAZON SOCIAL", "DOCUMENTO / NIT", "EMAIL", "DIRECCIÓN", "TELÉFONO",
+        "FORMA DE PAGO A VENDEDOR", "NOMBRES", "DOCUMENTO", "EMAIL", "DIRECCIÓN",
+        "TELÉFONO", "FORMA DE PAGO DEL COMPRADOR", "ENTIDAD / OBSERVACION",
+    ]
+    ws.append([])
+    ws.append(headers)
+
+    header_fill = PatternFill("solid", fgColor="1E293B")
+    for row in ws.iter_rows(min_row=1, max_row=3):
+        for cell in row:
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            cell.fill = header_fill
+
+    for index, row in enumerate(rows, start=4):
+        ws.append([
+            row["month"], row["year"], row["make"], row["reference"], row["plate"], row["model_year"],
+            row["purchase_price"], f"=G{index}*3%", f"=H{index}*0.19", row["sale_price"],
+            f"=H{index}", None, row["transaction_type"], row["transfer_to_cars"],
+            row["seller_name"], row["seller_document"], row["seller_email"], row["seller_address"],
+            row["seller_phone"], row["seller_payment_method"], row["buyer_name"], row["buyer_document"],
+            row["buyer_email"], row["buyer_address"], row["buyer_phone"], row["buyer_payment_method"],
+            row["buyer_financing_entity"],
+        ])
+
+    widths = [10, 8, 16, 22, 12, 10, 18, 14, 14, 16, 14, 12, 24, 18, 26, 18, 28, 34, 16, 24, 26, 18, 28, 34, 16, 28, 28]
+    for idx, width_value in enumerate(widths, start=1):
+        ws.column_dimensions[ws.cell(3, idx).column_letter].width = width_value
+    for row in ws.iter_rows(min_row=4):
+        for cell in row:
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+            if cell.column in {7, 8, 9, 10, 11, 12}:
+                cell.number_format = '"$"#,##0'
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    filename_year = year or datetime.datetime.utcnow().year
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="cuadro_tributacion_{filename_year}.xlsx"'}
+    )
 
 @app.put("/sales/{sale_id}/approve", response_model=schemas.Sale)
 def approve_sale(

@@ -38,6 +38,7 @@ const SalesDashboard = () => {
     const [sales, setSales] = useState([]);
     const [approvedSales, setApprovedSales] = useState([]);
     const [receipts, setReceipts] = useState([]);
+    const [taxRows, setTaxRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filterStatus, setFilterStatus] = useState('pending');
     const [activeTab, setActiveTab] = useState('sales');
@@ -79,7 +80,8 @@ const SalesDashboard = () => {
                     end_date: endDate || undefined
                 };
 
-            const [statsRes, salesRes, approvedSalesRes, receiptsRes] = await Promise.all([
+            const activeYear = startDate ? Number(startDate.slice(0, 4)) : new Date().getFullYear();
+            const [statsRes, salesRes, approvedSalesRes, receiptsRes, taxRes] = await Promise.all([
                 axios.get('/api/finance/stats', { headers, params: rangeParams }),
                 axios.get('/api/sales/', {
                     headers,
@@ -100,6 +102,13 @@ const SalesDashboard = () => {
                         limit: 300,
                         ...rangeParams
                     }
+                }),
+                axios.get('/api/finance/tax-report', {
+                    headers,
+                    params: {
+                        year: activeYear,
+                        limit: 500
+                    }
                 })
             ]);
 
@@ -107,6 +116,7 @@ const SalesDashboard = () => {
             setSales(Array.isArray(salesRes.data?.items) ? salesRes.data.items : []);
             setApprovedSales(Array.isArray(approvedSalesRes.data?.items) ? approvedSalesRes.data.items : []);
             setReceipts(Array.isArray(receiptsRes.data?.items) ? receiptsRes.data.items : []);
+            setTaxRows(Array.isArray(taxRes.data?.items) ? taxRes.data.items : []);
         } catch (error) {
             console.error('Error fetching sales data', error);
         } finally {
@@ -244,6 +254,91 @@ const SalesDashboard = () => {
     };
 
     const receiptGroups = buildReceiptGroups(receipts);
+
+    const handleDownloadTaxReport = () => {
+        const token = localStorage.getItem('token');
+        const activeYear = startDate ? Number(startDate.slice(0, 4)) : new Date().getFullYear();
+        window.open(`/api/finance/tax-report.xlsx?year=${activeYear}&token=${token}`, '_blank');
+    };
+
+    const handleEditTaxInfo = async (row) => {
+        const fieldLabels = [
+            ['tax_transaction_type', 'Intermediación o venta completa'],
+            ['tax_transfer_to_cars', 'Traspaso a Cars SI/NO'],
+            ['tax_seller_name', 'Vendedor del carro - Nombre o razón social'],
+            ['tax_seller_document', 'Vendedor del carro - Documento/NIT'],
+            ['tax_seller_email', 'Vendedor del carro - Email'],
+            ['tax_seller_address', 'Vendedor del carro - Dirección'],
+            ['tax_seller_phone', 'Vendedor del carro - Teléfono'],
+            ['tax_seller_payment_method', 'Forma de pago al vendedor'],
+            ['tax_buyer_name', 'Comprador - Nombre'],
+            ['tax_buyer_document', 'Comprador - Documento'],
+            ['tax_buyer_email', 'Comprador - Email'],
+            ['tax_buyer_address', 'Comprador - Dirección'],
+            ['tax_buyer_phone', 'Comprador - Teléfono'],
+            ['tax_buyer_payment_method', 'Forma de pago del comprador'],
+            ['tax_buyer_financing_entity', 'Entidad / observación']
+        ];
+        const valueByField = {
+            tax_transaction_type: row.transaction_type || 'INTERMEDIACION',
+            tax_transfer_to_cars: row.transfer_to_cars || '',
+            tax_seller_name: row.seller_name || '',
+            tax_seller_document: row.seller_document || '',
+            tax_seller_email: row.seller_email || '',
+            tax_seller_address: row.seller_address || '',
+            tax_seller_phone: row.seller_phone || '',
+            tax_seller_payment_method: row.seller_payment_method || '',
+            tax_buyer_name: row.buyer_name || '',
+            tax_buyer_document: row.buyer_document || '',
+            tax_buyer_email: row.buyer_email || '',
+            tax_buyer_address: row.buyer_address || '',
+            tax_buyer_phone: row.buyer_phone || '',
+            tax_buyer_payment_method: row.buyer_payment_method || '',
+            tax_buyer_financing_entity: row.buyer_financing_entity || ''
+        };
+
+        const { value } = await Swal.fire({
+            title: `Editar tributación venta #${row.sale_id}`,
+            width: '80%',
+            html: `
+                <div class="grid grid-cols-1 gap-3 text-left md:grid-cols-2">
+                    ${fieldLabels.map(([field, label]) => `
+                        <label class="block text-sm font-semibold text-gray-700">
+                            ${label}
+                            <input id="tax-${field}" class="swal2-input" value="${escapeHtml(valueByField[field])}" />
+                        </label>
+                    `).join('')}
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Guardar',
+            cancelButtonText: 'Cancelar',
+            focusConfirm: false,
+            preConfirm: () => fieldLabels.reduce((payload, [field]) => {
+                payload[field] = document.getElementById(`tax-${field}`)?.value || '';
+                return payload;
+            }, {}),
+            customClass: {
+                confirmButton: 'bg-blue-600 text-white px-4 py-2 rounded-lg ml-2',
+                cancelButton: 'bg-gray-400 text-white px-4 py-2 rounded-lg'
+            },
+            buttonsStyling: false
+        });
+
+        if (!value) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            await axios.put(`/api/sales/${row.sale_id}/tax-info`, value, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            await fetchData();
+            Swal.fire('Exito', 'Datos de tributación actualizados.', 'success');
+        } catch (error) {
+            console.error('Error updating tax info', error);
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo actualizar tributación.', 'error');
+        }
+    };
 
     const handleEditSalePrice = async (sale) => {
         const { value: salePrice } = await Swal.fire({
@@ -609,6 +704,12 @@ const SalesDashboard = () => {
                 >
                     Contabilidad
                 </button>
+                <button
+                    onClick={() => setActiveTab('tax')}
+                    className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === 'tax' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
+                >
+                    Tributación
+                </button>
             </div>
 
             <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
@@ -784,7 +885,7 @@ const SalesDashboard = () => {
                         </div>
                     </div>
                 </div>
-            ) : (
+            ) : activeTab === 'accounting' ? (
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
@@ -1163,6 +1264,78 @@ const SalesDashboard = () => {
                                 </table>
                             </div>
                         </div>
+                    </div>
+                </div>
+            ) : (
+                <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+                    <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 px-6 py-4 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-800">Cuadro de tributación</h3>
+                            <p className="text-sm text-gray-500">Información anual para comisión, IVA y datos de comprador/vendedor.</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleDownloadTaxReport}
+                            className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+                        >
+                            Descargar Excel
+                        </button>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full border-collapse text-left">
+                            <thead>
+                                <tr className="bg-gray-50 text-xs uppercase tracking-wider text-gray-600">
+                                    <th className="border-b p-4">Mes</th>
+                                    <th className="border-b p-4">Vehículo</th>
+                                    <th className="border-b p-4">Compra</th>
+                                    <th className="border-b p-4">Comisión</th>
+                                    <th className="border-b p-4">IVA</th>
+                                    <th className="border-b p-4">Venta</th>
+                                    <th className="border-b p-4">Vendedor carro</th>
+                                    <th className="border-b p-4">Comprador</th>
+                                    <th className="border-b p-4 text-right">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {taxRows.map((row) => (
+                                    <tr key={row.sale_id} className="hover:bg-gray-50">
+                                        <td className="p-4 text-sm text-gray-600">{row.month} {row.year}</td>
+                                        <td className="p-4">
+                                            <div className="font-medium text-gray-800">#{row.sale_id} - {row.make} {row.reference}</div>
+                                            <div className="text-xs text-gray-500">{row.plate || 'Sin placa'} · Modelo {row.model_year || '-'}</div>
+                                        </td>
+                                        <td className="p-4 font-semibold text-slate-700">${Number(row.purchase_price || 0).toLocaleString()}</td>
+                                        <td className="p-4 font-semibold text-blue-700">${Number(row.commission_base || 0).toLocaleString()}</td>
+                                        <td className="p-4 font-semibold text-purple-700">${Number(row.tax_iva || 0).toLocaleString()}</td>
+                                        <td className="p-4 font-semibold text-emerald-700">${Number(row.sale_price || 0).toLocaleString()}</td>
+                                        <td className="p-4">
+                                            <div className="font-medium text-gray-800">{row.seller_name || 'Pendiente'}</div>
+                                            <div className="text-xs text-gray-500">{row.seller_document || ''}</div>
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="font-medium text-gray-800">{row.buyer_name || 'Pendiente'}</div>
+                                            <div className="text-xs text-gray-500">{row.buyer_document || row.buyer_phone || ''}</div>
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleEditTaxInfo(row)}
+                                                className="rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100"
+                                            >
+                                                Editar datos
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {taxRows.length === 0 && (
+                                    <tr>
+                                        <td colSpan="9" className="p-8 text-center italic text-gray-400">
+                                            No hay ventas aprobadas para el cuadro de tributación.
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             )}

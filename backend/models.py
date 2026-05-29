@@ -279,6 +279,21 @@ class Sale(Base):
     company_id = Column(Integer, ForeignKey("companies.id"))
     seller_type = Column(String(20), default="internal")
     external_seller_name = Column(String(150), nullable=True)
+    tax_transaction_type = Column(String(50), default="intermediacion")
+    tax_transfer_to_cars = Column(String(20), nullable=True)
+    tax_seller_name = Column(String(180), nullable=True)
+    tax_seller_document = Column(String(60), nullable=True)
+    tax_seller_email = Column(String(150), nullable=True)
+    tax_seller_address = Column(String(250), nullable=True)
+    tax_seller_phone = Column(String(60), nullable=True)
+    tax_seller_payment_method = Column(String(120), nullable=True)
+    tax_buyer_name = Column(String(180), nullable=True)
+    tax_buyer_document = Column(String(60), nullable=True)
+    tax_buyer_email = Column(String(150), nullable=True)
+    tax_buyer_address = Column(String(250), nullable=True)
+    tax_buyer_phone = Column(String(60), nullable=True)
+    tax_buyer_payment_method = Column(String(120), nullable=True)
+    tax_buyer_financing_entity = Column(String(150), nullable=True)
     
     sale_price = Column(Integer) # Final price sold
     commission_percentage = Column(Integer) # Snapshot of % at time of sale
