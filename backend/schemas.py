@@ -731,6 +731,8 @@ class PaymentReceiptBase(BaseModel):
     amount: int
     category: Optional[str] = "sale_payment"
     notes: Optional[str] = None
+    payment_method: Optional[str] = None
+    bank: Optional[str] = None
 
 class PaymentReceiptMinimal(PaymentReceiptBase):
     id: int
@@ -757,6 +759,8 @@ class PaymentReceiptUpdate(BaseModel):
     amount: int
     category: Optional[str] = "sale_payment"
     notes: Optional[str] = None
+    payment_method: Optional[str] = None
+    bank: Optional[str] = None
 
 
 class PaymentReceipt(PaymentReceiptMinimal):

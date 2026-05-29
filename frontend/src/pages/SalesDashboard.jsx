@@ -61,8 +61,70 @@ const SalesDashboard = () => {
         receipt_number: '',
         category: 'sale_payment',
         notes: '',
+        payment_method: '',
+        bank: '',
         file: null
     });
+
+    const receiptConceptOptions = [
+        'Venta de Vehiculo',
+        'Compra de Vehiculo',
+        'Abono compra',
+        'Separación del vehículo',
+        'Traspaso / Tramites',
+        'Peritaje',
+        'Mantenimiento / Alistamiento',
+        'Lavado',
+        'Pago SOAT',
+        'Pago Impuestos',
+        'Pago Comision',
+        'Pago Arriendo',
+        'Servicios Publicos',
+        'Pago Nomina',
+        'Caja Menor',
+        'Publicidad',
+        'Otros'
+    ];
+    const receiptCategoryOptions = [
+        ['ingreso_venta', 'Ingresos por Venta'],
+        ['costo_vehiculo', 'Costo de Vehículo (Compra)'],
+        ['vehicle_purchase', 'Compra de Vehículo'],
+        ['purchase_payment', 'Abono compra'],
+        ['vehicle_separation', 'Separación del vehículo'],
+        ['gasto_tramites', 'Gastos de Trámites y Alistamiento'],
+        ['vehicle_expense', 'Gastos del Vehículo'],
+        ['gasto_operativo', 'Gastos Operativos y Administrativos'],
+        ['comisiones', 'Pago de Comisiones'],
+        ['otros', 'Otros Movimientos']
+    ];
+    const paymentMethodOptions = [
+        ['efectivo', 'Efectivo'],
+        ['transferencia', 'Transferencia']
+    ];
+    const bankOptions = [
+        'BANCOLOMBIA',
+        'BBVA',
+        'NEQUI JENN',
+        'NEQUI DIEGO',
+        'DAVIVIENDA',
+        'COLPATRIA',
+        'CUENTA DE BOLD'
+    ];
+
+    const getReceiptDefaultsForConcept = (concept) => {
+        if (concept === 'Venta de Vehiculo') return { category: 'ingreso_venta', movement_type: 'income' };
+        if (concept === 'Compra de Vehiculo') return { category: 'costo_vehiculo', movement_type: 'expense' };
+        if (concept === 'Abono compra') return { category: 'purchase_payment', movement_type: 'expense' };
+        if (concept === 'Separación del vehículo') return { category: 'vehicle_separation', movement_type: 'income' };
+        if (['Traspaso / Tramites', 'Peritaje', 'Mantenimiento / Alistamiento', 'Lavado', 'Pago SOAT', 'Pago Impuestos'].includes(concept)) {
+            return { category: 'gasto_tramites', movement_type: 'expense' };
+        }
+        if (['Pago Arriendo', 'Servicios Publicos', 'Pago Nomina', 'Publicidad'].includes(concept)) {
+            return { category: 'gasto_operativo', movement_type: 'expense' };
+        }
+        if (concept === 'Pago Comision') return { category: 'comisiones', movement_type: 'expense' };
+        return { category: 'otros', movement_type: 'expense' };
+    };
 
     useEffect(() => {
         fetchData();
@@ -202,6 +264,8 @@ const SalesDashboard = () => {
         if (category === 'ingreso_venta') return 'Ingresos por Venta';
         if (category === 'costo_vehiculo') return 'Costo de Vehículo (Compra)';
         if (category === 'vehicle_purchase') return 'Compra de Vehículo';
+        if (category === 'purchase_payment') return 'Abono compra';
+        if (category === 'vehicle_separation') return 'Separación del vehículo';
         if (category === 'gasto_tramites') return 'Gastos de Trámites y Alistamiento';
         if (category === 'vehicle_expense') return 'Gastos del Vehículo';
         if (category === 'gasto_operativo') return 'Gastos Operativos y Administrativos';
@@ -596,6 +660,8 @@ const SalesDashboard = () => {
             formData.append('payment_date', receiptForm.payment_date);
             formData.append('category', receiptForm.category);
             formData.append('notes', receiptForm.notes);
+            formData.append('payment_method', receiptForm.payment_method || '');
+            formData.append('bank', receiptForm.bank || '');
             if (receiptForm.file) {
                 formData.append('file', receiptForm.file);
             }
@@ -617,6 +683,8 @@ const SalesDashboard = () => {
                 receipt_number: '',
                 category: 'sale_payment',
                 notes: '',
+                payment_method: '',
+                bank: '',
                 file: null
             });
             await fetchData();
@@ -631,70 +699,109 @@ const SalesDashboard = () => {
 
     const handleCreateReceiptForSale = async (sale) => {
         if (!sale?.id) return;
-        const conceptOptions = [
-            'Venta de Vehiculo',
-            'Compra de Vehiculo',
-            'Traspaso / Tramites',
-            'Peritaje',
-            'Mantenimiento / Alistamiento',
-            'Lavado',
-            'Pago SOAT',
-            'Pago Impuestos',
-            'Pago Comision',
-            'Pago Arriendo',
-            'Servicios Publicos',
-            'Pago Nomina',
-            'Caja Menor',
-            'Publicidad',
-            'Otros'
-        ];
-        const categoryOptions = [
-            ['ingreso_venta', 'Ingresos por Venta'],
-            ['costo_vehiculo', 'Costo de Vehículo (Compra)'],
-            ['vehicle_purchase', 'Compra de Vehículo'],
-            ['gasto_tramites', 'Gastos de Trámites y Alistamiento'],
-            ['vehicle_expense', 'Gastos del Vehículo'],
-            ['gasto_operativo', 'Gastos Operativos y Administrativos'],
-            ['comisiones', 'Pago de Comisiones'],
-            ['otros', 'Otros Movimientos']
-        ];
+        const defaultDate = new Date().toISOString().slice(0, 10);
 
         const { value } = await Swal.fire({
             title: 'Agregar ítem a la venta',
-            width: '70%',
+            width: 560,
             html: `
-                <div class="grid grid-cols-1 gap-3 text-left md:grid-cols-2">
-                    <label class="block text-sm font-semibold text-gray-700">
-                        Concepto
-                        <select id="new-receipt-concept" class="swal2-select">
-                            ${conceptOptions.map((option) => `<option value="${option}">${option}</option>`).join('')}
-                        </select>
-                    </label>
-                    <label class="block text-sm font-semibold text-gray-700">
-                        Tipo
-                        <select id="new-receipt-movement-type" class="swal2-select">
-                            <option value="expense">Egreso</option>
-                            <option value="income">Ingreso</option>
-                        </select>
-                    </label>
-                    <label class="block text-sm font-semibold text-gray-700">
-                        Valor
-                        <input id="new-receipt-amount" type="number" min="1" class="swal2-input" />
-                    </label>
-                    <label class="block text-sm font-semibold text-gray-700">
-                        Fecha
-                        <input id="new-receipt-payment-date" type="date" class="swal2-input" value="${new Date().toISOString().slice(0, 10)}" />
-                    </label>
-                    <label class="block text-sm font-semibold text-gray-700 md:col-span-2">
-                        Cuenta contable
-                        <select id="new-receipt-category" class="swal2-select">
-                            ${categoryOptions.map(([value, label]) => `<option value="${value}" ${value === 'vehicle_expense' ? 'selected' : ''}>${label}</option>`).join('')}
-                        </select>
-                    </label>
-                    <label class="block text-sm font-semibold text-gray-700 md:col-span-2">
-                        Nota
-                        <textarea id="new-receipt-notes" class="swal2-textarea" placeholder="Detalle, referencia u observación"></textarea>
-                    </label>
+                <style>
+                    .sale-item-modal { text-align: left; }
+                    .sale-item-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+                    .sale-item-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%); }
+                    .sale-item-card.green { background: linear-gradient(135deg, #ffffff 0%, #f3fff8 100%); }
+                    .sale-item-card.purple { background: linear-gradient(135deg, #ffffff 0%, #fbf7ff 100%); }
+                    .sale-item-card.amber { background: linear-gradient(135deg, #ffffff 0%, #fffaf0 100%); }
+                    .sale-item-card.full { grid-column: 1 / -1; }
+                    .sale-item-title { margin-bottom: 14px; font-weight: 800; color: #2563eb; }
+                    .sale-item-card.green .sale-item-title { color: #16a34a; }
+                    .sale-item-card.purple .sale-item-title { color: #7c3aed; }
+                    .sale-item-card.amber .sale-item-title { color: #f59e0b; }
+                    .sale-item-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+                    .sale-item-field { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 700; color: #475569; }
+                    .sale-item-field input, .sale-item-field select, .sale-item-field textarea {
+                        width: 100%; border: 1px solid #dbe3ee; border-radius: 6px; padding: 10px 12px;
+                        font-size: 13px; font-weight: 600; color: #334155; outline: none; background: white;
+                    }
+                    .sale-item-field textarea { min-height: 86px; resize: vertical; font-weight: 500; }
+                    @media (max-width: 640px) {
+                        .sale-item-grid, .sale-item-row { grid-template-columns: 1fr; }
+                        .sale-item-card.full { grid-column: auto; }
+                    }
+                </style>
+                <div class="sale-item-modal">
+                    <div class="sale-item-grid">
+                        <section class="sale-item-card">
+                            <div class="sale-item-title">Información general</div>
+                            <div class="sale-item-field">
+                                Concepto
+                                <select id="new-receipt-concept">
+                                    ${receiptConceptOptions.map((option) => `<option value="${option}">${option}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="sale-item-field" style="margin-top: 12px;">
+                                Valor
+                                <input id="new-receipt-amount" type="number" min="1" placeholder="$ 0,00" />
+                            </div>
+                        </section>
+                        <section class="sale-item-card green">
+                            <div class="sale-item-title">Clasificación</div>
+                            <div class="sale-item-row">
+                                <label class="sale-item-field">
+                                    Tipo
+                                    <select id="new-receipt-movement-type">
+                                        <option value="expense">Egreso</option>
+                                        <option value="income">Ingreso</option>
+                                    </select>
+                                </label>
+                                <label class="sale-item-field">
+                                    Fecha
+                                    <input id="new-receipt-payment-date" type="date" value="${defaultDate}" />
+                                </label>
+                            </div>
+                        </section>
+                        <section class="sale-item-card purple full">
+                            <div class="sale-item-title">Contabilidad</div>
+                            <label class="sale-item-field">
+                                Cuenta contable
+                                <select id="new-receipt-category">
+                                    ${receiptCategoryOptions.map(([optionValue, label]) => `<option value="${optionValue}" ${optionValue === 'vehicle_expense' ? 'selected' : ''}>${label}</option>`).join('')}
+                                </select>
+                            </label>
+                        </section>
+                        <section class="sale-item-card full">
+                            <div class="sale-item-title">Movimiento de dinero</div>
+                            <div class="sale-item-row">
+                                <label class="sale-item-field">
+                                    Sale o entra por
+                                    <select id="new-receipt-payment-method">
+                                        <option value="">Seleccionar</option>
+                                        ${paymentMethodOptions.map(([optionValue, label]) => `<option value="${optionValue}">${label}</option>`).join('')}
+                                    </select>
+                                </label>
+                                <label class="sale-item-field">
+                                    Banco / cuenta
+                                    <select id="new-receipt-bank">
+                                        <option value="">Seleccionar banco</option>
+                                        ${bankOptions.map((option) => `<option value="${option}">${option}</option>`).join('')}
+                                    </select>
+                                </label>
+                            </div>
+                        </section>
+                        <section class="sale-item-card amber full">
+                            <div class="sale-item-title">Información adicional</div>
+                            <div class="sale-item-row">
+                                <label class="sale-item-field">
+                                    Detalle, referencia u observación
+                                    <textarea id="new-receipt-detail" placeholder="Escribe un detalle, referencia u observación"></textarea>
+                                </label>
+                                <label class="sale-item-field">
+                                    Nota
+                                    <textarea id="new-receipt-notes" placeholder="Nota adicional (opcional)"></textarea>
+                                </label>
+                            </div>
+                        </section>
+                    </div>
                 </div>
             `,
             showCancelButton: true,
@@ -718,8 +825,25 @@ const SalesDashboard = () => {
                     amount,
                     payment_date: paymentDate,
                     category: document.getElementById('new-receipt-category')?.value || 'vehicle_expense',
-                    notes: (document.getElementById('new-receipt-notes')?.value || '').trim()
+                    notes: [
+                        (document.getElementById('new-receipt-detail')?.value || '').trim(),
+                        (document.getElementById('new-receipt-notes')?.value || '').trim()
+                    ].filter(Boolean).join('\n'),
+                    payment_method: document.getElementById('new-receipt-payment-method')?.value || '',
+                    bank: document.getElementById('new-receipt-bank')?.value || ''
                 };
+            },
+            didOpen: () => {
+                const conceptSelect = document.getElementById('new-receipt-concept');
+                const movementSelect = document.getElementById('new-receipt-movement-type');
+                const categorySelect = document.getElementById('new-receipt-category');
+                const applyDefaults = () => {
+                    const defaults = getReceiptDefaultsForConcept(conceptSelect?.value || '');
+                    if (movementSelect) movementSelect.value = defaults.movement_type;
+                    if (categorySelect) categorySelect.value = defaults.category;
+                };
+                conceptSelect?.addEventListener('change', applyDefaults);
+                applyDefaults();
             },
             customClass: {
                 confirmButton: 'bg-blue-600 text-white px-4 py-2 rounded-lg ml-2',
@@ -740,6 +864,8 @@ const SalesDashboard = () => {
             formData.append('payment_date', value.payment_date);
             formData.append('category', value.category);
             formData.append('notes', value.notes || '');
+            formData.append('payment_method', value.payment_method || '');
+            formData.append('bank', value.bank || '');
             const response = await axios.post('/api/finance/receipts', formData, {
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -808,23 +934,9 @@ const SalesDashboard = () => {
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-gray-700">Concepto Contable</label>
                         <select id="edit-receipt-concept" class="swal2-select">
-                            <option value="Venta de Vehiculo" ${receipt.concept === 'Venta de Vehiculo' ? 'selected' : ''}>Venta de Vehículo</option>
-                            <option value="Compra de Vehiculo" ${receipt.concept === 'Compra de Vehiculo' ? 'selected' : ''}>Compra de Vehículo</option>
-                            <option value="Traspaso / Tramites" ${receipt.concept === 'Traspaso / Tramites' ? 'selected' : ''}>Traspaso / Trámites</option>
-                            <option value="Peritaje" ${receipt.concept === 'Peritaje' ? 'selected' : ''}>Peritaje</option>
-                            <option value="Mantenimiento / Alistamiento" ${receipt.concept === 'Mantenimiento / Alistamiento' ? 'selected' : ''}>Mantenimiento / Alistamiento</option>
-                            <option value="Lavado" ${receipt.concept === 'Lavado' ? 'selected' : ''}>Lavado</option>
-                            <option value="Pago SOAT" ${receipt.concept === 'Pago SOAT' ? 'selected' : ''}>Pago SOAT</option>
-                            <option value="Pago Impuestos" ${receipt.concept === 'Pago Impuestos' ? 'selected' : ''}>Pago Impuestos</option>
-                            <option value="Pago Comision" ${receipt.concept === 'Pago Comision' ? 'selected' : ''}>Pago Comisión</option>
-                            <option value="Pago Arriendo" ${receipt.concept === 'Pago Arriendo' ? 'selected' : ''}>Pago Arriendo</option>
-                            <option value="Servicios Publicos" ${receipt.concept === 'Servicios Publicos' ? 'selected' : ''}>Servicios Públicos</option>
-                            <option value="Pago Nomina" ${receipt.concept === 'Pago Nomina' ? 'selected' : ''}>Pago Nómina</option>
-                            <option value="Caja Menor" ${receipt.concept === 'Caja Menor' ? 'selected' : ''}>Caja Menor</option>
-                            <option value="Publicidad" ${receipt.concept === 'Publicidad' ? 'selected' : ''}>Publicidad</option>
-                            <option value="Otros" ${!['Venta de Vehiculo', 'Compra de Vehiculo', 'Traspaso / Tramites', 'Peritaje', 'Mantenimiento / Alistamiento', 'Lavado', 'Pago SOAT', 'Pago Impuestos', 'Pago Comision', 'Pago Arriendo', 'Servicios Publicos', 'Pago Nomina', 'Caja Menor', 'Publicidad'].includes(receipt.concept) ? 'selected' : ''}>Otros</option>
+                            ${receiptConceptOptions.map((option) => `<option value="${option}" ${receipt.concept === option || (option === 'Otros' && !receiptConceptOptions.includes(receipt.concept)) ? 'selected' : ''}>${option}</option>`).join('')}
                         </select>
-                        <input id="edit-receipt-concept-detail" type="text" class="swal2-input" style="display: ${!['Venta de Vehiculo', 'Compra de Vehiculo', 'Traspaso / Tramites', 'Peritaje', 'Mantenimiento / Alistamiento', 'Lavado', 'Pago SOAT', 'Pago Impuestos', 'Pago Comision', 'Pago Arriendo', 'Servicios Publicos', 'Pago Nomina', 'Caja Menor', 'Publicidad'].includes(receipt.concept) ? 'block' : 'none'}" value="${escapeHtml(receipt.concept || '')}" placeholder="Especifique el concepto..." />
+                        <input id="edit-receipt-concept-detail" type="text" class="swal2-input" style="display: ${!receiptConceptOptions.includes(receipt.concept) ? 'block' : 'none'}" value="${escapeHtml(receipt.concept || '')}" placeholder="Especifique el concepto..." />
                     </div>
                     <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
                         <div>
@@ -844,16 +956,25 @@ const SalesDashboard = () => {
                             <label class="mb-1 block text-sm font-semibold text-gray-700">Fecha</label>
                             <input id="edit-receipt-payment-date" type="date" class="swal2-input" value="${receipt.payment_date ? new Date(receipt.payment_date).toISOString().slice(0, 10) : ''}" />
                         </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Sale o entra por</label>
+                            <select id="edit-receipt-payment-method" class="swal2-select">
+                                <option value="">Sin definir</option>
+                                ${paymentMethodOptions.map(([value, label]) => `<option value="${value}" ${(receipt.payment_method || '') === value ? 'selected' : ''}>${label}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Banco / cuenta</label>
+                            <select id="edit-receipt-bank" class="swal2-select">
+                                <option value="">Sin banco</option>
+                                ${bankOptions.map((bank) => `<option value="${bank}" ${(receipt.bank || '') === bank ? 'selected' : ''}>${bank}</option>`).join('')}
+                            </select>
+                        </div>
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-gray-700">Cuenta Contable</label>
                         <select id="edit-receipt-category" class="swal2-select">
-                            <option value="ingreso_venta" ${(receipt.category || '') === 'ingreso_venta' ? 'selected' : ''}>Ingresos por Venta</option>
-                            <option value="costo_vehiculo" ${(receipt.category || '') === 'costo_vehiculo' ? 'selected' : ''}>Costo de Vehículo (Compra)</option>
-                            <option value="gasto_tramites" ${(receipt.category || '') === 'gasto_tramites' ? 'selected' : ''}>Gastos de Trámites y Alistamiento</option>
-                            <option value="gasto_operativo" ${(receipt.category || '') === 'gasto_operativo' ? 'selected' : ''}>Gastos Operativos y Administrativos</option>
-                            <option value="comisiones" ${(receipt.category || '') === 'comisiones' ? 'selected' : ''}>Pago de Comisiones</option>
-                            <option value="otros" ${(receipt.category || '') === 'otros' ? 'selected' : ''}>Otros Movimientos</option>
+                            ${receiptCategoryOptions.map(([value, label]) => `<option value="${value}" ${(receipt.category || '') === value ? 'selected' : ''}>${label}</option>`).join('')}
                         </select>
                     </div>
                     <div>
@@ -897,7 +1018,9 @@ const SalesDashboard = () => {
                     amount,
                     payment_date: paymentDate,
                     category,
-                    notes: notes || null
+                    notes: notes || null,
+                    payment_method: document.getElementById('edit-receipt-payment-method')?.value || null,
+                    bank: document.getElementById('edit-receipt-bank')?.value || null
                 };
             },
             didOpen: () => {
@@ -908,6 +1031,11 @@ const SalesDashboard = () => {
                         conceptDetail.style.display = e.target.value === 'Otros' ? 'block' : 'none';
                         if (e.target.value !== 'Otros') {
                             conceptDetail.value = e.target.value;
+                            const defaults = getReceiptDefaultsForConcept(e.target.value);
+                            const movementSelect = document.getElementById('edit-receipt-movement-type');
+                            const categorySelect = document.getElementById('edit-receipt-category');
+                            if (movementSelect) movementSelect.value = defaults.movement_type;
+                            if (categorySelect) categorySelect.value = defaults.category;
                         }
                     });
                 }
@@ -1263,52 +1391,22 @@ const SalesDashboard = () => {
                                         value={receiptForm.concept}
                                         onChange={(e) => {
                                             const concept = e.target.value;
-                                            let category = 'otros';
-                                            let movementType = 'expense';
-
-                                            if (concept === 'Venta de Vehiculo') {
-                                                category = 'ingreso_venta';
-                                                movementType = 'income';
-                                            } else if (concept === 'Compra de Vehiculo') {
-                                                category = 'costo_vehiculo';
-                                                movementType = 'expense';
-                                            } else if (['Traspaso / Tramites', 'Peritaje', 'Mantenimiento / Alistamiento', 'Lavado', 'Pago SOAT', 'Pago Impuestos'].includes(concept)) {
-                                                category = 'gasto_tramites';
-                                                movementType = 'expense';
-                                            } else if (['Pago Arriendo', 'Servicios Publicos', 'Pago Nomina', 'Publicidad'].includes(concept)) {
-                                                category = 'gasto_operativo';
-                                                movementType = 'expense';
-                                            } else if (concept === 'Pago Comision') {
-                                                category = 'comisiones';
-                                                movementType = 'expense';
-                                            }
+                                            const defaults = getReceiptDefaultsForConcept(concept);
 
                                             setReceiptForm({ 
                                                 ...receiptForm, 
                                                 concept: concept,
-                                                category: category,
-                                                movement_type: movementType
+                                                category: defaults.category,
+                                                movement_type: defaults.movement_type
                                             });
                                         }}
                                         className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
                                         required
                                     >
                                         <option value="">Seleccione un concepto...</option>
-                                        <option value="Venta de Vehiculo">Venta de Vehículo</option>
-                                        <option value="Compra de Vehiculo">Compra de Vehículo</option>
-                                        <option value="Traspaso / Tramites">Traspaso / Trámites</option>
-                                        <option value="Peritaje">Peritaje</option>
-                                        <option value="Mantenimiento / Alistamiento">Mantenimiento / Alistamiento</option>
-                                        <option value="Lavado">Lavado</option>
-                                        <option value="Pago SOAT">Pago SOAT</option>
-                                        <option value="Pago Impuestos">Pago Impuestos</option>
-                                        <option value="Pago Comision">Pago Comisión</option>
-                                        <option value="Pago Arriendo">Pago Arriendo</option>
-                                        <option value="Servicios Publicos">Servicios Públicos</option>
-                                        <option value="Pago Nomina">Pago Nómina</option>
-                                        <option value="Caja Menor">Caja Menor</option>
-                                        <option value="Publicidad">Publicidad</option>
-                                        <option value="Otros">Otros</option>
+                                        {receiptConceptOptions.map((option) => (
+                                            <option key={option} value={option}>{option}</option>
+                                        ))}
                                     </select>
                                     {receiptForm.concept === 'Otros' && (
                                         <input
@@ -1355,6 +1453,32 @@ const SalesDashboard = () => {
                                             required
                                         />
                                     </div>
+                                    <div>
+                                        <label className="mb-1 block text-sm font-semibold text-gray-700">Sale o entra por</label>
+                                        <select
+                                            value={receiptForm.payment_method}
+                                            onChange={(e) => setReceiptForm({ ...receiptForm, payment_method: e.target.value })}
+                                            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            <option value="">Seleccione...</option>
+                                            {paymentMethodOptions.map(([value, label]) => (
+                                                <option key={value} value={value}>{label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="mb-1 block text-sm font-semibold text-gray-700">Banco / cuenta</label>
+                                        <select
+                                            value={receiptForm.bank}
+                                            onChange={(e) => setReceiptForm({ ...receiptForm, bank: e.target.value })}
+                                            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            <option value="">Seleccione banco...</option>
+                                            {bankOptions.map((bank) => (
+                                                <option key={bank} value={bank}>{bank}</option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -1367,7 +1491,11 @@ const SalesDashboard = () => {
                                         >
                                             <option value="ingreso_venta">Ingresos por Venta</option>
                                             <option value="costo_vehiculo">Costo de Vehículo (Compra)</option>
+                                            <option value="vehicle_purchase">Compra de Vehículo</option>
+                                            <option value="purchase_payment">Abono compra</option>
+                                            <option value="vehicle_separation">Separación del vehículo</option>
                                             <option value="gasto_tramites">Gastos de Trámites y Alistamiento</option>
+                                            <option value="vehicle_expense">Gastos del Vehículo</option>
                                             <option value="gasto_operativo">Gastos Operativos y Administrativos</option>
                                             <option value="comisiones">Pago de Comisiones</option>
                                             <option value="otros">Otros Movimientos</option>
@@ -1423,12 +1551,9 @@ const SalesDashboard = () => {
                                         className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
                                     >
                                         <option value="">Todas las cuentas</option>
-                                        <option value="ingreso_venta">Ingresos por Venta</option>
-                                        <option value="costo_vehiculo">Costo de Vehículo (Compra)</option>
-                                        <option value="gasto_tramites">Gastos de Trámites y Alistamiento</option>
-                                        <option value="gasto_operativo">Gastos Operativos y Administrativos</option>
-                                        <option value="comisiones">Pago de Comisiones</option>
-                                        <option value="otros">Otros Movimientos</option>
+                                        {receiptCategoryOptions.map(([value, label]) => (
+                                            <option key={value} value={value}>{label}</option>
+                                        ))}
                                     </select>
                                     <select
                                         value={receiptMovementType}
@@ -1788,6 +1913,11 @@ const SalesDashboard = () => {
                                             <td className="p-3">
                                                 <div className="font-medium text-slate-800">{receipt.concept || 'Movimiento contable'}</div>
                                                 <div className="text-xs text-slate-500">{receipt.notes || receipt.receipt_number || 'Sin nota'}</div>
+                                                {(receipt.payment_method || receipt.bank) && (
+                                                    <div className="mt-1 text-xs font-medium text-slate-500">
+                                                        {[receipt.payment_method === 'efectivo' ? 'Efectivo' : receipt.payment_method === 'transferencia' ? 'Transferencia' : receipt.payment_method, receipt.bank].filter(Boolean).join(' · ')}
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="p-3 text-sm text-slate-600">{getCategoryLabel(receipt.category)}</td>
                                             <td className="p-3 text-sm">

@@ -241,7 +241,9 @@ def ensure_payment_receipts_columns():
 
         receipt_columns = {
             "concept": "ALTER TABLE payment_receipts ADD COLUMN concept VARCHAR(200) NULL",
-            "movement_type": "ALTER TABLE payment_receipts ADD COLUMN movement_type VARCHAR(20) NOT NULL DEFAULT 'income'"
+            "movement_type": "ALTER TABLE payment_receipts ADD COLUMN movement_type VARCHAR(20) NOT NULL DEFAULT 'income'",
+            "payment_method": "ALTER TABLE payment_receipts ADD COLUMN payment_method VARCHAR(30) NULL",
+            "bank": "ALTER TABLE payment_receipts ADD COLUMN bank VARCHAR(80) NULL"
         }
         for column_name, ddl in receipt_columns.items():
             exists = conn.execute(text(
@@ -6686,14 +6688,18 @@ def download_finance_projection_xlsx(
     autosize(costs)
 
     expenses = wb.create_sheet("GASTOS")
-    expenses.append(["FECHA", "CONCEPTO", "CUENTA", "TIPO", "VALOR", "VENTA", "PLACA", "NOTA"])
+    expenses.append(["FECHA", "CONCEPTO", "CUENTA", "TIPO", "VALOR", "EFEC", "TRANS", "BANCO", "VENTA", "PLACA", "NOTA"])
     style_header(expenses)
     for receipt in receipts:
         if (receipt.movement_type or "income") != "expense":
             continue
         expenses.append([
             receipt.payment_date or receipt.created_at, receipt.concept, receipt.category, "EGRESO",
-            _projection_money(receipt.amount), getattr(receipt.sale, "id", None),
+            _projection_money(receipt.amount),
+            "X" if (receipt.payment_method or "").lower() == "efectivo" else "",
+            "X" if (receipt.payment_method or "").lower() == "transferencia" else "",
+            receipt.bank,
+            getattr(receipt.sale, "id", None),
             getattr(getattr(receipt.sale, "vehicle", None), "plate", None), receipt.notes
         ])
     autosize(expenses)
@@ -6749,7 +6755,7 @@ def download_finance_projection_xlsx(
             getattr(sale, "tax_seller_address", None), getattr(sale, "tax_seller_phone", None),
             getattr(sale, "tax_seller_payment_method", None), _projection_money(getattr(vehicle, "purchase_price", None)),
             getattr(first_income, "payment_date", None), _projection_money(getattr(first_income, "amount", None)),
-            getattr(first_income, "receipt_number", None),
+            getattr(first_income, "bank", None) or getattr(first_income, "receipt_number", None),
             " | ".join(f"{r.payment_date:%d/%m/%Y}: {r.concept or r.category} ${_projection_money(r.amount):,}" for r in sale_receipts if (r.movement_type or "income") == "income"),
             total_expense, _projection_money(sale.sale_price), getattr(lead, "name", None),
             _projection_money(sale.sale_price), total_income, total_expense, difference, base_tax, iva
@@ -6832,6 +6838,8 @@ def read_payment_receipts(
                 models.PaymentReceipt.concept.ilike(search),
                 models.PaymentReceipt.receipt_number.ilike(search),
                 models.PaymentReceipt.notes.ilike(search),
+                models.PaymentReceipt.payment_method.ilike(search),
+                models.PaymentReceipt.bank.ilike(search),
                 models.Vehicle.make.ilike(search),
                 models.Vehicle.model.ilike(search),
                 models.Vehicle.plate.ilike(search)
@@ -6860,6 +6868,13 @@ def _get_receipt_with_access(
     return receipt
 
 
+def _normalize_receipt_payment_method(payment_method: Optional[str]) -> Optional[str]:
+    payment_method_value = (payment_method or "").strip().lower() or None
+    if payment_method_value and payment_method_value not in {"efectivo", "transferencia"}:
+        raise HTTPException(status_code=400, detail="La forma de pago debe ser efectivo o transferencia")
+    return payment_method_value
+
+
 @app.put("/finance/receipts/{receipt_id}", response_model=schemas.PaymentReceipt)
 def update_payment_receipt(
     receipt_id: int,
@@ -6874,6 +6889,7 @@ def update_payment_receipt(
     movement_type_value = (receipt_update.movement_type or "income").strip().lower()
     if movement_type_value not in {"income", "expense"}:
         raise HTTPException(status_code=400, detail="movement_type must be income or expense")
+    payment_method_value = _normalize_receipt_payment_method(receipt_update.payment_method)
     if int(receipt_update.amount or 0) <= 0:
         raise HTTPException(status_code=400, detail="Debes indicar un valor valido")
 
@@ -6903,6 +6919,8 @@ def update_payment_receipt(
     receipt.amount = int(receipt_update.amount)
     receipt.category = (receipt_update.category or "sale_payment").strip() or "sale_payment"
     receipt.notes = (receipt_update.notes or "").strip() or None
+    receipt.payment_method = payment_method_value
+    receipt.bank = (receipt_update.bank or "").strip() or None
 
     db.commit()
     db.refresh(receipt)
@@ -6924,6 +6942,8 @@ async def create_payment_receipt(
     receipt_number: Optional[str] = Form(None),
     category: Optional[str] = Form("sale_payment"),
     notes: Optional[str] = Form(None),
+    payment_method: Optional[str] = Form(None),
+    bank: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
@@ -6935,6 +6955,7 @@ async def create_payment_receipt(
     movement_type_value = (movement_type or "income").strip().lower()
     if movement_type_value not in {"income", "expense"}:
         raise HTTPException(status_code=400, detail="movement_type must be income or expense")
+    payment_method_value = _normalize_receipt_payment_method(payment_method)
     sale = None
     company_id = current_user.company_id
     if sale_id:
@@ -6987,6 +7008,8 @@ async def create_payment_receipt(
         amount=amount,
         category=(category or "sale_payment").strip() or "sale_payment",
         notes=(notes or "").strip() or None,
+        payment_method=payment_method_value,
+        bank=(bank or "").strip() or None,
         file_name=stored_file_name,
         file_path=stored_file_path,
         file_type=stored_file_type
@@ -7246,6 +7269,8 @@ def download_payment_receipt_pdf(
         ("Concepto", (receipt.concept or "Sin concepto").upper()),
         ("Tipo de Movimiento", "INGRESO" if (receipt.movement_type or "income") == "income" else "EGRESO"),
         ("Cuenta Contable", (receipt.category or "ingreso_venta").replace("_", " ").upper()),
+        ("Forma de Pago", (receipt.payment_method or "Sin definir").upper()),
+        ("Banco / Cuenta", (receipt.bank or "Sin definir").upper()),
         ("Valor Total", f"COP ${int(receipt.amount or 0):,}".replace(",", ".")),
     ]
 

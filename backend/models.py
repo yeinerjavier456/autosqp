@@ -326,6 +326,8 @@ class PaymentReceipt(Base):
     amount = Column(Integer, nullable=False, default=0)
     category = Column(String(50), default="sale_payment")
     notes = Column(Text, nullable=True)
+    payment_method = Column(String(30), nullable=True)
+    bank = Column(String(80), nullable=True)
     file_name = Column(String(255), nullable=True)
     file_path = Column(String(500), nullable=True)
     file_type = Column(String(120), nullable=True)
