@@ -332,18 +332,120 @@ const SalesDashboard = () => {
             buyer_payment_method: row?.buyer_payment_method || '',
             buyer_financing_entity: row?.buyer_financing_entity || ''
         };
+        const renderInput = (field, label, options = {}) => {
+            const value = escapeHtml(valueByField[field] ?? '');
+            if (options.type === 'select') {
+                return `
+                    <label class="tax-field">
+                        <span>${label}</span>
+                        <select id="tax-${field}" class="tax-input">
+                            <option value="">Seleccionar</option>
+                            ${options.items.map((item) => `<option value="${escapeHtml(item)}" ${String(valueByField[field] || '').toUpperCase() === String(item).toUpperCase() ? 'selected' : ''}>${escapeHtml(item)}</option>`).join('')}
+                        </select>
+                    </label>
+                `;
+            }
+            return `
+                <label class="tax-field">
+                    <span>${label}</span>
+                    <input id="tax-${field}" class="tax-input" type="${options.type || 'text'}" value="${value}" placeholder="${label}" />
+                </label>
+            `;
+        };
 
         const { value } = await Swal.fire({
             title: row ? `Editar tributación ${isManual ? 'manual' : `venta #${row.sale_id}`}` : 'Agregar tributación manual',
-            width: '80%',
+            width: 760,
             html: `
-                <div class="grid grid-cols-1 gap-3 text-left md:grid-cols-2">
-                    ${fieldLabels.map(([field, label]) => `
-                        <label class="block text-sm font-semibold text-gray-700">
-                            ${label}
-                            <input id="tax-${field}" class="swal2-input" value="${escapeHtml(valueByField[field])}" />
-                        </label>
-                    `).join('')}
+                <style>
+                    .tax-modal { text-align:left; }
+                    .tax-tabs { display:grid; grid-template-columns:repeat(${isManual ? 4 : 3}, minmax(0, 1fr)); border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; margin-bottom:16px; }
+                    .tax-tab { border:0; background:#fff; padding:14px 10px; font-weight:700; color:#64748b; cursor:pointer; display:flex; flex-direction:column; gap:5px; align-items:center; }
+                    .tax-tab.active { color:#2563eb; background:#f8fbff; box-shadow:inset 0 -3px 0 #2563eb; }
+                    .tax-card { border:1px solid #e5e7eb; border-radius:10px; padding:18px; box-shadow:0 8px 20px rgba(15,23,42,.05); }
+                    .tax-title { display:flex; align-items:center; gap:8px; color:#2563eb; font-weight:800; margin-bottom:16px; }
+                    .tax-grid { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:14px; }
+                    .tax-field { display:flex; flex-direction:column; gap:7px; font-size:12px; font-weight:700; color:#475569; }
+                    .tax-input { width:100%; border:1px solid #dbe3ef; border-radius:6px; padding:10px 11px; font-size:13px; color:#0f172a; outline:none; }
+                    .tax-input:focus { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+                    .tax-help { margin:22px auto 4px; max-width:520px; border-radius:10px; background:#f0f6ff; text-align:center; padding:22px; color:#475569; }
+                    .tax-help-icon { font-size:38px; line-height:1; margin-bottom:8px; }
+                    .tax-help strong { display:block; color:#1e293b; margin-bottom:4px; }
+                    .tax-nav { display:flex; justify-content:space-between; align-items:center; margin-top:20px; }
+                    .tax-nav button { border:0; border-radius:8px; padding:10px 18px; font-weight:700; cursor:pointer; }
+                    .tax-prev { background:#f1f5f9; color:#64748b; }
+                    .tax-next { background:#2563eb; color:#fff; }
+                    .tax-prev:disabled, .tax-next:disabled { opacity:.45; cursor:not-allowed; }
+                    .tax-section { display:none; }
+                    .tax-section.active { display:block; }
+                    @media (max-width: 720px) { .tax-grid { grid-template-columns:1fr; } .tax-tabs { grid-template-columns:1fr 1fr; } }
+                </style>
+                <div class="tax-modal">
+                    <div class="tax-tabs">
+                        ${isManual ? '<button type="button" class="tax-tab active" data-tax-tab="vehicle"><span>🚙</span><span>Vehículo</span></button>' : ''}
+                        <button type="button" class="tax-tab ${isManual ? '' : 'active'}" data-tax-tab="operation"><span>💲</span><span>Operación</span></button>
+                        <button type="button" class="tax-tab" data-tax-tab="seller"><span>♙</span><span>Vendedor</span></button>
+                        <button type="button" class="tax-tab" data-tax-tab="buyer"><span>♙</span><span>Comprador</span></button>
+                    </div>
+                    ${isManual ? `
+                        <section class="tax-section active" data-tax-section="vehicle">
+                            <div class="tax-card">
+                                <div class="tax-title">🚙 <span>Datos del vehículo</span></div>
+                                <div class="tax-grid">
+                                    ${renderInput('month', 'Mes', { type: 'select', items: ['ENE', 'FEB', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPT', 'OCT', 'NOV', 'DIC'] })}
+                                    ${renderInput('year', 'Año', { type: 'number' })}
+                                    ${renderInput('make', 'Marca')}
+                                    ${renderInput('model_year', 'Modelo', { type: 'number' })}
+                                    ${renderInput('plate', 'Placa')}
+                                    ${renderInput('reference', 'Referencia')}
+                                </div>
+                                <div class="tax-help"><div class="tax-help-icon">🚙</div><strong>Ingresa los datos básicos del vehículo</strong>Estos datos serán utilizados para la tributación y gestión.</div>
+                            </div>
+                        </section>
+                    ` : ''}
+                    <section class="tax-section ${isManual ? '' : 'active'}" data-tax-section="operation">
+                        <div class="tax-card">
+                            <div class="tax-title">💲 <span>Datos de operación</span></div>
+                            <div class="tax-grid">
+                                ${isManual ? renderInput('purchase_price', 'Precio compra / consignación', { type: 'number' }) : ''}
+                                ${isManual ? renderInput('sale_price', 'Precio venta', { type: 'number' }) : ''}
+                                ${renderInput('transaction_type', 'Intermediación o venta completa', { type: 'select', items: ['INTERMEDIACION', 'VENTA COMPLETA'] })}
+                                ${renderInput('transfer_to_cars', 'Traspaso a Cars SI/NO', { type: 'select', items: ['SI', 'NO'] })}
+                            </div>
+                            <div class="tax-help"><div class="tax-help-icon">💲</div><strong>Define valores y tipo de operación</strong>Estos datos alimentan comisión, IVA y exportación contable.</div>
+                        </div>
+                    </section>
+                    <section class="tax-section" data-tax-section="seller">
+                        <div class="tax-card">
+                            <div class="tax-title">♙ <span>A quien le compré el carro</span></div>
+                            <div class="tax-grid">
+                                ${renderInput('seller_name', 'Nombre o razón social')}
+                                ${renderInput('seller_document', 'Documento / NIT')}
+                                ${renderInput('seller_email', 'Email')}
+                                ${renderInput('seller_address', 'Dirección')}
+                                ${renderInput('seller_phone', 'Teléfono')}
+                                ${renderInput('seller_payment_method', 'Forma de pago a vendedor')}
+                            </div>
+                        </div>
+                    </section>
+                    <section class="tax-section" data-tax-section="buyer">
+                        <div class="tax-card">
+                            <div class="tax-title">♙ <span>A quien le vendí el carro</span></div>
+                            <div class="tax-grid">
+                                ${renderInput('buyer_name', 'Nombre')}
+                                ${renderInput('buyer_document', 'Documento')}
+                                ${renderInput('buyer_email', 'Email')}
+                                ${renderInput('buyer_address', 'Dirección')}
+                                ${renderInput('buyer_phone', 'Teléfono')}
+                                ${renderInput('buyer_payment_method', 'Forma de pago del comprador')}
+                                ${renderInput('buyer_financing_entity', 'Entidad / observación')}
+                            </div>
+                        </div>
+                    </section>
+                    <div class="tax-nav">
+                        <button type="button" class="tax-prev" id="tax-prev">← Anterior</button>
+                        <button type="button" class="tax-next" id="tax-next">Siguiente →</button>
+                    </div>
                 </div>
             `,
             showCancelButton: true,
@@ -354,6 +456,25 @@ const SalesDashboard = () => {
                 payload[field] = document.getElementById(`tax-${field}`)?.value || '';
                 return payload;
             }, {}),
+            didOpen: () => {
+                const tabs = Array.from(document.querySelectorAll('.tax-tab'));
+                const sections = Array.from(document.querySelectorAll('.tax-section'));
+                const previous = document.getElementById('tax-prev');
+                const next = document.getElementById('tax-next');
+                let activeIndex = 0;
+                const setActive = (index) => {
+                    activeIndex = Math.max(0, Math.min(index, tabs.length - 1));
+                    const activeName = tabs[activeIndex]?.dataset.taxTab;
+                    tabs.forEach((tab, tabIndex) => tab.classList.toggle('active', tabIndex === activeIndex));
+                    sections.forEach((section) => section.classList.toggle('active', section.dataset.taxSection === activeName));
+                    if (previous) previous.disabled = activeIndex === 0;
+                    if (next) next.disabled = activeIndex === tabs.length - 1;
+                };
+                tabs.forEach((tab, index) => tab.addEventListener('click', () => setActive(index)));
+                previous?.addEventListener('click', () => setActive(activeIndex - 1));
+                next?.addEventListener('click', () => setActive(activeIndex + 1));
+                setActive(0);
+            },
             customClass: {
                 confirmButton: 'bg-blue-600 text-white px-4 py-2 rounded-lg ml-2',
                 cancelButton: 'bg-gray-400 text-white px-4 py-2 rounded-lg'
