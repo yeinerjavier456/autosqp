@@ -167,6 +167,16 @@ const SalesDashboard = () => {
         }
     }, [selectedReceiptGroup?.sale?.id]);
 
+    useEffect(() => {
+        if (selectedReceiptGroup) {
+            const groups = buildReceiptGroups(receipts);
+            const updatedGroup = groups.find(g => g.key === selectedReceiptGroup.key);
+            if (updatedGroup) {
+                setSelectedReceiptGroup(updatedGroup);
+            }
+        }
+    }, [receipts]);
+
     const fetchData = async () => {
         setLoading(true);
         try {
@@ -1870,13 +1880,13 @@ const SalesDashboard = () => {
                                                 </td>
                                                 <td className="p-4">
                                                     <div className="font-medium text-gray-800">
-                                                        {group.sale?.id
+                                                        {supportDisplayName || (group.sale?.id
                                                             ? `#${group.sale.id} - ${group.sale?.vehicle?.make || ''} ${group.sale?.vehicle?.model || ''}`.trim()
-                                                            : (supportDisplayName || `Soporte ${supportDisplayId}`)}
+                                                            : `Soporte ${supportDisplayId}`)}
                                                     </div>
                                                     <div className="text-xs text-gray-500">
                                                         {group.sale?.id
-                                                            ? `${group.sale?.vehicle?.plate || ''} · ${group.sale?.seller?.full_name || group.sale?.seller?.email || ''}`
+                                                            ? `${supportDisplayName ? `#${group.sale.id} - ${group.sale?.vehicle?.make || ''} ${group.sale?.vehicle?.model || ''} · ` : ''}${group.sale?.vehicle?.plate || 'Sin placa'} · ${group.sale?.seller?.full_name || group.sale?.seller?.email || ''}`
                                                             : `Soporte ${supportDisplayId}`}
                                                     </div>
                                                     {isEditableGroup && (
@@ -2059,58 +2069,56 @@ const SalesDashboard = () => {
                         <div className="flex items-start justify-between border-b border-slate-200 px-6 py-4">
                             <div className="flex-1 min-w-0 pr-4">
                                 <h3 className="text-xl font-bold text-slate-900">
-                                    {!isSaleGroup && supportDisplayName ? supportDisplayName : modalTitle}
+                                    {supportDisplayName || modalTitle}
                                 </h3>
                                 <p className="mt-1 text-sm text-slate-500">{groupTitle}</p>
-                                {!isSaleGroup && (
-                                    <div className="mt-2 flex items-center gap-2">
-                                        <input
-                                            type="text"
-                                            value={editingGroupName !== '' ? editingGroupName : supportDisplayName}
-                                            onChange={(e) => setEditingGroupName(e.target.value)}
-                                            onFocus={() => { if (editingGroupName === '') setEditingGroupName(supportDisplayName); }}
-                                            placeholder="Nombre visible del soporte..."
-                                            className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={async () => {
-                                                const nameToSave = (editingGroupName || supportDisplayName).trim();
-                                                if (!nameToSave) return;
-                                                try {
-                                                    const token = localStorage.getItem('token');
-                                                    await Promise.all(
-                                                        selectedReceiptGroup.receipts.map((receipt) =>
-                                                            axios.put(`/api/finance/receipts/${receipt.id}`, {
-                                                                sale_id: receipt.sale?.id || null,
-                                                                receipt_number: receipt.receipt_number || null,
-                                                                display_name: nameToSave,
-                                                                concept: receipt.concept || 'Otros',
-                                                                movement_type: receipt.movement_type || 'income',
-                                                                amount: Number(receipt.amount || 0),
-                                                                payment_date: receipt.payment_date
-                                                                    ? new Date(receipt.payment_date).toISOString().slice(0, 10)
-                                                                    : new Date().toISOString().slice(0, 10),
-                                                                category: receipt.category || 'otros',
-                                                                notes: receipt.notes || null,
-                                                                payment_method: receipt.payment_method || null,
-                                                                bank: receipt.bank || null
-                                                            }, { headers: { Authorization: `Bearer ${token}` } })
-                                                        )
-                                                    );
-                                                    setEditingGroupName('');
-                                                    await fetchData();
-                                                    Swal.fire('Guardado', 'Nombre actualizado correctamente.', 'success');
-                                                } catch (err) {
-                                                    Swal.fire('Error', 'No se pudo guardar el nombre.', 'error');
-                                                }
-                                            }}
-                                            className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
-                                        >
-                                            Guardar
-                                        </button>
-                                    </div>
-                                )}
+                                <div className="mt-2 flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        value={editingGroupName !== '' ? editingGroupName : supportDisplayName}
+                                        onChange={(e) => setEditingGroupName(e.target.value)}
+                                        onFocus={() => { if (editingGroupName === '') setEditingGroupName(supportDisplayName); }}
+                                        placeholder="Nombre visible de la venta o soporte..."
+                                        className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            const nameToSave = (editingGroupName || supportDisplayName).trim();
+                                            if (!nameToSave) return;
+                                            try {
+                                                const token = localStorage.getItem('token');
+                                                await Promise.all(
+                                                    selectedReceiptGroup.receipts.map((receipt) =>
+                                                        axios.put(`/api/finance/receipts/${receipt.id}`, {
+                                                            sale_id: receipt.sale?.id || receipt.sale_id || null,
+                                                            receipt_number: receipt.receipt_number || null,
+                                                            display_name: nameToSave,
+                                                            concept: receipt.concept || 'Otros',
+                                                            movement_type: receipt.movement_type || 'income',
+                                                            amount: Number(receipt.amount || 0),
+                                                            payment_date: receipt.payment_date
+                                                                ? new Date(receipt.payment_date).toISOString().slice(0, 10)
+                                                                : new Date().toISOString().slice(0, 10),
+                                                            category: receipt.category || 'otros',
+                                                            notes: receipt.notes || null,
+                                                            payment_method: receipt.payment_method || null,
+                                                            bank: receipt.bank || null
+                                                        }, { headers: { Authorization: `Bearer ${token}` } })
+                                                    )
+                                                );
+                                                setEditingGroupName('');
+                                                await fetchData();
+                                                Swal.fire('Guardado', 'Nombre actualizado correctamente.', 'success');
+                                            } catch (err) {
+                                                Swal.fire('Error', 'No se pudo guardar el nombre.', 'error');
+                                            }
+                                        }}
+                                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+                                    >
+                                        Guardar
+                                    </button>
+                                </div>
                             </div>
                             <div className="flex items-center gap-2">
                                 {isSaleGroup && (
