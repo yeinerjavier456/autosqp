@@ -353,6 +353,45 @@ const SalesDashboard = () => {
         });
     };
 
+    const ensureAccountingSupportNumber = async (group, token) => {
+        if (group?.sale?.id) return null;
+        if (group?.receiptNumber) return group.receiptNumber;
+
+        const fallbackReceiptId = group?.latestReceipt?.id || group?.receipts?.[0]?.id;
+        if (!fallbackReceiptId) {
+            throw new Error('No se pudo identificar el soporte contable');
+        }
+
+        const generatedReceiptNumber = `CONT-LEGACY-${fallbackReceiptId}`;
+        const receiptsWithoutSupport = (group?.receipts || []).filter((receipt) => !(receipt?.receipt_number || '').trim());
+
+        await Promise.all(receiptsWithoutSupport.map((receipt) => axios.put(`/api/finance/receipts/${receipt.id}`, {
+            sale_id: receipt.sale?.id || receipt.sale_id || null,
+            concept: receipt.concept || null,
+            movement_type: receipt.movement_type || 'income',
+            receipt_number: generatedReceiptNumber,
+            payment_date: receipt.payment_date || receipt.created_at || null,
+            amount: Number(receipt.amount || 0),
+            category: receipt.category || 'sale_payment',
+            notes: receipt.notes || null,
+            payment_method: receipt.payment_method || null,
+            bank: receipt.bank || null
+        }, {
+            headers: { Authorization: `Bearer ${token}` }
+        })));
+
+        setSelectedReceiptGroup((current) => current ? ({
+            ...current,
+            receiptNumber: generatedReceiptNumber,
+            receipts: current.receipts.map((receipt) => ({
+                ...receipt,
+                receipt_number: receipt.receipt_number || generatedReceiptNumber
+            }))
+        }) : current);
+
+        return generatedReceiptNumber;
+    };
+
     const receiptGroups = buildReceiptGroups(receipts);
     const selectedReceiptGroupTotals = selectedReceiptGroup ? {
         incomeTotal: selectedReceiptGroup.receipts
@@ -838,10 +877,10 @@ const SalesDashboard = () => {
     };
 
     const handleCreateReceiptForGroup = async (group) => {
-        if (!group?.sale?.id && !group?.receiptNumber) return;
+        if (!group?.sale?.id && !group?.latestReceipt?.id && !group?.receipts?.length) return;
         const defaultDate = new Date().toISOString().slice(0, 10);
         const sale = group?.sale || null;
-        const supportLabel = group?.receiptNumber || 'soporte';
+        const supportLabel = group?.receiptNumber || group?.latestReceipt?.receipt_number || `CONT-LEGACY-${group?.latestReceipt?.id || group?.receipts?.[0]?.id || ''}`;
         const isSaleGroup = Boolean(sale?.id);
 
         const { value } = await Swal.fire({
@@ -999,12 +1038,15 @@ const SalesDashboard = () => {
 
         try {
             const token = localStorage.getItem('token');
+            const supportNumber = !sale?.id
+                ? await ensureAccountingSupportNumber(group, token)
+                : null;
             const formData = new FormData();
             if (sale?.id) {
                 formData.append('sale_id', String(sale.id));
             }
-            if (!sale?.id && group?.receiptNumber) {
-                formData.append('receipt_number', group.receiptNumber);
+            if (!sale?.id && supportNumber) {
+                formData.append('receipt_number', supportNumber);
             }
             formData.append('concept', value.concept);
             formData.append('movement_type', value.movement_type);
