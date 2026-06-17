@@ -1785,7 +1785,8 @@ const SalesDashboard = () => {
                                     <tbody className="divide-y divide-gray-100">
                                         {receiptGroups.map((group) => {
                                             const receipt = group.latestReceipt;
-                                            const isEditableGroup = Boolean(group.sale?.id) || Boolean(group.receiptNumber);
+                                            const isEditableGroup = true;
+                                            const supportDisplayId = group.receiptNumber || receipt.receipt_number || `REC-${receipt.id}`;
                                             return (
                                             <tr key={group.key} className="hover:bg-gray-50">
                                                 <td className="p-4 text-sm text-gray-600">
@@ -1795,7 +1796,7 @@ const SalesDashboard = () => {
                                                     <div className="font-medium text-gray-800">
                                                         {group.sale?.id
                                                             ? `#${group.sale.id} - ${group.sale?.vehicle?.make || ''} ${group.sale?.vehicle?.model || ''}`.trim()
-                                                            : `Soporte ${group.receiptNumber || receipt.receipt_number || receipt.id}`}
+                                                            : `Soporte ${supportDisplayId}`}
                                                     </div>
                                                     <div className="text-xs text-gray-500">
                                                         {group.sale?.id
@@ -1810,12 +1811,10 @@ const SalesDashboard = () => {
                                                 </td>
                                                 <td className="p-4 text-sm text-gray-600">
                                                     <div className="font-medium">
-                                                        {isEditableGroup ? (group.receiptNumber || 'Registro consolidado') : (receipt.receipt_number || 'Sin consecutivo')}
+                                                        {supportDisplayId}
                                                     </div>
                                                     <div className="line-clamp-2 text-xs text-gray-500">
-                                                        {isEditableGroup
-                                                            ? group.receipts.map((item) => item.concept || item.notes || getCategoryLabel(item.category)).filter(Boolean).slice(0, 3).join(' · ')
-                                                            : (receipt.notes || 'Sin nota')}
+                                                        {group.receipts.map((item) => item.concept || item.notes || getCategoryLabel(item.category)).filter(Boolean).slice(0, 3).join(' · ')}
                                                     </div>
                                                 </td>
                                                 <td className="p-4 text-sm">
@@ -1824,43 +1823,24 @@ const SalesDashboard = () => {
                                                     </span>
                                                 </td>
                                                 <td className="p-4 text-sm font-medium text-gray-600">
-                                                    {isEditableGroup ? (group.sale?.id ? 'Venta consolidada' : 'Soporte consolidado') : getCategoryLabel(receipt.category)}
+                                                    {group.sale?.id ? 'Venta consolidada' : 'Soporte consolidado'}
                                                 </td>
                                                 <td className="p-4 text-sm">
-                                                    {isEditableGroup ? (
-                                                        <div className="space-y-1">
-                                                            <div className="font-semibold text-emerald-600">Ingresos: ${group.incomeTotal.toLocaleString()}</div>
-                                                            <div className="font-semibold text-rose-600">Egresos: ${group.expenseTotal.toLocaleString()}</div>
-                                                            <div className={`font-bold ${group.balanceTotal >= 0 ? 'text-blue-600' : 'text-red-600'}`}>Neto: ${group.balanceTotal.toLocaleString()}</div>
-                                                        </div>
-                                                    ) : (
-                                                        <span className={`font-semibold ${receipt.movement_type === 'expense' ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                                            ${Number(receipt.amount || 0).toLocaleString()}
-                                                        </span>
-                                                    )}
+                                                    <div className="space-y-1">
+                                                        <div className="font-semibold text-emerald-600">Ingresos: ${group.incomeTotal.toLocaleString()}</div>
+                                                        <div className="font-semibold text-rose-600">Egresos: ${group.expenseTotal.toLocaleString()}</div>
+                                                        <div className={`font-bold ${group.balanceTotal >= 0 ? 'text-blue-600' : 'text-red-600'}`}>Neto: ${group.balanceTotal.toLocaleString()}</div>
+                                                    </div>
                                                 </td>
                                                 <td className="p-4 text-sm">
-                                                    {isEditableGroup ? (
-                                                        <span className="text-gray-500">
-                                                            {group.receipts.filter((item) => item.file_path).length} adjuntos
-                                                        </span>
-                                                    ) : receipt.file_path ? (
-                                                        <a
-                                                            href={`/api${receipt.file_path}?token=${localStorage.getItem('token')}`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="inline-flex items-center rounded-lg bg-blue-50 px-3 py-1.5 font-medium text-blue-700 hover:bg-blue-100"
-                                                        >
-                                                            Ver adjunto
-                                                        </a>
-                                                    ) : (
-                                                        <span className="text-gray-400">Sin archivo</span>
-                                                    )}
+                                                    <span className="text-gray-500">
+                                                        {group.receipts.filter((item) => item.file_path).length} adjuntos
+                                                    </span>
                                                 </td>
                                                 <td className="p-4">
                                                     <div className="flex justify-end gap-2">
                                                         <button
-                                                            onClick={() => isEditableGroup ? setSelectedReceiptGroup(group) : handleEditReceipt(receipt)}
+                                                            onClick={() => setSelectedReceiptGroup(group)}
                                                             className="inline-flex items-center rounded-lg bg-blue-50 px-3 py-1.5 font-medium text-blue-700 hover:bg-blue-100"
                                                         >
                                                             Editar
@@ -1874,24 +1854,6 @@ const SalesDashboard = () => {
                                                             >
                                                                 Factura
                                                             </a>
-                                                        )}
-                                                        {!isEditableGroup && (
-                                                            <>
-                                                                <a
-                                                                    href={`/api/finance/receipts/${receipt.id}/pdf?token=${localStorage.getItem('token')}`}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="inline-flex items-center rounded-lg bg-emerald-50 px-3 py-1.5 font-medium text-emerald-700 hover:bg-emerald-100"
-                                                                >
-                                                                    PDF
-                                                                </a>
-                                                                <button
-                                                                    onClick={() => handleDeleteReceipt(receipt.id)}
-                                                                    className="inline-flex items-center rounded-lg bg-red-50 px-3 py-1.5 font-medium text-red-700 hover:bg-red-100"
-                                                                >
-                                                                    Eliminar
-                                                                </button>
-                                                            </>
                                                         )}
                                                     </div>
                                                 </td>
