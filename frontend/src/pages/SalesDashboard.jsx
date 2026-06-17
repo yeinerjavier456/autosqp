@@ -1310,6 +1310,7 @@ const SalesDashboard = () => {
     const hasDateFilter = periodPreset !== 'all' && Boolean(startDate && endDate);
 
     return (
+        <>
         <div className="animate-fade-in space-y-8">
             <header>
                 <h1 className="text-3xl font-bold text-gray-800">Finanzas y Comisiones</h1>
@@ -2543,6 +2544,7 @@ const SalesDashboard = () => {
                 </div>
             </div>
         )}
+        </>
     );
 };
 
