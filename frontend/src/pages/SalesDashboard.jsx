@@ -69,6 +69,7 @@ const SalesDashboard = () => {
     const [receiptCategory, setReceiptCategory] = useState('');
     const [receiptMovementType, setReceiptMovementType] = useState('');
     const [selectedReceiptGroup, setSelectedReceiptGroup] = useState(null);
+    const [editingGroupName, setEditingGroupName] = useState('');
     const [saleAttachments, setSaleAttachments] = useState([]);
     const [periodPreset, setPeriodPreset] = useState('last_month');
     const [startDate, setStartDate] = useState(defaultRange.start);
@@ -1289,6 +1290,73 @@ const SalesDashboard = () => {
         }
     };
 
+    const handleRenameReceiptGroup = async (group) => {
+        if (!group?.receipts?.length) return;
+
+        const currentName = group.receipts.map((item) => item.display_name).find(Boolean) || '';
+        const { value: updatedName } = await Swal.fire({
+            title: 'Editar nombre del soporte',
+            input: 'text',
+            inputValue: currentName,
+            inputLabel: 'Nombre visible del soporte',
+            inputPlaceholder: 'Ej: Chevrolet Spark FLX485',
+            showCancelButton: true,
+            confirmButtonText: 'Guardar',
+            cancelButtonText: 'Cancelar',
+            inputValidator: (value) => {
+                if (!(value || '').trim()) {
+                    return 'Debes ingresar un nombre';
+                }
+                return null;
+            },
+            customClass: {
+                confirmButton: 'bg-blue-600 text-white px-4 py-2 rounded-lg ml-2',
+                cancelButton: 'bg-gray-400 text-white px-4 py-2 rounded-lg'
+            },
+            buttonsStyling: false
+        });
+
+        if (!updatedName) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            const normalizedName = updatedName.trim();
+
+            await Promise.all(
+                group.receipts.map((receipt) =>
+                    axios.put(
+                        `/api/finance/receipts/${receipt.id}`,
+                        {
+                            sale_id: receipt.sale?.id || null,
+                            receipt_number: receipt.receipt_number || null,
+                            display_name: normalizedName,
+                            concept: receipt.concept || 'Otros',
+                            movement_type: receipt.movement_type || 'income',
+                            amount: Number(receipt.amount || 0),
+                            payment_date: receipt.payment_date
+                                ? new Date(receipt.payment_date).toISOString().slice(0, 10)
+                                : new Date().toISOString().slice(0, 10),
+                            category: receipt.category || 'sale_payment',
+                            notes: receipt.notes || null,
+                            payment_method: receipt.payment_method || null,
+                            bank: receipt.bank || null
+                        },
+                        {
+                            headers: { Authorization: `Bearer ${token}` }
+                        }
+                    )
+                )
+            );
+
+            await fetchData();
+            setSelectedReceiptGroup(null);
+            Swal.fire('Exito', 'El nombre del soporte fue actualizado.', 'success');
+        } catch (error) {
+            console.error('Error renaming receipt group', error);
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo actualizar el nombre del soporte.', 'error');
+        }
+    };
+
     const handleDeleteSale = async (sale) => {
         if (!sale?.id) return;
 
@@ -2065,7 +2133,7 @@ const SalesDashboard = () => {
                     <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl">
                         {(() => {
                             const isSaleGroup = Boolean(selectedReceiptGroup.sale?.id);
-                            const supportDisplayName = selectedReceiptGroup.receipts.map((item) => item.display_name).find(Boolean);
+                            const supportDisplayName = selectedReceiptGroup.receipts.map((item) => item.display_name).find(Boolean) || '';
                             const groupTitle = isSaleGroup
                                 ? `#${selectedReceiptGroup.sale?.id} - ${selectedReceiptGroup.sale?.vehicle?.make} ${selectedReceiptGroup.sale?.vehicle?.model} · ${selectedReceiptGroup.sale?.vehicle?.plate || 'Sin placa'}`
                                 : `Soporte ${selectedReceiptGroup.receiptNumber || selectedReceiptGroup.latestReceipt?.receipt_number || ''}`;
@@ -2074,13 +2142,57 @@ const SalesDashboard = () => {
                             return (
                         <>
                         <div className="flex items-start justify-between border-b border-slate-200 px-6 py-4">
-                            <div>
+                            <div className="flex-1 min-w-0 pr-4">
                                 <h3 className="text-xl font-bold text-slate-900">{modalTitle}</h3>
-                                <p className="mt-1 text-sm text-slate-500">
-                                    {groupTitle}
-                                </p>
-                                {!isSaleGroup && supportDisplayName && (
-                                    <p className="mt-1 text-sm font-medium text-slate-700">{supportDisplayName}</p>
+                                <p className="mt-1 text-sm text-slate-500">{groupTitle}</p>
+                                {!isSaleGroup && (
+                                    <div className="mt-2 flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            value={editingGroupName !== '' ? editingGroupName : supportDisplayName}
+                                            onChange={(e) => setEditingGroupName(e.target.value)}
+                                            onFocus={() => { if (editingGroupName === '') setEditingGroupName(supportDisplayName); }}
+                                            placeholder="Nombre visible del soporte..."
+                                            className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={async () => {
+                                                const nameToSave = (editingGroupName || supportDisplayName).trim();
+                                                if (!nameToSave) return;
+                                                try {
+                                                    const token = localStorage.getItem('token');
+                                                    await Promise.all(
+                                                        selectedReceiptGroup.receipts.map((receipt) =>
+                                                            axios.put(`/api/finance/receipts/${receipt.id}`, {
+                                                                sale_id: receipt.sale?.id || null,
+                                                                receipt_number: receipt.receipt_number || null,
+                                                                display_name: nameToSave,
+                                                                concept: receipt.concept || 'Otros',
+                                                                movement_type: receipt.movement_type || 'income',
+                                                                amount: Number(receipt.amount || 0),
+                                                                payment_date: receipt.payment_date
+                                                                    ? new Date(receipt.payment_date).toISOString().slice(0, 10)
+                                                                    : new Date().toISOString().slice(0, 10),
+                                                                category: receipt.category || 'otros',
+                                                                notes: receipt.notes || null,
+                                                                payment_method: receipt.payment_method || null,
+                                                                bank: receipt.bank || null
+                                                            }, { headers: { Authorization: `Bearer ${token}` } })
+                                                        )
+                                                    );
+                                                    setEditingGroupName('');
+                                                    await fetchData();
+                                                    Swal.fire('Guardado', 'Nombre actualizado correctamente.', 'success');
+                                                } catch (err) {
+                                                    Swal.fire('Error', 'No se pudo guardar el nombre.', 'error');
+                                                }
+                                            }}
+                                            className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+                                        >
+                                            Guardar
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                             <div className="flex items-center gap-2">
@@ -2112,7 +2224,7 @@ const SalesDashboard = () => {
                                 )}
                                 <button
                                     type="button"
-                                    onClick={() => setSelectedReceiptGroup(null)}
+                                    onClick={() => { setSelectedReceiptGroup(null); setEditingGroupName(''); }}
                                     className="rounded-full bg-slate-100 px-3 py-1 text-lg font-bold text-slate-600 hover:bg-slate-200"
                                 >
                                     ×
