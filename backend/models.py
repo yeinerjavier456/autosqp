@@ -320,6 +320,7 @@ class PaymentReceipt(Base):
     company_id = Column(Integer, ForeignKey("companies.id"), index=True, nullable=False)
     sale_id = Column(Integer, ForeignKey("sales.id"), index=True, nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    display_name = Column(String(180), nullable=True)
     concept = Column(String(200), nullable=True)
     movement_type = Column(String(20), default="income")
     receipt_number = Column(String(120), nullable=True)

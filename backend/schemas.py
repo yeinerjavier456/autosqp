@@ -755,6 +755,7 @@ class SaleAttachmentList(BaseModel):
 
 class PaymentReceiptBase(BaseModel):
     sale_id: Optional[int] = None
+    display_name: Optional[str] = None
     concept: Optional[str] = None
     movement_type: Optional[str] = "income"
     receipt_number: Optional[str] = None
@@ -783,6 +784,7 @@ class PaymentReceiptCreate(PaymentReceiptBase):
 
 class PaymentReceiptUpdate(BaseModel):
     sale_id: Optional[int] = None
+    display_name: Optional[str] = None
     concept: Optional[str] = None
     movement_type: Optional[str] = "income"
     receipt_number: Optional[str] = None

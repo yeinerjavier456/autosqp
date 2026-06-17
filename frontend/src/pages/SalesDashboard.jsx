@@ -15,6 +15,28 @@ const getLastMonthRange = () => {
     };
 };
 
+const formatCurrencyInput = (value) => {
+    const digits = String(value ?? '').replace(/\D/g, '');
+    if (!digits) return '';
+    return Number(digits).toLocaleString('es-CO');
+};
+
+const parseCurrencyInput = (value) => {
+    const digits = String(value ?? '').replace(/\D/g, '');
+    return digits ? Number(digits) : 0;
+};
+
+const attachCurrencyFormatter = (input) => {
+    if (!input) return;
+    input.addEventListener('input', () => {
+        const formatted = formatCurrencyInput(input.value);
+        input.value = formatted;
+        try {
+            input.setSelectionRange(formatted.length, formatted.length);
+        } catch {}
+    });
+};
+
 const SalesDashboard = () => {
     const defaultRange = getLastMonthRange();
     const [stats, setStats] = useState({
@@ -54,6 +76,7 @@ const SalesDashboard = () => {
     const [creatingReceipt, setCreatingReceipt] = useState(false);
     const [receiptForm, setReceiptForm] = useState({
         sale_id: '',
+        display_name: '',
         concept: '',
         concept_detail: '',
         movement_type: 'income',
@@ -368,6 +391,7 @@ const SalesDashboard = () => {
         await Promise.all(receiptsWithoutSupport.map((receipt) => axios.put(`/api/finance/receipts/${receipt.id}`, {
             sale_id: receipt.sale?.id || receipt.sale_id || null,
             concept: receipt.concept || null,
+            display_name: receipt.display_name || null,
             movement_type: receipt.movement_type || 'income',
             receipt_number: generatedReceiptNumber,
             payment_date: receipt.payment_date || receipt.created_at || null,
@@ -718,7 +742,8 @@ const SalesDashboard = () => {
 
     const handleCreateReceipt = async (e) => {
         e.preventDefault();
-        if (!receiptForm.concept.trim() || !receiptForm.amount || Number(receiptForm.amount) <= 0) {
+        const parsedAmount = parseCurrencyInput(receiptForm.amount);
+        if (!receiptForm.concept.trim() || !parsedAmount || parsedAmount <= 0) {
             Swal.fire('Atencion', 'Debes seleccionar un concepto y poner un valor valido.', 'warning');
             return;
         }
@@ -730,9 +755,10 @@ const SalesDashboard = () => {
             if (receiptForm.sale_id) {
                 formData.append('sale_id', receiptForm.sale_id);
             }
+            formData.append('display_name', receiptForm.display_name || '');
             formData.append('concept', receiptForm.concept === 'Otros' ? (receiptForm.concept_detail || 'Otros') : receiptForm.concept);
             formData.append('movement_type', receiptForm.movement_type);
-            formData.append('amount', receiptForm.amount);
+            formData.append('amount', String(parsedAmount));
             formData.append('payment_date', receiptForm.payment_date);
             formData.append('category', receiptForm.category);
             formData.append('notes', receiptForm.notes);
@@ -751,6 +777,7 @@ const SalesDashboard = () => {
 
             setReceiptForm({
                 sale_id: '',
+                display_name: '',
                 concept: '',
                 concept_detail: '',
                 movement_type: 'income',
@@ -915,6 +942,10 @@ const SalesDashboard = () => {
                     <div class="sale-item-grid">
                         <section class="sale-item-card">
                             <div class="sale-item-title">Información general</div>
+                            <div class="sale-item-field" style="margin-bottom: 12px;">
+                                Nombre
+                                <input id="new-receipt-display-name" type="text" placeholder="Ej: Chevrolet Spark FLX485" />
+                            </div>
                             <div class="sale-item-field">
                                 Concepto
                                 <select id="new-receipt-concept">
@@ -923,7 +954,7 @@ const SalesDashboard = () => {
                             </div>
                             <div class="sale-item-field" style="margin-top: 12px;">
                                 Valor
-                                <input id="new-receipt-amount" type="number" min="1" placeholder="$ 0,00" />
+                                <input id="new-receipt-amount" type="text" inputmode="numeric" placeholder="$ 0,00" />
                             </div>
                         </section>
                         <section class="sale-item-card green">
@@ -991,7 +1022,7 @@ const SalesDashboard = () => {
             cancelButtonText: 'Cancelar',
             focusConfirm: false,
             preConfirm: () => {
-                const amount = Number(document.getElementById('new-receipt-amount')?.value || 0);
+                const amount = parseCurrencyInput(document.getElementById('new-receipt-amount')?.value || 0);
                 const paymentDate = document.getElementById('new-receipt-payment-date')?.value || '';
                 if (!amount || amount <= 0) {
                     Swal.showValidationMessage('Debes ingresar un valor válido');
@@ -1002,6 +1033,7 @@ const SalesDashboard = () => {
                     return false;
                 }
                 return {
+                    display_name: (document.getElementById('new-receipt-display-name')?.value || '').trim(),
                     concept: document.getElementById('new-receipt-concept')?.value || 'Otros',
                     movement_type: document.getElementById('new-receipt-movement-type')?.value || 'expense',
                     amount,
@@ -1024,6 +1056,7 @@ const SalesDashboard = () => {
                     if (movementSelect) movementSelect.value = defaults.movement_type;
                     if (categorySelect) categorySelect.value = defaults.category;
                 };
+                attachCurrencyFormatter(document.getElementById('new-receipt-amount'));
                 conceptSelect?.addEventListener('change', applyDefaults);
                 applyDefaults();
             },
@@ -1048,6 +1081,7 @@ const SalesDashboard = () => {
             if (!sale?.id && supportNumber) {
                 formData.append('receipt_number', supportNumber);
             }
+            formData.append('display_name', value.display_name || '');
             formData.append('concept', value.concept);
             formData.append('movement_type', value.movement_type);
             formData.append('amount', String(value.amount));
@@ -1119,6 +1153,10 @@ const SalesDashboard = () => {
                         </select>
                     </div>
                     <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Nombre</label>
+                        <input id="edit-receipt-display-name" type="text" class="swal2-input" value="${escapeHtml(receipt.display_name || '')}" placeholder="Ej: Chevrolet Spark FLX485" />
+                    </div>
+                    <div>
                         <label class="mb-1 block text-sm font-semibold text-gray-700">Concepto Contable</label>
                         <select id="edit-receipt-concept" class="swal2-select">
                             ${receiptConceptOptions.map((option) => `<option value="${option}" ${receipt.concept === option || (option === 'Otros' && !receiptConceptOptions.includes(receipt.concept)) ? 'selected' : ''}>${option}</option>`).join('')}
@@ -1135,7 +1173,7 @@ const SalesDashboard = () => {
                         </div>
                         <div>
                             <label class="mb-1 block text-sm font-semibold text-gray-700">Valor</label>
-                            <input id="edit-receipt-amount" type="number" min="1" class="swal2-input" value="${Number(receipt.amount || 0)}" placeholder="Valor" />
+                            <input id="edit-receipt-amount" type="text" inputmode="numeric" class="swal2-input" value="${escapeHtml(formatCurrencyInput(receipt.amount || 0))}" placeholder="Valor" />
                         </div>
                     </div>
                     <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1180,7 +1218,7 @@ const SalesDashboard = () => {
                 const conceptDetail = (document.getElementById('edit-receipt-concept-detail')?.value || '').trim();
                 const concept = conceptSelect === 'Otros' ? (conceptDetail || 'Otros') : conceptSelect;
                 const movementType = document.getElementById('edit-receipt-movement-type')?.value || 'income';
-                const amount = Number(document.getElementById('edit-receipt-amount')?.value || 0);
+                const amount = parseCurrencyInput(document.getElementById('edit-receipt-amount')?.value || 0);
                 const paymentDate = document.getElementById('edit-receipt-payment-date')?.value || '';
                 const category = document.getElementById('edit-receipt-category')?.value || 'sale_payment';
                 const notes = (document.getElementById('edit-receipt-notes')?.value || '').trim();
@@ -1200,6 +1238,7 @@ const SalesDashboard = () => {
 
                 return {
                     sale_id: saleId ? Number(saleId) : null,
+                    display_name: (document.getElementById('edit-receipt-display-name')?.value || '').trim() || null,
                     concept,
                     movement_type: movementType,
                     amount,
@@ -1213,6 +1252,7 @@ const SalesDashboard = () => {
             didOpen: () => {
                 const conceptSelect = document.getElementById('edit-receipt-concept');
                 const conceptDetail = document.getElementById('edit-receipt-concept-detail');
+                attachCurrencyFormatter(document.getElementById('edit-receipt-amount'));
                 if (conceptSelect && conceptDetail) {
                     conceptSelect.addEventListener('change', (e) => {
                         conceptDetail.style.display = e.target.value === 'Otros' ? 'block' : 'none';
@@ -1657,10 +1697,10 @@ const SalesDashboard = () => {
                                             {receiptForm.movement_type === 'expense' ? 'Valor del egreso' : 'Valor del ingreso'}
                                         </label>
                                         <input
-                                            type="number"
-                                            min="1"
+                                            type="text"
+                                            inputMode="numeric"
                                             value={receiptForm.amount}
-                                            onChange={(e) => setReceiptForm({ ...receiptForm, amount: e.target.value })}
+                                            onChange={(e) => setReceiptForm({ ...receiptForm, amount: formatCurrencyInput(e.target.value) })}
                                             className="w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
                                             required
                                         />
@@ -1700,6 +1740,16 @@ const SalesDashboard = () => {
                                                 <option key={bank} value={bank}>{bank}</option>
                                             ))}
                                         </select>
+                                    </div>
+                                    <div>
+                                        <label className="mb-1 block text-sm font-semibold text-gray-700">Nombre</label>
+                                        <input
+                                            type="text"
+                                            value={receiptForm.display_name}
+                                            onChange={(e) => setReceiptForm({ ...receiptForm, display_name: e.target.value })}
+                                            className="w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                                            placeholder="Ej: Chevrolet Spark FLX485"
+                                        />
                                     </div>
                                 </div>
 
@@ -1829,6 +1879,7 @@ const SalesDashboard = () => {
                                             const receipt = group.latestReceipt;
                                             const isEditableGroup = true;
                                             const supportDisplayId = group.receiptNumber || receipt.receipt_number || `REC-${receipt.id}`;
+                                            const supportDisplayName = group.receipts.map((item) => item.display_name).find(Boolean);
                                             return (
                                             <tr key={group.key} className="hover:bg-gray-50">
                                                 <td className="p-4 text-sm text-gray-600">
@@ -1843,7 +1894,7 @@ const SalesDashboard = () => {
                                                     <div className="text-xs text-gray-500">
                                                         {group.sale?.id
                                                             ? `${group.sale?.vehicle?.plate || ''} · ${group.sale?.seller?.full_name || group.sale?.seller?.email || ''}`
-                                                            : 'Soporte de contabilidad'}
+                                                            : (supportDisplayName || 'Soporte de contabilidad')}
                                                     </div>
                                                     {isEditableGroup && (
                                                         <div className="mt-1 text-xs font-semibold text-blue-600">
@@ -2014,6 +2065,7 @@ const SalesDashboard = () => {
                     <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl">
                         {(() => {
                             const isSaleGroup = Boolean(selectedReceiptGroup.sale?.id);
+                            const supportDisplayName = selectedReceiptGroup.receipts.map((item) => item.display_name).find(Boolean);
                             const groupTitle = isSaleGroup
                                 ? `#${selectedReceiptGroup.sale?.id} - ${selectedReceiptGroup.sale?.vehicle?.make} ${selectedReceiptGroup.sale?.vehicle?.model} · ${selectedReceiptGroup.sale?.vehicle?.plate || 'Sin placa'}`
                                 : `Soporte ${selectedReceiptGroup.receiptNumber || selectedReceiptGroup.latestReceipt?.receipt_number || ''}`;
@@ -2027,6 +2079,9 @@ const SalesDashboard = () => {
                                 <p className="mt-1 text-sm text-slate-500">
                                     {groupTitle}
                                 </p>
+                                {!isSaleGroup && supportDisplayName && (
+                                    <p className="mt-1 text-sm font-medium text-slate-700">{supportDisplayName}</p>
+                                )}
                             </div>
                             <div className="flex items-center gap-2">
                                 {isSaleGroup && (
