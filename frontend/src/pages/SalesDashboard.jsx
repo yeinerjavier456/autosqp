@@ -1872,12 +1872,12 @@ const SalesDashboard = () => {
                                                     <div className="font-medium text-gray-800">
                                                         {group.sale?.id
                                                             ? `#${group.sale.id} - ${group.sale?.vehicle?.make || ''} ${group.sale?.vehicle?.model || ''}`.trim()
-                                                            : `Soporte ${supportDisplayId}`}
+                                                            : (supportDisplayName || `Soporte ${supportDisplayId}`)}
                                                     </div>
                                                     <div className="text-xs text-gray-500">
                                                         {group.sale?.id
                                                             ? `${group.sale?.vehicle?.plate || ''} · ${group.sale?.seller?.full_name || group.sale?.seller?.email || ''}`
-                                                            : (supportDisplayName || 'Soporte de contabilidad')}
+                                                            : `Soporte ${supportDisplayId}`}
                                                     </div>
                                                     {isEditableGroup && (
                                                         <div className="mt-1 text-xs font-semibold text-blue-600">
@@ -2058,7 +2058,9 @@ const SalesDashboard = () => {
                         <>
                         <div className="flex items-start justify-between border-b border-slate-200 px-6 py-4">
                             <div className="flex-1 min-w-0 pr-4">
-                                <h3 className="text-xl font-bold text-slate-900">{modalTitle}</h3>
+                                <h3 className="text-xl font-bold text-slate-900">
+                                    {!isSaleGroup && supportDisplayName ? supportDisplayName : modalTitle}
+                                </h3>
                                 <p className="mt-1 text-sm text-slate-500">{groupTitle}</p>
                                 {!isSaleGroup && (
                                     <div className="mt-2 flex items-center gap-2">
