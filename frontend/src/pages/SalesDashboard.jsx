@@ -71,6 +71,10 @@ const SalesDashboard = () => {
     const [selectedReceiptGroup, setSelectedReceiptGroup] = useState(null);
     const [editingGroupName, setEditingGroupName] = useState('');
     const [saleAttachments, setSaleAttachments] = useState([]);
+    const [editingReceipt, setEditingReceipt] = useState(null);
+    const [editReceiptForm, setEditReceiptForm] = useState({});
+    const [editReceiptFile, setEditReceiptFile] = useState(null);
+    const [savingEditReceipt, setSavingEditReceipt] = useState(false);
     const [periodPreset, setPeriodPreset] = useState('last_month');
     const [startDate, setStartDate] = useState(defaultRange.start);
     const [endDate, setEndDate] = useState(defaultRange.end);
@@ -1136,157 +1140,67 @@ const SalesDashboard = () => {
         }
     };
 
-    const handleEditReceipt = async (receipt) => {
-        const { value: updatedData } = await Swal.fire({
-            title: 'Editar registro contable',
-            width: '80%',
-            html: `
-                <div class="space-y-3 text-left">
-                    <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Venta aprobada</label>
-                        <select id="edit-receipt-sale-id" class="swal2-select">
-                            <option value="">Sin venta asociada</option>
-                            ${approvedSales.map((sale) => `
-                                <option value="${sale.id}" ${Number(receipt.sale?.id) === Number(sale.id) ? 'selected' : ''}>
-                                    #${sale.id} - ${sale.vehicle?.make || ''} ${sale.vehicle?.model || ''} - ${sale.vehicle?.plate || ''}
-                                </option>
-                            `).join('')}
-                        </select>
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Nombre</label>
-                        <input id="edit-receipt-display-name" type="text" class="swal2-input" value="${escapeHtml(receipt.display_name || '')}" placeholder="Ej: Chevrolet Spark FLX485" />
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Concepto Contable</label>
-                        <select id="edit-receipt-concept" class="swal2-select">
-                            ${receiptConceptOptions.map((option) => `<option value="${option}" ${receipt.concept === option || (option === 'Otros' && !receiptConceptOptions.includes(receipt.concept)) ? 'selected' : ''}>${option}</option>`).join('')}
-                        </select>
-                        <input id="edit-receipt-concept-detail" type="text" class="swal2-input" style="display: ${!receiptConceptOptions.includes(receipt.concept) ? 'block' : 'none'}" value="${escapeHtml(receipt.concept || '')}" placeholder="Especifique el concepto..." />
-                    </div>
-                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-                        <div>
-                            <label class="mb-1 block text-sm font-semibold text-gray-700">Tipo</label>
-                            <select id="edit-receipt-movement-type" class="swal2-select">
-                                <option value="income" ${(receipt.movement_type || 'income') === 'income' ? 'selected' : ''}>Ingreso</option>
-                                <option value="expense" ${(receipt.movement_type || 'income') === 'expense' ? 'selected' : ''}>Egreso</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="mb-1 block text-sm font-semibold text-gray-700">Valor</label>
-                            <input id="edit-receipt-amount" type="text" inputmode="numeric" class="swal2-input" value="${escapeHtml(formatCurrencyInput(receipt.amount || 0))}" placeholder="Valor" />
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-                        <div>
-                            <label class="mb-1 block text-sm font-semibold text-gray-700">Fecha</label>
-                            <input id="edit-receipt-payment-date" type="date" class="swal2-input" value="${receipt.payment_date ? new Date(receipt.payment_date).toISOString().slice(0, 10) : ''}" />
-                        </div>
-                        <div>
-                            <label class="mb-1 block text-sm font-semibold text-gray-700">Sale o entra por</label>
-                            <select id="edit-receipt-payment-method" class="swal2-select">
-                                <option value="">Sin definir</option>
-                                ${paymentMethodOptions.map(([value, label]) => `<option value="${value}" ${(receipt.payment_method || '') === value ? 'selected' : ''}>${label}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div>
-                            <label class="mb-1 block text-sm font-semibold text-gray-700">Banco / cuenta</label>
-                            <select id="edit-receipt-bank" class="swal2-select">
-                                <option value="">Sin banco</option>
-                                ${bankOptions.map((bank) => `<option value="${bank}" ${(receipt.bank || '') === bank ? 'selected' : ''}>${bank}</option>`).join('')}
-                            </select>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Cuenta Contable</label>
-                        <select id="edit-receipt-category" class="swal2-select">
-                            ${receiptCategoryOptions.map(([value, label]) => `<option value="${value}" ${(receipt.category || '') === value ? 'selected' : ''}>${label}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Nota contable</label>
-                        <textarea id="edit-receipt-notes" class="swal2-textarea" placeholder="Observaciones">${escapeHtml(receipt.notes || '')}</textarea>
-                    </div>
-                </div>
-            `,
-            showCancelButton: true,
-            confirmButtonText: 'Guardar cambios',
-            cancelButtonText: 'Cancelar',
-            focusConfirm: false,
-            preConfirm: () => {
-                const saleId = document.getElementById('edit-receipt-sale-id')?.value || '';
-                const conceptSelect = document.getElementById('edit-receipt-concept')?.value || '';
-                const conceptDetail = (document.getElementById('edit-receipt-concept-detail')?.value || '').trim();
-                const concept = conceptSelect === 'Otros' ? (conceptDetail || 'Otros') : conceptSelect;
-                const movementType = document.getElementById('edit-receipt-movement-type')?.value || 'income';
-                const amount = parseCurrencyInput(document.getElementById('edit-receipt-amount')?.value || 0);
-                const paymentDate = document.getElementById('edit-receipt-payment-date')?.value || '';
-                const category = document.getElementById('edit-receipt-category')?.value || 'sale_payment';
-                const notes = (document.getElementById('edit-receipt-notes')?.value || '').trim();
-
-                if (!amount || amount <= 0) {
-                    Swal.showValidationMessage('Debes ingresar un valor valido');
-                    return false;
-                }
-                if (!saleId && !concept) {
-                    Swal.showValidationMessage('Debes asociar una venta o escribir un concepto');
-                    return false;
-                }
-                if (!paymentDate) {
-                    Swal.showValidationMessage('Debes indicar la fecha del registro');
-                    return false;
-                }
-
-                return {
-                    sale_id: saleId ? Number(saleId) : null,
-                    display_name: (document.getElementById('edit-receipt-display-name')?.value || '').trim() || null,
-                    concept,
-                    movement_type: movementType,
-                    amount,
-                    payment_date: paymentDate,
-                    category,
-                    notes: notes || null,
-                    payment_method: document.getElementById('edit-receipt-payment-method')?.value || null,
-                    bank: document.getElementById('edit-receipt-bank')?.value || null
-                };
-            },
-            didOpen: () => {
-                const conceptSelect = document.getElementById('edit-receipt-concept');
-                const conceptDetail = document.getElementById('edit-receipt-concept-detail');
-                attachCurrencyFormatter(document.getElementById('edit-receipt-amount'));
-                if (conceptSelect && conceptDetail) {
-                    conceptSelect.addEventListener('change', (e) => {
-                        conceptDetail.style.display = e.target.value === 'Otros' ? 'block' : 'none';
-                        if (e.target.value !== 'Otros') {
-                            conceptDetail.value = e.target.value;
-                            const defaults = getReceiptDefaultsForConcept(e.target.value);
-                            const movementSelect = document.getElementById('edit-receipt-movement-type');
-                            const categorySelect = document.getElementById('edit-receipt-category');
-                            if (movementSelect) movementSelect.value = defaults.movement_type;
-                            if (categorySelect) categorySelect.value = defaults.category;
-                        }
-                    });
-                }
-            },
-            customClass: {
-                confirmButton: 'bg-blue-600 text-white px-4 py-2 rounded-lg ml-2',
-                cancelButton: 'bg-gray-400 text-white px-4 py-2 rounded-lg'
-            },
-            buttonsStyling: false
+    const handleEditReceipt = (receipt) => {
+        const isKnownConcept = receiptConceptOptions.includes(receipt.concept);
+        setEditReceiptForm({
+            sale_id: receipt.sale?.id ? String(receipt.sale.id) : '',
+            display_name: receipt.display_name || '',
+            concept: isKnownConcept ? receipt.concept : 'Otros',
+            concept_detail: isKnownConcept ? '' : (receipt.concept || ''),
+            movement_type: receipt.movement_type || 'income',
+            amount: formatCurrencyInput(receipt.amount || 0),
+            payment_date: receipt.payment_date ? new Date(receipt.payment_date).toISOString().slice(0, 10) : '',
+            category: receipt.category || 'otros',
+            notes: receipt.notes || '',
+            payment_method: receipt.payment_method || '',
+            bank: receipt.bank || '',
         });
+        setEditReceiptFile(null);
+        setEditingReceipt(receipt);
+    };
 
-        if (!updatedData) return;
+    const handleSaveEditReceipt = async () => {
+        const concept = editReceiptForm.concept === 'Otros'
+            ? (editReceiptForm.concept_detail || 'Otros')
+            : editReceiptForm.concept;
+        const amount = parseCurrencyInput(editReceiptForm.amount || 0);
 
+        if (!amount || amount <= 0) return Swal.fire('Error', 'Debes ingresar un valor válido', 'error');
+        if (!editReceiptForm.payment_date) return Swal.fire('Error', 'Debes indicar la fecha', 'error');
+
+        setSavingEditReceipt(true);
         try {
             const token = localStorage.getItem('token');
-            await axios.put(`/api/finance/receipts/${receipt.id}`, updatedData, {
+            const payload = {
+                sale_id: editReceiptForm.sale_id ? Number(editReceiptForm.sale_id) : null,
+                display_name: editReceiptForm.display_name.trim() || null,
+                concept,
+                movement_type: editReceiptForm.movement_type,
+                amount,
+                payment_date: editReceiptForm.payment_date,
+                category: editReceiptForm.category,
+                notes: editReceiptForm.notes.trim() || null,
+                payment_method: editReceiptForm.payment_method || null,
+                bank: editReceiptForm.bank || null,
+            };
+            await axios.put(`/api/finance/receipts/${editingReceipt.id}`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
+            if (editReceiptFile) {
+                const fd = new FormData();
+                fd.append('file', editReceiptFile);
+                await axios.post(`/api/finance/receipts/${editingReceipt.id}/upload`, fd, {
+                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' }
+                });
+            }
             await fetchData();
-            Swal.fire('Exito', 'El registro contable fue actualizado.', 'success');
+            setEditingReceipt(null);
+            Swal.fire('Éxito', 'Registro contable actualizado.', 'success');
         } catch (error) {
             console.error('Error updating receipt', error);
             Swal.fire('Error', error.response?.data?.detail || 'No se pudo actualizar el registro contable.', 'error');
+        } finally {
+            setSavingEditReceipt(false);
         }
     };
 
@@ -2384,6 +2298,251 @@ const SalesDashboard = () => {
                 </div>
             )}
         </div>
+        {/* ── MODAL EDITAR REGISTRO CONTABLE (native React) ── */}
+        {editingReceipt && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4">
+                <div className="max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col">
+                    {/* Header */}
+                    <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 bg-slate-50">
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-900">Editar registro contable</h3>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                                {editingReceipt.receipt_number || `#${editingReceipt.id}`} · {editingReceipt.concept}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setEditingReceipt(null)}
+                            className="rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    {/* Body */}
+                    <div className="overflow-y-auto px-6 py-5 space-y-4 flex-1">
+                        {/* Venta asociada */}
+                        <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Venta asociada</label>
+                            <select
+                                value={editReceiptForm.sale_id || ''}
+                                onChange={(e) => setEditReceiptForm({ ...editReceiptForm, sale_id: e.target.value })}
+                                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                            >
+                                <option value="">Sin venta asociada</option>
+                                {approvedSales.map((sale) => (
+                                    <option key={sale.id} value={String(sale.id)}>
+                                        #{sale.id} – {sale.vehicle?.make} {sale.vehicle?.model} · {sale.vehicle?.plate || 'Sin placa'}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Nombre visible */}
+                        <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nombre visible</label>
+                            <input
+                                type="text"
+                                value={editReceiptForm.display_name || ''}
+                                onChange={(e) => setEditReceiptForm({ ...editReceiptForm, display_name: e.target.value })}
+                                placeholder="Ej: Chevrolet Spark FLX485"
+                                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                            />
+                        </div>
+
+                        {/* Concepto contable */}
+                        <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Concepto contable</label>
+                            <select
+                                value={editReceiptForm.concept || ''}
+                                onChange={(e) => {
+                                    const concept = e.target.value;
+                                    const defaults = getReceiptDefaultsForConcept(concept);
+                                    setEditReceiptForm({
+                                        ...editReceiptForm,
+                                        concept,
+                                        concept_detail: '',
+                                        ...(concept !== 'Otros' ? { movement_type: defaults.movement_type, category: defaults.category } : {})
+                                    });
+                                }}
+                                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                            >
+                                {receiptConceptOptions.map((opt) => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                            </select>
+                            {editReceiptForm.concept === 'Otros' && (
+                                <input
+                                    type="text"
+                                    value={editReceiptForm.concept_detail || ''}
+                                    onChange={(e) => setEditReceiptForm({ ...editReceiptForm, concept_detail: e.target.value })}
+                                    placeholder="Especifique el concepto..."
+                                    className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                />
+                            )}
+                        </div>
+
+                        {/* Tipo + Valor */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Tipo</label>
+                                <select
+                                    value={editReceiptForm.movement_type || 'expense'}
+                                    onChange={(e) => setEditReceiptForm({ ...editReceiptForm, movement_type: e.target.value })}
+                                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                >
+                                    <option value="income">Ingreso</option>
+                                    <option value="expense">Egreso</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Valor ($)</label>
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={editReceiptForm.amount || ''}
+                                    onChange={(e) => {
+                                        const raw = e.target.value.replace(/\D/g, '');
+                                        setEditReceiptForm({ ...editReceiptForm, amount: raw ? Number(raw).toLocaleString('es-CO') : '' });
+                                    }}
+                                    placeholder="0"
+                                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Fecha + Método de pago */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Fecha</label>
+                                <input
+                                    type="date"
+                                    value={editReceiptForm.payment_date || ''}
+                                    onChange={(e) => setEditReceiptForm({ ...editReceiptForm, payment_date: e.target.value })}
+                                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                />
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Sale o entra por</label>
+                                <select
+                                    value={editReceiptForm.payment_method || ''}
+                                    onChange={(e) => setEditReceiptForm({ ...editReceiptForm, payment_method: e.target.value })}
+                                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                >
+                                    <option value="">Sin definir</option>
+                                    {paymentMethodOptions.map(([val, label]) => (
+                                        <option key={val} value={val}>{label}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Banco */}
+                        <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Banco / cuenta</label>
+                            <select
+                                value={editReceiptForm.bank || ''}
+                                onChange={(e) => setEditReceiptForm({ ...editReceiptForm, bank: e.target.value })}
+                                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                            >
+                                <option value="">Sin banco</option>
+                                {bankOptions.map((b) => (
+                                    <option key={b} value={b}>{b}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Cuenta contable */}
+                        <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Cuenta contable</label>
+                            <select
+                                value={editReceiptForm.category || 'otros'}
+                                onChange={(e) => setEditReceiptForm({ ...editReceiptForm, category: e.target.value })}
+                                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                            >
+                                {receiptCategoryOptions.map(([val, label]) => (
+                                    <option key={val} value={val}>{label}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Nota contable */}
+                        <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nota contable</label>
+                            <textarea
+                                rows={3}
+                                value={editReceiptForm.notes || ''}
+                                onChange={(e) => setEditReceiptForm({ ...editReceiptForm, notes: e.target.value })}
+                                placeholder="Detalle del pago, referencia, observaciones..."
+                                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 resize-none"
+                            />
+                        </div>
+
+                        {/* Adjuntar documento */}
+                        <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Adjuntar soporte / comprobante</label>
+                            {editingReceipt.file_path && (
+                                <div className="mb-2 flex items-center gap-2 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                    </svg>
+                                    <a
+                                        href={`/api${editingReceipt.file_path}?token=${localStorage.getItem('token')}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs text-blue-600 hover:underline truncate"
+                                    >
+                                        {editingReceipt.file_name || 'Ver archivo actual'}
+                                    </a>
+                                    <span className="ml-auto text-xs text-slate-400">actual</span>
+                                </div>
+                            )}
+                            <label className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-slate-300 px-4 py-3 hover:border-blue-400 hover:bg-blue-50 transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                </svg>
+                                <span className="text-sm text-slate-600">
+                                    {editReceiptFile ? editReceiptFile.name : 'Seleccionar archivo (PDF, imagen…)'}
+                                </span>
+                                <input
+                                    type="file"
+                                    accept="image/*,application/pdf"
+                                    className="hidden"
+                                    onChange={(e) => setEditReceiptFile(e.target.files?.[0] || null)}
+                                />
+                            </label>
+                        </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="flex items-center justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+                        <button
+                            type="button"
+                            onClick={() => setEditingReceipt(null)}
+                            className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 transition"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSaveEditReceipt}
+                            disabled={savingEditReceipt}
+                            className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60 transition flex items-center gap-2"
+                        >
+                            {savingEditReceipt && (
+                                <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                </svg>
+                            )}
+                            Guardar cambios
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
     );
 };
 
