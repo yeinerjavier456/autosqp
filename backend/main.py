@@ -6196,6 +6196,33 @@ def update_sale(
     db.refresh(sale)
     return sale
 
+
+@app.delete("/sales/{sale_id}")
+def delete_sale(
+    sale_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if not is_company_admin_user(current_user):
+        raise HTTPException(status_code=403, detail="Solo un administrador puede eliminar ventas")
+
+    sale = db.query(models.Sale).options(
+        joinedload(models.Sale.vehicle)
+    ).filter(models.Sale.id == sale_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+
+    if current_user.company_id and sale.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    vehicle = sale.vehicle
+    if vehicle and vehicle.status in {"reserved", "sold"}:
+        vehicle.status = "available"
+
+    db.delete(sale)
+    db.commit()
+    return {"message": "Venta eliminada correctamente"}
+
 TAX_MONTH_LABELS = {
     1: "ENE", 2: "FEB", 3: "MARZO", 4: "ABRIL", 5: "MAYO", 6: "JUNIO",
     7: "JULIO", 8: "AGOSTO", 9: "SEPT", 10: "OCT", 11: "NOV", 12: "DIC",
@@ -7179,6 +7206,16 @@ def _normalize_receipt_payment_method(payment_method: Optional[str]) -> Optional
     return payment_method_value
 
 
+def _generate_accounting_receipt_number(db: Session, company_id: Optional[int]) -> str:
+    query = db.query(func.count(models.PaymentReceipt.id)).filter(
+        models.PaymentReceipt.sale_id.is_(None)
+    )
+    if company_id:
+        query = query.filter(models.PaymentReceipt.company_id == company_id)
+    count = query.scalar() or 0
+    return f"CONT-{count + 1:05d}"
+
+
 @app.put("/finance/receipts/{receipt_id}", response_model=schemas.PaymentReceipt)
 def update_payment_receipt(
     receipt_id: int,
@@ -7275,6 +7312,10 @@ async def create_payment_receipt(
     elif not concept_value:
         raise HTTPException(status_code=400, detail="Debes indicar una venta o un concepto contable")
 
+    receipt_number_value = (receipt_number or "").strip() or None
+    if not sale and not receipt_number_value:
+        receipt_number_value = _generate_accounting_receipt_number(db, company_id)
+
     parsed_payment_date = datetime.datetime.utcnow()
     if payment_date:
         payment_date = payment_date.strip()
@@ -7307,7 +7348,7 @@ async def create_payment_receipt(
         user_id=current_user.id,
         concept=concept_value,
         movement_type=movement_type_value,
-        receipt_number=(receipt_number or "").strip() or None,
+        receipt_number=receipt_number_value,
         payment_date=parsed_payment_date,
         amount=amount,
         category=(category or "sale_payment").strip() or "sale_payment",

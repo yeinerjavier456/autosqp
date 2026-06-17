@@ -288,7 +288,12 @@ const SalesDashboard = () => {
 
         receiptItems.forEach((receipt) => {
             const saleId = receipt.sale?.id || receipt.sale_id;
-            const key = saleId ? `sale-${saleId}` : `receipt-${receipt.id}`;
+            const receiptNumber = (receipt.receipt_number || '').trim();
+            const key = saleId
+                ? `sale-${saleId}`
+                : receiptNumber
+                    ? `support-${receiptNumber}`
+                    : `receipt-${receipt.id}`;
             const existing = groupsByKey.get(key);
 
             if (existing) {
@@ -299,6 +304,7 @@ const SalesDashboard = () => {
             groupsByKey.set(key, {
                 key,
                 sale: receipt.sale || null,
+                receiptNumber: saleId ? null : receiptNumber || null,
                 receipts: [receipt]
             });
         });
@@ -321,7 +327,28 @@ const SalesDashboard = () => {
                 latestReceipt,
                 incomeTotal,
                 expenseTotal,
-                balanceTotal: incomeTotal - expenseTotal
+                balanceTotal: incomeTotal - expenseTotal,
+                isSaleGroup: Boolean(group.sale?.id),
+                isAccountingSupportGroup: !group.sale?.id && Boolean(group.receiptNumber)
+            };
+        });
+    };
+
+    const appendReceiptToSelectedGroup = (newReceipt) => {
+        setSelectedReceiptGroup((current) => {
+            if (!current) return current;
+
+            const currentSaleId = current.sale?.id || null;
+            const newSaleId = newReceipt.sale?.id || newReceipt.sale_id || null;
+            const currentReceiptNumber = current.receiptNumber || null;
+            const newReceiptNumber = (newReceipt.receipt_number || '').trim() || null;
+
+            if (currentSaleId && currentSaleId !== newSaleId) return current;
+            if (!currentSaleId && currentReceiptNumber && currentReceiptNumber !== newReceiptNumber) return current;
+
+            return {
+                ...current,
+                receipts: [...current.receipts, newReceipt]
             };
         });
     };
@@ -810,12 +837,15 @@ const SalesDashboard = () => {
         }
     };
 
-    const handleCreateReceiptForSale = async (sale) => {
-        if (!sale?.id) return;
+    const handleCreateReceiptForGroup = async (group) => {
+        if (!group?.sale?.id && !group?.receiptNumber) return;
         const defaultDate = new Date().toISOString().slice(0, 10);
+        const sale = group?.sale || null;
+        const supportLabel = group?.receiptNumber || 'soporte';
+        const isSaleGroup = Boolean(sale?.id);
 
         const { value } = await Swal.fire({
-            title: 'Agregar ítem a la venta',
+            title: isSaleGroup ? 'Agregar ítem a la venta' : `Agregar ítem al soporte ${supportLabel}`,
             width: 560,
             html: `
                 <style>
@@ -970,7 +1000,12 @@ const SalesDashboard = () => {
         try {
             const token = localStorage.getItem('token');
             const formData = new FormData();
-            formData.append('sale_id', String(sale.id));
+            if (sale?.id) {
+                formData.append('sale_id', String(sale.id));
+            }
+            if (!sale?.id && group?.receiptNumber) {
+                formData.append('receipt_number', group.receiptNumber);
+            }
             formData.append('concept', value.concept);
             formData.append('movement_type', value.movement_type);
             formData.append('amount', String(value.amount));
@@ -986,13 +1021,10 @@ const SalesDashboard = () => {
                 }
             });
             await fetchData();
-            setSelectedReceiptGroup((current) => current ? {
-                ...current,
-                receipts: [...current.receipts, response.data]
-            } : current);
-            Swal.fire('Exito', 'Ítem agregado a la venta.', 'success');
+            appendReceiptToSelectedGroup(response.data);
+            Swal.fire('Exito', isSaleGroup ? 'Ítem agregado a la venta.' : 'Ítem agregado al soporte contable.', 'success');
         } catch (error) {
-            console.error('Error creating sale receipt item', error);
+            console.error('Error creating grouped receipt item', error);
             Swal.fire('Error', error.response?.data?.detail || 'No se pudo agregar el ítem.', 'error');
         }
     };
@@ -1172,6 +1204,38 @@ const SalesDashboard = () => {
         } catch (error) {
             console.error('Error updating receipt', error);
             Swal.fire('Error', error.response?.data?.detail || 'No se pudo actualizar el registro contable.', 'error');
+        }
+    };
+
+    const handleDeleteSale = async (sale) => {
+        if (!sale?.id) return;
+
+        const result = await Swal.fire({
+            title: 'Eliminar registro de venta',
+            text: 'La venta, sus recibos y adjuntos asociados serán eliminados. El vehículo quedará disponible nuevamente.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Eliminar',
+            cancelButtonText: 'Cancelar',
+            customClass: {
+                confirmButton: 'bg-red-600 text-white px-4 py-2 rounded-lg ml-2',
+                cancelButton: 'bg-slate-600 text-white px-4 py-2 rounded-lg'
+            },
+            buttonsStyling: false
+        });
+
+        if (!result.isConfirmed) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            await axios.delete(`/api/sales/${sale.id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            await fetchData();
+            Swal.fire('Exito', 'La venta fue eliminada correctamente.', 'success');
+        } catch (error) {
+            console.error('Error deleting sale', error);
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo eliminar la venta.', 'error');
         }
     };
 
@@ -1364,6 +1428,7 @@ const SalesDashboard = () => {
                                         <th className="border-b p-4">Comision ($)</th>
                                         <th className="border-b p-4">Ingreso Neto</th>
                                         <th className="border-b p-4 text-right">Editar</th>
+                                        <th className="border-b p-4 text-right">Eliminar</th>
                                         {filterStatus === 'pending' && <th className="border-b p-4 text-right">Accion</th>}
                                     </tr>
                                 </thead>
@@ -1416,6 +1481,14 @@ const SalesDashboard = () => {
                                                     Editar valor
                                                 </button>
                                             </td>
+                                            <td className="p-4 text-right">
+                                                <button
+                                                    onClick={() => handleDeleteSale(sale)}
+                                                    className="rounded bg-red-100 px-3 py-1.5 text-sm font-medium text-red-700 transition hover:bg-red-200"
+                                                >
+                                                    Eliminar
+                                                </button>
+                                            </td>
                                             {filterStatus === 'pending' && (
                                                 <td className="p-4 text-right">
                                                     <div className="flex justify-end gap-2">
@@ -1438,7 +1511,7 @@ const SalesDashboard = () => {
                                     ))}
                                     {sales.length === 0 && (
                                         <tr>
-                                            <td colSpan={filterStatus === 'pending' ? 9 : 8} className="p-8 text-center italic text-gray-400">
+                                            <td colSpan={filterStatus === 'pending' ? 10 : 9} className="p-8 text-center italic text-gray-400">
                                                 No hay ventas en esta seccion.
                                             </td>
                                         </tr>
@@ -1712,7 +1785,7 @@ const SalesDashboard = () => {
                                     <tbody className="divide-y divide-gray-100">
                                         {receiptGroups.map((group) => {
                                             const receipt = group.latestReceipt;
-                                            const isGroupedSale = Boolean(group.sale?.id) && group.receipts.length > 1;
+                                            const isEditableGroup = Boolean(group.sale?.id) || Boolean(group.receiptNumber);
                                             return (
                                             <tr key={group.key} className="hover:bg-gray-50">
                                                 <td className="p-4 text-sm text-gray-600">
@@ -1722,14 +1795,14 @@ const SalesDashboard = () => {
                                                     <div className="font-medium text-gray-800">
                                                         {group.sale?.id
                                                             ? `#${group.sale.id} - ${group.sale?.vehicle?.make || ''} ${group.sale?.vehicle?.model || ''}`.trim()
-                                                            : (receipt.concept || 'Movimiento contable')}
+                                                            : `Soporte ${group.receiptNumber || receipt.receipt_number || receipt.id}`}
                                                     </div>
                                                     <div className="text-xs text-gray-500">
                                                         {group.sale?.id
                                                             ? `${group.sale?.vehicle?.plate || ''} · ${group.sale?.seller?.full_name || group.sale?.seller?.email || ''}`
-                                                            : 'Sin venta asociada'}
+                                                            : 'Soporte de contabilidad'}
                                                     </div>
-                                                    {isGroupedSale && (
+                                                    {isEditableGroup && (
                                                         <div className="mt-1 text-xs font-semibold text-blue-600">
                                                             {group.receipts.length} movimientos relacionados
                                                         </div>
@@ -1737,10 +1810,10 @@ const SalesDashboard = () => {
                                                 </td>
                                                 <td className="p-4 text-sm text-gray-600">
                                                     <div className="font-medium">
-                                                        {isGroupedSale ? 'Registro consolidado' : (receipt.receipt_number || 'Sin consecutivo')}
+                                                        {isEditableGroup ? (group.receiptNumber || 'Registro consolidado') : (receipt.receipt_number || 'Sin consecutivo')}
                                                     </div>
                                                     <div className="line-clamp-2 text-xs text-gray-500">
-                                                        {isGroupedSale
+                                                        {isEditableGroup
                                                             ? group.receipts.map((item) => item.concept || item.notes || getCategoryLabel(item.category)).filter(Boolean).slice(0, 3).join(' · ')
                                                             : (receipt.notes || 'Sin nota')}
                                                     </div>
@@ -1751,10 +1824,10 @@ const SalesDashboard = () => {
                                                     </span>
                                                 </td>
                                                 <td className="p-4 text-sm font-medium text-gray-600">
-                                                    {isGroupedSale ? 'Venta consolidada' : getCategoryLabel(receipt.category)}
+                                                    {isEditableGroup ? (group.sale?.id ? 'Venta consolidada' : 'Soporte consolidado') : getCategoryLabel(receipt.category)}
                                                 </td>
                                                 <td className="p-4 text-sm">
-                                                    {isGroupedSale ? (
+                                                    {isEditableGroup ? (
                                                         <div className="space-y-1">
                                                             <div className="font-semibold text-emerald-600">Ingresos: ${group.incomeTotal.toLocaleString()}</div>
                                                             <div className="font-semibold text-rose-600">Egresos: ${group.expenseTotal.toLocaleString()}</div>
@@ -1767,7 +1840,7 @@ const SalesDashboard = () => {
                                                     )}
                                                 </td>
                                                 <td className="p-4 text-sm">
-                                                    {isGroupedSale ? (
+                                                    {isEditableGroup ? (
                                                         <span className="text-gray-500">
                                                             {group.receipts.filter((item) => item.file_path).length} adjuntos
                                                         </span>
@@ -1787,7 +1860,7 @@ const SalesDashboard = () => {
                                                 <td className="p-4">
                                                     <div className="flex justify-end gap-2">
                                                         <button
-                                                            onClick={() => isGroupedSale ? setSelectedReceiptGroup(group) : handleEditReceipt(receipt)}
+                                                            onClick={() => isEditableGroup ? setSelectedReceiptGroup(group) : handleEditReceipt(receipt)}
                                                             className="inline-flex items-center rounded-lg bg-blue-50 px-3 py-1.5 font-medium text-blue-700 hover:bg-blue-100"
                                                         >
                                                             Editar
@@ -1802,7 +1875,7 @@ const SalesDashboard = () => {
                                                                 Factura
                                                             </a>
                                                         )}
-                                                        {!isGroupedSale && (
+                                                        {!isEditableGroup && (
                                                             <>
                                                                 <a
                                                                     href={`/api/finance/receipts/${receipt.id}/pdf?token=${localStorage.getItem('token')}`}
@@ -1935,36 +2008,49 @@ const SalesDashboard = () => {
             {selectedReceiptGroup && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
                     <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+                        {(() => {
+                            const isSaleGroup = Boolean(selectedReceiptGroup.sale?.id);
+                            const groupTitle = isSaleGroup
+                                ? `#${selectedReceiptGroup.sale?.id} - ${selectedReceiptGroup.sale?.vehicle?.make} ${selectedReceiptGroup.sale?.vehicle?.model} · ${selectedReceiptGroup.sale?.vehicle?.plate || 'Sin placa'}`
+                                : `Soporte ${selectedReceiptGroup.receiptNumber || selectedReceiptGroup.latestReceipt?.receipt_number || ''}`;
+                            const modalTitle = isSaleGroup ? 'Editar movimientos de la venta' : 'Editar soporte contable';
+
+                            return (
+                        <>
                         <div className="flex items-start justify-between border-b border-slate-200 px-6 py-4">
                             <div>
-                                <h3 className="text-xl font-bold text-slate-900">Editar movimientos de la venta</h3>
+                                <h3 className="text-xl font-bold text-slate-900">{modalTitle}</h3>
                                 <p className="mt-1 text-sm text-slate-500">
-                                    #{selectedReceiptGroup.sale?.id} - {selectedReceiptGroup.sale?.vehicle?.make} {selectedReceiptGroup.sale?.vehicle?.model} · {selectedReceiptGroup.sale?.vehicle?.plate || 'Sin placa'}
+                                    {groupTitle}
                                 </p>
                             </div>
                             <div className="flex items-center gap-2">
-                                <a
-                                    href={`/api/finance/sales/${selectedReceiptGroup.sale?.id}/invoice.pdf?token=${localStorage.getItem('token')}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
-                                >
-                                    Descargar factura
-                                </a>
+                                {isSaleGroup && (
+                                    <a
+                                        href={`/api/finance/sales/${selectedReceiptGroup.sale?.id}/invoice.pdf?token=${localStorage.getItem('token')}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
+                                    >
+                                        Descargar factura
+                                    </a>
+                                )}
                                 <button
                                     type="button"
-                                    onClick={() => handleCreateReceiptForSale(selectedReceiptGroup.sale)}
+                                    onClick={() => handleCreateReceiptForGroup(selectedReceiptGroup)}
                                     className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
                                 >
                                     Agregar ítem
                                 </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleUploadSaleAttachment(selectedReceiptGroup.sale)}
-                                    className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100"
-                                >
-                                    Adjuntar comprobante
-                                </button>
+                                {isSaleGroup && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleUploadSaleAttachment(selectedReceiptGroup.sale)}
+                                        className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100"
+                                    >
+                                        Adjuntar comprobante
+                                    </button>
+                                )}
                                 <button
                                     type="button"
                                     onClick={() => setSelectedReceiptGroup(null)}
@@ -1989,6 +2075,7 @@ const SalesDashboard = () => {
                                     <p className={`mt-1 text-xl font-bold ${selectedReceiptGroupTotals.balanceTotal >= 0 ? 'text-blue-700' : 'text-red-700'}`}>${selectedReceiptGroupTotals.balanceTotal.toLocaleString()}</p>
                                 </div>
                             </div>
+                            {isSaleGroup && (
                             <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                     <div>
@@ -2033,6 +2120,7 @@ const SalesDashboard = () => {
                                     )}
                                 </div>
                             </div>
+                            )}
                             <table className="w-full border-collapse text-left">
                                 <thead>
                                     <tr className="bg-slate-50 text-xs uppercase tracking-wider text-slate-600">
@@ -2118,6 +2206,9 @@ const SalesDashboard = () => {
                                 </tbody>
                             </table>
                         </div>
+                        </>
+                            );
+                        })()}
                     </div>
                 </div>
             )}
