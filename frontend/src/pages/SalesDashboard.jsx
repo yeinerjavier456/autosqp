@@ -1155,6 +1155,7 @@ const SalesDashboard = () => {
         setEditReceiptForm({
             sale_id: receipt.sale?.id ? String(receipt.sale.id) : '',
             display_name: receipt.display_name || '',
+            receipt_number: receipt.receipt_number || '',
             concept: isKnownConcept ? receipt.concept : 'Otros',
             concept_detail: isKnownConcept ? '' : (receipt.concept || ''),
             movement_type: receipt.movement_type || 'income',
@@ -1184,6 +1185,7 @@ const SalesDashboard = () => {
             const payload = {
                 sale_id: editReceiptForm.sale_id ? Number(editReceiptForm.sale_id) : null,
                 display_name: editReceiptForm.display_name.trim() || null,
+                receipt_number: (editReceiptForm.receipt_number || '').trim() || null,
                 concept,
                 movement_type: editReceiptForm.movement_type,
                 amount,
@@ -2359,6 +2361,18 @@ const SalesDashboard = () => {
                                 value={editReceiptForm.display_name || ''}
                                 onChange={(e) => setEditReceiptForm({ ...editReceiptForm, display_name: e.target.value })}
                                 placeholder="Ej: Chevrolet Spark FLX485"
+                                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                            />
+                        </div>
+
+                        {/* Nro. de Soporte / Recibo */}
+                        <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Número de Soporte / Recibo</label>
+                            <input
+                                type="text"
+                                value={editReceiptForm.receipt_number || ''}
+                                onChange={(e) => setEditReceiptForm({ ...editReceiptForm, receipt_number: e.target.value })}
+                                placeholder="Ej: REC-1025"
                                 className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                             />
                         </div>
