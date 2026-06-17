@@ -7276,6 +7276,47 @@ def update_payment_receipt(
     ).filter(models.PaymentReceipt.id == receipt.id).first()
 
 
+@app.post("/finance/receipts/{receipt_id}/upload", response_model=schemas.PaymentReceipt)
+async def upload_payment_receipt_file(
+    receipt_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    receipt = _get_receipt_with_access(db, receipt_id, current_user)
+
+    stored_file_name = None
+    stored_file_path = None
+    stored_file_type = None
+    if file and file.filename:
+        os.makedirs("static/accounting", exist_ok=True)
+        safe_name = os.path.basename(file.filename)
+        extension = safe_name.split(".")[-1] if "." in safe_name else "bin"
+        unique_filename = f"{uuid.uuid4()}.{extension}"
+        file_path = f"static/accounting/{unique_filename}"
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        stored_file_name = safe_name
+        stored_file_path = f"/{file_path.replace('\\', '/')}"
+        stored_file_type = file.content_type
+
+        receipt.file_name = stored_file_name
+        receipt.file_path = stored_file_path
+        receipt.file_type = stored_file_type
+
+        db.commit()
+        db.refresh(receipt)
+
+    return db.query(models.PaymentReceipt).options(
+        joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.vehicle),
+        joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.seller),
+        joinedload(models.PaymentReceipt.user)
+    ).filter(models.PaymentReceipt.id == receipt.id).first()
+
+
 @app.post("/finance/receipts", response_model=schemas.PaymentReceipt)
 async def create_payment_receipt(
     request: Request,
