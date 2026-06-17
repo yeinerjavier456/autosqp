@@ -7,6 +7,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { formatBogotaDateTime } from '../utils/dateTime';
 
 const API_BASE_URL = `${window.location.origin}/crm/api`;
+const BOARD_PAGE_SIZE = 20;
 
 const extractCreditVehicleTrace = (comment) => {
     const text = (comment || '').trim();
@@ -715,7 +716,22 @@ const buildPurchaseOptionShareText = (lead, option) => {
 };
 
 // Kanban Column
-const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragStart, onViewHistory, highlightedLeadId, boardMode = 'general', currentUserId = null, currentUserRole = '' }) => {
+const KanbanColumn = ({
+    title,
+    status,
+    leads,
+    color,
+    onDragOver,
+    onDrop,
+    onDragStart,
+    onViewHistory,
+    highlightedLeadId,
+    boardMode = 'general',
+    currentUserId = null,
+    currentUserRole = '',
+    hasMore = false,
+    onLoadMore = null,
+}) => {
     return (
         <div
             className={`flex-1 min-w-[290px] rounded-xl p-3 border flex flex-col h-full backdrop-blur-sm ${boardMode === 'ally' ? 'bg-amber-50/70 border-amber-200' : 'bg-slate-50/80 border-slate-200'}`}
@@ -745,6 +761,15 @@ const KanbanColumn = ({ title, status, leads, color, onDragOver, onDrop, onDragS
                         canDrag={!isSupervisorOnlyCreditViewer(lead, currentUserId, currentUserRole)}
                     />
                 ))}
+                {hasMore && typeof onLoadMore === 'function' && (
+                    <button
+                        type="button"
+                        onClick={() => onLoadMore(status)}
+                        className="w-full rounded-xl border border-dashed border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-blue-300 hover:text-blue-700"
+                    >
+                        Más
+                    </button>
+                )}
             </div>
         </div>
     );
@@ -757,7 +782,6 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     const [selectedSupervisors, setSelectedSupervisors] = useState(getLeadSupervisorIds(lead));
     const { createAppointment } = useNotifications();
     const [newComment, setNewComment] = useState('');
-    const [newStatus, setNewStatus] = useState(normalizeLeadStatus(lead?.status || 'new'));
     const [loading, setLoading] = useState(false);
     const [savingSupervisors, setSavingSupervisors] = useState(false);
     const [isSupervisionSelectorOpen, setIsSupervisionSelectorOpen] = useState(false);
@@ -828,7 +852,6 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         setEditableLeadName(lead?.name || '');
         setEditableLeadEmail(lead?.email || '');
         setEditableLeadPhone(lead?.phone || '');
-        setNewStatus(normalizeLeadStatus(lead?.status || 'new'));
         setHasVehicle(typeof lead?.process_detail?.has_vehicle === 'boolean' ? lead.process_detail.has_vehicle : null);
         setSelectedVehicleId(lead?.process_detail?.vehicle_id || '');
         setDesiredVehicle(lead?.process_detail?.desired_vehicle || '');
@@ -1782,14 +1805,16 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             return;
         }
 
+        const effectiveStatus = normalizeLeadStatus(lead?.status || 'new');
+
         // Si no es status 'interested', comprobamos el comment
         const adminCanSaveWithoutNote = currentUserRole === 'admin' || currentUserRole === 'super_admin';
-        if (!adminCanSaveWithoutNote && !newComment.trim() && newStatus !== 'in_process' && newStatus === normalizeLeadStatus(lead?.status)) {
+        if (!adminCanSaveWithoutNote && !newComment.trim() && effectiveStatus !== 'in_process') {
             Swal.fire('Error', 'Debes escribir una nota o comentario', 'warning');
             return;
         }
 
-        if (newStatus === 'in_process') {
+        if (effectiveStatus === 'in_process') {
             if (hasVehicle === null) {
                 Swal.fire('Atención', 'Debes indicar si el vehículo está disponible en inventario o si toca conseguirlo.', 'warning');
                 return;
@@ -1801,7 +1826,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             }
         }
 
-        if (newStatus === 'reserved') {
+        if (effectiveStatus === 'reserved') {
             const parsedReservationAmount = Number(String(reservationAmount || '').replace(/[^\d]/g, ''));
             const parsedCreditUsedAmount = Number(String(reservationCreditUsedAmount || '').replace(/[^\d]/g, ''));
             const normalizedPaymentMethod = String(reservationPaymentMethod || '').trim().toLowerCase();
@@ -1815,7 +1840,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             }
         }
 
-        if (newStatus === 'sold') {
+        if (effectiveStatus === 'sold') {
             if (!deliveryChecklistComplete) {
                 Swal.fire('Atención', 'Debes completar todo el checklist de entrega antes de pasar el lead a Vendido.', 'warning');
                 return;
@@ -1829,7 +1854,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         setLoading(true);
         try {
             let processDetail = null;
-            if (newStatus === 'in_process') {
+            if (effectiveStatus === 'in_process') {
                 const desiredVehicleFallback = desiredVehicle.trim() || lead?.process_detail?.desired_vehicle?.trim() || lead?.message?.trim() || 'Por definir';
                 const shouldMoveToPurchaseSearch = hasVehicle === true && !selectedVehicleId;
                 processDetail = {
@@ -1837,7 +1862,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                     vehicle_id: hasVehicle && selectedVehicleId ? parseInt(selectedVehicleId) : null,
                     desired_vehicle: (!hasVehicle || shouldMoveToPurchaseSearch) ? desiredVehicleFallback : null
                 };
-            } else if (newStatus === 'reserved') {
+            } else if (effectiveStatus === 'reserved') {
                 const parsedCreditUsedAmount = Number(String(reservationCreditUsedAmount || '').replace(/[^\d]/g, ''));
                 processDetail = {
                     has_vehicle: typeof lead?.process_detail?.has_vehicle === 'boolean' ? lead.process_detail.has_vehicle : false,
@@ -1847,10 +1872,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                     credit_used_amount: Number.isFinite(parsedCreditUsedAmount) && parsedCreditUsedAmount > 0 ? parsedCreditUsedAmount : null,
                     reservation_payment_method: String(reservationPaymentMethod || '').trim().toLowerCase(),
                 };
-            } else if (newStatus === 'sold') {
+            } else if (effectiveStatus === 'sold') {
                 processDetail = buildCurrentProcessDetailPayload();
             }
-            await onUpdate(lead.id, newStatus, newComment, processDetail, canManageSupervision ? selectedSupervisors : null);
+            await onUpdate(lead.id, effectiveStatus, newComment, processDetail, canManageSupervision ? selectedSupervisors : null);
             setNewComment('');
         } catch (error) {
             console.error("Update failed", error);
@@ -2250,26 +2275,11 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                         <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
                             <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                            Agregar Nota / Actualizar Estado
+                            Agregar Nota / Seguimiento
                         </h3>
                         <form onSubmit={handleSubmit} className="space-y-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <div className="sm:col-span-1">
-                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Estado</label>
-                                    <select
-                                        value={newStatus}
-                                        onChange={(e) => setNewStatus(e.target.value)}
-                                        disabled={!canModifyLead}
-                                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                                    >
-                                        {LEAD_STATUS_OPTIONS.map((statusOption) => (
-                                            <option key={statusOption.value} value={statusOption.value}>
-                                                {statusOption.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="sm:col-span-2">
+                            <div className="grid grid-cols-1 gap-3">
+                                <div>
                                     <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Nota / Comentario</label>
                                     <textarea
                                         value={newComment}
@@ -2283,7 +2293,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                             </div>
 
                             {/* Process Detail conditional UI */}
-                            {newStatus === 'in_process' && (
+                            {normalizeLeadStatus(lead?.status) === 'in_process' && (
                                 <div className="p-3 bg-orange-50 rounded-lg border border-orange-100 flex flex-col gap-3 animate-fade-in shadow-sm">
                                     <div>
                                         <p className="text-sm font-bold text-gray-700 mb-2">Disponibilidad del vehículo</p>
@@ -2448,7 +2458,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                 disabled={loading || !canModifyLead}
                                 className="w-full bg-blue-600 text-white text-sm font-bold py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {loading ? 'Guardando...' : 'Guardar Nota y Actualizar'}
+                                {loading ? 'Guardando...' : 'Guardar seguimiento'}
                             </button>
                         </form>
                     </div>
@@ -2526,7 +2536,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                 </div>
                             )}
 
-                            {newStatus === 'reserved' && (
+                            {normalizeLeadStatus(lead?.status) === 'reserved' && (
                                 <div className="p-3 bg-violet-50 rounded-lg border border-violet-100 flex flex-col gap-3 animate-fade-in shadow-sm">
                                     <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                                         <div>
@@ -3374,6 +3384,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const [globalStatusFilter, setGlobalStatusFilter] = useState('');
     const [showFiltersMenu, setShowFiltersMenu] = useState(false);
     const [showMyLeadsOnly, setShowMyLeadsOnly] = useState(false);
+    const [visibleLeadsByStatus, setVisibleLeadsByStatus] = useState({});
+    const [boardTotalsByStatus, setBoardTotalsByStatus] = useState({});
 
     // Modal State - Sales
     const [showSaleModal, setShowSaleModal] = useState(false);
@@ -3438,6 +3450,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     useEffect(() => {
         setLoading(true);
         setLeads([]);
+        setVisibleLeadsByStatus({});
+        setBoardTotalsByStatus({});
         setSelectedLeadForHistory(null);
         setShowHistoryModal(false);
         setHighlightedLeadId(null);
@@ -3463,10 +3477,14 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             assigned_to_id: '',
             supervisor_ids: []
         });
-        fetchLeads('');
+        fetchBoardLeads('');
         fetchAdvisors();
         fetchAvailableVehicles();
     }, [boardMode]);
+
+    useEffect(() => {
+        setVisibleLeadsByStatus({});
+    }, [boardMode, searchTerm, dateFilter, assignedFilter, userFilter, globalStatusFilter, showMyLeadsOnly]);
 
     useEffect(() => {
         if (!fetchNotifications) return;
@@ -3514,19 +3532,19 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
     useEffect(() => {
         const searchTimer = setTimeout(() => {
-            fetchLeads(searchTerm);
+            fetchBoardLeads(searchTerm);
         }, 250);
 
         return () => clearTimeout(searchTimer);
-    }, [searchTerm, boardMode]);
+    }, [searchTerm, boardMode, dateFilter, assignedFilter, userFilter, globalStatusFilter, showMyLeadsOnly, visibleLeadsByStatus]);
 
     useEffect(() => {
         const intervalId = setInterval(() => {
-            fetchLeads(searchTerm);
+            fetchBoardLeads(searchTerm);
         }, 15000);
 
         return () => clearInterval(intervalId);
-    }, [boardMode, searchTerm]);
+    }, [boardMode, searchTerm, dateFilter, assignedFilter, userFilter, globalStatusFilter, showMyLeadsOnly, visibleLeadsByStatus]);
 
     useEffect(() => {
         const leadIdFromQuery = parseInt(searchParams.get('leadId') || '', 10);
@@ -3577,11 +3595,10 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     .filter((id) => Number.isInteger(id))
                 : [];
 
-            const response = await axios.post(`${API_BASE_URL}/leads`, payload, {
+            await axios.post(`${API_BASE_URL}/leads`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-
-            setLeads(prev => [response.data, ...prev]);
+            await fetchBoardLeads(searchTerm);
             setShowAddLeadModal(false);
             setNewLeadForm({ name: '', email: '', phone: '', source: isAllyBoard ? 'referral' : 'web', message: '', status: 'new', assigned_to_id: '', supervisor_ids: [] });
 
@@ -3604,19 +3621,42 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         }
     };
 
-    const fetchLeads = async (term = '') => {
+    const fetchBoardLeads = async (term = '') => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get(`${API_BASE_URL}/leads`, {
+            const normalizedSearchTerm = term?.trim() || '';
+            const statusLimitsPayload = LEAD_STATUS_OPTIONS.reduce((acc, statusOption) => {
+                acc[statusOption.value] = visibleLeadsByStatus[normalizeLeadStatus(statusOption.value)] || BOARD_PAGE_SIZE;
+                return acc;
+            }, {});
+            const response = await axios.get(`${API_BASE_URL}/leads/board`, {
                 headers: { Authorization: `Bearer ${token}` },
                 params: {
                     board_scope: boardMode,
-                    limit: 5000,
-                    q: term?.trim() || undefined
+                    q: normalizedSearchTerm || undefined,
+                    exact_date: dateFilter || undefined,
+                    assigned_mode: assignedFilter || undefined,
+                    responsible_user_id: parseUserId(userFilter) || undefined,
+                    global_status: globalStatusFilter || undefined,
+                    only_my_leads: showMyLeadsOnly || undefined,
+                    load_all_matching: normalizedSearchTerm ? true : undefined,
+                    status_limits: normalizedSearchTerm ? undefined : JSON.stringify(statusLimitsPayload)
                 }
             });
-            const items = Array.isArray(response.data.items) ? response.data.items : [];
-            setLeads(items.map(normalizeLeadRecord));
+            const columns = Array.isArray(response.data.columns) ? response.data.columns : [];
+            const items = [];
+            const totals = {};
+
+            columns.forEach((column) => {
+                const normalizedStatus = normalizeLeadStatus(column?.status);
+                totals[normalizedStatus] = Number(column?.total || 0);
+                if (Array.isArray(column?.items)) {
+                    column.items.forEach((lead) => items.push(normalizeLeadRecord(lead)));
+                }
+            });
+
+            setBoardTotalsByStatus(totals);
+            setLeads(items);
         } catch (error) {
             console.error("Error fetching leads", error);
         } finally {
@@ -3928,7 +3968,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             );
 
             // Refresh leads to get updated history
-            fetchLeads();
+            fetchBoardLeads(searchTerm);
 
         } catch (error) {
             console.error("Error updating lead", error);
@@ -3938,7 +3978,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 text: 'No se pudo actualizar el estado: ' + (error.response?.data?.error || error.message),
                 confirmButtonColor: '#2563eb'
             });
-            fetchLeads(); // Revert
+            fetchBoardLeads(searchTerm); // Revert
         }
     };
 
@@ -3977,7 +4017,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             }));
 
             // Re-fetch to get the new history record
-            fetchLeads(); // Or fetch specific lead if optimized
+            fetchBoardLeads(searchTerm); // Or fetch specific lead if optimized
 
             Swal.fire({
                 icon: 'success',
@@ -4072,7 +4112,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             )));
             setSelectedLeadForHistory(prev => (prev && prev.id === leadId ? normalizedLead : prev));
 
-            await fetchLeads();
+            await fetchBoardLeads(searchTerm);
             Swal.fire({
                 icon: 'success',
                 title: 'Supervision actualizada',
@@ -4150,7 +4190,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     : prev
             ));
 
-            fetchLeads(); // Refresh board to show final backend state
+            fetchBoardLeads(searchTerm); // Refresh board to show final backend state
         } catch (error) {
             console.error("Error assigning lead", error);
             Swal.fire('Error', 'No se pudo asignar el lead', 'error');
@@ -4168,7 +4208,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             setLeads((prev) => prev.filter((lead) => lead.id !== leadId));
             setSelectedLeadForHistory((prev) => (prev && prev.id === leadId ? null : prev));
             setShowHistoryModal(false);
-            fetchLeads();
+            fetchBoardLeads(searchTerm);
 
             Swal.fire({
                 icon: 'success',
@@ -4257,7 +4297,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             setSaleDeliveryFiles([]);
 
             setLeads(prev => prev.map(l => l.id === selectedLeadForSale.id ? { ...l, status: 'sold' } : l));
-            fetchLeads();
+            fetchBoardLeads(searchTerm);
 
             Swal.fire({
                 icon: 'success',
@@ -4304,31 +4344,26 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     ].filter(Boolean).join(' | ');
 
     const filterByStatus = (status) => {
-        return leads.filter(lead => {
-            const supervisorIds = getLeadSupervisorIds(lead);
-            const assignedUserId = getLeadAssignedUserId(lead);
-            const matchesStatus = normalizeLeadStatus(lead.status) === normalizeLeadStatus(status);
-            const matchesSearch =
-                lead.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                lead.phone?.includes(searchTerm);
+        return leads.filter((lead) => normalizeLeadStatus(lead.status) === normalizeLeadStatus(status));
+    };
 
-            const matchesDate = !dateFilter || lead.created_at?.startsWith(dateFilter);
+    const getVisibleLeadsForStatus = (status) => {
+        return filterByStatus(status);
+    };
 
-            // "Mis Leads" Filter (Priority)
-            const matchesMyLeads = !showMyLeadsOnly || assignedUserId === currentUserId || supervisorIds.includes(currentUserId);
+    const hasMoreLeadsForStatus = (status) => {
+        const filteredLeads = filterByStatus(status);
+        const normalizedStatus = normalizeLeadStatus(status);
+        const totalForStatus = Number(boardTotalsByStatus[normalizedStatus] || 0);
+        return totalForStatus > filteredLeads.length;
+    };
 
-            // Specific User filter
-            const parsedUserFilter = parseUserId(userFilter);
-            const matchesUser = !parsedUserFilter || assignedUserId === parsedUserFilter || supervisorIds.includes(parsedUserFilter);
-
-            const hasAnyResponsible = !!lead.assigned_to || supervisorIds.length > 0;
-            const matchesAssigned = !assignedFilter ||
-                (assignedFilter === 'assigned' ? hasAnyResponsible : !hasAnyResponsible);
-
-            const matchesGlobalStatus = !globalStatusFilter || normalizeLeadStatus(lead.status) === normalizeLeadStatus(globalStatusFilter);
-
-            return matchesStatus && matchesSearch && matchesDate && matchesUser && matchesAssigned && matchesGlobalStatus && matchesMyLeads;
-        });
+    const handleLoadMoreByStatus = (status) => {
+        const normalizedStatus = normalizeLeadStatus(status);
+        setVisibleLeadsByStatus((prev) => ({
+            ...prev,
+            [normalizedStatus]: (prev[normalizedStatus] || BOARD_PAGE_SIZE) + BOARD_PAGE_SIZE,
+        }));
     };
 
     if (loading) return (
@@ -4492,7 +4527,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                         title={statusOption.label}
                         status={statusOption.value}
                         color={statusOption.columnColor}
-                        leads={filterByStatus(statusOption.value)}
+                        leads={getVisibleLeadsForStatus(statusOption.value)}
                         onDragStart={handleDragStart}
                         onDragOver={handleDragOver}
                         onDrop={handleDrop}
@@ -4501,6 +4536,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                         boardMode={boardMode}
                         currentUserId={currentUserId}
                         currentUserRole={currentRoleName}
+                        hasMore={hasMoreLeadsForStatus(statusOption.value)}
+                        onLoadMore={handleLoadMoreByStatus}
                     />
                 ))}
             </div>
@@ -4846,7 +4883,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     onDeleteLead={handleDeleteLead}
                     advisors={advisors}
                     onAssign={handleAssignLead}
-                    onRefreshLeadBoard={fetchLeads}
+                    onRefreshLeadBoard={() => fetchBoardLeads(searchTerm)}
                     availableVehicles={availableVehicles}
                     currentUserRole={currentRoleName}
                     boardMode={boardMode}

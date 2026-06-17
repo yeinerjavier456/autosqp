@@ -509,6 +509,17 @@ class LeadList(BaseModel):
     items: List[Lead]
     total: int
 
+
+class LeadBoardColumn(BaseModel):
+    status: str
+    label: str
+    total: int
+    items: List[Lead]
+
+
+class LeadBoardResponse(BaseModel):
+    columns: List[LeadBoardColumn]
+
 # --- VEHICLES ---
 
 class VehicleBase(BaseModel):

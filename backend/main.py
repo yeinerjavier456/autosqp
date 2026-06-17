@@ -66,6 +66,184 @@ LEAD_STATUS_LABELS = {
 }
 
 
+def build_lead_summary_query(db: Session):
+    return db.query(models.Lead).options(
+        joinedload(models.Lead.assigned_to),
+        joinedload(models.Lead.deleted_by),
+        selectinload(models.Lead.supervisors),
+        selectinload(models.Lead.process_detail),
+        selectinload(models.Lead.purchase_options),
+        noload(models.Lead.history),
+        noload(models.Lead.conversation),
+        noload(models.Lead.notes),
+        noload(models.Lead.files),
+    )
+
+
+def apply_lead_access_filters(
+    query,
+    db: Session,
+    current_user: models.User,
+    *,
+    source: Optional[str] = None,
+    status: Optional[str] = None,
+    board_scope: Optional[str] = None,
+    q: Optional[str] = None,
+    exact_date: Optional[str] = None,
+    assigned_mode: Optional[str] = None,
+    responsible_user_id: Optional[int] = None,
+    only_my_leads: bool = False,
+):
+    role_name = get_user_role_name(current_user)
+    can_view_all_company_leads = role_name in {"admin", "super_admin"}
+    active_assignee_filter = and_(
+        models.User.role_id.isnot(None),
+        or_(models.User.is_active == True, models.User.is_active.is_(None))
+    )
+    invalid_assignment_filter = or_(
+        models.Lead.assigned_to_id.is_(None),
+        ~models.Lead.assigned_to.has(active_assignee_filter)
+    )
+
+    query = query.filter(models.Lead.deleted_at.is_(None))
+
+    if current_user.company_id:
+        query = query.filter(models.Lead.company_id == current_user.company_id)
+
+    aliado_user_ids = get_company_ally_user_ids(db, current_user.company_id)
+
+    if board_scope == "ally":
+        if not can_view_all_company_leads:
+            query = query.filter(
+                or_(
+                    models.Lead.assigned_to_id == current_user.id,
+                    models.Lead.supervisors.any(models.User.id == current_user.id)
+                )
+            )
+        elif aliado_user_ids:
+            query = query.filter(
+                or_(
+                    models.Lead.assigned_to_id.in_(aliado_user_ids),
+                    models.Lead.supervisors.any(models.User.id.in_(aliado_user_ids))
+                )
+            )
+        else:
+            query = query.filter(false())
+    elif aliado_user_ids and not can_view_all_company_leads:
+        query = query.filter(
+            or_(
+                models.Lead.assigned_to_id.is_(None),
+                ~models.Lead.assigned_to_id.in_(aliado_user_ids)
+            )
+        )
+
+    if not can_view_all_company_leads:
+        query = query.filter(
+            or_(
+                models.Lead.assigned_to_id == current_user.id,
+                models.Lead.supervisors.any(models.User.id == current_user.id),
+                and_(
+                    invalid_assignment_filter,
+                    or_(
+                        models.Lead.created_by_id == current_user.id,
+                        models.Lead.history.any(models.LeadHistory.user_id == current_user.id)
+                    )
+                )
+            )
+        )
+
+    if source:
+        query = query.filter(models.Lead.source == source)
+
+    if status:
+        query = query.filter(models.Lead.status == normalize_lead_status_value(status))
+
+    if q:
+        search = f"%{q}%"
+        query = query.filter(
+            or_(
+                models.Lead.name.ilike(search),
+                models.Lead.email.ilike(search),
+                models.Lead.phone.ilike(search)
+            )
+        )
+
+    if exact_date:
+        try:
+            parsed_date = datetime.date.fromisoformat(exact_date)
+            query = query.filter(func.date(models.Lead.created_at) == parsed_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de fecha inválido")
+
+    if only_my_leads:
+        query = query.filter(
+            or_(
+                models.Lead.assigned_to_id == current_user.id,
+                models.Lead.supervisors.any(models.User.id == current_user.id)
+            )
+        )
+
+    if responsible_user_id:
+        query = query.filter(
+            or_(
+                models.Lead.assigned_to_id == responsible_user_id,
+                models.Lead.supervisors.any(models.User.id == responsible_user_id)
+            )
+        )
+
+    if assigned_mode == "assigned":
+        query = query.filter(
+            or_(
+                models.Lead.assigned_to_id.isnot(None),
+                models.Lead.supervisors.any()
+            )
+        )
+    elif assigned_mode == "unassigned":
+        query = query.filter(
+            and_(
+                models.Lead.assigned_to_id.is_(None),
+                ~models.Lead.supervisors.any()
+            )
+        )
+
+    return query
+
+
+def hydrate_lead_summary_fields(db: Session, leads: List[models.Lead]):
+    if not leads:
+        return
+
+    lead_ids = [lead.id for lead in leads]
+    related_credits = db.query(models.CreditApplication).filter(
+        models.CreditApplication.lead_id.in_(lead_ids)
+    ).order_by(
+        models.CreditApplication.updated_at.desc(),
+        models.CreditApplication.created_at.desc()
+    ).all()
+
+    records_by_lead_id: Dict[int, List[models.CreditApplication]] = {}
+    for record in related_credits:
+        if not record.lead_id:
+            continue
+        records_by_lead_id.setdefault(record.lead_id, []).append(record)
+
+    for lead in leads:
+        lead.status = normalize_lead_status_value(lead.status)
+        related_records = records_by_lead_id.get(lead.id, [])
+        related_credit = pick_related_credit_record(related_records, lead.status)
+        related_purchase = pick_related_purchase_record(related_records)
+        if related_credit and is_credit_stage_status(lead.status):
+            lead.credit_application_id = related_credit.id
+            lead.credit_application_status = related_credit.status
+            lead.credit_application_updated_at = related_credit.updated_at
+        if related_purchase and should_attach_purchase_request(lead, related_purchase):
+            lead.purchase_request_id = related_purchase.id
+            lead.purchase_request_status = related_purchase.status
+            lead.purchase_request_updated_at = related_purchase.updated_at
+            lead.purchase_request_notes = related_purchase.notes
+        sanitize_lead_assignment_for_response(lead)
+
+
 def normalize_lead_status_value(status: Optional[str], default: str = "new") -> str:
     normalized = (status or "").strip().lower()
     if not normalized:
@@ -2941,135 +3119,106 @@ def read_leads(
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(get_current_user)
 ):
-    role_name = get_user_role_name(current_user)
-    can_view_all_company_leads = role_name in {"admin", "super_admin"}
-    active_assignee_filter = and_(
-        models.User.role_id.isnot(None),
-        or_(models.User.is_active == True, models.User.is_active.is_(None))
+    query = apply_lead_access_filters(
+        build_lead_summary_query(db),
+        db,
+        current_user,
+        source=source,
+        status=status,
+        board_scope=board_scope,
+        q=q,
     )
-    invalid_assignment_filter = or_(
-        models.Lead.assigned_to_id.is_(None),
-        ~models.Lead.assigned_to.has(active_assignee_filter)
-    )
 
-    query = db.query(models.Lead).options(
-        joinedload(models.Lead.assigned_to),
-        joinedload(models.Lead.deleted_by),
-        selectinload(models.Lead.supervisors),
-        selectinload(models.Lead.process_detail),
-        selectinload(models.Lead.purchase_options),
-        noload(models.Lead.history),
-        noload(models.Lead.conversation),
-        noload(models.Lead.notes),
-        noload(models.Lead.files),
-    )
-    query = query.filter(models.Lead.deleted_at.is_(None))
-    
-    # Filter by user company
-    if current_user.company_id:
-        query = query.filter(models.Lead.company_id == current_user.company_id)
-    
-    aliado_user_ids = get_company_ally_user_ids(db, current_user.company_id)
-
-    if board_scope == "ally":
-        if not can_view_all_company_leads:
-            query = query.filter(
-                or_(
-                    models.Lead.assigned_to_id == current_user.id,
-                    models.Lead.supervisors.any(models.User.id == current_user.id)
-                )
-            )
-        elif aliado_user_ids:
-            query = query.filter(
-                or_(
-                    models.Lead.assigned_to_id.in_(aliado_user_ids),
-                    models.Lead.supervisors.any(models.User.id.in_(aliado_user_ids))
-                )
-            )
-        else:
-            query = query.filter(false())
-    elif aliado_user_ids and not can_view_all_company_leads:
-        query = query.filter(
-            or_(
-                models.Lead.assigned_to_id.is_(None),
-                ~models.Lead.assigned_to_id.in_(aliado_user_ids)
-            )
-        )
-
-    if not can_view_all_company_leads:
-        query = query.filter(
-            or_(
-                models.Lead.assigned_to_id == current_user.id,
-                models.Lead.supervisors.any(models.User.id == current_user.id),
-                and_(
-                    invalid_assignment_filter,
-                    or_(
-                        models.Lead.created_by_id == current_user.id,
-                        models.Lead.history.any(models.LeadHistory.user_id == current_user.id)
-                    )
-                )
-            )
-        )
-
-    if source:
-        query = query.filter(models.Lead.source == source)
-    
-    if status:
-        query = query.filter(models.Lead.status == normalize_lead_status_value(status))
-
-    if q:
-        search = f"%{q}%"
-        query = query.filter(
-            (models.Lead.name.ilike(search)) | 
-            (models.Lead.email.ilike(search)) | 
-            (models.Lead.phone.ilike(search))
-        )
-        
     total = query.count()
     leads = query.order_by(models.Lead.id.desc()).offset(skip).limit(limit).all()
-
-    lead_ids = [lead.id for lead in leads]
-    credit_map = {}
-    purchase_map = {}
-    if lead_ids:
-        related_credits = db.query(models.CreditApplication).filter(
-            models.CreditApplication.lead_id.in_(lead_ids)
-        ).order_by(
-            models.CreditApplication.updated_at.desc(),
-            models.CreditApplication.created_at.desc()
-        ).all()
-
-        for credit in related_credits:
-            if not credit.lead_id:
-                continue
-            if is_purchase_request_record(credit):
-                if credit.lead_id not in purchase_map:
-                    purchase_map[credit.lead_id] = credit
-            else:
-                if credit.lead_id not in credit_map:
-                    credit_map[credit.lead_id] = credit
-
-    for lead in leads:
-        lead.status = normalize_lead_status_value(lead.status)
-        related_credit = pick_related_credit_record(
-            [record for record in related_credits if record.lead_id == lead.id] if lead_ids else [],
-            lead.status
-        )
-        related_purchase = pick_related_purchase_record(
-            [record for record in related_credits if record.lead_id == lead.id] if lead_ids else []
-        )
-        if related_credit and is_credit_stage_status(lead.status):
-            lead.credit_application_id = related_credit.id
-            lead.credit_application_status = related_credit.status
-            lead.credit_application_updated_at = related_credit.updated_at
-        if related_purchase and should_attach_purchase_request(lead, related_purchase):
-            lead.purchase_request_id = related_purchase.id
-            lead.purchase_request_status = related_purchase.status
-            lead.purchase_request_updated_at = related_purchase.updated_at
-            lead.purchase_request_notes = related_purchase.notes
-        sanitize_lead_assignment_for_response(lead)
+    hydrate_lead_summary_fields(db, leads)
 
     return {"items": leads, "total": total}
+
+
+@app.get("/leads/board", response_model=schemas.LeadBoardResponse)
+def read_leads_board(
+    board_scope: str = None,
+    q: str = None,
+    exact_date: str = None,
+    assigned_mode: str = None,
+    responsible_user_id: int = None,
+    global_status: str = None,
+    only_my_leads: bool = False,
+    load_all_matching: bool = False,
+    status_limits: str = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    parsed_status_limits: Dict[str, int] = {}
+    if status_limits:
+        try:
+            raw_limits = json.loads(status_limits)
+            if isinstance(raw_limits, dict):
+                parsed_status_limits = {
+                    normalize_lead_status_value(key): max(1, int(value))
+                    for key, value in raw_limits.items()
+                    if value is not None
+                }
+        except (TypeError, ValueError, json.JSONDecodeError):
+            raise HTTPException(status_code=400, detail="Formato de límites por estado inválido")
+
+    columns: List[schemas.LeadBoardColumn] = []
+
+    for status_key in LEAD_STATUS_SEQUENCE:
+        normalized_status = normalize_lead_status_value(status_key)
+        if global_status and normalize_lead_status_value(global_status) != normalized_status:
+            columns.append(
+                schemas.LeadBoardColumn(
+                    status=normalized_status,
+                    label=LEAD_STATUS_LABELS.get(normalized_status, normalized_status),
+                    total=0,
+                    items=[],
+                )
+            )
+            continue
+
+        base_query = apply_lead_access_filters(
+            db.query(models.Lead),
+            db,
+            current_user,
+            board_scope=board_scope,
+            q=q,
+            exact_date=exact_date,
+            assigned_mode=assigned_mode,
+            responsible_user_id=responsible_user_id,
+            only_my_leads=only_my_leads,
+            status=normalized_status,
+        )
+
+        total = base_query.count()
+        status_limit = total if load_all_matching else parsed_status_limits.get(normalized_status, 10)
+
+        items_query = apply_lead_access_filters(
+            build_lead_summary_query(db),
+            db,
+            current_user,
+            board_scope=board_scope,
+            q=q,
+            exact_date=exact_date,
+            assigned_mode=assigned_mode,
+            responsible_user_id=responsible_user_id,
+            only_my_leads=only_my_leads,
+            status=normalized_status,
+        )
+        items = items_query.order_by(models.Lead.id.desc()).limit(status_limit).all()
+        hydrate_lead_summary_fields(db, items)
+
+        columns.append(
+            schemas.LeadBoardColumn(
+                status=normalized_status,
+                label=LEAD_STATUS_LABELS.get(normalized_status, normalized_status),
+                total=total,
+                items=items,
+            )
+        )
+
+    return {"columns": columns}
 
 
 @app.get("/leads/{lead_id:int}", response_model=schemas.Lead)
