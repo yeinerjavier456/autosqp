@@ -4597,7 +4597,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
             {/* Comment Modal for Status Change */}
             {showCommentModal && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[80] p-4">
                     <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-fade-in-up border border-gray-100">
                         <h2 className="text-xl font-bold mb-4 text-gray-800">Confirmar cambio de estado</h2>
                         <p className="text-sm text-gray-500 mb-4">
