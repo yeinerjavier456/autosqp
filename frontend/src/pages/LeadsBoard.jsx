@@ -1875,7 +1875,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             } else if (effectiveStatus === 'sold') {
                 processDetail = buildCurrentProcessDetailPayload();
             }
-            await onUpdate(lead.id, effectiveStatus, newComment, processDetail, canManageSupervision ? selectedSupervisors : null);
+            const sanitizedSupervisorIds = canManageSupervision
+                ? sanitizeSupervisorIds(selectedSupervisors, advisors)
+                : null;
+            await onUpdate(lead.id, effectiveStatus, newComment, processDetail, sanitizedSupervisorIds);
             setNewComment('');
         } catch (error) {
             console.error("Update failed", error);
@@ -1907,7 +1910,9 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         }
         setSavingSupervisors(true);
         try {
-            await onSaveSupervisors(lead.id, selectedSupervisors);
+            const sanitizedSupervisorIds = sanitizeSupervisorIds(selectedSupervisors, advisors);
+            setSelectedSupervisors(sanitizedSupervisorIds || []);
+            await onSaveSupervisors(lead.id, sanitizedSupervisorIds || []);
         } catch (error) {
             console.error("Error saving supervisors", error);
         } finally {
@@ -4149,9 +4154,10 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const handleSaveSupervisors = async (leadId, supervisorIds) => {
         try {
             const token = localStorage.getItem('token');
+            const sanitizedSupervisorIds = sanitizeSupervisorIds(supervisorIds, advisors) || [];
             const response = await axios.put(`${API_BASE_URL}/leads/${leadId}`,
                 {
-                    supervisor_ids: supervisorIds,
+                    supervisor_ids: sanitizedSupervisorIds,
                     comment: 'Supervision actualizada'
                 },
                 { headers: { Authorization: `Bearer ${token}` } }
@@ -4169,7 +4175,9 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             Swal.fire({
                 icon: 'success',
                 title: 'Supervision actualizada',
-                text: 'La supervision del lead se guardo correctamente.',
+                text: Array.isArray(supervisorIds) && sanitizedSupervisorIds.length !== supervisorIds.length
+                    ? 'La supervision se guardo correctamente. Los usuarios inactivos fueron ignorados.'
+                    : 'La supervision del lead se guardo correctamente.',
                 timer: 1400,
                 showConfirmButton: false,
                 confirmButtonColor: '#2563eb'
