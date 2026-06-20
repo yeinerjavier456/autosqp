@@ -776,7 +776,7 @@ const KanbanColumn = ({
 };
 
 // History Modal Component
-const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervisors, onDeleteLead, advisors, onAssign, onRefreshLeadBoard, availableVehicles, currentUserRole, boardMode = 'general', loadingDetail = false }) => {
+const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervisors, onDeleteLead, advisors, onAssign, onRefreshLeadBoard, onRequestStatusChange, availableVehicles, currentUserRole, boardMode = 'general', loadingDetail = false }) => {
     const { user } = useAuth();
     const [assignedAdvisor, setAssignedAdvisor] = useState(getLeadAssignedUserId(lead) || '');
     const [selectedSupervisors, setSelectedSupervisors] = useState(getLeadSupervisorIds(lead));
@@ -2273,10 +2273,20 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
 
                     {activeDetailTab === 'gestion' && (
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                        <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                            <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                            Agregar Nota / Seguimiento
-                        </h3>
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                            <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                                <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                Agregar Nota / Seguimiento
+                            </h3>
+                            <button
+                                type="button"
+                                disabled={!canModifyLead}
+                                onClick={() => onRequestStatusChange?.(lead)}
+                                className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                Cambiar estado
+                            </button>
+                        </div>
                         <form onSubmit={handleSubmit} className="space-y-3">
                             <div className="grid grid-cols-1 gap-3">
                                 <div>
@@ -3400,6 +3410,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     // Modal State - Status Comment
     const [showCommentModal, setShowCommentModal] = useState(false);
     const [pendingStatusChange, setPendingStatusChange] = useState(null);
+    const [manualStatusSelectionEnabled, setManualStatusSelectionEnabled] = useState(false);
     const [statusComment, setStatusComment] = useState('');
     const [dragHasVehicle, setDragHasVehicle] = useState(null);
     const [dragSelectedVehicleId, setDragSelectedVehicleId] = useState('');
@@ -3736,66 +3747,76 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         e.preventDefault();
     };
 
+    const prepareStatusChange = async (lead, newStatus, { allowManualSelection = false } = {}) => {
+        if (!lead?.id) return;
+        if (isSupervisorOnlyCreditViewer(lead, currentUserId, currentRoleName)) {
+            Swal.fire('Solo lectura', 'Como supervisor en Estudio de crédito puedes ver el lead, pero no cambiarle el estado desde este tablero.', 'info');
+            return;
+        }
+
+        const normalizedCurrentStatus = normalizeLeadStatus(lead.status);
+        const normalizedNewStatus = normalizeLeadStatus(newStatus || lead.status || 'new');
+
+        setPendingStatusChange({ leadId: lead.id, newStatus: normalizedNewStatus });
+        setManualStatusSelectionEnabled(Boolean(allowManualSelection));
+        setStatusComment('');
+        setPendingLeadDetailOverride(null);
+        setDragHasVehicle(null);
+        setDragSelectedVehicleId('');
+        setDragDesiredVehicle('');
+        setDragReservationAmount('');
+        setDragCreditUsedAmount(lead?.process_detail?.credit_used_amount ? String(lead.process_detail.credit_used_amount) : '');
+        setDragReservationPaymentMethod('');
+        const leadApprovalMetrics = getLeadApprovalMetrics(lead);
+        setDragApprovedAmount(leadApprovalMetrics.approvedAmount ? String(leadApprovalMetrics.approvedAmount) : '');
+        setDragApprovalPercentage(leadApprovalMetrics.approvalPercentage ? String(leadApprovalMetrics.approvalPercentage) : '');
+        setDragApprovedDownPayment(leadApprovalMetrics.minimumDownPayment ? String(leadApprovalMetrics.minimumDownPayment) : '');
+
+        if (!allowManualSelection && normalizedCurrentStatus === normalizedNewStatus) return;
+
+        if (normalizedNewStatus === 'sold' && !allowManualSelection) {
+            initiateSale(lead.id);
+            return;
+        }
+
+        setShowCommentModal(true);
+
+        if (normalizedNewStatus === 'reserved') {
+            try {
+                const detailedLead = await fetchLeadDetail(lead.id);
+                if (detailedLead && detailedLead.id === lead.id) {
+                    setPendingLeadDetailOverride(detailedLead);
+                    const detailedMetrics = getLeadApprovalMetrics(detailedLead);
+                    if (detailedMetrics.approvedAmount != null) setDragApprovedAmount(String(detailedMetrics.approvedAmount));
+                    if (detailedMetrics.approvalPercentage != null) setDragApprovalPercentage(String(detailedMetrics.approvalPercentage));
+                    if (detailedMetrics.minimumDownPayment != null) setDragApprovedDownPayment(String(detailedMetrics.minimumDownPayment));
+
+                    const existingReservationAmount = detailedLead?.process_detail?.reservation_amount;
+                    const existingPaymentMethod = detailedLead?.process_detail?.reservation_payment_method;
+                    const existingCreditUsedAmount = detailedLead?.process_detail?.credit_used_amount;
+                    if (existingReservationAmount != null && Number(existingReservationAmount) > 0) {
+                        setDragReservationAmount(String(existingReservationAmount));
+                    }
+                    if (existingPaymentMethod) {
+                        setDragReservationPaymentMethod(String(existingPaymentMethod));
+                    }
+                    if (existingCreditUsedAmount != null && Number(existingCreditUsedAmount) > 0) {
+                        setDragCreditUsedAmount(String(existingCreditUsedAmount));
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching detailed lead for Reservas', error);
+            }
+        }
+    };
+
     const handleDrop = async (e, newStatus) => {
         const leadId = e.dataTransfer.getData("leadId");
         if (leadId) {
             const id = parseInt(leadId);
             const lead = leads.find(l => l.id === id);
             if (!lead) return;
-
-            if (isSupervisorOnlyCreditViewer(lead, currentUserId, currentRoleName)) {
-                Swal.fire('Solo lectura', 'Como supervisor en Estudio de crédito puedes ver el lead, pero no cambiarle el estado desde este tablero.', 'info');
-                return;
-            }
-
-            if (lead.status === newStatus) return;
-
-            setPendingStatusChange({ leadId: id, newStatus });
-            setStatusComment('');
-            setPendingLeadDetailOverride(null);
-            setDragHasVehicle(null);
-            setDragSelectedVehicleId('');
-            setDragDesiredVehicle('');
-            setDragReservationAmount('');
-            setDragCreditUsedAmount(lead?.process_detail?.credit_used_amount ? String(lead.process_detail.credit_used_amount) : '');
-            setDragReservationPaymentMethod('');
-            const leadApprovalMetrics = getLeadApprovalMetrics(lead);
-            setDragApprovedAmount(leadApprovalMetrics.approvedAmount ? String(leadApprovalMetrics.approvedAmount) : '');
-            setDragApprovalPercentage(leadApprovalMetrics.approvalPercentage ? String(leadApprovalMetrics.approvalPercentage) : '');
-            setDragApprovedDownPayment(leadApprovalMetrics.minimumDownPayment ? String(leadApprovalMetrics.minimumDownPayment) : '');
-
-            if (newStatus === 'sold') {
-                initiateSale(id);
-            } else {
-                setShowCommentModal(true);
-                if (normalizeLeadStatus(newStatus) === 'reserved') {
-                    try {
-                        const detailedLead = await fetchLeadDetail(id);
-                        if (detailedLead && detailedLead.id === id) {
-                            setPendingLeadDetailOverride(detailedLead);
-                            const detailedMetrics = getLeadApprovalMetrics(detailedLead);
-                            if (detailedMetrics.approvedAmount != null) setDragApprovedAmount(String(detailedMetrics.approvedAmount));
-                            if (detailedMetrics.approvalPercentage != null) setDragApprovalPercentage(String(detailedMetrics.approvalPercentage));
-                            if (detailedMetrics.minimumDownPayment != null) setDragApprovedDownPayment(String(detailedMetrics.minimumDownPayment));
-
-                            const existingReservationAmount = detailedLead?.process_detail?.reservation_amount;
-                            const existingPaymentMethod = detailedLead?.process_detail?.reservation_payment_method;
-                            const existingCreditUsedAmount = detailedLead?.process_detail?.credit_used_amount;
-                            if (existingReservationAmount != null && Number(existingReservationAmount) > 0) {
-                                setDragReservationAmount(String(existingReservationAmount));
-                            }
-                            if (existingPaymentMethod) {
-                                setDragReservationPaymentMethod(String(existingPaymentMethod));
-                            }
-                            if (existingCreditUsedAmount != null && Number(existingCreditUsedAmount) > 0) {
-                                setDragCreditUsedAmount(String(existingCreditUsedAmount));
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Error fetching detailed lead for Reservas', error);
-                    }
-                }
-            }
+            await prepareStatusChange(lead, newStatus, { allowManualSelection: false });
         }
     };
 
@@ -3854,7 +3875,36 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         }
     };
 
+    const handleOpenStatusChangeFromHistory = async (lead) => {
+        if (!lead?.id) return;
+        await prepareStatusChange(lead, normalizeLeadStatus(lead.status || 'new'), { allowManualSelection: true });
+    };
+
     const confirmStatusChange = async () => {
+        if (!pendingStatusChange) return;
+
+        const currentLead = leads.find((item) => item.id === pendingStatusChange.leadId);
+        const currentStatus = normalizeLeadStatus(currentLead?.status || 'new');
+        const selectedStatus = normalizeLeadStatus(pendingStatusChange?.newStatus || currentStatus);
+
+        if (manualStatusSelectionEnabled && selectedStatus === currentStatus) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Información requerida',
+                text: 'Debes seleccionar un estado diferente al actual.',
+                confirmButtonColor: '#3b82f6'
+            });
+            return;
+        }
+
+        if (selectedStatus === 'sold') {
+            setShowCommentModal(false);
+            setManualStatusSelectionEnabled(false);
+            setStatusComment('');
+            await initiateSale(pendingStatusChange.leadId);
+            return;
+        }
+
         // Validation Logic
         if (!statusComment || statusComment.trim().length < 6) {
             Swal.fire({
@@ -3866,9 +3916,10 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             return;
         }
 
-        if (!pendingStatusChange) return;
-
-        const { leadId, newStatus } = pendingStatusChange;
+        const { leadId, newStatus } = {
+            leadId: pendingStatusChange.leadId,
+            newStatus: selectedStatus,
+        };
 
         let processDetail = null;
         let reservedApprovalPayload = null;
@@ -3948,6 +3999,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             // Optimistic UI Update
             setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l));
             setShowCommentModal(false);
+            setManualStatusSelectionEnabled(false);
 
             const token = localStorage.getItem('token');
             const payload = {
@@ -3978,6 +4030,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 text: 'No se pudo actualizar el estado: ' + (error.response?.data?.error || error.message),
                 confirmButtonColor: '#2563eb'
             });
+            setManualStatusSelectionEnabled(false);
             fetchBoardLeads(searchTerm); // Revert
         }
     };
@@ -4554,6 +4607,27 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                             <br />Por favor, indica el motivo o un comentario para el seguimiento.
                         </p>
 
+                        {manualStatusSelectionEnabled && (
+                            <div className="mb-4">
+                                <label className="mb-1 block text-sm font-bold text-gray-700">Nuevo estado</label>
+                                <select
+                                    className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    value={normalizeLeadStatus(pendingStatusChange?.newStatus)}
+                                    onChange={async (e) => {
+                                        const lead = leads.find((item) => item.id === pendingStatusChange?.leadId);
+                                        if (!lead) return;
+                                        await prepareStatusChange(lead, e.target.value, { allowManualSelection: true });
+                                    }}
+                                >
+                                    {LEAD_STATUS_OPTIONS.map((statusOption) => (
+                                        <option key={statusOption.value} value={statusOption.value}>
+                                            {statusOption.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
                         <textarea
                             className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none mb-4"
                             rows="3"
@@ -4697,6 +4771,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                             <button
                                 onClick={() => {
                                     setShowCommentModal(false);
+                                    setManualStatusSelectionEnabled(false);
                                     setStatusComment('');
                                     setDragReservationAmount('');
                                     setDragCreditUsedAmount('');
@@ -4884,6 +4959,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     advisors={advisors}
                     onAssign={handleAssignLead}
                     onRefreshLeadBoard={() => fetchBoardLeads(searchTerm)}
+                    onRequestStatusChange={handleOpenStatusChangeFromHistory}
                     availableVehicles={availableVehicles}
                     currentUserRole={currentRoleName}
                     boardMode={boardMode}
