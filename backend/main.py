@@ -4618,6 +4618,76 @@ def get_sale_display_name(sale: Optional[models.Sale]) -> Optional[str]:
     return None
 
 
+def enrich_receipt_display_names(
+    db: Session,
+    receipts: List[models.PaymentReceipt],
+    company_id: Optional[int] = None
+) -> List[models.PaymentReceipt]:
+    if not receipts:
+        return receipts
+
+    missing_receipt_numbers = {
+        (receipt.receipt_number or "").strip()
+        for receipt in receipts
+        if not (receipt.display_name or "").strip() and (receipt.receipt_number or "").strip()
+    }
+    missing_sale_ids = {
+        int(receipt.sale_id)
+        for receipt in receipts
+        if not (receipt.display_name or "").strip() and getattr(receipt, "sale_id", None)
+    }
+
+    if not missing_receipt_numbers and not missing_sale_ids:
+        return receipts
+
+    lookup_filters = []
+    if missing_receipt_numbers:
+        lookup_filters.append(models.PaymentReceipt.receipt_number.in_(missing_receipt_numbers))
+    if missing_sale_ids:
+        lookup_filters.append(models.PaymentReceipt.sale_id.in_(missing_sale_ids))
+
+    sibling_query = db.query(models.PaymentReceipt).filter(
+        models.PaymentReceipt.display_name.isnot(None),
+        models.PaymentReceipt.display_name != "",
+        or_(*lookup_filters)
+    )
+    if company_id:
+        sibling_query = sibling_query.filter(models.PaymentReceipt.company_id == company_id)
+
+    sibling_rows = sibling_query.order_by(
+        models.PaymentReceipt.payment_date.desc(),
+        models.PaymentReceipt.id.desc()
+    ).all()
+
+    display_name_by_receipt_number: Dict[str, str] = {}
+    display_name_by_sale_id: Dict[int, str] = {}
+
+    for sibling in sibling_rows:
+        sibling_name = (sibling.display_name or "").strip()
+        if not sibling_name:
+            continue
+        sibling_receipt_number = (sibling.receipt_number or "").strip()
+        if sibling_receipt_number and sibling_receipt_number not in display_name_by_receipt_number:
+            display_name_by_receipt_number[sibling_receipt_number] = sibling_name
+        sibling_sale_id = getattr(sibling, "sale_id", None)
+        if sibling_sale_id and sibling_sale_id not in display_name_by_sale_id:
+            display_name_by_sale_id[int(sibling_sale_id)] = sibling_name
+
+    for receipt in receipts:
+        if (receipt.display_name or "").strip():
+            continue
+        receipt_number = (receipt.receipt_number or "").strip()
+        sale_id = int(receipt.sale_id) if getattr(receipt, "sale_id", None) else None
+        fallback_name = (
+            display_name_by_receipt_number.get(receipt_number)
+            or (display_name_by_sale_id.get(sale_id) if sale_id else None)
+        )
+        if fallback_name:
+            receipt.display_name = fallback_name
+
+    return receipts
+
+
 def attach_sale_metadata_to_vehicle(vehicle: models.Vehicle, sale: Optional[models.Sale]) -> models.Vehicle:
     setattr(vehicle, "sold_price", getattr(sale, "sale_price", None))
     setattr(vehicle, "sold_by_type", getattr(sale, "seller_type", None))
@@ -7054,6 +7124,7 @@ def read_payment_receipts(
 
     total = query.count()
     items = query.order_by(models.PaymentReceipt.payment_date.desc(), models.PaymentReceipt.id.desc()).offset(skip).limit(limit).all()
+    items = enrich_receipt_display_names(db, items, current_user.company_id)
     return {"items": items, "total": total}
 
 
