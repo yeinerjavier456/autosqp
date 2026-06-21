@@ -300,6 +300,31 @@ const SalesDashboard = () => {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 
+    const getBestGroupDisplayName = (receiptsGroup) => {
+        const candidates = (Array.isArray(receiptsGroup) ? receiptsGroup : [])
+            .map((item) => String(item?.display_name || '').trim())
+            .filter(Boolean);
+
+        if (candidates.length === 0) return '';
+
+        const scoreName = (value) => {
+            const hasDigits = /\d/.test(value) ? 1 : 0;
+            const wordCount = value.split(/\s+/).filter(Boolean).length;
+            return [hasDigits, wordCount, value.length];
+        };
+
+        return candidates.reduce((best, current) => {
+            if (!best) return current;
+            const bestScore = scoreName(best);
+            const currentScore = scoreName(current);
+            for (let index = 0; index < currentScore.length; index += 1) {
+                if (currentScore[index] > bestScore[index]) return current;
+                if (currentScore[index] < bestScore[index]) return best;
+            }
+            return best;
+        }, '');
+    };
+
     const getSellerLabel = (sale) => {
         if (sale?.seller_type === 'external') {
             return sale?.external_seller_name || 'Asesor externo';
@@ -1219,7 +1244,7 @@ const SalesDashboard = () => {
     const handleRenameReceiptGroup = async (group) => {
         if (!group?.receipts?.length) return;
 
-        const currentName = group.receipts.map((item) => item.display_name).find(Boolean) || '';
+        const currentName = getBestGroupDisplayName(group.receipts) || '';
         const { value: updatedName } = await Swal.fire({
             title: 'Editar nombre del soporte',
             input: 'text',
@@ -1874,7 +1899,7 @@ const SalesDashboard = () => {
                                             const receipt = group.latestReceipt;
                                             const isEditableGroup = true;
                                             const supportDisplayId = group.receiptNumber || receipt.receipt_number || `REC-${receipt.id}`;
-                                            const supportDisplayName = group.receipts.map((item) => item.display_name).find(Boolean);
+                                            const supportDisplayName = getBestGroupDisplayName(group.receipts);
                                             return (
                                             <tr key={group.key} className="hover:bg-gray-50">
                                                 <td className="p-4 text-sm text-gray-600">
@@ -2060,7 +2085,7 @@ const SalesDashboard = () => {
                     <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl">
                         {(() => {
                             const isSaleGroup = Boolean(selectedReceiptGroup.sale?.id);
-                            const supportDisplayName = selectedReceiptGroup.receipts.map((item) => item.display_name).find(Boolean) || '';
+                            const supportDisplayName = getBestGroupDisplayName(selectedReceiptGroup.receipts) || '';
                             const groupTitle = isSaleGroup
                                 ? `#${selectedReceiptGroup.sale?.id} - ${selectedReceiptGroup.sale?.vehicle?.make} ${selectedReceiptGroup.sale?.vehicle?.model} · ${selectedReceiptGroup.sale?.vehicle?.plate || 'Sin placa'}`
                                 : `Soporte ${selectedReceiptGroup.receiptNumber || selectedReceiptGroup.latestReceipt?.receipt_number || ''}`;

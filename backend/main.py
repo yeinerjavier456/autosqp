@@ -4618,6 +4618,24 @@ def get_sale_display_name(sale: Optional[models.Sale]) -> Optional[str]:
     return None
 
 
+def _pick_best_receipt_display_name(candidates: List[str]) -> Optional[str]:
+    cleaned_candidates = []
+    for candidate in candidates or []:
+        normalized_candidate = (candidate or "").strip()
+        if normalized_candidate:
+            cleaned_candidates.append(normalized_candidate)
+
+    if not cleaned_candidates:
+        return None
+
+    def _display_name_score(value: str) -> tuple[int, int, int]:
+        has_digits = 1 if any(char.isdigit() for char in value) else 0
+        word_count = len(value.split())
+        return (has_digits, word_count, len(value))
+
+    return max(cleaned_candidates, key=_display_name_score)
+
+
 def enrich_receipt_display_names(
     db: Session,
     receipts: List[models.PaymentReceipt],
@@ -4659,23 +4677,41 @@ def enrich_receipt_display_names(
         models.PaymentReceipt.id.desc()
     ).all()
 
-    display_name_by_receipt_number: Dict[str, str] = {}
-    display_name_by_sale_id: Dict[int, str] = {}
+    display_name_candidates_by_receipt_number: Dict[str, List[str]] = {}
+    display_name_candidates_by_sale_id: Dict[int, List[str]] = {}
 
     for sibling in sibling_rows:
         sibling_name = (sibling.display_name or "").strip()
         if not sibling_name:
             continue
         sibling_receipt_number = (sibling.receipt_number or "").strip()
-        if sibling_receipt_number and sibling_receipt_number not in display_name_by_receipt_number:
-            display_name_by_receipt_number[sibling_receipt_number] = sibling_name
+        if sibling_receipt_number:
+            display_name_candidates_by_receipt_number.setdefault(sibling_receipt_number, []).append(sibling_name)
         sibling_sale_id = getattr(sibling, "sale_id", None)
-        if sibling_sale_id and sibling_sale_id not in display_name_by_sale_id:
-            display_name_by_sale_id[int(sibling_sale_id)] = sibling_name
+        if sibling_sale_id:
+            display_name_candidates_by_sale_id.setdefault(int(sibling_sale_id), []).append(sibling_name)
 
     for receipt in receipts:
-        if (receipt.display_name or "").strip():
+        current_name = (receipt.display_name or "").strip()
+        if not current_name:
             continue
+        current_receipt_number = (receipt.receipt_number or "").strip()
+        if current_receipt_number:
+            display_name_candidates_by_receipt_number.setdefault(current_receipt_number, []).append(current_name)
+        current_sale_id = getattr(receipt, "sale_id", None)
+        if current_sale_id:
+            display_name_candidates_by_sale_id.setdefault(int(current_sale_id), []).append(current_name)
+
+    display_name_by_receipt_number = {
+        receipt_number: _pick_best_receipt_display_name(candidate_names)
+        for receipt_number, candidate_names in display_name_candidates_by_receipt_number.items()
+    }
+    display_name_by_sale_id = {
+        sale_id: _pick_best_receipt_display_name(candidate_names)
+        for sale_id, candidate_names in display_name_candidates_by_sale_id.items()
+    }
+
+    for receipt in receipts:
         receipt_number = (receipt.receipt_number or "").strip()
         sale_id = int(receipt.sale_id) if getattr(receipt, "sale_id", None) else None
         fallback_name = (
