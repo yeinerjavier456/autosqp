@@ -7221,6 +7221,7 @@ def download_payment_receipts_xlsx(
         )
 
     receipts = query.order_by(models.PaymentReceipt.payment_date.desc(), models.PaymentReceipt.id.desc()).all()
+    receipts = enrich_receipt_display_names(db, receipts, current_user.company_id)
     wb = Workbook()
     ws = wb.active
     ws.title = "Contabilidad"
