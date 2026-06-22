@@ -3207,7 +3207,12 @@ def read_leads_board(
             only_my_leads=only_my_leads,
             status=normalized_status,
         )
-        items = items_query.order_by(models.Lead.id.desc()).limit(status_limit).all()
+        recent_activity_field = func.coalesce(models.Lead.status_updated_at, models.Lead.created_at)
+        items = items_query.order_by(
+            recent_activity_field.desc(),
+            models.Lead.created_at.desc(),
+            models.Lead.id.desc()
+        ).limit(status_limit).all()
         hydrate_lead_summary_fields(db, items)
 
         columns.append(

@@ -4004,6 +4004,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             // Optimistic UI Update
             setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l));
             setShowCommentModal(false);
+            setShowHistoryModal(false);
+            setSelectedLeadForHistory(null);
             setManualStatusSelectionEnabled(false);
 
             const token = localStorage.getItem('token');
@@ -4024,8 +4026,27 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
-            // Refresh leads to get updated history
-            fetchBoardLeads(searchTerm);
+            setPendingStatusChange(null);
+            setPendingLeadDetailOverride(null);
+            setStatusComment('');
+            setDragHasVehicle(null);
+            setDragSelectedVehicleId('');
+            setDragDesiredVehicle('');
+            setDragReservationAmount('');
+            setDragCreditUsedAmount('');
+            setDragReservationPaymentMethod('');
+            setDragApprovedAmount('');
+            setDragApprovalPercentage('');
+            setDragApprovedDownPayment('');
+
+            await fetchBoardLeads(searchTerm);
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Estado actualizado',
+                text: 'El estado se cambió correctamente.',
+                confirmButtonColor: '#2563eb'
+            });
 
         } catch (error) {
             console.error("Error updating lead", error);
