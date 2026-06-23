@@ -4729,6 +4729,72 @@ def enrich_receipt_display_names(
     return receipts
 
 
+def apply_receipt_group_search_filter(
+    query,
+    db: Session,
+    search_term: Optional[str],
+    company_id: Optional[int] = None
+):
+    normalized_search = (search_term or "").strip()
+    if not normalized_search:
+        return query
+
+    search = f"%{normalized_search}%"
+    matched_rows_query = query.join(
+        models.Sale, models.PaymentReceipt.sale_id == models.Sale.id, isouter=True
+    ).join(
+        models.Vehicle, models.Sale.vehicle_id == models.Vehicle.id, isouter=True
+    ).filter(
+        or_(
+            models.PaymentReceipt.display_name.ilike(search),
+            models.PaymentReceipt.concept.ilike(search),
+            models.PaymentReceipt.receipt_number.ilike(search),
+            models.PaymentReceipt.notes.ilike(search),
+            models.PaymentReceipt.payment_method.ilike(search),
+            models.PaymentReceipt.bank.ilike(search),
+            models.Vehicle.make.ilike(search),
+            models.Vehicle.model.ilike(search),
+            models.Vehicle.plate.ilike(search)
+        )
+    )
+
+    matched_rows = matched_rows_query.with_entities(
+        models.PaymentReceipt.id,
+        models.PaymentReceipt.sale_id,
+        models.PaymentReceipt.receipt_number
+    ).all()
+
+    matched_receipt_ids = {int(row.id) for row in matched_rows if getattr(row, "id", None)}
+    matched_sale_ids = {int(row.sale_id) for row in matched_rows if getattr(row, "sale_id", None)}
+    matched_receipt_numbers = {
+        (row.receipt_number or "").strip()
+        for row in matched_rows
+        if (row.receipt_number or "").strip()
+    }
+
+    if not matched_receipt_ids and not matched_sale_ids and not matched_receipt_numbers:
+        return query.filter(false())
+
+    group_filters = []
+    if matched_receipt_ids:
+        group_filters.append(models.PaymentReceipt.id.in_(matched_receipt_ids))
+    if matched_sale_ids:
+        group_filters.append(models.PaymentReceipt.sale_id.in_(matched_sale_ids))
+    if matched_receipt_numbers:
+        group_filters.append(models.PaymentReceipt.receipt_number.in_(matched_receipt_numbers))
+
+    group_scope_query = db.query(models.PaymentReceipt.id)
+    if company_id:
+        group_scope_query = group_scope_query.filter(models.PaymentReceipt.company_id == company_id)
+    group_scope_query = group_scope_query.filter(or_(*group_filters))
+
+    grouped_receipt_ids = [row.id for row in group_scope_query.all()]
+    if not grouped_receipt_ids:
+        return query.filter(false())
+
+    return query.filter(models.PaymentReceipt.id.in_(grouped_receipt_ids))
+
+
 def attach_sale_metadata_to_vehicle(vehicle: models.Vehicle, sale: Optional[models.Sale]) -> models.Vehicle:
     setattr(vehicle, "sold_price", getattr(sale, "sale_price", None))
     setattr(vehicle, "sold_by_type", getattr(sale, "seller_type", None))
@@ -7146,22 +7212,7 @@ def read_payment_receipts(
         receipt_date_field = func.coalesce(models.PaymentReceipt.payment_date, models.PaymentReceipt.created_at)
         query = query.filter(receipt_date_field >= range_start, receipt_date_field < range_end)
     if q:
-        search = f"%{q}%"
-        query = query.join(models.Sale, models.PaymentReceipt.sale_id == models.Sale.id, isouter=True).join(
-            models.Vehicle, models.Sale.vehicle_id == models.Vehicle.id, isouter=True
-        ).filter(
-            or_(
-                models.PaymentReceipt.display_name.ilike(search),
-                models.PaymentReceipt.concept.ilike(search),
-                models.PaymentReceipt.receipt_number.ilike(search),
-                models.PaymentReceipt.notes.ilike(search),
-                models.PaymentReceipt.payment_method.ilike(search),
-                models.PaymentReceipt.bank.ilike(search),
-                models.Vehicle.make.ilike(search),
-                models.Vehicle.model.ilike(search),
-                models.Vehicle.plate.ilike(search)
-            )
-        )
+        query = apply_receipt_group_search_filter(query, db, q, current_user.company_id)
 
     total = query.count()
     items = query.order_by(models.PaymentReceipt.payment_date.desc(), models.PaymentReceipt.id.desc()).offset(skip).limit(limit).all()
@@ -7208,22 +7259,7 @@ def download_payment_receipts_xlsx(
         receipt_date_field = func.coalesce(models.PaymentReceipt.payment_date, models.PaymentReceipt.created_at)
         query = query.filter(receipt_date_field >= range_start, receipt_date_field < range_end)
     if q:
-        search = f"%{q}%"
-        query = query.join(models.Sale, models.PaymentReceipt.sale_id == models.Sale.id, isouter=True).join(
-            models.Vehicle, models.Sale.vehicle_id == models.Vehicle.id, isouter=True
-        ).filter(
-            or_(
-                models.PaymentReceipt.display_name.ilike(search),
-                models.PaymentReceipt.concept.ilike(search),
-                models.PaymentReceipt.receipt_number.ilike(search),
-                models.PaymentReceipt.notes.ilike(search),
-                models.PaymentReceipt.payment_method.ilike(search),
-                models.PaymentReceipt.bank.ilike(search),
-                models.Vehicle.make.ilike(search),
-                models.Vehicle.model.ilike(search),
-                models.Vehicle.plate.ilike(search)
-            )
-        )
+        query = apply_receipt_group_search_filter(query, db, q, current_user.company_id)
 
     receipts = query.order_by(models.PaymentReceipt.payment_date.desc(), models.PaymentReceipt.id.desc()).all()
     receipts = enrich_receipt_display_names(db, receipts, current_user.company_id)
