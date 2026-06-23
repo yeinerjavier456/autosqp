@@ -37,6 +37,15 @@ const attachCurrencyFormatter = (input) => {
     });
 };
 
+const sortReceiptsByRecentFirst = (items = []) => {
+    return [...items].sort((left, right) => {
+        const leftTime = new Date(left?.payment_date || left?.created_at || 0).getTime();
+        const rightTime = new Date(right?.payment_date || right?.created_at || 0).getTime();
+        if (rightTime !== leftTime) return rightTime - leftTime;
+        return Number(right?.id || 0) - Number(left?.id || 0);
+    });
+};
+
 const SalesDashboard = () => {
     const defaultRange = getLastMonthRange();
     const [stats, setStats] = useState({
@@ -373,20 +382,22 @@ const SalesDashboard = () => {
         });
 
         return Array.from(groupsByKey.values()).map((group) => {
+            const orderedReceipts = sortReceiptsByRecentFirst(group.receipts);
             const latestReceipt = group.receipts.reduce((latest, receipt) => {
                 const latestTime = new Date(latest.payment_date || latest.created_at || 0).getTime();
                 const receiptTime = new Date(receipt.payment_date || receipt.created_at || 0).getTime();
                 return receiptTime > latestTime ? receipt : latest;
-            }, group.receipts[0]);
-            const incomeTotal = group.receipts
+            }, orderedReceipts[0]);
+            const incomeTotal = orderedReceipts
                 .filter((receipt) => (receipt.movement_type || 'income') === 'income')
                 .reduce((sum, receipt) => sum + Number(receipt.amount || 0), 0);
-            const expenseTotal = group.receipts
+            const expenseTotal = orderedReceipts
                 .filter((receipt) => (receipt.movement_type || 'income') === 'expense')
                 .reduce((sum, receipt) => sum + Number(receipt.amount || 0), 0);
 
             return {
                 ...group,
+                receipts: orderedReceipts,
                 latestReceipt,
                 incomeTotal,
                 expenseTotal,
@@ -411,7 +422,7 @@ const SalesDashboard = () => {
 
             return {
                 ...current,
-                receipts: [...current.receipts, newReceipt]
+                receipts: sortReceiptsByRecentFirst([...current.receipts, newReceipt])
             };
         });
     };
@@ -1136,8 +1147,12 @@ const SalesDashboard = () => {
                     'Content-Type': 'multipart/form-data'
                 }
             });
-            await fetchData();
+            setReceipts((current) => sortReceiptsByRecentFirst([
+                response.data,
+                ...current.filter((item) => item.id !== response.data.id)
+            ]));
             appendReceiptToSelectedGroup(response.data);
+            fetchData();
             Swal.fire('Exito', isSaleGroup ? 'Ítem agregado a la venta.' : 'Ítem agregado al soporte contable.', 'success');
         } catch (error) {
             console.error('Error creating grouped receipt item', error);
