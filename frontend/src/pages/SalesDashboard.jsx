@@ -427,6 +427,41 @@ const SalesDashboard = () => {
         });
     };
 
+    const loadReceiptGroupDetails = async (group) => {
+        if (!group) return null;
+
+        const token = localStorage.getItem('token');
+        const params = {
+            limit: 500
+        };
+
+        if (group.sale?.id) {
+            params.sale_id = group.sale.id;
+        } else if (group.receiptNumber) {
+            params.receipt_number = group.receiptNumber;
+        } else if (group.latestReceipt?.id) {
+            params.q = group.latestReceipt.display_name || group.latestReceipt.receipt_number || String(group.latestReceipt.id);
+        }
+
+        const response = await axios.get('/api/finance/receipts', {
+            headers: { Authorization: `Bearer ${token}` },
+            params
+        });
+
+        const fetchedItems = Array.isArray(response.data?.items) ? response.data.items : [];
+        const fetchedGroups = buildReceiptGroups(fetchedItems);
+        const targetKey = group.key;
+        const updatedGroup = fetchedGroups.find((item) => item.key === targetKey)
+            || fetchedGroups[0]
+            || null;
+
+        if (updatedGroup) {
+            setSelectedReceiptGroup(updatedGroup);
+        }
+
+        return updatedGroup;
+    };
+
     const ensureAccountingSupportNumber = async (group, token) => {
         if (group?.sale?.id) return null;
         if (group?.receiptNumber) return group.receiptNumber;
@@ -1151,7 +1186,10 @@ const SalesDashboard = () => {
                 response.data,
                 ...current.filter((item) => item.id !== response.data.id)
             ]));
-            appendReceiptToSelectedGroup(response.data);
+            await loadReceiptGroupDetails({
+                ...group,
+                receiptNumber: supportNumber || group.receiptNumber || response.data.receipt_number || null
+            });
             fetchData();
             Swal.fire('Exito', isSaleGroup ? 'Ítem agregado a la venta.' : 'Ítem agregado al soporte contable.', 'success');
         } catch (error) {
@@ -1968,7 +2006,7 @@ const SalesDashboard = () => {
                                                 <td className="p-4">
                                                     <div className="flex justify-end gap-2">
                                                         <button
-                                                            onClick={() => setSelectedReceiptGroup(group)}
+                                                            onClick={() => loadReceiptGroupDetails(group)}
                                                             className="inline-flex items-center rounded-lg bg-blue-50 px-3 py-1.5 font-medium text-blue-700 hover:bg-blue-100"
                                                         >
                                                             Editar

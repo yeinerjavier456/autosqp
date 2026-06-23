@@ -7175,6 +7175,7 @@ def download_finance_projection_xlsx(
 @app.get("/finance/receipts", response_model=schemas.PaymentReceiptList)
 def read_payment_receipts(
     sale_id: Optional[int] = None,
+    receipt_number: Optional[str] = None,
     category: Optional[str] = None,
     movement_type: Optional[str] = None,
     q: Optional[str] = None,
@@ -7197,6 +7198,8 @@ def read_payment_receipts(
         query = query.filter(models.PaymentReceipt.company_id == current_user.company_id)
     if sale_id:
         query = query.filter(models.PaymentReceipt.sale_id == sale_id)
+    if receipt_number:
+        query = query.filter(models.PaymentReceipt.receipt_number == receipt_number.strip())
     if category:
         query = query.filter(models.PaymentReceipt.category == category)
     if movement_type:
