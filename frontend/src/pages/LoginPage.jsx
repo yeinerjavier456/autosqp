@@ -51,6 +51,10 @@ const LoginPage = () => {
                 throw new Error('No se pudo cargar la sesion del usuario despues de autenticar.');
             }
 
+            if (response.data.license_notice) {
+                window.alert(response.data.license_notice);
+            }
+
             const roleName = getRoleName(loggedUser);
             const orderedViews = getOrderedMenuViews(loggedUser);
             const destination = hasViewAccess(loggedUser, 'dashboard')

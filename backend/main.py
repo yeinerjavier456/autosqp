@@ -75,6 +75,210 @@ DEFAULT_PUBLIC_COMPANY_CONTEXT = {
     "secondary_color": "#0f172a",
 }
 
+DEFAULT_COMPANY_ENABLED_MODULES = sorted(COMPANY_VIEW_IDS)
+
+
+def normalize_company_enabled_modules(modules: Optional[List[str]]) -> List[str]:
+    if modules is None:
+        return DEFAULT_COMPANY_ENABLED_MODULES[:]
+    normalized = []
+    for module_id in modules:
+        candidate = str(module_id or "").strip()
+        if not candidate or candidate not in COMPANY_VIEW_IDS or candidate in normalized:
+            continue
+        normalized.append(candidate)
+    return normalized
+
+
+def get_company_enabled_modules(company: Optional[models.Company]) -> List[str]:
+    if not company:
+        return DEFAULT_COMPANY_ENABLED_MODULES[:]
+    if getattr(company, "enabled_modules_json", None) is None:
+        return DEFAULT_COMPANY_ENABLED_MODULES[:]
+    return normalize_company_enabled_modules(getattr(company, "enabled_modules", []))
+
+
+def apply_company_module_limits(view_ids: List[str], company: Optional[models.Company]) -> List[str]:
+    enabled_modules = set(get_company_enabled_modules(company))
+    filtered = []
+    for view_id in view_ids or []:
+        if view_id not in COMPANY_VIEW_IDS or view_id in enabled_modules:
+            filtered.append(view_id)
+    return filtered
+
+
+def get_company_by_id(db: Session, company_id: Optional[int]) -> Optional[models.Company]:
+    if not company_id:
+        return None
+    return db.query(models.Company).filter(models.Company.id == company_id).first()
+
+
+def company_has_enabled_module(
+    module_id: str,
+    *,
+    company: Optional[models.Company] = None,
+    company_id: Optional[int] = None,
+    db: Optional[Session] = None,
+) -> bool:
+    target_company = company
+    if target_company is None and company_id and db is not None:
+        target_company = get_company_by_id(db, company_id)
+    enabled_modules = set(get_company_enabled_modules(target_company))
+    return module_id in enabled_modules
+
+
+def get_company_allowed_lead_statuses(company: Optional[models.Company]) -> List[str]:
+    statuses = ["new", "contacted", "in_process"]
+    if company_has_enabled_module("credits", company=company):
+        statuses.extend(["credit_study", "approvals"])
+    if company_has_enabled_module("purchase_board", company=company):
+        statuses.extend(["reserved", "preparation"])
+    statuses.extend(["sold", "lost"])
+    return statuses
+
+
+def normalize_company_lead_status(
+    status: Optional[str],
+    company: Optional[models.Company],
+    default: str = "new"
+) -> str:
+    normalized_status = normalize_lead_status_value(status, default)
+    allowed_statuses = set(get_company_allowed_lead_statuses(company))
+
+    if normalized_status in allowed_statuses:
+        return normalized_status
+
+    if normalized_status in {"credit_study", "approvals"}:
+        return models.LeadStatus.IN_PROCESS.value
+
+    if normalized_status in {"reserved", "preparation"}:
+        if models.LeadStatus.APPROVALS.value in allowed_statuses:
+            return models.LeadStatus.APPROVALS.value
+        return models.LeadStatus.IN_PROCESS.value
+
+    if normalized_status in {models.LeadStatus.SOLD.value, models.LeadStatus.LOST.value}:
+        return normalized_status if normalized_status in allowed_statuses else default
+
+    return default
+
+
+def get_bogota_today() -> datetime.date:
+    return datetime.datetime.now(BOGOTA_TZ).date()
+
+
+def get_company_license_state(company: Optional[models.Company]) -> Dict[str, Any]:
+    if not company:
+        return {"status": "unlimited", "notice": None, "days_remaining": None}
+
+    today = get_bogota_today()
+    start_date = getattr(company, "license_start_date", None)
+    end_date = getattr(company, "license_end_date", None)
+
+    if start_date and today < start_date:
+        days_until_start = (start_date - today).days
+        return {
+            "status": "pending",
+            "notice": f"La licencia de la empresa inicia el {start_date.strftime('%d/%m/%Y')}. Faltan {days_until_start} día(s).",
+            "days_remaining": days_until_start,
+        }
+
+    if end_date:
+        days_remaining = (end_date - today).days
+        if days_remaining < 0:
+            return {
+                "status": "expired",
+                "notice": f"La licencia de la empresa terminó el {end_date.strftime('%d/%m/%Y')}.",
+                "days_remaining": days_remaining,
+            }
+        if days_remaining <= 5:
+            return {
+                "status": "warning",
+                "notice": f"La licencia vence el {end_date.strftime('%d/%m/%Y')}. Quedan {days_remaining} día(s).",
+                "days_remaining": days_remaining,
+            }
+        return {"status": "active", "notice": None, "days_remaining": days_remaining}
+
+    return {"status": "unlimited", "notice": None, "days_remaining": None}
+
+
+def ensure_company_license_allows_login(company: Optional[models.Company]):
+    license_state = get_company_license_state(company)
+    if license_state["status"] in {"pending", "expired"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=license_state["notice"] or "La licencia de la empresa no permite el acceso.",
+        )
+    return license_state
+
+
+def count_company_users(db: Session, company_id: Optional[int]) -> int:
+    if not company_id:
+        return 0
+    return db.query(func.count(models.User.id)).filter(models.User.company_id == company_id).scalar() or 0
+
+
+def count_company_active_users(db: Session, company_id: Optional[int]) -> int:
+    if not company_id:
+        return 0
+    return db.query(func.count(models.User.id)).filter(
+        models.User.company_id == company_id,
+        models.User.is_active != 0
+    ).scalar() or 0
+
+
+def count_company_leads_in_license_period(db: Session, company: Optional[models.Company]) -> int:
+    if not company:
+        return 0
+    query = db.query(func.count(models.Lead.id)).filter(models.Lead.company_id == company.id)
+    if getattr(company, "license_start_date", None):
+        query = query.filter(func.date(models.Lead.created_at) >= company.license_start_date)
+    if getattr(company, "license_end_date", None):
+        query = query.filter(func.date(models.Lead.created_at) <= company.license_end_date)
+    return query.scalar() or 0
+
+
+def ensure_company_user_limit(db: Session, company_id: Optional[int], *, excluding_user_id: Optional[int] = None):
+    if not company_id:
+        return
+    company = db.query(models.Company).filter(models.Company.id == company_id).first()
+    if not company or not company.max_users:
+        return
+    query = db.query(func.count(models.User.id)).filter(models.User.company_id == company_id)
+    if excluding_user_id:
+        query = query.filter(models.User.id != excluding_user_id)
+    total_users = query.scalar() or 0
+    if total_users >= company.max_users:
+        raise HTTPException(status_code=403, detail=f"La empresa alcanzó el límite de usuarios ({company.max_users}).")
+
+
+def ensure_company_active_account_limit(db: Session, company_id: Optional[int], *, excluding_user_id: Optional[int] = None):
+    if not company_id:
+        return
+    company = db.query(models.Company).filter(models.Company.id == company_id).first()
+    if not company or not company.max_active_accounts:
+        return
+    query = db.query(func.count(models.User.id)).filter(
+        models.User.company_id == company_id,
+        models.User.is_active != 0
+    )
+    if excluding_user_id:
+        query = query.filter(models.User.id != excluding_user_id)
+    total_active_users = query.scalar() or 0
+    if total_active_users >= company.max_active_accounts:
+        raise HTTPException(status_code=403, detail=f"La empresa alcanzó el límite de cuentas activas ({company.max_active_accounts}).")
+
+
+def ensure_company_lead_creation_capacity(db: Session, company_id: Optional[int]):
+    if not company_id:
+        return
+    company = db.query(models.Company).filter(models.Company.id == company_id).first()
+    if not company:
+        return
+    if company.max_leads:
+        total_leads = count_company_leads_in_license_period(db, company)
+        if total_leads >= company.max_leads:
+            raise HTTPException(status_code=403, detail=f"La empresa alcanzó el límite de creación de leads ({company.max_leads}) para la licencia actual.")
+
 
 def normalize_public_host(raw_host: Optional[str]) -> str:
     host = (raw_host or "").strip().lower()
@@ -585,6 +789,23 @@ def ensure_company_public_domain_columns():
         )).scalar()
         if not index_exists:
             conn.execute(text("CREATE INDEX ix_companies_public_domain ON companies (public_domain)"))
+
+        company_columns = {
+            "max_users": "ALTER TABLE companies ADD COLUMN max_users INTEGER NULL",
+            "max_leads": "ALTER TABLE companies ADD COLUMN max_leads INTEGER NULL",
+            "max_active_accounts": "ALTER TABLE companies ADD COLUMN max_active_accounts INTEGER NULL",
+            "license_start_date": "ALTER TABLE companies ADD COLUMN license_start_date DATE NULL",
+            "license_end_date": "ALTER TABLE companies ADD COLUMN license_end_date DATE NULL",
+            "enabled_modules_json": "ALTER TABLE companies ADD COLUMN enabled_modules_json TEXT NULL",
+        }
+        for column_name, ddl in company_columns.items():
+            exists = conn.execute(text(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'companies' "
+                "AND COLUMN_NAME = :column_name"
+            ), {"column_name": column_name}).scalar()
+            if not exists:
+                conn.execute(text(ddl))
 
 ensure_company_public_domain_columns()
 
@@ -1312,6 +1533,10 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
             detail="Usuario inhabilitado",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    company = None
+    if getattr(user, "company_id", None):
+        company = db.query(models.Company).filter(models.Company.id == user.company_id).first()
+    license_state = ensure_company_license_allows_login(company)
     access_token = auth_utils.create_access_token(
         data={"sub": str(user.id), "role": user.role.name if user.role else "user"}
     )
@@ -1319,7 +1544,13 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     # Log the successful login
     log_action_to_db(db, user.id, "LOGIN", "Auth", user.id, "Usuario inició sesión exitosamente")
     
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "license_status": license_state["status"],
+        "license_notice": license_state["notice"],
+        "license_days_remaining": license_state["days_remaining"],
+    }
 
 def log_action_to_db(db: Session, user_id: int, action: str, entity_type: str, entity_id: int, details: str = None, ip_address: str = None):
     try:
@@ -1930,6 +2161,8 @@ def maybe_assign_credit_coordinator(
     previous_assigned_to_id: Optional[int] = None
 ):
     next_supervisor_ids = normalize_supervisor_ids(supervisor_ids)
+    if not company_has_enabled_module("credits", company_id=lead_company_id, db=db):
+        return assigned_to_id, next_supervisor_ids, None
 
     if normalize_lead_status_value(target_status) != models.LeadStatus.CREDIT_STUDY.value:
         return assigned_to_id, next_supervisor_ids, None
@@ -1958,6 +2191,7 @@ def get_effective_lead_assignment_for_update(
     lead_update: schemas.LeadUpdate,
     current_user: models.User
 ):
+    lead_company = get_company_by_id(db, lead.company_id)
     previous_assigned_user = lead.assigned_to
     previous_role_name = get_user_role_name(previous_assigned_user)
     target_assigned_user = previous_assigned_user
@@ -2001,6 +2235,11 @@ def get_effective_lead_assignment_for_update(
         current_user=current_user,
         base_status=base_status,
         assigned_to_id=target_assigned_to_id
+    )
+    effective_status = normalize_company_lead_status(
+        effective_status,
+        lead_company,
+        models.LeadStatus.NEW.value
     )
     if board_transfer:
         effective_status = models.LeadStatus.NEW.value
@@ -2264,9 +2503,21 @@ def resolve_assignable_role(db: Session, target_role: models.Role, company_id: O
 def serialize_user(user: models.User, is_online: Optional[bool] = None) -> dict:
     payload = schemas.User.model_validate(user, from_attributes=True).model_dump()
     payload["role"] = serialize_role(user.role) if user.role else None
+    company = getattr(user, "company", None)
+    if payload.get("role"):
+        payload["role"]["permissions"] = apply_company_module_limits(payload["role"].get("permissions", []), company)
+        payload["role"]["menu_order"] = apply_company_module_limits(payload["role"].get("menu_order", []), company)
+    if payload.get("company"):
+        payload["company"]["enabled_modules"] = get_company_enabled_modules(company)
     payload["auto_assign_leads"] = bool(getattr(user, "auto_assign_leads", False) and is_advisor_role(getattr(user, "role", None)))
     if is_online is not None:
         payload["is_online"] = is_online
+    return payload
+
+
+def serialize_company(company: models.Company) -> dict:
+    payload = schemas.Company.model_validate(company, from_attributes=True).model_dump()
+    payload["enabled_modules"] = get_company_enabled_modules(company)
     return payload
 
 def upsert_purchase_request_from_lead(db: Session, lead: models.Lead):
@@ -2274,8 +2525,11 @@ def upsert_purchase_request_from_lead(db: Session, lead: models.Lead):
     Create/update a purchase request for purchase managers when a lead reaches
     reservation/purchase flow and is marked as "no vehicle in inventory" with a desired vehicle.
     """
+    if not lead or not company_has_enabled_module("purchase_board", company_id=getattr(lead, "company_id", None), db=db):
+        return
+
     normalized_status = normalize_lead_status_value(getattr(lead, "status", None))
-    if not lead or normalized_status not in {
+    if normalized_status not in {
         models.LeadStatus.RESERVED.value,
         models.LeadStatus.PREPARATION.value,
         models.LeadStatus.SOLD.value,
@@ -2384,7 +2638,9 @@ def upsert_credit_application_from_lead(
     Create/update a credit application when the lead enters credit request stage.
     This keeps the same lead visible in /creditos without creating duplicates.
     """
-    if not lead or normalize_lead_status_value(lead.status) != models.LeadStatus.CREDIT_STUDY.value:
+    if not lead or not company_has_enabled_module("credits", company_id=getattr(lead, "company_id", None), db=db):
+        return
+    if normalize_lead_status_value(lead.status) != models.LeadStatus.CREDIT_STUDY.value:
         return
 
     detail = db.query(models.LeadProcessDetail).filter(
@@ -2455,6 +2711,9 @@ def upsert_credit_approval_data_for_lead(
     lead: models.Lead,
     lead_update: schemas.LeadUpdate,
 ):
+    if not company_has_enabled_module("credits", company_id=getattr(lead, "company_id", None), db=db):
+        return
+
     approved_amount = lead_update.approved_amount
     approval_percentage = lead_update.approval_percentage
     approved_down_payment = lead_update.approved_down_payment
@@ -2598,6 +2857,10 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
+
+    ensure_company_user_limit(db, user.company_id)
+    if user.company_id:
+        ensure_company_active_account_limit(db, user.company_id)
     
     hashed_password = auth_utils.get_password_hash(user.password)
     auto_assign_leads = bool(user.auto_assign_leads) if is_advisor_role(role_obj) else False
@@ -2624,6 +2887,7 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
 # Keep this for backward compatibility or strict "me" endpoint
 @app.get("/users/me", response_model=schemas.User)
 async def read_users_me(current_user: models.User = Depends(get_current_user)):
+    ensure_company_license_allows_login(getattr(current_user, "company", None))
     return serialize_user(current_user)
 
 @app.get("/users/{user_id}", response_model=schemas.User)
@@ -2665,6 +2929,11 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
     if user_update.company_id is not None:
         if acting_company_id and user_update.company_id != acting_company_id:
             raise HTTPException(status_code=403, detail="No puedes mover usuarios a otra empresa")
+        if user_update.company_id != db_user.company_id:
+            ensure_company_user_limit(db, user_update.company_id, excluding_user_id=db_user.id)
+            target_active_state = bool(user_update.is_active) if user_update.is_active is not None else bool(db_user.is_active)
+            if target_active_state and user_update.company_id:
+                ensure_company_active_account_limit(db, user_update.company_id, excluding_user_id=db_user.id)
         db_user.company_id = user_update.company_id
     
     # Update new fields
@@ -2680,6 +2949,11 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
         db_user.auto_assign_leads = bool(user_update.auto_assign_leads) if is_advisor_role(resolved_role) else False
     elif not is_advisor_role(resolved_role):
         db_user.auto_assign_leads = False
+    if user_update.is_active is not None:
+        next_active = 1 if bool(user_update.is_active) else 0
+        if next_active and not bool(db_user.is_active):
+            ensure_company_active_account_limit(db, db_user.company_id, excluding_user_id=db_user.id)
+        db_user.is_active = next_active
         
     try:
         db.commit()
@@ -2976,12 +3250,18 @@ def create_company(company: schemas.CompanyCreate, db: Session = Depends(get_db)
         public_domains_json=json.dumps(public_domains),
         logo_url=company.logo_url,
         primary_color=company.primary_color,
-        secondary_color=company.secondary_color
+        secondary_color=company.secondary_color,
+        max_users=company.max_users,
+        max_leads=company.max_leads,
+        max_active_accounts=company.max_active_accounts,
+        license_start_date=company.license_start_date,
+        license_end_date=company.license_end_date,
+        enabled_modules_json=json.dumps(normalize_company_enabled_modules(company.enabled_modules))
     )
     db.add(new_company)
     db.commit()
     db.refresh(new_company)
-    return new_company
+    return serialize_company(new_company)
 
 @app.get("/companies/", response_model=schemas.CompanyList)
 def read_companies(skip: int = 0, limit: int = 10, q: str = None, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -2991,14 +3271,14 @@ def read_companies(skip: int = 0, limit: int = 10, q: str = None, db: Session = 
     
     total = query.count()
     companies = query.offset(skip).limit(limit).all()
-    return {"items": companies, "total": total}
+    return {"items": [serialize_company(company) for company in companies], "total": total}
 
 @app.get("/companies/{company_id}", response_model=schemas.Company)
 def read_company(company_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     company = db.query(models.Company).filter(models.Company.id == company_id).first()
     if company is None:
         raise HTTPException(status_code=404, detail="Company not found")
-    return company
+    return serialize_company(company)
 
 @app.put("/companies/{company_id}", response_model=schemas.Company)
 def update_company(company_id: int, company_update: schemas.CompanyCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -3014,6 +3294,12 @@ def update_company(company_id: int, company_update: schemas.CompanyCreate, db: S
     db_company.logo_url = company_update.logo_url
     db_company.primary_color = company_update.primary_color
     db_company.secondary_color = company_update.secondary_color
+    db_company.max_users = company_update.max_users
+    db_company.max_leads = company_update.max_leads
+    db_company.max_active_accounts = company_update.max_active_accounts
+    db_company.license_start_date = company_update.license_start_date
+    db_company.license_end_date = company_update.license_end_date
+    db_company.enabled_modules_json = json.dumps(normalize_company_enabled_modules(company_update.enabled_modules))
     
     try:
         db.commit()
@@ -3022,7 +3308,7 @@ def update_company(company_id: int, company_update: schemas.CompanyCreate, db: S
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
         
-    return db_company
+    return serialize_company(db_company)
 
 @app.get("/public/company-context", response_model=schemas.PublicCompanyContext)
 def read_public_company_context(request: Request, db: Session = Depends(get_db)):
@@ -3303,6 +3589,7 @@ def read_leads_board(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    company = get_company_by_id(db, current_user.company_id)
     parsed_status_limits: Dict[str, int] = {}
     if status_limits:
         try:
@@ -3318,7 +3605,7 @@ def read_leads_board(
 
     columns: List[schemas.LeadBoardColumn] = []
 
-    for status_key in LEAD_STATUS_SEQUENCE:
+    for status_key in get_company_allowed_lead_statuses(company):
         normalized_status = normalize_lead_status_value(status_key)
         if global_status and normalize_lead_status_value(global_status) != normalized_status:
             columns.append(
@@ -3583,6 +3870,7 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
              raise HTTPException(status_code=400, detail="Company ID required for assignment")
 
     # 2. Assignment Logic
+    company = get_company_by_id(db, company_id)
     assigned_user_id = lead.assigned_to_id
     supervisor_ids = normalize_supervisor_ids(getattr(lead, "supervisor_ids", []))
     if supervisor_ids and not is_company_admin(current_user):
@@ -3617,6 +3905,11 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
         base_status=lead.status,
         assigned_to_id=assigned_user_id
     )
+    effective_status = normalize_company_lead_status(
+        effective_status,
+        company,
+        models.LeadStatus.NEW.value
+    )
     assigned_user_id, supervisor_ids, credit_coordinator = maybe_assign_credit_coordinator(
         db=db,
         lead_company_id=company_id,
@@ -3628,6 +3921,8 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
     )
     if should_supervise_manual_lead(current_user.id, assigned_user_id):
         supervisor_ids = ensure_user_in_supervisors(supervisor_ids, current_user.id)
+
+    ensure_company_lead_creation_capacity(db, company_id)
 
     new_lead = models.Lead(
         created_at=datetime.datetime.now(),
@@ -5273,6 +5568,8 @@ def maybe_create_public_chat_lead(
         if auto_assigned_user:
             assigned_user_id = auto_assigned_user.id
 
+    ensure_company_lead_creation_capacity(db, session.company_id)
+
     new_lead = models.Lead(
         source=lead_source,
         name=name,
@@ -6120,6 +6417,7 @@ def receive_webhook_lead(
     company_id = company.id if company else None
 
     # Create Lead
+    ensure_company_lead_creation_capacity(db, company_id)
     new_lead = models.Lead(
         name=name,
         phone=phone,

@@ -560,6 +560,27 @@ const LEAD_STATUS_META = LEAD_STATUS_OPTIONS.reduce((accumulator, statusOption) 
     return accumulator;
 }, {});
 
+const getCompanyEnabledModules = (user) => {
+    const rawModules = user?.company?.enabled_modules;
+    return Array.isArray(rawModules) ? rawModules : [];
+};
+
+const getEnabledLeadStatusOptions = (user) => {
+    const enabledModules = new Set(getCompanyEnabledModules(user));
+    const hasCreditsModule = enabledModules.has('credits');
+    const hasPurchaseModule = enabledModules.has('purchase_board');
+
+    return LEAD_STATUS_OPTIONS.filter((statusOption) => {
+        if (['credit_study', 'approvals'].includes(statusOption.value)) {
+            return hasCreditsModule;
+        }
+        if (['reserved', 'preparation'].includes(statusOption.value)) {
+            return hasPurchaseModule;
+        }
+        return true;
+    });
+};
+
 const normalizeLeadStatus = (status) => {
     const normalizedStatus = String(status || '').trim().toLowerCase();
     if (!normalizedStatus) return 'new';
@@ -3451,6 +3472,9 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const isAllyBoard = boardMode === 'ally';
     const currentUserId = parseUserId(user?.id);
     const currentRoleName = normalizeRoleKey(user?.role);
+    const leadStatusOptions = React.useMemo(() => getEnabledLeadStatusOptions(user), [user]);
+    const enabledModules = React.useMemo(() => new Set(getCompanyEnabledModules(user)), [user]);
+    const hasCreditsModule = enabledModules.has('credits');
     const boardTitle = isAllyBoard ? 'Tablero de Aliados' : 'Tablero de Leads';
     const boardDescription = isAllyBoard
         ? 'Gestiona los leads que estan en manos de aliados y transfiere al tablero general cuando corresponda.'
@@ -3641,7 +3665,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         try {
             const token = localStorage.getItem('token');
             const normalizedSearchTerm = term?.trim() || '';
-            const statusLimitsPayload = LEAD_STATUS_OPTIONS.reduce((acc, statusOption) => {
+            const statusLimitsPayload = leadStatusOptions.reduce((acc, statusOption) => {
                 acc[statusOption.value] = visibleLeadsByStatus[normalizeLeadStatus(statusOption.value)] || BOARD_PAGE_SIZE;
                 return acc;
             }, {});
@@ -3965,21 +3989,23 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 Swal.fire('Atención', 'Debes indicar el monto de la separación para pasar el lead a Reservas.', 'warning');
                 return;
             }
-            if (!finalApprovedAmount) {
-                Swal.fire('Atención', 'Debes indicar el monto aprobado del crédito para este lead.', 'warning');
-                return;
-            }
-            if (!finalApprovalPercentage || finalApprovalPercentage <= 0 || finalApprovalPercentage > 100) {
-                Swal.fire('Atención', 'Debes indicar el porcentaje aprobado del crédito.', 'warning');
-                return;
-            }
-            if (!finalApprovedDownPayment) {
-                Swal.fire('Atención', 'Debes indicar la cuota inicial mínima aprobada.', 'warning');
-                return;
-            }
-            if (finalApprovedAmount > 0 && (!Number.isFinite(parsedCreditUsedAmount) || parsedCreditUsedAmount <= 0)) {
-                Swal.fire('Atención', 'Debes indicar el monto del crédito a usar para pasar el lead a Reservas.', 'warning');
-                return;
+            if (hasCreditsModule) {
+                if (!finalApprovedAmount) {
+                    Swal.fire('Atención', 'Debes indicar el monto aprobado del crédito para este lead.', 'warning');
+                    return;
+                }
+                if (!finalApprovalPercentage || finalApprovalPercentage <= 0 || finalApprovalPercentage > 100) {
+                    Swal.fire('Atención', 'Debes indicar el porcentaje aprobado del crédito.', 'warning');
+                    return;
+                }
+                if (!finalApprovedDownPayment) {
+                    Swal.fire('Atención', 'Debes indicar la cuota inicial mínima aprobada.', 'warning');
+                    return;
+                }
+                if (finalApprovedAmount > 0 && (!Number.isFinite(parsedCreditUsedAmount) || parsedCreditUsedAmount <= 0)) {
+                    Swal.fire('Atención', 'Debes indicar el monto del crédito a usar para pasar el lead a Reservas.', 'warning');
+                    return;
+                }
             }
             if (!['efectivo', 'transferencia'].includes(normalizedPaymentMethod)) {
                 Swal.fire('Atención', 'Debes indicar si la separación fue en efectivo o transferencia.', 'warning');
@@ -3990,14 +4016,16 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 vehicle_id: leadRef?.process_detail?.vehicle_id || null,
                 desired_vehicle: leadRef?.process_detail?.desired_vehicle || leadRef?.message?.trim() || 'Por definir',
                 reservation_amount: parsedReservationAmount,
-                credit_used_amount: Number.isFinite(parsedCreditUsedAmount) && parsedCreditUsedAmount > 0 ? parsedCreditUsedAmount : null,
+                credit_used_amount: hasCreditsModule && Number.isFinite(parsedCreditUsedAmount) && parsedCreditUsedAmount > 0 ? parsedCreditUsedAmount : null,
                 reservation_payment_method: normalizedPaymentMethod,
             };
-            reservedApprovalPayload = {
-                approved_amount: finalApprovedAmount,
-                approval_percentage: finalApprovalPercentage,
-                approved_down_payment: finalApprovedDownPayment,
-            };
+            if (hasCreditsModule) {
+                reservedApprovalPayload = {
+                    approved_amount: finalApprovedAmount,
+                    approval_percentage: finalApprovalPercentage,
+                    approved_down_payment: finalApprovedDownPayment,
+                };
+            }
         }
 
         try {
@@ -4520,7 +4548,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                                     onChange={(e) => setGlobalStatusFilter(e.target.value)}
                                 >
                                     <option value="">Todos los Estados</option>
-                                    {LEAD_STATUS_OPTIONS.map((statusOption) => (
+                                    {leadStatusOptions.map((statusOption) => (
                                         <option key={statusOption.value} value={statusOption.value}>
                                             {statusOption.label}
                                         </option>
@@ -4603,7 +4631,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
             {/* Kanban Board */}
             <div className="flex gap-4 overflow-x-auto pb-4 h-full items-start">
-                {LEAD_STATUS_OPTIONS.map((statusOption) => (
+                {leadStatusOptions.map((statusOption) => (
                     <KanbanColumn
                         key={statusOption.value}
                         title={statusOption.label}
@@ -4648,7 +4676,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                                         await prepareStatusChange(lead, e.target.value, { allowManualSelection: true });
                                     }}
                                 >
-                                    {LEAD_STATUS_OPTIONS.map((statusOption) => (
+                                    {leadStatusOptions.map((statusOption) => (
                                         <option key={statusOption.value} value={statusOption.value}>
                                             {statusOption.label}
                                         </option>

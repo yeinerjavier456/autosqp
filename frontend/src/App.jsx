@@ -36,7 +36,7 @@ import PurchaseBoard from './pages/PurchaseBoard';
 import InternalChat from './pages/InternalChat';
 import SystemLogs from './pages/SystemLogs';
 import RolesConfig from './pages/RolesConfig';
-import { hasViewAccess, getRoleName } from './config/views';
+import { hasViewAccess, getOrderedMenuViews } from './config/views';
 
 const routerBaseName = import.meta.env.BASE_URL === '/' ? '/' : import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -49,19 +49,10 @@ const PrivateRoute = ({ requiredView }) => {
 
   if (!user) return <Navigate to="/login" replace />;
 
-  const roleName = getRoleName(user);
   if (requiredView && !hasViewAccess(user, requiredView)) {
-    if (hasViewAccess(user, 'inventory')) {
-      return <Navigate to="/admin/inventory" replace />;
-    }
-    if (hasViewAccess(user, 'credits')) {
-      return <Navigate to="/admin/credits" replace />;
-    }
-    if (hasViewAccess(user, 'ally_board')) {
-      return <Navigate to="/aliado/dashboard" replace />;
-    }
-    if (hasViewAccess(user, 'dashboard')) {
-      return <Navigate to="/admin/dashboard" replace />;
+    const fallbackView = getOrderedMenuViews(user).find((view) => view?.path);
+    if (fallbackView?.path) {
+      return <Navigate to={fallbackView.path} replace />;
     }
     return <Navigate to="/autos" replace />;
   }

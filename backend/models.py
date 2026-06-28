@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String, ForeignKey, Enum as SqEnum, JSON, DateTime, Text
+from sqlalchemy import Boolean, Column, Integer, String, ForeignKey, Enum as SqEnum, JSON, DateTime, Text, Date
 from sqlalchemy.orm import relationship
 from database import Base
 import enum
@@ -29,6 +29,12 @@ class Company(Base):
     logo_url = Column(String(500), nullable=True)
     primary_color = Column(String(50), default="#000000")
     secondary_color = Column(String(50), default="#ffffff")
+    max_users = Column(Integer, nullable=True)
+    max_leads = Column(Integer, nullable=True)
+    max_active_accounts = Column(Integer, nullable=True)
+    license_start_date = Column(Date, nullable=True)
+    license_end_date = Column(Date, nullable=True)
+    enabled_modules_json = Column(Text, nullable=True)
     
     users = relationship("User", back_populates="company")
     integration_settings = relationship("IntegrationSettings", uselist=False, back_populates="company")
@@ -59,6 +65,27 @@ class Company(Base):
                 normalized.append(text_value)
         if self.public_domain and self.public_domain not in normalized:
             normalized.insert(0, self.public_domain)
+        return normalized
+
+    @property
+    def enabled_modules(self):
+        raw_value = self.enabled_modules_json
+        if not raw_value:
+            return []
+        try:
+            values = json.loads(raw_value)
+        except Exception:
+            values = []
+        if not isinstance(values, list):
+            values = []
+        normalized = []
+        for value in values:
+            if not value:
+                continue
+            module_id = str(value).strip()
+            if not module_id or module_id in normalized:
+                continue
+            normalized.append(module_id)
         return normalized
 
 

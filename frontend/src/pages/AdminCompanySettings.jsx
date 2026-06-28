@@ -1,11 +1,23 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import axios from 'axios';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+import { SYSTEM_VIEWS } from '../config/views';
+
+const COMPANY_VIEWS = SYSTEM_VIEWS.filter((view) => view.scope === 'company');
+const COMPANY_VIEW_GROUPS = COMPANY_VIEWS.reduce((acc, view) => {
+    if (!acc[view.section]) acc[view.section] = [];
+    acc[view.section].push(view);
+    return acc;
+}, {});
+const SECTION_LABELS = {
+    general: 'General',
+    admin: 'Configuracion',
+    crm: 'CRM',
+    channels: 'Canales',
+};
 
 const AdminCompanySettings = () => {
     const { id } = useParams();
-    const navigate = useNavigate();
     const [company, setCompany] = useState({
         name: 'Nueva Empresa',
         public_domain: '',
@@ -13,10 +25,17 @@ const AdminCompanySettings = () => {
         logo_url: 'https://via.placeholder.com/150',
         primary_color: '#3B82F6', // Blue-500
         secondary_color: '#1E40AF', // Blue-800
+        max_users: '',
+        max_leads: '',
+        max_active_accounts: '',
+        license_start_date: '',
+        license_end_date: '',
+        enabled_modules: COMPANY_VIEWS.map((view) => view.id),
     });
     const [domainDraft, setDomainDraft] = useState('');
     const [isEditing, setIsEditing] = useState(false);
     const [status, setStatus] = useState({ type: '', message: '' });
+    const groupedViews = useMemo(() => COMPANY_VIEW_GROUPS, []);
 
     useEffect(() => {
         if (id) {
@@ -32,6 +51,14 @@ const AdminCompanySettings = () => {
                         public_domains: Array.isArray(response.data.public_domains)
                             ? response.data.public_domains
                             : (response.data.public_domain ? [response.data.public_domain] : []),
+                        max_users: response.data.max_users ?? '',
+                        max_leads: response.data.max_leads ?? '',
+                        max_active_accounts: response.data.max_active_accounts ?? '',
+                        license_start_date: response.data.license_start_date || '',
+                        license_end_date: response.data.license_end_date || '',
+                        enabled_modules: Array.isArray(response.data.enabled_modules)
+                            ? response.data.enabled_modules
+                            : COMPANY_VIEWS.map((view) => view.id),
                     });
                 } catch (error) {
                     console.error("Error fetching company", error);
@@ -46,6 +73,23 @@ const AdminCompanySettings = () => {
         setCompany({
             ...company,
             [e.target.name]: e.target.value,
+        });
+    };
+
+    const handleModuleToggle = (moduleId) => {
+        setCompany((prev) => {
+            const current = new Set(prev.enabled_modules || []);
+            if (current.has(moduleId)) {
+                current.delete(moduleId);
+            } else {
+                current.add(moduleId);
+            }
+            return {
+                ...prev,
+                enabled_modules: COMPANY_VIEWS
+                    .map((view) => view.id)
+                    .filter((viewId) => current.has(viewId)),
+            };
         });
     };
 
@@ -90,6 +134,10 @@ const AdminCompanySettings = () => {
     };
 
     const handleSave = async () => {
+        if (company.license_start_date && company.license_end_date && company.license_end_date < company.license_start_date) {
+            setStatus({ type: 'error', message: 'La fecha final no puede ser menor que la fecha inicial.' });
+            return;
+        }
         setStatus({ type: 'loading', message: 'Guardando...' });
         try {
             const token = localStorage.getItem('token');
@@ -98,11 +146,13 @@ const AdminCompanySettings = () => {
                 ...company,
                 public_domain: company.public_domains?.[0] || '',
                 public_domains: company.public_domains || [],
+                max_users: company.max_users === '' ? null : parseInt(company.max_users, 10),
+                max_leads: company.max_leads === '' ? null : parseInt(company.max_leads, 10),
+                max_active_accounts: company.max_active_accounts === '' ? null : parseInt(company.max_active_accounts, 10),
+                license_start_date: company.license_start_date || null,
+                license_end_date: company.license_end_date || null,
+                enabled_modules: company.enabled_modules || [],
             };
-
-            // Note: We need to implement PUT endpoint for full update. 
-            // For now, if editing, we might need a specific update endpoint or handling.
-            // Assuming we'll add PUT /companies/{id} soon. Re-using POST for now will fail due to unique name constraint if name unchanged.
 
             if (isEditing) {
                 await axios.put(`/api/companies/${id}`, payload, { headers });
@@ -110,7 +160,6 @@ const AdminCompanySettings = () => {
             } else {
                 const response = await axios.post('/api/companies/', payload, { headers });
                 setStatus({ type: 'success', message: `Empresa "${response.data.name}" creada exitosamente!` });
-                // navigate(`/admin/companies/${response.data.id}`); // Optional: redirect to edit mode
             }
         } catch (error) {
             console.error(error);
@@ -231,6 +280,92 @@ const AdminCompanySettings = () => {
                                     />
                                     <span className="text-gray-500 text-sm font-mono">{company.secondary_color}</span>
                                 </div>
+                            </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-100">
+                            <h3 className="text-lg font-bold mb-4 text-slate-700">Licencia y Limites</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Limite de usuarios</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        name="max_users"
+                                        value={company.max_users}
+                                        onChange={handleChange}
+                                        className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                        placeholder="Sin limite"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Limite de leads</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        name="max_leads"
+                                        value={company.max_leads}
+                                        onChange={handleChange}
+                                        className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                        placeholder="Sin limite"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Limite de cuentas activas</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        name="max_active_accounts"
+                                        value={company.max_active_accounts}
+                                        onChange={handleChange}
+                                        className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                        placeholder="Sin limite"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Fecha de inicio</label>
+                                    <input
+                                        type="date"
+                                        name="license_start_date"
+                                        value={company.license_start_date || ''}
+                                        onChange={handleChange}
+                                        className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Fecha de fin</label>
+                                    <input
+                                        type="date"
+                                        name="license_end_date"
+                                        value={company.license_end_date || ''}
+                                        onChange={handleChange}
+                                        className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-100">
+                            <h3 className="text-lg font-bold mb-4 text-slate-700">Modulos habilitados</h3>
+                            <div className="space-y-4">
+                                {Object.entries(groupedViews).map(([sectionId, views]) => (
+                                    <div key={sectionId} className="rounded-xl border border-slate-200 p-4">
+                                        <h4 className="text-sm font-bold text-slate-700 mb-3">{SECTION_LABELS[sectionId] || sectionId}</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            {views.map((view) => (
+                                                <label key={view.id} className="flex items-center gap-3 text-sm text-slate-700">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={(company.enabled_modules || []).includes(view.id)}
+                                                        onChange={() => handleModuleToggle(view.id)}
+                                                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                                    />
+                                                    <span>{view.menuLabel || view.label}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
 

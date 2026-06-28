@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, ConfigDict, Field
 from typing import List, Optional, Any, Dict
-from datetime import datetime
+from datetime import datetime, date
 import enum
 
 # --- ENUMS ---
@@ -106,6 +106,12 @@ class UserCompany(BaseModel):
     logo_url: Optional[str] = None
     primary_color: Optional[str] = "#000000"
     secondary_color: Optional[str] = "#ffffff"
+    max_users: Optional[int] = None
+    max_leads: Optional[int] = None
+    max_active_accounts: Optional[int] = None
+    license_start_date: Optional[date] = None
+    license_end_date: Optional[date] = None
+    enabled_modules: List[str] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -128,6 +134,9 @@ class UserList(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    license_status: Optional[str] = None
+    license_notice: Optional[str] = None
+    license_days_remaining: Optional[int] = None
 
 class TokenData(BaseModel):
     username: Optional[str] = None
@@ -141,6 +150,12 @@ class CompanyBase(BaseModel):
     logo_url: Optional[str] = None
     primary_color: Optional[str] = "#000000"
     secondary_color: Optional[str] = "#ffffff"
+    max_users: Optional[int] = None
+    max_leads: Optional[int] = None
+    max_active_accounts: Optional[int] = None
+    license_start_date: Optional[date] = None
+    license_end_date: Optional[date] = None
+    enabled_modules: List[str] = Field(default_factory=list)
 
 class CompanyCreate(CompanyBase):
     pass
