@@ -1,22 +1,32 @@
 import React from 'react';
 import PublicSalesChatbot from '../components/PublicSalesChatbot';
+import { normalizeMediaUrl } from '../utils/media';
+import { getPublicCompanyHomeUrl, usePublicCompany } from '../utils/publicCompany';
 
 const TikTokLanding = () => {
+    const company = usePublicCompany();
+    const publicHomeUrl = getPublicCompanyHomeUrl(company.public_domain);
+    const brandName = company.name || 'AutosQP';
+
     return (
         <div className="min-h-screen bg-[radial-gradient(circle_at_top,#fff6e8_0%,#f7fafc_42%,#e2e8f0_100%)] text-slate-900">
             <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6">
                 <header className="flex justify-center pb-4 sm:pb-5 lg:pb-6">
                     <a
-                        href="https://autosqp.com"
-                        title="AutosQP"
+                        href={publicHomeUrl}
+                        title={brandName}
                         className="rounded-full border border-white/70 bg-white/90 px-4 py-2 shadow-sm backdrop-blur transition-opacity hover:opacity-90"
                     >
-                        <img
-                            src="https://autosqp.com/wp-content/uploads/2025/12/Horizontal-Base_-v3-1.03.18-p.m.png"
-                            alt="AutosQP"
-                            className="h-11 w-auto object-contain md:h-12"
-                            style={{ aspectRatio: '512 / 300' }}
-                        />
+                        {company.logo_url ? (
+                            <img
+                                src={normalizeMediaUrl(company.logo_url)}
+                                alt={brandName}
+                                className="h-11 w-auto object-contain md:h-12"
+                                style={{ aspectRatio: '512 / 300' }}
+                            />
+                        ) : (
+                            <span className="text-lg font-extrabold">{brandName}</span>
+                        )}
                     </a>
                 </header>
 
@@ -32,8 +42,9 @@ const TikTokLanding = () => {
                                 embedded={true}
                                 forceFreshSession={true}
                                 sourcePage="/autos"
-                                sessionStorageKey="autosqp_public_chat_session_tiktok"
-                                initialAssistantMessage="Hola, bienvenido a Autos QP. Soy tu asesora virtual y voy a ayudarte a perfilar tu solicitud. Para empezar, cuéntame qué vehículo te interesa."
+                                brandName={brandName}
+                                sessionStorageKey={`public_chat_session_tiktok_${company.public_domain || window.location.host}`}
+                                initialAssistantMessage={`Hola, bienvenido a ${brandName}. Soy tu asesora virtual y voy a ayudarte a perfilar tu solicitud. Para empezar, cuéntame qué vehículo te interesa.`}
                             />
                         </div>
                     </section>

@@ -3,9 +3,11 @@ import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import PublicSalesChatbot from '../components/PublicSalesChatbot';
 import { normalizeMediaUrl } from '../utils/media';
+import { getPublicCompanyHomeUrl, usePublicCompany } from '../utils/publicCompany';
 
 const VehicleDetail = () => {
     const { id } = useParams();
+    const company = usePublicCompany();
     const [vehicle, setVehicle] = useState(null);
     const [loading, setLoading] = useState(true);
     const [selectedImage, setSelectedImage] = useState('');
@@ -53,6 +55,9 @@ const VehicleDetail = () => {
         return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(price);
     };
 
+    const publicHomeUrl = getPublicCompanyHomeUrl(company.public_domain);
+    const brandName = company.name || 'AutosQP';
+
     const nextImage = (e) => {
         if (e) e.stopPropagation();
         if (vehicle.photos && vehicle.photos.length > 0) {
@@ -85,9 +90,17 @@ const VehicleDetail = () => {
             {/* Navbar */}
             <header className="bg-slate-900 shadow-lg sticky top-0 z-50">
                 <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-                    <Link to="/autos" className="text-2xl font-extrabold text-white tracking-tight">
-                        <span className="text-blue-500">Autos</span>QP
-                    </Link>
+                    <a href={`${publicHomeUrl}/autos`} className="text-2xl font-extrabold text-white tracking-tight">
+                        {company.logo_url ? (
+                            <img
+                                src={normalizeMediaUrl(company.logo_url)}
+                                alt={brandName}
+                                className="h-11 w-auto object-contain md:h-12"
+                            />
+                        ) : (
+                            brandName
+                        )}
+                    </a>
                     <nav className="flex items-center gap-4 text-sm font-bold">
                         <Link
                             to="/login"
@@ -102,7 +115,7 @@ const VehicleDetail = () => {
             <main className="container mx-auto px-4 py-6">
                 {/* Breadcrumb */}
                 <nav className="text-xs text-gray-500 mb-6 flex items-center gap-2">
-                    <Link to="/autos" className="hover:text-blue-600 hover:underline">Volver al listado</Link>
+                    <a href={`${publicHomeUrl}/autos`} className="hover:text-blue-600 hover:underline">Volver al listado</a>
                     <span>/</span>
                     <span className="text-gray-800 font-semibold">{vehicle.make} {vehicle.model}</span>
                 </nav>
@@ -316,7 +329,11 @@ const VehicleDetail = () => {
                     )}
                 </div>
             )}
-            <PublicSalesChatbot vehicleId={Number(id)} />
+            <PublicSalesChatbot
+                vehicleId={Number(id)}
+                brandName={brandName}
+                sessionStorageKey={`public_chat_session_${company.public_domain || window.location.host}`}
+            />
         </div>
     );
 };

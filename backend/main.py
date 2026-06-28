@@ -65,6 +65,102 @@ LEAD_STATUS_LABELS = {
     "lost": "Perdidos",
 }
 
+DEFAULT_PUBLIC_COMPANY_CONTEXT = {
+    "id": None,
+    "name": "AutosQP",
+    "public_domain": None,
+    "public_domains": [],
+    "logo_url": None,
+    "primary_color": "#2563eb",
+    "secondary_color": "#0f172a",
+}
+
+
+def normalize_public_host(raw_host: Optional[str]) -> str:
+    host = (raw_host or "").strip().lower()
+    if not host:
+        return ""
+    if ":" in host:
+        host = host.split(":", 1)[0]
+    if host.startswith("www."):
+        host = host[4:]
+    return host
+
+
+def normalize_public_domains(domains: Optional[List[str]], primary_domain: Optional[str] = None) -> List[str]:
+    normalized = []
+    seed_values = list(domains or [])
+    if primary_domain:
+        seed_values.insert(0, primary_domain)
+
+    for value in seed_values:
+        normalized_value = normalize_public_host(value)
+        if normalized_value and normalized_value not in normalized:
+            normalized.append(normalized_value)
+    return normalized
+
+
+def company_matches_public_host(company: models.Company, host: str) -> bool:
+    if not company or not host:
+        return False
+    domains = normalize_public_domains(getattr(company, "public_domains", []), getattr(company, "public_domain", None))
+    return host in domains
+
+
+def validate_company_public_domains(db: Session, domains: List[str], exclude_company_id: Optional[int] = None):
+    if not domains:
+        return
+
+    existing_companies = db.query(models.Company).all()
+    for company in existing_companies:
+        if exclude_company_id and company.id == exclude_company_id:
+            continue
+        company_domains = normalize_public_domains(getattr(company, "public_domains", []), getattr(company, "public_domain", None))
+        collision = next((domain for domain in domains if domain in company_domains), None)
+        if collision:
+            raise HTTPException(
+                status_code=400,
+                detail=f'El dominio "{collision}" ya está configurado en la empresa "{company.name}"'
+            )
+
+
+def resolve_public_company(db: Session, request: Optional[Request]) -> Optional[models.Company]:
+    if request is None:
+        return None
+
+    host = normalize_public_host(request.headers.get("host"))
+    if not host:
+        return None
+
+    direct_match = db.query(models.Company).filter(
+        func.lower(models.Company.public_domain) == host
+    ).first()
+    if direct_match:
+        return direct_match
+
+    for company in db.query(models.Company).all():
+        if company_matches_public_host(company, host):
+            return company
+
+    if host in {"autosqp.com", "autosqp.co"}:
+        return db.query(models.Company).order_by(models.Company.id.asc()).first()
+
+    return None
+
+
+def serialize_public_company(company: Optional[models.Company]) -> schemas.PublicCompanyContext:
+    if not company:
+        return schemas.PublicCompanyContext(**DEFAULT_PUBLIC_COMPANY_CONTEXT)
+    return schemas.PublicCompanyContext(
+        id=company.id,
+        name=company.name or DEFAULT_PUBLIC_COMPANY_CONTEXT["name"],
+        public_domain=company.public_domain,
+        public_domains=normalize_public_domains(getattr(company, "public_domains", []), company.public_domain),
+        logo_url=company.logo_url,
+        primary_color=company.primary_color or DEFAULT_PUBLIC_COMPANY_CONTEXT["primary_color"],
+        secondary_color=company.secondary_color or DEFAULT_PUBLIC_COMPANY_CONTEXT["secondary_color"],
+    )
+
 
 def build_lead_summary_query(db: Session):
     return db.query(models.Lead).options(
@@ -456,6 +552,41 @@ def ensure_payment_receipts_columns():
 
 ensure_role_configuration_columns()
 ensure_payment_receipts_columns()
+
+def ensure_company_public_domain_columns():
+    with engine.begin() as conn:
+        table_exists = conn.execute(text(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'companies'"
+        )).scalar()
+        if not table_exists:
+            return
+
+        column_exists = conn.execute(text(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'companies' "
+            "AND COLUMN_NAME = 'public_domain'"
+        )).scalar()
+        if not column_exists:
+            conn.execute(text("ALTER TABLE companies ADD COLUMN public_domain VARCHAR(255) NULL"))
+
+        domains_json_exists = conn.execute(text(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'companies' "
+            "AND COLUMN_NAME = 'public_domains_json'"
+        )).scalar()
+        if not domains_json_exists:
+            conn.execute(text("ALTER TABLE companies ADD COLUMN public_domains_json TEXT NULL"))
+
+        index_exists = conn.execute(text(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'companies' "
+            "AND INDEX_NAME = 'ix_companies_public_domain'"
+        )).scalar()
+        if not index_exists:
+            conn.execute(text("CREATE INDEX ix_companies_public_domain ON companies (public_domain)"))
+
+ensure_company_public_domain_columns()
 
 def ensure_user_status_columns():
     try:
@@ -1146,6 +1277,7 @@ app.add_middleware(
         "http://www.autosqp.co",     # WWW Domain HTTP
         "https://www.autosqp.co",    # WWW Domain HTTPS
     ],
+    allow_origin_regex=r"https?://([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -2829,8 +2961,13 @@ def create_company(company: schemas.CompanyCreate, db: Session = Depends(get_db)
     if db_company:
         raise HTTPException(status_code=400, detail="Company already registered")
     
+    public_domains = normalize_public_domains(company.public_domains, company.public_domain)
+    validate_company_public_domains(db, public_domains)
+
     new_company = models.Company(
         name=company.name,
+        public_domain=public_domains[0] if public_domains else None,
+        public_domains_json=json.dumps(public_domains),
         logo_url=company.logo_url,
         primary_color=company.primary_color,
         secondary_color=company.secondary_color
@@ -2863,7 +3000,11 @@ def update_company(company_id: int, company_update: schemas.CompanyCreate, db: S
     if not db_company:
         raise HTTPException(status_code=404, detail="Company not found")
     
+    public_domains = normalize_public_domains(company_update.public_domains, company_update.public_domain)
+    validate_company_public_domains(db, public_domains, exclude_company_id=company_id)
     db_company.name = company_update.name
+    db_company.public_domain = public_domains[0] if public_domains else None
+    db_company.public_domains_json = json.dumps(public_domains)
     db_company.logo_url = company_update.logo_url
     db_company.primary_color = company_update.primary_color
     db_company.secondary_color = company_update.secondary_color
@@ -2876,6 +3017,11 @@ def update_company(company_id: int, company_update: schemas.CompanyCreate, db: S
         raise HTTPException(status_code=400, detail=str(e))
         
     return db_company
+
+@app.get("/public/company-context", response_model=schemas.PublicCompanyContext)
+def read_public_company_context(request: Request, db: Session = Depends(get_db)):
+    company = resolve_public_company(db, request)
+    return serialize_public_company(company)
 
 @app.get("/companies/{company_id}/integrations", response_model=schemas.IntegrationSettings)
 def read_integration_settings(company_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -5027,6 +5173,8 @@ def is_inventory_request(message: str) -> bool:
     return any(t in text for t in triggers)
 
 def build_inventory_response(db: Session, company_id: Optional[int]) -> str:
+    company = db.query(models.Company).filter(models.Company.id == company_id).first() if company_id else None
+    inventory_url = f"https://{company.public_domain}/autos" if company and company.public_domain else "https://autosqp.com/autos"
     query = db.query(models.Vehicle).filter(models.Vehicle.status == "available")
     if company_id:
         query = query.filter(models.Vehicle.company_id == company_id)
@@ -5035,14 +5183,14 @@ def build_inventory_response(db: Session, company_id: Optional[int]) -> str:
     if not vehicles:
         return (
             "En este momento no tengo vehículos disponibles para mostrarte en el chat. "
-            "Puedes revisar el inventario completo aquí: https://autosqp.com/autos"
+            f"Puedes revisar el inventario completo aquí: {inventory_url}"
         )
 
     lines = ["Claro. Estos son 5 carros disponibles en este momento:"]
     for idx, v in enumerate(vehicles, start=1):
         price = f"{v.price:,}".replace(",", ".") if v.price is not None else "N/A"
         lines.append(f"{idx}. {v.make} {v.model or ''} {v.year} - COP {price}")
-    lines.append("Puedes ver más opciones aquí: https://autosqp.com/autos")
+    lines.append(f"Puedes ver más opciones aquí: {inventory_url}")
     return "\n".join(lines)
 
 def maybe_create_public_chat_lead(
@@ -5982,9 +6130,13 @@ def receive_webhook_lead(
 # --- VEHICLES ENDPOINTS ---
 
 @app.get("/vehicles/makes")
-def get_public_makes(db: Session = Depends(get_db)):
+def get_public_makes(request: Request, db: Session = Depends(get_db)):
     # Returns distinct makes from available vehicles
-    makes = db.query(models.Vehicle.make).filter(models.Vehicle.status == 'available').distinct().all()
+    company = resolve_public_company(db, request)
+    query = db.query(models.Vehicle.make).filter(models.Vehicle.status == 'available')
+    if company:
+        query = query.filter(models.Vehicle.company_id == company.id)
+    makes = query.distinct().all()
     return [m[0] for m in makes if m[0]]
 
 @app.get("/vehicles/public")
@@ -6000,9 +6152,13 @@ def get_public_vehicles(
     mileage_max: Optional[int] = None,
     color: Optional[str] = None,
     limit: int = 50,
+    request: Request = None,
     db: Session = Depends(get_db)
 ):
     query = db.query(models.Vehicle).filter(models.Vehicle.status == 'available')
+    company = resolve_public_company(db, request)
+    if company:
+        query = query.filter(models.Vehicle.company_id == company.id)
     
     if q:
         search = f"%{q}%"

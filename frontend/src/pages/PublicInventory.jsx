@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Link } from 'react-router-dom';
 import PublicSalesChatbot from '../components/PublicSalesChatbot';
 import { normalizeMediaUrl } from '../utils/media';
+import { getPublicCompanyHomeUrl, usePublicCompany } from '../utils/publicCompany';
 
 const normalizeArrayPayload = (payload) => {
     if (Array.isArray(payload)) return payload;
@@ -14,6 +15,7 @@ const normalizeArrayPayload = (payload) => {
 };
 
 const PublicInventory = () => {
+    const company = usePublicCompany();
     const [vehicles, setVehicles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [makes, setMakes] = useState([]);
@@ -95,6 +97,9 @@ const PublicInventory = () => {
         return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(price);
     };
 
+    const publicHomeUrl = getPublicCompanyHomeUrl(company.public_domain);
+    const brandName = company.name || 'AutosQP';
+
     return (
         <div className="min-h-screen bg-slate-100 font-sans">
             {/* Navbar */}
@@ -102,16 +107,20 @@ const PublicInventory = () => {
                 <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                         <a
-                            href="https://autosqp.com"
-                            title="AutosQP"
+                            href={publicHomeUrl}
+                            title={brandName}
                             className="flex items-center rounded-lg transition-opacity hover:opacity-90"
                         >
-                            <img
-                                src="https://autosqp.com/wp-content/uploads/2025/12/Horizontal-Base_-v3-1.03.18-p.m.png"
-                                alt="AutosQP"
-                                className="h-11 w-auto object-contain md:h-12"
-                                style={{ aspectRatio: '512 / 300' }}
-                            />
+                            {company.logo_url ? (
+                                <img
+                                    src={normalizeMediaUrl(company.logo_url)}
+                                    alt={brandName}
+                                    className="h-11 w-auto object-contain md:h-12"
+                                    style={{ aspectRatio: '512 / 300' }}
+                                />
+                            ) : (
+                                <span className="text-2xl font-extrabold tracking-tight text-white">{brandName}</span>
+                            )}
                         </a>
                     </div>
 
@@ -477,7 +486,10 @@ const PublicInventory = () => {
                     )}
                 </div>
             </main>
-            <PublicSalesChatbot />
+            <PublicSalesChatbot
+                brandName={brandName}
+                sessionStorageKey={`public_chat_session_${company.public_domain || window.location.host}`}
+            />
         </div>
     );
 };

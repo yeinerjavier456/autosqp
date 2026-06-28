@@ -8,10 +8,13 @@ const AdminCompanySettings = () => {
     const navigate = useNavigate();
     const [company, setCompany] = useState({
         name: 'Nueva Empresa',
+        public_domain: '',
+        public_domains: [],
         logo_url: 'https://via.placeholder.com/150',
         primary_color: '#3B82F6', // Blue-500
         secondary_color: '#1E40AF', // Blue-800
     });
+    const [domainDraft, setDomainDraft] = useState('');
     const [isEditing, setIsEditing] = useState(false);
     const [status, setStatus] = useState({ type: '', message: '' });
 
@@ -24,7 +27,12 @@ const AdminCompanySettings = () => {
                     const response = await axios.get(`/api/companies/${id}`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
-                    setCompany(response.data);
+                    setCompany({
+                        ...response.data,
+                        public_domains: Array.isArray(response.data.public_domains)
+                            ? response.data.public_domains
+                            : (response.data.public_domain ? [response.data.public_domain] : []),
+                    });
                 } catch (error) {
                     console.error("Error fetching company", error);
                     setStatus({ type: 'error', message: 'Error al cargar la empresa.' });
@@ -41,23 +49,66 @@ const AdminCompanySettings = () => {
         });
     };
 
+    const normalizeDomain = (value) => {
+        const trimmed = String(value || '').trim().toLowerCase();
+        if (!trimmed) return '';
+        return trimmed
+            .replace(/^https?:\/\//, '')
+            .replace(/^www\./, '')
+            .replace(/\/.*$/, '')
+            .replace(/:\d+$/, '');
+    };
+
+    const handleAddDomain = () => {
+        const normalizedDomain = normalizeDomain(domainDraft);
+        if (!normalizedDomain) {
+            return;
+        }
+
+        if (company.public_domains.includes(normalizedDomain)) {
+            setDomainDraft('');
+            return;
+        }
+
+        setCompany((prev) => ({
+            ...prev,
+            public_domain: prev.public_domain || normalizedDomain,
+            public_domains: [...prev.public_domains, normalizedDomain],
+        }));
+        setDomainDraft('');
+    };
+
+    const handleRemoveDomain = (domainToRemove) => {
+        setCompany((prev) => {
+            const nextDomains = prev.public_domains.filter((domain) => domain !== domainToRemove);
+            return {
+                ...prev,
+                public_domain: nextDomains[0] || '',
+                public_domains: nextDomains,
+            };
+        });
+    };
+
     const handleSave = async () => {
         setStatus({ type: 'loading', message: 'Guardando...' });
         try {
             const token = localStorage.getItem('token');
             const headers = { Authorization: `Bearer ${token}` };
+            const payload = {
+                ...company,
+                public_domain: company.public_domains?.[0] || '',
+                public_domains: company.public_domains || [],
+            };
 
             // Note: We need to implement PUT endpoint for full update. 
             // For now, if editing, we might need a specific update endpoint or handling.
             // Assuming we'll add PUT /companies/{id} soon. Re-using POST for now will fail due to unique name constraint if name unchanged.
 
             if (isEditing) {
-                // Pending: Implement PUT in backend. For now, we simulate success or warn user.
-                // let's assume we implement PUT below.
-                await axios.put(`/api/companies/${id}`, company, { headers });
+                await axios.put(`/api/companies/${id}`, payload, { headers });
                 setStatus({ type: 'success', message: `Empresa "${company.name}" actualizada exitosamente!` });
             } else {
-                const response = await axios.post('/api/companies/', company, { headers });
+                const response = await axios.post('/api/companies/', payload, { headers });
                 setStatus({ type: 'success', message: `Empresa "${response.data.name}" creada exitosamente!` });
                 // navigate(`/admin/companies/${response.data.id}`); // Optional: redirect to edit mode
             }
@@ -111,6 +162,47 @@ const AdminCompanySettings = () => {
                                 onChange={handleChange}
                                 className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
                             />
+                        </div>
+
+                        <div className="space-y-3">
+                            <label className="block text-sm font-medium text-slate-600">Dominios públicos</label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={domainDraft}
+                                    onChange={(e) => setDomainDraft(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleAddDomain();
+                                        }
+                                    }}
+                                    placeholder="Ej: autosprime.com"
+                                    className="flex-1 px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleAddDomain}
+                                    className="px-4 py-2 rounded-lg bg-slate-900 text-white font-semibold"
+                                >
+                                    Agregar
+                                </button>
+                            </div>
+                            <p className="text-xs text-slate-400">Sin http ni https. El primero de la lista será el dominio principal.</p>
+                            <div className="flex flex-wrap gap-2">
+                                {company.public_domains?.map((domain, index) => (
+                                    <div key={domain} className="flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm text-slate-700">
+                                        <span>{domain}{index === 0 ? ' (principal)' : ''}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRemoveDomain(domain)}
+                                            className="text-red-500 hover:text-red-700"
+                                        >
+                                            x
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-6">

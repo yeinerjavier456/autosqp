@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from database import Base
 import enum
 import datetime
+import json
 
 class UserRole(str, enum.Enum):
     SUPER_ADMIN = "super_admin"
@@ -23,6 +24,8 @@ class Company(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, index=True)
+    public_domain = Column(String(255), nullable=True, unique=True, index=True)
+    public_domains_json = Column(Text, nullable=True)
     logo_url = Column(String(500), nullable=True)
     primary_color = Column(String(50), default="#000000")
     secondary_color = Column(String(50), default="#ffffff")
@@ -31,6 +34,32 @@ class Company(Base):
     integration_settings = relationship("IntegrationSettings", uselist=False, back_populates="company")
     leads = relationship("Lead", back_populates="company")
     vehicles = relationship("Vehicle", back_populates="company")
+
+    @property
+    def public_domains(self):
+        raw_value = self.public_domains_json
+        if not raw_value:
+            return [self.public_domain] if self.public_domain else []
+        try:
+            values = json.loads(raw_value)
+        except Exception:
+            values = []
+        if not isinstance(values, list):
+            values = []
+        normalized = []
+        for value in values:
+            if not value:
+                continue
+            text_value = str(value).strip().lower()
+            if not text_value:
+                continue
+            if text_value.startswith("www."):
+                text_value = text_value[4:]
+            if text_value not in normalized:
+                normalized.append(text_value)
+        if self.public_domain and self.public_domain not in normalized:
+            normalized.insert(0, self.public_domain)
+        return normalized
 
 
 class Role(Base):

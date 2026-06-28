@@ -6,6 +6,7 @@ import models, schemas
 from database import get_db
 import os
 import shutil
+import json
 from import_vehicles_from_excel import import_inventory
 
 # Attempting to import log_action_to_db (will require circular import bypassing if done wrong, but from main is fine if deferred)
@@ -37,6 +38,61 @@ router = APIRouter(
     prefix="/vehicles",
     tags=["vehicles"]
 )
+
+
+def normalize_public_host(raw_host: Optional[str]) -> str:
+    host = (raw_host or "").strip().lower()
+    if not host:
+        return ""
+    if ":" in host:
+        host = host.split(":", 1)[0]
+    if host.startswith("www."):
+        host = host[4:]
+    return host
+
+
+def normalize_public_domains(company) -> List[str]:
+    raw_json = getattr(company, "public_domains_json", None)
+    values = []
+    if raw_json:
+        try:
+            decoded = json.loads(raw_json)
+            if isinstance(decoded, list):
+                values.extend(decoded)
+        except Exception:
+            pass
+    if getattr(company, "public_domain", None):
+        values.insert(0, company.public_domain)
+
+    normalized = []
+    for value in values:
+        normalized_value = normalize_public_host(value)
+        if normalized_value and normalized_value not in normalized:
+            normalized.append(normalized_value)
+    return normalized
+
+
+def resolve_public_company_id(db: Session, request: Optional[Request]) -> Optional[int]:
+    if request is None:
+        return None
+
+    host = normalize_public_host(request.headers.get("host"))
+    if not host:
+        return None
+
+    direct_company = db.query(models.Company.id).filter(models.Company.public_domain.ilike(host)).first()
+    if direct_company:
+        return direct_company[0]
+
+    for company in db.query(models.Company.id, models.Company.public_domain, models.Company.public_domains_json).all():
+        if host in normalize_public_domains(company):
+            return company.id
+
+    if host in {"autosqp.com", "autosqp.co"}:
+        company = db.query(models.Company.id).order_by(models.Company.id.asc()).first()
+        return company[0] if company else None
+
+    return None
 
 def get_effective_role_name(role) -> str:
     if not role:
@@ -87,21 +143,18 @@ def get_public_vehicles(
     color: Optional[str] = None,
     sort_by: Optional[str] = None,
     company_id: Optional[int] = None,
+    request: Optional[Request] = None,
     db: Session = Depends(get_db)
 ):
     """
     Public endpoint to fetch available vehicles.
     No authentication required.
     """
-    query = db.query(models.Vehicle).filter(
-        or_(
-            models.Vehicle.status == "available",
-            models.Vehicle.status == "sold"
-        )
-    )
+    resolved_company_id = company_id or resolve_public_company_id(db, request)
+    query = db.query(models.Vehicle).filter(models.Vehicle.status == "available")
 
-    if company_id:
-        query = query.filter(models.Vehicle.company_id == company_id)
+    if resolved_company_id:
+        query = query.filter(models.Vehicle.company_id == resolved_company_id)
 
     if q:
         search = f"%{q}%"
@@ -155,22 +208,33 @@ def get_public_vehicles(
     return query.offset(skip).limit(limit).all()
 
 @router.get("/public/{vehicle_id}", response_model=schemas.Vehicle)
-def get_public_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
+def get_public_vehicle(vehicle_id: int, request: Request, db: Session = Depends(get_db)):
     """
     Public endpoint to fetch a single vehicle details.
     No authentication required.
     """
-    vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == vehicle_id, models.Vehicle.status == "available").first()
+    resolved_company_id = resolve_public_company_id(db, request)
+    query = db.query(models.Vehicle).filter(
+        models.Vehicle.id == vehicle_id,
+        models.Vehicle.status == "available"
+    )
+    if resolved_company_id:
+        query = query.filter(models.Vehicle.company_id == resolved_company_id)
+    vehicle = query.first()
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehicle not found or not available")
     return vehicle
 
 @router.get("/makes", response_model=List[str])
-def get_available_makes(db: Session = Depends(get_db)):
+def get_available_makes(request: Request, db: Session = Depends(get_db)):
     """
     Get list of unique makes from available vehicles
     """
-    makes = db.query(models.Vehicle.make).filter(models.Vehicle.status == "available").distinct().all()
+    resolved_company_id = resolve_public_company_id(db, request)
+    query = db.query(models.Vehicle.make).filter(models.Vehicle.status == "available")
+    if resolved_company_id:
+        query = query.filter(models.Vehicle.company_id == resolved_company_id)
+    makes = query.distinct().all()
     return [m[0] for m in makes if m[0]]
 
 # --- CRUD Endpoints (Protected) ---

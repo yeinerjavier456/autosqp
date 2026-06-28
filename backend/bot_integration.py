@@ -185,6 +185,8 @@ def is_inventory_request(message: str) -> bool:
 
 
 def build_inventory_response(db: Session, company_id: Optional[int]) -> str:
+    company = db.query(models.Company).filter(models.Company.id == company_id).first() if company_id else None
+    inventory_url = f"https://{company.public_domain}/autos" if company and company.public_domain else "https://autosqp.com/autos"
     query = db.query(models.Vehicle).filter(models.Vehicle.status == "available")
     if company_id:
         query = query.filter(models.Vehicle.company_id == company_id)
@@ -193,14 +195,14 @@ def build_inventory_response(db: Session, company_id: Optional[int]) -> str:
     if not vehicles:
         return (
             "En este momento no tengo vehículos disponibles para mostrarte en el chat. "
-            "Puedes revisar el inventario completo aquí: https://autosqp.com/autos"
+            f"Puedes revisar el inventario completo aquí: {inventory_url}"
         )
 
     lines = ["Claro. Estos son 5 carros disponibles en este momento:"]
     for idx, vehicle in enumerate(vehicles, start=1):
         price = f"{vehicle.price:,}".replace(",", ".") if vehicle.price is not None else "N/A"
         lines.append(f"{idx}. {vehicle.make} {vehicle.model or ''} {vehicle.year} - COP {price}")
-    lines.append("Puedes ver más opciones aquí: https://autosqp.com/autos")
+    lines.append(f"Puedes ver más opciones aquí: {inventory_url}")
     return "\n".join(lines)
 
 

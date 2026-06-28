@@ -11,7 +11,8 @@ const PublicSalesChatbot = ({
     initialAssistantMessage = '',
     hideLauncher = false,
     embedded = false,
-    forceFreshSession = false
+    forceFreshSession = false,
+    brandName = 'Autos QP'
 }) => {
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -159,7 +160,7 @@ const PublicSalesChatbot = ({
                 <div className={`${embedded ? 'relative flex h-[420px] w-full max-w-none flex-col sm:h-[500px] lg:h-full lg:min-h-[580px] lg:max-h-[calc(100vh-140px)]' : 'fixed bottom-24 right-4 md:right-6 z-50 w-[360px] max-w-[calc(100vw-2rem)] h-[560px]'} bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden`}>
                     <div className="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
                         <div>
-                            <h3 className="font-bold">Autos QP</h3>
+                            <h3 className="font-bold">{brandName}</h3>
                             <p className="text-xs text-slate-300">Atención comercial en línea</p>
                         </div>
                         <button onClick={() => setOpen(false)} className={`text-slate-300 hover:text-white ${hideLauncher ? 'hidden' : ''}`}>

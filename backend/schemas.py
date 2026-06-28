@@ -136,6 +136,8 @@ class TokenData(BaseModel):
 
 class CompanyBase(BaseModel):
     name: str
+    public_domain: Optional[str] = None
+    public_domains: List[str] = Field(default_factory=list)
     logo_url: Optional[str] = None
     primary_color: Optional[str] = "#000000"
     secondary_color: Optional[str] = "#ffffff"
@@ -150,8 +152,17 @@ class Company(CompanyBase):
 
 class CompanyList(BaseModel):
     items: List[Company]
-    items: List[Company]
     total: int
+
+
+class PublicCompanyContext(BaseModel):
+    id: Optional[int] = None
+    name: str
+    public_domain: Optional[str] = None
+    public_domains: List[str] = Field(default_factory=list)
+    logo_url: Optional[str] = None
+    primary_color: str = "#000000"
+    secondary_color: str = "#ffffff"
 
 # --- NOTIFICATIONS & REMINDERS ---
 
