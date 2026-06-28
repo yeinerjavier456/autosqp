@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getOrderedMenuViews, hasViewAccess, getRoleName } from '../config/views';
+import { normalizeMediaUrl } from '../utils/media';
+import { usePublicCompany } from '../utils/publicCompany';
 
 const API_BASE_URL = import.meta.env.DEV ? '/crm/api' : '/api';
 
@@ -13,6 +15,18 @@ const LoginPage = () => {
     const [submitting, setSubmitting] = useState(false);
     const navigate = useNavigate();
     const { login } = useAuth();
+    const company = usePublicCompany();
+
+    const theme = useMemo(() => {
+        const primary = company?.primary_color || '#2563eb';
+        const secondary = company?.secondary_color || '#0f172a';
+        return {
+            primary,
+            secondary,
+            primarySoft: `${primary}14`,
+            secondarySoft: `${secondary}f2`,
+        };
+    }, [company]);
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -67,11 +81,34 @@ const LoginPage = () => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-900">
-            <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md">
+        <div
+            className="min-h-screen flex items-center justify-center px-4 py-10"
+            style={{
+                background: `linear-gradient(135deg, ${theme.secondary} 0%, ${theme.primary} 100%)`,
+            }}
+        >
+            <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md border" style={{ borderColor: theme.primarySoft }}>
                 <div className="text-center mb-8">
-                    <h1 className="text-3xl font-extrabold text-slate-800">AutosQP</h1>
-                    <p className="text-slate-500">Inicia sesión en tu cuenta</p>
+                    {company?.logo_url ? (
+                        <img
+                            src={normalizeMediaUrl(company.logo_url)}
+                            alt={company?.name || 'AutosQP'}
+                            className="h-16 w-auto object-contain mx-auto mb-4"
+                        />
+                    ) : (
+                        <h1 className="text-3xl font-extrabold mb-2" style={{ color: theme.secondary }}>
+                            {company?.name || 'AutosQP'}
+                        </h1>
+                    )}
+                    {!company?.logo_url && <p className="text-slate-500">Inicia sesión en tu cuenta</p>}
+                    {company?.logo_url && (
+                        <>
+                            <h1 className="text-2xl font-extrabold" style={{ color: theme.secondary }}>
+                                {company?.name || 'AutosQP'}
+                            </h1>
+                            <p className="text-slate-500">Inicia sesión en tu cuenta</p>
+                        </>
+                    )}
                 </div>
 
                 {error && (
@@ -88,8 +125,11 @@ const LoginPage = () => {
                             required
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
-                            placeholder="admin@autosqp.com"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none text-black bg-white"
+                            style={{ boxShadow: 'none' }}
+                            onFocus={(e) => { e.target.style.borderColor = theme.primary; e.target.style.boxShadow = `0 0 0 2px ${theme.primarySoft}`; }}
+                            onBlur={(e) => { e.target.style.borderColor = ''; e.target.style.boxShadow = 'none'; }}
+                            placeholder={`admin@${(company?.public_domain || 'autosqp.com').replace(/^www\./, '')}`}
                         />
                     </div>
                     <div>
@@ -99,7 +139,10 @@ const LoginPage = () => {
                             required
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none text-black bg-white"
+                            style={{ boxShadow: 'none' }}
+                            onFocus={(e) => { e.target.style.borderColor = theme.primary; e.target.style.boxShadow = `0 0 0 2px ${theme.primarySoft}`; }}
+                            onBlur={(e) => { e.target.style.borderColor = ''; e.target.style.boxShadow = 'none'; }}
                             placeholder="••••••••"
                         />
                     </div>
@@ -107,7 +150,8 @@ const LoginPage = () => {
                     <button
                         type="submit"
                         disabled={submitting}
-                        className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-lg transition shadow-lg"
+                        className="w-full py-3 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-lg transition shadow-lg"
+                        style={{ backgroundColor: theme.primary }}
                     >
                         {submitting ? 'Ingresando...' : 'Ingresar'}
                     </button>

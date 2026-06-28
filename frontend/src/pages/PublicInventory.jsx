@@ -5,6 +5,18 @@ import PublicSalesChatbot from '../components/PublicSalesChatbot';
 import { normalizeMediaUrl } from '../utils/media';
 import { getPublicCompanyHomeUrl, usePublicCompany } from '../utils/publicCompany';
 
+const withAlpha = (hex, alpha = '14') => {
+    if (typeof hex !== 'string') return hex;
+    const normalized = hex.trim();
+    if (!normalized.startsWith('#')) return normalized;
+    if (normalized.length === 7) return `${normalized}${alpha}`;
+    if (normalized.length === 4) {
+        const expanded = `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`;
+        return `${expanded}${alpha}`;
+    }
+    return normalized;
+};
+
 const normalizeArrayPayload = (payload) => {
     if (Array.isArray(payload)) return payload;
     if (Array.isArray(payload?.data)) return payload.data;
@@ -99,11 +111,28 @@ const PublicInventory = () => {
 
     const publicHomeUrl = getPublicCompanyHomeUrl(company.public_domain);
     const brandName = company.name || 'AutosQP';
+    const primaryColor = company.primary_color || '#2563eb';
+    const secondaryColor = company.secondary_color || '#0f172a';
+    const primarySoft = withAlpha(primaryColor, '14');
+    const secondarySoft = withAlpha(secondaryColor, 'f0');
 
     return (
-        <div className="min-h-screen bg-slate-100 font-sans">
+        <div
+            className="min-h-screen bg-slate-100 font-sans"
+            style={{
+                '--public-primary': primaryColor,
+                '--public-secondary': secondaryColor,
+                '--public-primary-soft': primarySoft,
+            }}
+        >
             {/* Navbar */}
-            <header className="bg-slate-900 shadow-lg sticky top-0 z-50 border-b border-slate-800">
+            <header
+                className="shadow-lg sticky top-0 z-50 border-b"
+                style={{
+                    backgroundColor: secondaryColor,
+                    borderColor: withAlpha(primaryColor, '30'),
+                }}
+            >
                 <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                         <a
@@ -132,9 +161,10 @@ const PublicInventory = () => {
                                 value={filters.q}
                                 onChange={handleFilterChange}
                                 placeholder="Buscar vehículos..."
-                                className="w-full pl-4 pr-10 py-2.5 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 bg-slate-50 border-none"
+                                className="w-full pl-4 pr-10 py-2.5 rounded-lg shadow-sm focus:outline-none text-slate-700 bg-slate-50 border-none"
+                                style={{ boxShadow: `0 0 0 1px ${withAlpha(primaryColor, '20')}` }}
                             />
-                            <button className="absolute right-0 top-0 h-full px-3 text-slate-400 hover:text-blue-600 transition">
+                            <button className="absolute right-0 top-0 h-full px-3 text-slate-400 transition" style={{ color: primaryColor }}>
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                             </button>
                         </div>
@@ -143,7 +173,8 @@ const PublicInventory = () => {
                     <nav className="flex items-center gap-4 text-sm font-bold">
                         <Link
                             to="/login"
-                            className="text-white hover:text-blue-400 transition bg-white/10 px-4 py-2 rounded-lg hover:bg-white/20"
+                            className="text-white transition px-4 py-2 rounded-lg"
+                            style={{ backgroundColor: withAlpha(primaryColor, '24') }}
                         >
                             Ingresa
                         </Link>
@@ -158,6 +189,7 @@ const PublicInventory = () => {
                         onChange={handleFilterChange}
                         placeholder="Buscar vehículos..."
                         className="w-full pl-4 pr-10 py-2 rounded-sm shadow-sm focus:outline-none text-slate-700"
+                        style={{ boxShadow: `0 0 0 1px ${withAlpha(primaryColor, '20')}` }}
                     />
                 </div>
             </header>
@@ -191,7 +223,7 @@ const PublicInventory = () => {
                                     type="number"
                                     name="price_min"
                                     placeholder="Mín"
-                                    className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                    className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 outline-none"
                                     onChange={handleFilterChange}
                                     value={filters.price_min}
                                 />
@@ -200,7 +232,7 @@ const PublicInventory = () => {
                                     type="number"
                                     name="price_max"
                                     placeholder="Máx"
-                                    className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                    className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 outline-none"
                                     onChange={handleFilterChange}
                                     value={filters.price_max}
                                 />
@@ -211,7 +243,7 @@ const PublicInventory = () => {
                             <h4 className="font-semibold text-sm mb-2 text-slate-300">Ordenar por</h4>
                             <select
                                 name="sort_by"
-                                className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white outline-none"
                                 onChange={handleFilterChange}
                                 value={filters.sort_by}
                             >
@@ -228,7 +260,7 @@ const PublicInventory = () => {
                             <h4 className="font-semibold text-sm mb-2 text-slate-300">Marca</h4>
                             <select
                                 name="make"
-                                className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none mb-2"
+                                className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white outline-none mb-2"
                                 onChange={handleFilterChange}
                                 value={filters.make}
                             >
@@ -247,7 +279,7 @@ const PublicInventory = () => {
                                     type="number"
                                     name="year_from"
                                     placeholder="Desde"
-                                    className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                    className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 outline-none"
                                     onChange={handleFilterChange}
                                 />
                                 <span className="text-slate-500">-</span>
@@ -255,7 +287,7 @@ const PublicInventory = () => {
                                     type="number"
                                     name="year_to"
                                     placeholder="Hasta"
-                                    className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                    className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 outline-none"
                                     onChange={handleFilterChange}
                                 />
                             </div>
@@ -268,7 +300,7 @@ const PublicInventory = () => {
                                 type="text"
                                 name="model" // Use 'model' distinct from global 'q'
                                 placeholder="Escribe el modelo..."
-                                className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 outline-none"
                                 onChange={handleFilterChange}
                                 value={filters.model || ''}
                             />
@@ -282,7 +314,7 @@ const PublicInventory = () => {
                                     type="number"
                                     name="mileage_min"
                                     placeholder="Mín"
-                                    className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                    className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 outline-none"
                                     onChange={handleFilterChange}
                                     value={filters.mileage_min || ''}
                                 />
@@ -291,7 +323,7 @@ const PublicInventory = () => {
                                     type="number"
                                     name="mileage_max"
                                     placeholder="Máx"
-                                    className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                    className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 outline-none"
                                     onChange={handleFilterChange}
                                     value={filters.mileage_max || ''}
                                 />
@@ -305,7 +337,7 @@ const PublicInventory = () => {
                                 type="text"
                                 name="color"
                                 placeholder="Ej: Blanco, Rojo..."
-                                className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 outline-none"
                                 onChange={handleFilterChange}
                                 value={filters.color || ''}
                             />
@@ -325,7 +357,8 @@ const PublicInventory = () => {
                                 color: '',
                                 sort_by: ''
                             })}
-                            className="text-blue-400 text-sm font-medium hover:text-blue-300 w-full text-center transition-colors pb-10"
+                            className="text-sm font-medium w-full text-center transition-colors pb-10"
+                            style={{ color: primaryColor }}
                         >
                             Limpiar filtros
                         </button>
@@ -353,7 +386,8 @@ const PublicInventory = () => {
                                 name="sort_by"
                                 value={filters.sort_by}
                                 onChange={handleFilterChange}
-                                className="hidden md:block rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                className="hidden md:block rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm outline-none transition"
+                                style={{ boxShadow: `0 0 0 1px ${withAlpha(primaryColor, '18')}` }}
                             >
                                 <option value="">Más recientes</option>
                                 <option value="price_desc">Precio: mayor a menor</option>
@@ -364,6 +398,7 @@ const PublicInventory = () => {
                             <button
                                 className="md:hidden flex items-center gap-2 text-slate-700 font-bold bg-white px-4 py-2 rounded-lg shadow-sm"
                                 onClick={() => setShowFilters(!showFilters)}
+                                style={{ color: secondaryColor }}
                             >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
                                 Filtros
@@ -384,7 +419,8 @@ const PublicInventory = () => {
                                 {safeVehicles.map(vehicle => (
                                     <div
                                         key={vehicle.id}
-                                        className="bg-white rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 group relative border-2 border-slate-100 hover:border-blue-500 flex flex-col"
+                                        className="bg-white rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 group relative border-2 border-slate-100 flex flex-col"
+                                        style={{ borderColor: withAlpha(primaryColor, '18') }}
                                     >
                                         {/* Image Container with Overlay */}
                                         <Link to={`/autos/${vehicle.id}`} className="block relative aspect-[4/3] overflow-hidden">
@@ -429,13 +465,22 @@ const PublicInventory = () => {
                                         {/* Card Body */}
                                         <div className="p-5">
                                             <div className="mb-3">
-                                                <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded uppercase tracking-wide">
+                                                <span
+                                                    className="text-xs font-bold px-2 py-1 rounded uppercase tracking-wide"
+                                                    style={{
+                                                        color: primaryColor,
+                                                        backgroundColor: primarySoft,
+                                                    }}
+                                                >
                                                     {vehicle.make}
                                                 </span>
                                             </div>
 
                                             <Link to={`/autos/${vehicle.id}`} className="block">
-                                                <h3 className="text-lg font-bold text-gray-800 mb-1 group-hover:text-blue-600 transition-colors line-clamp-1">
+                                                <h3
+                                                    className="text-lg font-bold text-gray-800 mb-1 transition-colors line-clamp-1"
+                                                    style={{ color: secondaryColor }}
+                                                >
                                                     {vehicle.make} {vehicle.model}
                                                 </h3>
                                             </Link>
@@ -450,7 +495,11 @@ const PublicInventory = () => {
 
                                                 <Link
                                                     to={`/autos/${vehicle.id}`}
-                                                    className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 group-hover:bg-blue-600 group-hover:text-white transition-colors"
+                                                    className="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+                                                    style={{
+                                                        backgroundColor: primarySoft,
+                                                        color: primaryColor,
+                                                    }}
                                                 >
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
                                                 </Link>
@@ -476,7 +525,8 @@ const PublicInventory = () => {
                                             mileage_max: '',
                                             color: ''
                                         })}
-                                        className="mt-4 text-blue-600 font-semibold"
+                                        className="mt-4 font-semibold"
+                                        style={{ color: primaryColor }}
                                     >
                                         Ver todos los vehículos
                                     </button>
