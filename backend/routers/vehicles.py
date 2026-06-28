@@ -129,6 +129,7 @@ def ensure_inventory_admin(current_user: models.User):
 
 @router.get("/public", response_model=List[schemas.Vehicle])
 def get_public_vehicles(
+    request: Request,
     skip: int = 0,
     limit: int = 100,
     q: Optional[str] = None,
@@ -143,7 +144,6 @@ def get_public_vehicles(
     color: Optional[str] = None,
     sort_by: Optional[str] = None,
     company_id: Optional[int] = None,
-    request: Optional[Request] = None,
     db: Session = Depends(get_db)
 ):
     """

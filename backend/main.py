@@ -6141,6 +6141,7 @@ def get_public_makes(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/vehicles/public")
 def get_public_vehicles(
+    request: Request,
     q: Optional[str] = None,
     make: Optional[str] = None,
     model: Optional[str] = None,
@@ -6152,7 +6153,6 @@ def get_public_vehicles(
     mileage_max: Optional[int] = None,
     color: Optional[str] = None,
     limit: int = 50,
-    request: Request = None,
     db: Session = Depends(get_db)
 ):
     query = db.query(models.Vehicle).filter(models.Vehicle.status == 'available')
