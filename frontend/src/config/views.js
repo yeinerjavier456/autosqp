@@ -75,6 +75,13 @@ export const DEFAULT_ROLE_MENU_ORDER = {
     user: []
 };
 
+export const ROLE_REQUIRED_MODULES = {
+    inventario: ['inventory'],
+    compras: ['purchase_board'],
+    gestion_creditos: ['credits'],
+    aliado: ['ally_board'],
+};
+
 export const getRoleName = (user) =>
     user?.role?.base_role_name ||
     user?.role?.name ||
@@ -146,5 +153,33 @@ export const getGroupedMenuViews = (user) => {
 
 export const getVisibleSystemViews = (user) => {
     const isCompanyUser = Boolean(user?.company_id);
-    return SYSTEM_VIEWS.filter((view) => !isCompanyUser || view.scope !== 'global');
+    const enabledModules = new Set(
+        Array.isArray(user?.company?.enabled_modules) && user.company.enabled_modules.length > 0
+            ? user.company.enabled_modules
+            : SYSTEM_VIEWS.filter((view) => view.scope === 'company').map((view) => view.id)
+    );
+    return SYSTEM_VIEWS.filter((view) => {
+        if (isCompanyUser && view.scope === 'global') return false;
+        if (view.scope !== 'company') return true;
+        return enabledModules.has(view.id);
+    });
+};
+
+export const isRoleAvailableForCompany = (role, company) => {
+    if (!role) return false;
+    if (!company) return true;
+
+    const roleName = role.base_role_name || role.name || '';
+    const requiredModules = ROLE_REQUIRED_MODULES[roleName];
+    if (!requiredModules || requiredModules.length === 0) {
+        return true;
+    }
+
+    const enabledModules = new Set(
+        Array.isArray(company.enabled_modules) && company.enabled_modules.length > 0
+            ? company.enabled_modules
+            : SYSTEM_VIEWS.filter((view) => view.scope === 'company').map((view) => view.id)
+    );
+
+    return requiredModules.some((moduleId) => enabledModules.has(moduleId));
 };

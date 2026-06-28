@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { useAuth } from '../context/AuthContext';
-import { SYSTEM_VIEWS, getVisibleSystemViews } from '../config/views';
+import { SYSTEM_VIEWS, getVisibleSystemViews, isRoleAvailableForCompany } from '../config/views';
 
 const SECTION_META = {
     general: { title: 'General', description: 'Pantallas principales del panel.' },
@@ -28,6 +28,10 @@ const RolesConfig = () => {
     const selectedRole = useMemo(
         () => roles.find((role) => role.id === selectedRoleId) || null,
         [roles, selectedRoleId]
+    );
+    const visibleRoles = useMemo(
+        () => roles.filter((role) => isRoleAvailableForCompany(role, user?.company || null)),
+        [roles, user]
     );
     const availableViews = useMemo(() => getVisibleSystemViews(user), [user]);
     const groupedViews = useMemo(() => {
@@ -108,9 +112,17 @@ const RolesConfig = () => {
         });
     }, [selectedRole]);
 
+    useEffect(() => {
+        if (!selectedRoleId) return;
+        const roleStillVisible = visibleRoles.some((role) => role.id === selectedRoleId);
+        if (!roleStillVisible) {
+            setSelectedRoleId(visibleRoles[0]?.id || null);
+        }
+    }, [visibleRoles, selectedRoleId]);
+
     const roleOptionsForAssignment = useMemo(
-        () => roles.filter((role) => role.id !== selectedRoleId),
-        [roles, selectedRoleId]
+        () => visibleRoles.filter((role) => role.id !== selectedRoleId),
+        [visibleRoles, selectedRoleId]
     );
 
     const syncMenuOrder = (permissions, currentOrder) => {
@@ -236,7 +248,7 @@ const RolesConfig = () => {
                         <p className="text-sm text-slate-400">Cargando roles...</p>
                     ) : (
                         <div className="space-y-2">
-                            {roles.map((role) => (
+                            {visibleRoles.map((role) => (
                                 <button
                                     key={role.id}
                                     onClick={() => setSelectedRoleId(role.id)}

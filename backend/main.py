@@ -76,6 +76,12 @@ DEFAULT_PUBLIC_COMPANY_CONTEXT = {
 }
 
 DEFAULT_COMPANY_ENABLED_MODULES = sorted(COMPANY_VIEW_IDS)
+ROLE_REQUIRED_MODULES = {
+    "inventario": {"inventory"},
+    "compras": {"purchase_board"},
+    "gestion_creditos": {"credits"},
+    "aliado": {"ally_board"},
+}
 
 
 def normalize_company_enabled_modules(modules: Optional[List[str]]) -> List[str]:
@@ -105,6 +111,21 @@ def apply_company_module_limits(view_ids: List[str], company: Optional[models.Co
         if view_id not in COMPANY_VIEW_IDS or view_id in enabled_modules:
             filtered.append(view_id)
     return filtered
+
+
+def is_role_enabled_for_company(role: Optional[models.Role], company: Optional[models.Company]) -> bool:
+    if role is None:
+        return False
+    if not company:
+        return True
+
+    role_name = getattr(role, "base_role_name", None) or getattr(role, "name", None) or ""
+    required_modules = ROLE_REQUIRED_MODULES.get(role_name)
+    if not required_modules:
+        return True
+
+    enabled_modules = set(get_company_enabled_modules(company))
+    return bool(enabled_modules.intersection(required_modules))
 
 
 def get_company_by_id(db: Session, company_id: Optional[int]) -> Optional[models.Company]:
@@ -3334,7 +3355,12 @@ def read_integration_settings(company_id: int, db: Session = Depends(get_db), cu
 @app.get("/roles/views")
 def read_role_views(current_user: models.User = Depends(get_current_user)):
     ensure_role_management_permissions(current_user)
-    return {"items": SYSTEM_VIEWS}
+    company = getattr(current_user, "company", None)
+    items = [
+        view for view in SYSTEM_VIEWS
+        if view.get("scope") == "global" or view["id"] in apply_company_module_limits([view["id"]], company)
+    ]
+    return {"items": items}
 
 
 @app.get("/roles/", response_model=list[schemas.Role])
@@ -3354,6 +3380,7 @@ def read_roles(
     if current_user.company_id:
         override_names = {role.base_role_name for role in roles if role.company_id == current_user.company_id and role.base_role_name}
         roles = [role for role in roles if not (role.is_system and role.name in override_names)]
+        roles = [role for role in roles if is_role_enabled_for_company(role, current_user.company)]
     return [serialize_role(role) for role in roles]
 
 

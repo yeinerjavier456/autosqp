@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Swal from 'sweetalert2';
+import { isRoleAvailableForCompany } from '../config/views';
 
 const API_BASE_URL = import.meta.env.DEV ? '/crm/api' : '/api';
 
@@ -41,6 +42,13 @@ const UserForm = () => {
     const isAdvisorRoleSelected = (selectedRole?.base_role_name || selectedRole?.name) === 'asesor';
     const currentRoleName = currentUser?.role?.base_role_name || currentUser?.role?.name;
     const isSuperAdmin = currentRoleName === 'super_admin';
+    const selectedCompany = isSuperAdmin
+        ? companies.find((company) => String(company.id) === String(user.company_id))
+        : currentUser?.company || null;
+    const availableRoles = roles.filter((role) => {
+        if (currentUser?.company_id && role.name === 'super_admin') return false;
+        return isRoleAvailableForCompany(role, selectedCompany);
+    });
 
     const generateTemporaryPassword = () => {
         const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
@@ -129,7 +137,7 @@ const UserForm = () => {
         const { name, value, type, checked } = e.target;
         const nextValue = type === 'checkbox' ? checked : value;
         if (name === 'role_id') {
-            const nextRole = roles.find((role) => String(role.id) === String(nextValue));
+            const nextRole = availableRoles.find((role) => String(role.id) === String(nextValue));
             const nextIsAdvisorRole = (nextRole?.base_role_name || nextRole?.name) === 'asesor';
             setUser({
                 ...user,
@@ -143,6 +151,18 @@ const UserForm = () => {
             [name]: nextValue,
         });
     };
+
+    useEffect(() => {
+        if (!user.role_id) return;
+        const roleStillAvailable = availableRoles.some((role) => String(role.id) === String(user.role_id));
+        if (!roleStillAvailable) {
+            setUser((current) => ({
+                ...current,
+                role_id: '',
+                auto_assign_leads: false,
+            }));
+        }
+    }, [availableRoles, user.role_id]);
 
     const handleSave = async (e) => {
         e.preventDefault();
@@ -356,11 +376,7 @@ const UserForm = () => {
                                 className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
                             >
                                 <option value="">Seleccionar Rol</option>
-                                {roles.filter(r => {
-                                    // If company admin, hide Super Admin role
-                                    if (currentUser?.company_id && r.name === 'super_admin') return false;
-                                    return true;
-                                }).map(role => (
+                                {availableRoles.map(role => (
                                     <option key={role.id} value={role.id}>
                                         {ROLE_LABELS[role.name] || role.label || role.name}
                                     </option>

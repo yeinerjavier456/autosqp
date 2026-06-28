@@ -1,9 +1,24 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 
+const inferCompanyNameFromHost = () => {
+  if (typeof window === 'undefined') {
+    return 'AutosQP';
+  }
+
+  const hostname = String(window.location.hostname || '').trim().toLowerCase();
+  if (!hostname || hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'AutosQP';
+  }
+
+  const normalized = hostname.replace(/^www\./, '');
+  const [label] = normalized.split('.');
+  return label || 'AutosQP';
+};
+
 const DEFAULT_PUBLIC_COMPANY = {
   id: null,
-  name: 'AutosQP',
+  name: inferCompanyNameFromHost(),
   public_domain: null,
   logo_url: '',
   primary_color: '#2563eb',
@@ -35,6 +50,13 @@ export const usePublicCompany = () => {
       ignore = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    document.title = company?.name || 'AutosQP';
+  }, [company]);
 
   return company;
 };
