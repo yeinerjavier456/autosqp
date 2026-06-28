@@ -2502,7 +2502,7 @@ def resolve_assignable_role(db: Session, target_role: models.Role, company_id: O
 
 def serialize_user(user: models.User, is_online: Optional[bool] = None) -> dict:
     payload = schemas.User.model_validate(user, from_attributes=True).model_dump()
-    payload["role"] = serialize_role(user.role) if user.role else None
+    payload["role"] = serialize_role(user.role).model_dump() if user.role else None
     company = getattr(user, "company", None)
     if payload.get("role"):
         payload["role"]["permissions"] = apply_company_module_limits(payload["role"].get("permissions", []), company)
