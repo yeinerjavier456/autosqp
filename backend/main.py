@@ -2539,6 +2539,7 @@ def read_users(
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(get_current_user)
 ):
+    effective_role_name = get_user_role_name(current_user)
     today = datetime.datetime.utcnow()
     five_min_ago = today - datetime.timedelta(minutes=5)
 
@@ -2549,7 +2550,7 @@ def read_users(
     query = db.query(models.User)
     
     # If user belongs to a company, limit scope to that company specific users
-    if current_user.company_id:
+    if current_user.company_id and effective_role_name != "super_admin":
         query = query.filter(models.User.company_id == current_user.company_id)
 
     if not include_inactive:
@@ -2575,18 +2576,20 @@ def read_users(
 @app.post("/users/", response_model=schemas.User)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     print(f"Creating user with payload: {user.dict()}") 
+    effective_role_name = get_user_role_name(current_user)
+    acting_company_id = None if effective_role_name == "super_admin" else current_user.company_id
     
     # Verify role exists
     role_obj = db.query(models.Role).filter(models.Role.id == user.role_id).first()
     if not role_obj:
         raise HTTPException(status_code=400, detail="Invalid Role ID")
-    role_obj = resolve_assignable_role(db, role_obj, current_user.company_id)
-    if current_user.company_id and role_obj.company_id not in {None, current_user.company_id}:
+    role_obj = resolve_assignable_role(db, role_obj, acting_company_id)
+    if acting_company_id and role_obj.company_id not in {None, acting_company_id}:
         raise HTTPException(status_code=403, detail="No puedes usar roles de otra empresa")
 
     # Check permissions and scope
-    if current_user.company_id:
-        user.company_id = current_user.company_id
+    if acting_company_id:
+        user.company_id = acting_company_id
         # Prevent creating Super Admins
         if role_obj.name == "super_admin":
              raise HTTPException(status_code=403, detail="Company admins cannot create Super Users")
@@ -2625,20 +2628,23 @@ async def read_users_me(current_user: models.User = Depends(get_current_user)):
 
 @app.get("/users/{user_id}", response_model=schemas.User)
 def read_user(user_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    effective_role_name = get_user_role_name(current_user)
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    if current_user.company_id and user.company_id != current_user.company_id:
+    if current_user.company_id and effective_role_name != "super_admin" and user.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="No tienes permisos para ver usuarios de otra empresa")
     return serialize_user(user)
 
 @app.put("/users/{user_id}", response_model=schemas.User)
 def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     print(f"Updating user {user_id} with: {user_update.dict()}") 
+    effective_role_name = get_user_role_name(current_user)
+    acting_company_id = None if effective_role_name == "super_admin" else current_user.company_id
     db_user = db.query(models.User).filter(models.User.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
-    if current_user.company_id and db_user.company_id != current_user.company_id:
+    if current_user.company_id and effective_role_name != "super_admin" and db_user.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="No tienes permisos para editar usuarios de otra empresa")
     resolved_role = getattr(db_user, "role", None)
 
@@ -2650,14 +2656,14 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
         target_role = db.query(models.Role).filter(models.Role.id == user_update.role_id).first()
         if not target_role:
             raise HTTPException(status_code=400, detail="Invalid Role ID")
-        target_role = resolve_assignable_role(db, target_role, current_user.company_id)
-        if current_user.company_id and target_role.company_id not in {None, current_user.company_id}:
+        target_role = resolve_assignable_role(db, target_role, acting_company_id)
+        if acting_company_id and target_role.company_id not in {None, acting_company_id}:
             raise HTTPException(status_code=403, detail="No puedes usar roles de otra empresa")
         print(f"Setting role_id to: {target_role.id}") 
         db_user.role_id = target_role.id
         resolved_role = target_role
     if user_update.company_id is not None:
-        if current_user.company_id and user_update.company_id != current_user.company_id:
+        if acting_company_id and user_update.company_id != acting_company_id:
             raise HTTPException(status_code=403, detail="No puedes mover usuarios a otra empresa")
         db_user.company_id = user_update.company_id
     

@@ -115,6 +115,20 @@ const PublicInventory = () => {
     const secondaryColor = company.secondary_color || '#0f172a';
     const primarySoft = withAlpha(primaryColor, '14');
     const secondarySoft = withAlpha(secondaryColor, 'f0');
+    const darkPanel = withAlpha(secondaryColor, 'f7');
+    const controlDark = withAlpha(secondaryColor, 'e8');
+    const darkBorder = withAlpha(primaryColor, '28');
+    const lightBorder = withAlpha(primaryColor, '22');
+
+    const darkInputStyle = {
+        backgroundColor: controlDark,
+        borderColor: darkBorder,
+    };
+
+    const lightInputStyle = {
+        borderColor: lightBorder,
+        boxShadow: `0 0 0 1px ${withAlpha(primaryColor, '18')}`,
+    };
 
     return (
         <div
@@ -129,7 +143,7 @@ const PublicInventory = () => {
             <header
                 className="shadow-lg sticky top-0 z-50 border-b"
                 style={{
-                    backgroundColor: secondaryColor,
+                    background: `linear-gradient(90deg, ${secondaryColor} 0%, ${withAlpha(primaryColor, 'dd')} 100%)`,
                     borderColor: withAlpha(primaryColor, '30'),
                 }}
             >
@@ -162,7 +176,7 @@ const PublicInventory = () => {
                                 onChange={handleFilterChange}
                                 placeholder="Buscar vehículos..."
                                 className="w-full pl-4 pr-10 py-2.5 rounded-lg shadow-sm focus:outline-none text-slate-700 bg-slate-50 border-none"
-                                style={{ boxShadow: `0 0 0 1px ${withAlpha(primaryColor, '20')}` }}
+                                style={lightInputStyle}
                             />
                             <button className="absolute right-0 top-0 h-full px-3 text-slate-400 transition" style={{ color: primaryColor }}>
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
@@ -174,7 +188,7 @@ const PublicInventory = () => {
                         <Link
                             to="/login"
                             className="text-white transition px-4 py-2 rounded-lg"
-                            style={{ backgroundColor: withAlpha(primaryColor, '24') }}
+                            style={{ backgroundColor: primaryColor }}
                         >
                             Ingresa
                         </Link>
@@ -189,7 +203,7 @@ const PublicInventory = () => {
                         onChange={handleFilterChange}
                         placeholder="Buscar vehículos..."
                         className="w-full pl-4 pr-10 py-2 rounded-sm shadow-sm focus:outline-none text-slate-700"
-                        style={{ boxShadow: `0 0 0 1px ${withAlpha(primaryColor, '20')}` }}
+                        style={lightInputStyle}
                     />
                 </div>
             </header>
@@ -198,11 +212,15 @@ const PublicInventory = () => {
                 {/* Sidebar */}
                 <aside
                     className={`
-                        fixed inset-y-0 left-0 z-40 bg-slate-900 text-white shadow-xl transition-transform duration-300 ease-in-out transform 
+                        fixed inset-y-0 left-0 z-40 text-white shadow-xl transition-transform duration-300 ease-in-out transform 
                         ${showFilters ? 'translate-x-0' : '-translate-x-full'} 
                         md:translate-x-0 md:static md:h-[calc(100vh-64px)] md:sticky md:top-16
-                        w-64 flex-shrink-0 overflow-y-auto custom-scrollbar border-r border-slate-800
+                        w-64 flex-shrink-0 overflow-y-auto custom-scrollbar border-r
                     `}
+                    style={{
+                        background: `linear-gradient(180deg, ${darkPanel} 0%, ${secondaryColor} 100%)`,
+                        borderColor: darkBorder,
+                    }}
                 >
                     <div className="p-6">
                         <div className="flex justify-between items-center mb-6">
@@ -217,7 +235,7 @@ const PublicInventory = () => {
 
                         {/* Price Filter */}
                         <div className="mb-6">
-                            <h4 className="font-semibold text-sm mb-2 text-slate-300">Precio</h4>
+                            <h4 className="font-semibold text-sm mb-2" style={{ color: primaryColor }}>Precio</h4>
                             <div className="flex gap-2 items-center">
                                 <input
                                     type="number"
@@ -226,6 +244,7 @@ const PublicInventory = () => {
                                     className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 outline-none"
                                     onChange={handleFilterChange}
                                     value={filters.price_min}
+                                    style={darkInputStyle}
                                 />
                                 <span className="text-slate-500">-</span>
                                 <input
@@ -235,17 +254,19 @@ const PublicInventory = () => {
                                     className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 outline-none"
                                     onChange={handleFilterChange}
                                     value={filters.price_max}
+                                    style={darkInputStyle}
                                 />
                             </div>
                         </div>
 
                         <div className="mb-6">
-                            <h4 className="font-semibold text-sm mb-2 text-slate-300">Ordenar por</h4>
+                            <h4 className="font-semibold text-sm mb-2" style={{ color: primaryColor }}>Ordenar por</h4>
                             <select
                                 name="sort_by"
                                 className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white outline-none"
                                 onChange={handleFilterChange}
                                 value={filters.sort_by}
+                                style={darkInputStyle}
                             >
                                 <option value="">Más recientes</option>
                                 <option value="price_desc">Precio: mayor a menor</option>
@@ -257,12 +278,13 @@ const PublicInventory = () => {
 
                         {/* Brand Filter */}
                         <div className="mb-6">
-                            <h4 className="font-semibold text-sm mb-2 text-slate-300">Marca</h4>
+                            <h4 className="font-semibold text-sm mb-2" style={{ color: primaryColor }}>Marca</h4>
                             <select
                                 name="make"
                                 className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white outline-none mb-2"
                                 onChange={handleFilterChange}
                                 value={filters.make}
+                                style={darkInputStyle}
                             >
                                 <option value="">Todas</option>
                                 {safeMakes.map(m => (
@@ -273,7 +295,7 @@ const PublicInventory = () => {
 
                         {/* Year Filter */}
                         <div className="mb-6">
-                            <h4 className="font-semibold text-sm mb-2 text-slate-300">Año</h4>
+                            <h4 className="font-semibold text-sm mb-2" style={{ color: primaryColor }}>Año</h4>
                             <div className="flex gap-2 items-center">
                                 <input
                                     type="number"
@@ -281,6 +303,7 @@ const PublicInventory = () => {
                                     placeholder="Desde"
                                     className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 outline-none"
                                     onChange={handleFilterChange}
+                                    style={darkInputStyle}
                                 />
                                 <span className="text-slate-500">-</span>
                                 <input
@@ -289,13 +312,14 @@ const PublicInventory = () => {
                                     placeholder="Hasta"
                                     className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 outline-none"
                                     onChange={handleFilterChange}
+                                    style={darkInputStyle}
                                 />
                             </div>
                         </div>
 
                         {/* Model Filter */}
                         <div className="mb-6">
-                            <h4 className="font-semibold text-sm mb-2 text-slate-300">Modelo</h4>
+                            <h4 className="font-semibold text-sm mb-2" style={{ color: primaryColor }}>Modelo</h4>
                             <input
                                 type="text"
                                 name="model" // Use 'model' distinct from global 'q'
@@ -303,12 +327,13 @@ const PublicInventory = () => {
                                 className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 outline-none"
                                 onChange={handleFilterChange}
                                 value={filters.model || ''}
+                                style={darkInputStyle}
                             />
                         </div>
 
                         {/* Mileage Filter */}
                         <div className="mb-6">
-                            <h4 className="font-semibold text-sm mb-2 text-slate-300">Kilometraje</h4>
+                            <h4 className="font-semibold text-sm mb-2" style={{ color: primaryColor }}>Kilometraje</h4>
                             <div className="flex gap-2 items-center mb-2">
                                 <input
                                     type="number"
@@ -317,6 +342,7 @@ const PublicInventory = () => {
                                     className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 outline-none"
                                     onChange={handleFilterChange}
                                     value={filters.mileage_min || ''}
+                                    style={darkInputStyle}
                                 />
                                 <span className="text-slate-500">-</span>
                                 <input
@@ -326,13 +352,14 @@ const PublicInventory = () => {
                                     className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 outline-none"
                                     onChange={handleFilterChange}
                                     value={filters.mileage_max || ''}
+                                    style={darkInputStyle}
                                 />
                             </div>
                         </div>
 
                         {/* Color Filter */}
                         <div className="mb-6">
-                            <h4 className="font-semibold text-sm mb-2 text-slate-300">Color</h4>
+                            <h4 className="font-semibold text-sm mb-2" style={{ color: primaryColor }}>Color</h4>
                             <input
                                 type="text"
                                 name="color"
@@ -340,6 +367,7 @@ const PublicInventory = () => {
                                 className="w-full text-sm p-2 bg-slate-800 border-slate-700 border rounded text-white placeholder-slate-500 outline-none"
                                 onChange={handleFilterChange}
                                 value={filters.color || ''}
+                                style={darkInputStyle}
                             />
                         </div>
 
@@ -377,9 +405,14 @@ const PublicInventory = () => {
                 <div className="flex-1 p-6 md:p-8 overflow-y-auto">
                     {/* Header Results */}
                     <div className="flex justify-between items-center mb-6">
-                        <h1 className="text-2xl font-bold text-gray-800">
+                        <h1 className="text-2xl font-bold" style={{ color: secondaryColor }}>
                             {filters.make ? `${filters.make}` : 'Carros y Camionetas'}
-                            <span className="text-gray-500 font-normal text-base ml-2 bg-white px-2 py-1 rounded-full shadow-sm">{safeVehicles.length} resultados</span>
+                            <span
+                                className="font-normal text-base ml-2 px-2 py-1 rounded-full shadow-sm"
+                                style={{ color: primaryColor, backgroundColor: primarySoft }}
+                            >
+                                {safeVehicles.length} resultados
+                            </span>
                         </h1>
                         <div className="flex items-center gap-3">
                             <select
@@ -387,7 +420,7 @@ const PublicInventory = () => {
                                 value={filters.sort_by}
                                 onChange={handleFilterChange}
                                 className="hidden md:block rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm outline-none transition"
-                                style={{ boxShadow: `0 0 0 1px ${withAlpha(primaryColor, '18')}` }}
+                                style={lightInputStyle}
                             >
                                 <option value="">Más recientes</option>
                                 <option value="price_desc">Precio: mayor a menor</option>

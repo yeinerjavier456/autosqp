@@ -40,6 +40,7 @@ const UserForm = () => {
     const isInventarioRoleSelected = (selectedRole?.base_role_name || selectedRole?.name) === 'inventario';
     const isAdvisorRoleSelected = (selectedRole?.base_role_name || selectedRole?.name) === 'asesor';
     const currentRoleName = currentUser?.role?.base_role_name || currentUser?.role?.name;
+    const isSuperAdmin = currentRoleName === 'super_admin';
 
     const generateTemporaryPassword = () => {
         const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
@@ -78,7 +79,7 @@ const UserForm = () => {
                 }
 
                 // Fetch Companies if Super Admin
-                if (!currentUser?.company_id) {
+                if (isSuperAdmin) {
                     const compRes = await axios.get(`${API_BASE_URL}/companies/?limit=100`, { headers });
                     setCompanies(compRes.data.items);
                 }
@@ -122,7 +123,7 @@ const UserForm = () => {
             };
             fetchUser();
         }
-    }, [id, currentUser]);
+    }, [id, currentUser, isSuperAdmin]);
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -367,8 +368,7 @@ const UserForm = () => {
                             </select>
                         </div>
 
-                        {/* Dropdown de Empresa: Visible si es Super Admin (sin company_id) O si hemos cargado empresas */}
-                        {(!currentUser?.company_id || companies.length > 0) && (
+                        {isSuperAdmin && (
                             <div>
                                 <label className="block text-sm font-medium text-slate-600 mb-1">Empresa</label>
                                 <select
