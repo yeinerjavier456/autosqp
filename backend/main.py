@@ -594,6 +594,12 @@ def _send_public_credit_verification_email(target_email: str, db: Session, compa
         subtype="html",
     )
 
+    _deliver_smtp_message(message, smtp_settings)
+
+
+def _deliver_smtp_message(message: EmailMessage, smtp_settings: Dict[str, Any]):
+    """Send an already-built message using the company's SMTP connection."""
+
     if smtp_settings["use_tls"]:
         context = ssl.create_default_context()
         with smtplib.SMTP(smtp_settings["host"], smtp_settings["port"]) as server:
@@ -606,6 +612,383 @@ def _send_public_credit_verification_email(target_email: str, db: Session, compa
             if smtp_settings["username"]:
                 server.login(smtp_settings["username"], smtp_settings["password"])
             server.send_message(message)
+
+
+PUBLIC_CREDIT_SECTION_LABELS = {
+    "vehicle": "Datos del vehículo",
+    "personal": "Datos personales",
+    "employment": "Datos laborales",
+    "income": "Ingresos",
+    "references": "Referencias",
+    "consent": "Consentimiento y firma",
+}
+
+PUBLIC_CREDIT_FIELD_LABELS = {
+    "vehicleValue": "Valor del vehículo",
+    "requestedAmount": "Monto solicitado",
+    "requestDate": "Fecha de solicitud",
+    "make": "Marca",
+    "model": "Modelo",
+    "vehicleType": "Tipo de vehículo",
+    "label": "Vehículo solicitado",
+    "firstName": "Nombres",
+    "lastName": "Apellidos",
+    "documentType": "Tipo de documento",
+    "documentNumber": "Número de documento",
+    "issuePlace": "Lugar de expedición",
+    "birthDate": "Fecha de nacimiento",
+    "gender": "Sexo",
+    "profession": "Profesión",
+    "birthPlace": "Lugar de nacimiento",
+    "maritalStatus": "Estado civil",
+    "childrenCount": "Número de hijos",
+    "educationLevel": "Nivel de estudio",
+    "livesWith": "Con quién vive",
+    "housingType": "Tipo de vivienda",
+    "mobilePhone": "Teléfono móvil",
+    "city": "Ciudad",
+    "address": "Dirección",
+    "email": "Correo electrónico",
+    "activity": "Actividad económica",
+    "companyName": "Empresa actual",
+    "companyCity": "Ciudad de la empresa",
+    "companyAddress": "Dirección de la empresa",
+    "jobTitle": "Cargo u ocupación",
+    "companyEmail": "Correo de la empresa",
+    "startDate": "Fecha de ingreso",
+    "salary": "Salario",
+    "contractType": "Tipo de contrato",
+    "previousCompanyName": "Empresa anterior",
+    "previousCompanyActivity": "Actividad de la empresa anterior",
+    "previousCompanyRole": "Cargo anterior",
+    "previousEmploymentTime": "Tiempo laborado",
+    "salaryIncome": "Ingreso por salario",
+    "commissionsIncome": "Ingreso por comisiones",
+    "otherIncome": "Otros ingresos",
+    "otherIncomeDetail": "Detalle de otros ingresos",
+    "totalIncome": "Total de ingresos",
+    "commercial": "Referencia comercial",
+    "personal1": "Primera referencia personal",
+    "personal2": "Segunda referencia personal",
+    "names": "Nombres",
+    "lastNames": "Apellidos",
+    "phone": "Teléfono",
+    "accepted": "Política de tratamiento aceptada",
+    "signatureMode": "Modalidad de firma",
+    "signatureName": "Nombre de quien firma",
+}
+
+PUBLIC_CREDIT_HIDDEN_FIELDS = {"verificationCode", "signatureDrawnDataUrl", "summary"}
+PUBLIC_CREDIT_MONEY_FIELDS = {
+    "vehicleValue", "requestedAmount", "salary", "salaryIncome",
+    "commissionsIncome", "otherIncome", "totalIncome",
+}
+
+
+def _public_credit_field_label(field_name: str) -> str:
+    if field_name in PUBLIC_CREDIT_FIELD_LABELS:
+        return PUBLIC_CREDIT_FIELD_LABELS[field_name]
+    return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", str(field_name)).strip().capitalize()
+
+
+def _public_credit_display_value(field_name: str, value: Any) -> str:
+    if value is None or value == "":
+        return "Sin dato"
+    if isinstance(value, bool):
+        return "Sí" if value else "No"
+    if field_name in PUBLIC_CREDIT_MONEY_FIELDS:
+        try:
+            amount = int(float(re.sub(r"[^\d.-]", "", str(value)) or 0))
+            return f"$ {amount:,}".replace(",", ".")
+        except (TypeError, ValueError):
+            pass
+    if field_name == "signatureMode":
+        return "Firma dibujada" if str(value) == "draw" else "Firma adjunta"
+    if field_name in {"requestDate", "birthDate", "startDate"} and re.match(r"^\d{4}-\d{2}-\d{2}$", str(value)):
+        year, month, day = str(value).split("-")
+        return f"{day}/{month}/{year}"
+    return str(value)
+
+
+def _public_credit_attachment_path(file_url: Optional[str]) -> Optional[str]:
+    value = str(file_url or "").strip()
+    marker = "/api/static/"
+    if not value or marker not in value:
+        return None
+    relative_path = value.split(marker, 1)[1].replace("/", os.sep)
+    local_path = os.path.abspath(os.path.join("static", relative_path))
+    static_root = os.path.abspath("static")
+    if os.path.commonpath([local_path, static_root]) != static_root or not os.path.isfile(local_path):
+        return None
+    return local_path
+
+
+def _public_credit_bogota_datetime(value: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
+    if not value:
+        return None
+    aware_value = value if value.tzinfo else value.replace(tzinfo=datetime.timezone.utc)
+    return aware_value.astimezone(BOGOTA_TZ)
+
+
+def _build_public_credit_submission_pdf(
+    company: Optional[models.Company],
+    submission: models.PublicCreditSubmission,
+) -> bytes:
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.enums import TA_CENTER
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import cm
+        from reportlab.lib.utils import ImageReader
+        from reportlab.platypus import Image as RLImage
+        from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail="La librería reportlab no está instalada en el servidor") from exc
+
+    payload = submission.form_payload or {}
+    attachments = submission.attachments or {}
+    company_name = getattr(company, "name", None) or "AutosQP"
+    primary_color = getattr(company, "primary_color", None) or "#2563eb"
+    secondary_color = getattr(company, "secondary_color", None) or "#0f172a"
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(
+        name="CreditTitle",
+        parent=styles["Title"],
+        alignment=TA_CENTER,
+        textColor=colors.HexColor(secondary_color),
+        fontSize=20,
+        leading=24,
+        spaceAfter=6,
+    ))
+    styles.add(ParagraphStyle(
+        name="CreditSection",
+        parent=styles["Heading2"],
+        textColor=colors.HexColor(primary_color),
+        fontSize=13,
+        leading=16,
+        spaceBefore=10,
+        spaceAfter=8,
+    ))
+    styles.add(ParagraphStyle(
+        name="CreditSmall",
+        parent=styles["BodyText"],
+        fontSize=8,
+        leading=11,
+        textColor=colors.HexColor("#475569"),
+    ))
+
+    buffer = BytesIO()
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=1.4 * cm,
+        leftMargin=1.4 * cm,
+        topMargin=1.3 * cm,
+        bottomMargin=1.3 * cm,
+        title=f"Formulario de crédito - {submission.applicant_name}",
+        author=company_name,
+    )
+    story = [
+        Paragraph(escape(company_name), styles["CreditTitle"]),
+        Paragraph("FORMULARIO DE CRÉDITO", styles["CreditTitle"]),
+        Paragraph(
+            f"Solicitud No. {submission.id} · Fecha: "
+            f"{_public_credit_bogota_datetime(submission.created_at).strftime('%d/%m/%Y %I:%M %p') if submission.created_at else 'Sin fecha'}",
+            styles["CreditSmall"],
+        ),
+        Spacer(1, 12),
+    ]
+
+    summary_rows = [
+        ["Solicitante", submission.applicant_name or "Sin dato", "Correo", submission.email or "Sin dato"],
+        ["Documento", submission.document_number or "Sin dato", "Teléfono", submission.phone or "Sin dato"],
+        ["Vehículo", submission.desired_vehicle or "Sin dato", "Estado", "Enviada"],
+    ]
+    summary_table = Table(summary_rows, colWidths=[2.6 * cm, 5.3 * cm, 2.2 * cm, 6.1 * cm])
+    summary_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
+        ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#0f172a")),
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 7),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+    ]))
+    story.extend([summary_table, Spacer(1, 8)])
+
+    def append_fields(section_value: Dict[str, Any], prefix: Optional[str] = None):
+        rows = []
+        for field_name, field_value in section_value.items():
+            if field_name in PUBLIC_CREDIT_HIDDEN_FIELDS:
+                continue
+            if isinstance(field_value, dict):
+                if rows:
+                    table = Table(rows, colWidths=[5.2 * cm, 11 * cm])
+                    table.setStyle(detail_table_style)
+                    story.append(table)
+                    rows = []
+                story.append(Paragraph(escape(_public_credit_field_label(field_name)), styles["Heading4"]))
+                append_fields(field_value, field_name)
+                continue
+            label = _public_credit_field_label(field_name)
+            rows.append([
+                Paragraph(escape(label), styles["CreditSmall"]),
+                Paragraph(escape(_public_credit_display_value(field_name, field_value)), styles["CreditSmall"]),
+            ])
+        if rows:
+            table = Table(rows, colWidths=[5.2 * cm, 11 * cm])
+            table.setStyle(detail_table_style)
+            story.append(table)
+
+    detail_table_style = TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f1f5f9")),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cbd5e1")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ])
+
+    for section_name, section_value in payload.items():
+        if not isinstance(section_value, dict):
+            continue
+        story.append(Paragraph(
+            escape(PUBLIC_CREDIT_SECTION_LABELS.get(section_name, _public_credit_field_label(section_name))),
+            styles["CreditSection"],
+        ))
+        append_fields(section_value)
+
+    story.extend([
+        PageBreak(),
+        Paragraph("Autorización y tratamiento de datos", styles["CreditSection"]),
+        Paragraph(escape(submission.consent_text or PUBLIC_CREDIT_POLICY_TEXT), styles["CreditSmall"]),
+        Spacer(1, 12),
+    ])
+
+    attachment_labels = {
+        "document_front": "Documento de identidad - cara frontal",
+        "document_back": "Documento de identidad - cara posterior",
+        "signature_upload": "Firma adjunta",
+        "signature_drawn": "Firma realizada en el formulario",
+    }
+    for attachment_key, attachment_url in attachments.items():
+        local_path = _public_credit_attachment_path(attachment_url)
+        if not local_path:
+            continue
+        try:
+            image_reader = ImageReader(local_path)
+            image_width, image_height = image_reader.getSize()
+            display_width = 16 * cm
+            display_height = min(10 * cm, display_width * image_height / max(image_width, 1))
+            story.append(Paragraph(escape(attachment_labels.get(attachment_key, "Archivo adjunto")), styles["CreditSection"]))
+            story.append(RLImage(local_path, width=display_width, height=display_height))
+            story.append(Spacer(1, 10))
+        except Exception:
+            story.append(Paragraph(
+                f"{escape(attachment_labels.get(attachment_key, 'Archivo adjunto'))}: archivo disponible en el sistema.",
+                styles["CreditSmall"],
+            ))
+
+    document.build(story)
+    return buffer.getvalue()
+
+
+def _parse_public_credit_recipients(raw_recipients: Optional[str], applicant_email: str) -> List[str]:
+    candidates = [applicant_email]
+    candidates.extend(re.split(r"[,;\n\r]+", str(raw_recipients or "")))
+    result = []
+    seen = set()
+    for candidate in candidates:
+        email_value = str(candidate or "").strip().lower()
+        if email_value and "@" in email_value and email_value not in seen:
+            seen.add(email_value)
+            result.append(email_value)
+    return result
+
+
+def _send_public_credit_submission_email(
+    db: Session,
+    company: Optional[models.Company],
+    submission: models.PublicCreditSubmission,
+    pdf_bytes: bytes,
+):
+    smtp_settings = _get_public_credit_smtp_settings(db, company)
+    integration_settings = db.query(models.IntegrationSettings).filter(
+        models.IntegrationSettings.company_id == submission.company_id
+    ).first()
+    recipients = _parse_public_credit_recipients(
+        getattr(integration_settings, "smtp_always_recipients", None),
+        submission.email,
+    )
+    if not recipients:
+        raise ValueError("No hay destinatarios configurados para el formulario de crédito")
+
+    vehicle = (submission.form_payload or {}).get("vehicle", {}) or {}
+    vehicle_value = _public_credit_display_value("vehicleValue", vehicle.get("vehicleValue"))
+    requested_amount = _public_credit_display_value("requestedAmount", vehicle.get("requestedAmount"))
+    company_name = getattr(company, "name", None) or "AutosQP"
+    primary_color = getattr(company, "primary_color", None) or "#2563eb"
+    secondary_color = getattr(company, "secondary_color", None) or "#0f172a"
+
+    message = EmailMessage()
+    message["Subject"] = f"Formulario de crédito - {submission.applicant_name}"
+    message["From"] = smtp_settings["sender"]
+    message["To"] = submission.email
+    internal_recipients = [email for email in recipients if email != submission.email.lower()]
+    if internal_recipients:
+        message["Bcc"] = ", ".join(internal_recipients)
+    message.set_content(
+        "\n".join([
+            "Formulario de crédito",
+            f"Nombre: {submission.applicant_name}",
+            f"Correo: {submission.email}",
+            f"Valor del carro: {vehicle_value}",
+            f"Valor del crédito solicitado: {requested_amount}",
+            "",
+            "El formulario completo se encuentra adjunto en PDF.",
+        ]),
+        charset="utf-8",
+    )
+    message.add_alternative(
+        f"""
+        <html><body style="margin:0;background:#f8fafc;font-family:Arial,sans-serif;color:#0f172a;">
+          <div style="max-width:640px;margin:0 auto;padding:28px 18px;">
+            <div style="overflow:hidden;border:1px solid #e2e8f0;border-radius:22px;background:#fff;">
+              <div style="padding:26px;background:linear-gradient(135deg,{secondary_color},{primary_color});color:#fff;">
+                <div style="font-size:13px;opacity:.85;">{escape(company_name)}</div>
+                <h1 style="margin:8px 0 0;font-size:26px;">Formulario de crédito</h1>
+              </div>
+              <div style="padding:28px;">
+                <p style="margin-top:0;color:#475569;">Se registró correctamente una solicitud de crédito.</p>
+                <table style="width:100%;border-collapse:collapse;">
+                  <tr><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;">Nombre</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;">{escape(submission.applicant_name)}</td></tr>
+                  <tr><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;">Correo</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;">{escape(submission.email)}</td></tr>
+                  <tr><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;">Valor del carro</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;">{escape(vehicle_value)}</td></tr>
+                  <tr><td style="padding:10px;font-weight:bold;">Crédito solicitado</td><td style="padding:10px;">{escape(requested_amount)}</td></tr>
+                </table>
+                <p style="margin:24px 0 0;color:#475569;">El formulario completo está adjunto en formato PDF.</p>
+              </div>
+            </div>
+          </div>
+        </body></html>
+        """.strip(),
+        subtype="html",
+    )
+    safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", submission.applicant_name or "solicitante").strip("_")
+    message.add_attachment(
+        pdf_bytes,
+        maintype="application",
+        subtype="pdf",
+        filename=f"formulario_credito_{safe_name or submission.id}.pdf",
+    )
+    _deliver_smtp_message(message, smtp_settings)
 
 
 def _build_public_credit_lead_message(payload: Dict[str, Any]) -> str:
@@ -1346,6 +1729,7 @@ def ensure_company_smtp_settings_columns():
                 "smtp_password": "ADD COLUMN smtp_password TEXT NULL",
                 "smtp_from": "ADD COLUMN smtp_from VARCHAR(255) NULL",
                 "smtp_use_tls": "ADD COLUMN smtp_use_tls BOOLEAN NULL DEFAULT 1",
+                "smtp_always_recipients": "ADD COLUMN smtp_always_recipients TEXT NULL",
             }
             for _, ddl in smtp_columns.items():
                 try:
@@ -4048,9 +4432,23 @@ async def submit_public_credit_request(
     db.commit()
     db.refresh(submission)
 
+    response_message = "Solicitud de crédito enviada correctamente."
+    try:
+        pdf_bytes = _build_public_credit_submission_pdf(company, submission)
+        _send_public_credit_submission_email(db, company, submission, pdf_bytes)
+    except Exception as exc:
+        print(
+            f"Warning: public credit submission {submission.id} was saved but email delivery failed: {exc}",
+            flush=True,
+        )
+        response_message = (
+            "Solicitud guardada correctamente, pero no fue posible enviar el correo con el PDF. "
+            "La empresa puede descargarlo desde Solicitudes Públicas."
+        )
+
     return schemas.PublicCreditSubmissionResponse(
         status="ok",
-        message="Solicitud de crédito enviada correctamente.",
+        message=response_message,
         lead_id=new_lead.id,
         submission_id=submission.id,
     )
@@ -4123,6 +4521,36 @@ def read_public_credit_submission_detail(
         raise HTTPException(status_code=404, detail="Solicitud pública no encontrada")
 
     return schemas.PublicCreditSubmissionDetail(**serialize_public_credit_submission(submission))
+
+
+@app.get("/public-credit-submissions/{submission_id}/pdf")
+def download_public_credit_submission_pdf(
+    submission_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    ensure_public_credit_review_permissions(current_user)
+    query = db.query(models.PublicCreditSubmission).filter(
+        models.PublicCreditSubmission.id == submission_id
+    )
+    if current_user.company_id:
+        query = query.filter(models.PublicCreditSubmission.company_id == current_user.company_id)
+    submission = query.first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Solicitud pública no encontrada")
+
+    company = db.query(models.Company).filter(models.Company.id == submission.company_id).first()
+    pdf_bytes = _build_public_credit_submission_pdf(company, submission)
+    safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", submission.applicant_name or "solicitante").strip("_")
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="formulario_credito_{safe_name or submission.id}.pdf"'
+            )
+        },
+    )
 
 
 @app.put("/public-credit-submissions/{submission_id}", response_model=schemas.PublicCreditSubmissionDetail)

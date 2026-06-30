@@ -13,6 +13,107 @@ const STATUS_OPTIONS = [
     { value: 'rejected', label: 'Rechazada' },
 ];
 
+const SECTION_LABELS = {
+    vehicle: 'Datos del vehículo',
+    personal: 'Datos personales',
+    employment: 'Datos laborales',
+    income: 'Ingresos',
+    references: 'Referencias',
+    consent: 'Consentimiento y firma',
+};
+
+const FIELD_LABELS = {
+    vehicleValue: 'Valor del vehículo',
+    requestedAmount: 'Monto solicitado',
+    requestDate: 'Fecha de solicitud',
+    make: 'Marca',
+    model: 'Modelo',
+    vehicleType: 'Tipo de vehículo',
+    firstName: 'Nombres',
+    lastName: 'Apellidos',
+    documentType: 'Tipo de documento',
+    documentNumber: 'Número de documento',
+    issuePlace: 'Lugar de expedición',
+    birthDate: 'Fecha de nacimiento',
+    gender: 'Sexo',
+    profession: 'Profesión',
+    birthPlace: 'Lugar de nacimiento',
+    maritalStatus: 'Estado civil',
+    childrenCount: 'Número de hijos',
+    educationLevel: 'Nivel de estudio',
+    livesWith: 'Con quién vive',
+    housingType: 'Tipo de vivienda',
+    mobilePhone: 'Teléfono móvil',
+    city: 'Ciudad',
+    address: 'Dirección',
+    email: 'Correo electrónico',
+    activity: 'Actividad económica',
+    companyName: 'Empresa actual',
+    companyCity: 'Ciudad de la empresa',
+    companyAddress: 'Dirección de la empresa',
+    jobTitle: 'Cargo u ocupación',
+    companyEmail: 'Correo de la empresa',
+    startDate: 'Fecha de ingreso',
+    salary: 'Salario',
+    contractType: 'Tipo de contrato',
+    previousCompanyName: 'Empresa anterior',
+    previousCompanyActivity: 'Actividad de la empresa anterior',
+    previousCompanyRole: 'Cargo anterior',
+    previousEmploymentTime: 'Tiempo laborado',
+    salaryIncome: 'Ingreso por salario',
+    commissionsIncome: 'Ingreso por comisiones',
+    otherIncome: 'Otros ingresos',
+    otherIncomeDetail: 'Detalle de otros ingresos',
+    totalIncome: 'Total de ingresos',
+    commercial: 'Referencia comercial',
+    personal1: 'Primera referencia personal',
+    personal2: 'Segunda referencia personal',
+    names: 'Nombres',
+    lastNames: 'Apellidos',
+    phone: 'Teléfono',
+    accepted: 'Política de tratamiento aceptada',
+    signatureMode: 'Modalidad de firma',
+    signatureName: 'Nombre de quien firma',
+};
+
+const ATTACHMENT_LABELS = {
+    document_front: 'Documento de identidad - cara frontal',
+    document_back: 'Documento de identidad - cara posterior',
+    signature_upload: 'Firma adjunta',
+    signature_drawn: 'Firma realizada en el formulario',
+};
+
+const LEAD_STATUS_LABELS = {
+    new: 'Nuevo',
+    contacted: 'Contactado',
+    in_process: 'En proceso',
+    credit_study: 'Estudio de crédito',
+    approvals: 'Aprobaciones',
+    reservations: 'Reservas',
+    preparations: 'Alistamientos',
+    sold: 'Vendido',
+    lost: 'Perdido',
+};
+
+const HIDDEN_DETAIL_FIELDS = new Set(['verificationCode', 'signatureDrawnDataUrl', 'summary']);
+const MONEY_FIELDS = new Set([
+    'vehicleValue',
+    'requestedAmount',
+    'salary',
+    'salaryIncome',
+    'commissionsIncome',
+    'otherIncome',
+    'totalIncome',
+]);
+const DATE_FIELDS = new Set(['requestDate', 'birthDate', 'startDate']);
+
+const fieldLabel = (key) => FIELD_LABELS[key] || String(key).replace(/([a-z])([A-Z])/g, '$1 $2');
+
+const formatMoney = (value) => {
+    const amount = Number(String(value ?? '').replace(/[^\d.-]/g, ''));
+    return Number.isFinite(amount) ? `$ ${amount.toLocaleString('es-CO')}` : formatValue(value);
+};
+
 const statusBadgeClass = (status) => {
     switch (status) {
         case 'approved':
@@ -31,11 +132,58 @@ const statusLabel = (status) => {
     return found?.label || status || 'Sin estado';
 };
 
-const formatValue = (value) => {
+const formatValue = (value, fieldKey = '') => {
     if (value === null || value === undefined || value === '') return 'Sin dato';
     if (typeof value === 'boolean') return value ? 'Sí' : 'No';
-    if (typeof value === 'object') return JSON.stringify(value, null, 2);
+    if (MONEY_FIELDS.has(fieldKey)) return formatMoney(value);
+    if (DATE_FIELDS.has(fieldKey) && /^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+        const [year, month, day] = String(value).split('-');
+        return `${day}/${month}/${year}`;
+    }
+    if (fieldKey === 'signatureMode') return value === 'draw' ? 'Firma dibujada' : 'Firma adjunta';
+    if (typeof value === 'object') return 'Información registrada';
     return String(value);
+};
+
+const DetailField = ({ fieldKey, value }) => {
+    if (HIDDEN_DETAIL_FIELDS.has(fieldKey)) return null;
+
+    if (Array.isArray(value)) {
+        return (
+            <div className="space-y-2">
+                {value.map((item, index) => (
+                    <DetailField key={`${fieldKey}-${index}`} fieldKey={`${fieldKey} ${index + 1}`} value={item} />
+                ))}
+            </div>
+        );
+    }
+
+    if (value && typeof value === 'object') {
+        const entries = Object.entries(value).filter(([key]) => !HIDDEN_DETAIL_FIELDS.has(key));
+        if (!entries.length) return null;
+        return (
+            <div className="rounded-xl border border-slate-200 bg-white p-3 sm:col-span-2">
+                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-600">{fieldLabel(fieldKey)}</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                    {entries.map(([nestedKey, nestedValue]) => (
+                        <DetailField key={nestedKey} fieldKey={nestedKey} value={nestedValue} />
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{fieldLabel(fieldKey)}</p>
+            <p className="mt-1 break-words text-sm text-slate-800">{formatValue(value, fieldKey)}</p>
+        </div>
+    );
+};
+
+const isImageAttachment = (key, value) => {
+    if (key.startsWith('signature_')) return true;
+    return /\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(String(value || ''));
 };
 
 const flattenPayloadSections = (payload) => {
@@ -55,6 +203,7 @@ const PublicCreditSubmissions = () => {
     const [selectedItem, setSelectedItem] = useState(null);
     const [selectedStatus, setSelectedStatus] = useState('submitted');
     const [savingStatus, setSavingStatus] = useState(false);
+    const [downloadingPdf, setDownloadingPdf] = useState(false);
 
     const token = useMemo(() => localStorage.getItem('token'), []);
 
@@ -111,6 +260,37 @@ const PublicCreditSubmissions = () => {
         }
     };
 
+    const downloadPdf = async () => {
+        if (!selectedItem?.id) return;
+        setDownloadingPdf(true);
+        try {
+            const response = await axios.get(
+                `${API_BASE_URL}/public-credit-submissions/${selectedItem.id}/pdf`,
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                    responseType: 'blob',
+                }
+            );
+            const objectUrl = URL.createObjectURL(response.data);
+            const link = document.createElement('a');
+            const safeName = String(selectedItem.applicant_name || 'solicitante')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^A-Za-z0-9_-]+/g, '_');
+            link.href = objectUrl;
+            link.download = `formulario_credito_${safeName || selectedItem.id}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(objectUrl);
+        } catch (error) {
+            console.error(error);
+            Swal.fire('Error', error?.response?.data?.detail || 'No se pudo descargar el formulario.', 'error');
+        } finally {
+            setDownloadingPdf(false);
+        }
+    };
+
     useEffect(() => {
         fetchItems();
     }, []);
@@ -122,7 +302,7 @@ const PublicCreditSubmissions = () => {
         <div className="p-8 min-h-screen">
             <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                    <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Solicitudes Publicas de Credito</h1>
+                    <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Solicitudes Públicas de Crédito</h1>
                     <p className="text-slate-500 mt-1 font-medium">
                         Revisa los formularios públicos enviados, sus adjuntos y el lead creado desde la web.
                     </p>
@@ -209,7 +389,7 @@ const PublicCreditSubmissions = () => {
                                                 {item.lead_name || 'Sin lead asociado'}
                                             </p>
                                             <p className="text-xs text-slate-500 mt-1">
-                                                Estado: {item.lead_status || 'Sin estado'}
+                                                Estado: {LEAD_STATUS_LABELS[item.lead_status] || item.lead_status || 'Sin estado'}
                                             </p>
                                         </div>
                                     </div>
@@ -231,9 +411,19 @@ const PublicCreditSubmissions = () => {
                                     <h2 className="text-2xl font-bold text-slate-800">{selectedItem.applicant_name}</h2>
                                     <p className="text-sm text-slate-500">{selectedItem.email}</p>
                                 </div>
-                                <span className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wide ${statusBadgeClass(selectedItem.status)}`}>
-                                    {statusLabel(selectedItem.status)}
-                                </span>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={downloadPdf}
+                                        disabled={downloadingPdf}
+                                        className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60"
+                                    >
+                                        {downloadingPdf ? 'Generando PDF...' : 'Descargar PDF'}
+                                    </button>
+                                    <span className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wide ${statusBadgeClass(selectedItem.status)}`}>
+                                        {statusLabel(selectedItem.status)}
+                                    </span>
+                                </div>
                             </div>
 
                             <div className="mb-6 grid gap-3 sm:grid-cols-2">
@@ -287,7 +477,7 @@ const PublicCreditSubmissions = () => {
                                     {selectedItem.lead_name || 'Sin lead asociado'}
                                 </p>
                                 <p className="text-xs text-slate-500 mt-1">
-                                    Estado: {selectedItem.lead_status || 'Sin estado'}
+                                    Estado: {LEAD_STATUS_LABELS[selectedItem.lead_status] || selectedItem.lead_status || 'Sin estado'}
                                 </p>
                             </div>
 
@@ -296,17 +486,29 @@ const PublicCreditSubmissions = () => {
                                 {attachmentEntries.length === 0 ? (
                                     <p className="text-sm text-slate-500">No hay adjuntos cargados.</p>
                                 ) : (
-                                    <div className="space-y-2">
+                                    <div className="grid gap-3 sm:grid-cols-2">
                                         {attachmentEntries.map(([key, value]) => (
-                                            <a
-                                                key={key}
-                                                href={value}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="block rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-blue-700 hover:bg-slate-100"
-                                            >
-                                                {key}
-                                            </a>
+                                            <div key={key} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                                                {isImageAttachment(key, value) ? (
+                                                    <img
+                                                        src={value}
+                                                        alt={ATTACHMENT_LABELS[key] || 'Adjunto de la solicitud'}
+                                                        className="h-44 w-full bg-white object-contain"
+                                                    />
+                                                ) : (
+                                                    <div className="flex h-28 items-center justify-center px-4 text-center text-sm text-slate-500">
+                                                        Archivo adjunto
+                                                    </div>
+                                                )}
+                                                <a
+                                                    href={value}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="block border-t border-slate-200 px-4 py-3 text-sm font-semibold text-blue-700 hover:bg-slate-100"
+                                                >
+                                                    {ATTACHMENT_LABELS[key] || 'Abrir archivo adjunto'}
+                                                </a>
+                                            </div>
                                         ))}
                                     </div>
                                 )}
@@ -315,16 +517,15 @@ const PublicCreditSubmissions = () => {
                             <div className="space-y-4">
                                 {payloadSections.map(({ sectionName, sectionValue }) => (
                                     <div key={sectionName} className="rounded-2xl border border-slate-200 p-4">
-                                        <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">{sectionName}</p>
+                                        <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">
+                                            {SECTION_LABELS[sectionName] || fieldLabel(sectionName)}
+                                        </p>
                                         <div className="grid gap-3 sm:grid-cols-2">
-                                            {Object.entries(sectionValue).map(([fieldKey, fieldValue]) => (
-                                                <div key={fieldKey} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                                                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{fieldKey}</p>
-                                                    <pre className="mt-1 whitespace-pre-wrap break-words font-sans text-sm text-slate-800">
-                                                        {formatValue(fieldValue)}
-                                                    </pre>
-                                                </div>
-                                            ))}
+                                            {Object.entries(sectionValue)
+                                                .filter(([fieldKey]) => !HIDDEN_DETAIL_FIELDS.has(fieldKey))
+                                                .map(([fieldKey, fieldValue]) => (
+                                                    <DetailField key={fieldKey} fieldKey={fieldKey} value={fieldValue} />
+                                                ))}
                                         </div>
                                     </div>
                                 ))}

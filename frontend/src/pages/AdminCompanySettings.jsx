@@ -38,6 +38,7 @@ const AdminCompanySettings = () => {
         smtp_password: '',
         smtp_from: '',
         smtp_use_tls: true,
+        smtp_always_recipients: '',
     });
     const [domainDraft, setDomainDraft] = useState('');
     const [isEditing, setIsEditing] = useState(false);
@@ -79,6 +80,7 @@ const AdminCompanySettings = () => {
                         smtp_password: integrationSettings.smtp_password || '',
                         smtp_from: integrationSettings.smtp_from || '',
                         smtp_use_tls: integrationSettings.smtp_use_tls ?? true,
+                        smtp_always_recipients: integrationSettings.smtp_always_recipients || '',
                     });
                 } catch (error) {
                     console.error("Error fetching company", error);
@@ -170,6 +172,7 @@ const AdminCompanySettings = () => {
                 smtp_password,
                 smtp_from,
                 smtp_use_tls,
+                smtp_always_recipients,
                 ...companyOnlyFields
             } = company;
             const payload = {
@@ -191,6 +194,7 @@ const AdminCompanySettings = () => {
                 smtp_password: smtp_password || '',
                 smtp_from: smtp_from || '',
                 smtp_use_tls: Boolean(smtp_use_tls),
+                smtp_always_recipients: smtp_always_recipients || '',
             };
 
             if (isEditing) {
@@ -471,6 +475,22 @@ const AdminCompanySettings = () => {
                                     />
                                     <span>Usar TLS / STARTTLS</span>
                                 </label>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">
+                                        Destinatarios permanentes del formulario de crédito
+                                    </label>
+                                    <textarea
+                                        name="smtp_always_recipients"
+                                        value={company.smtp_always_recipients}
+                                        onChange={handleChange}
+                                        rows={3}
+                                        placeholder={'creditos@empresa.com\nadministracion@empresa.com'}
+                                        className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                    />
+                                    <p className="mt-1 text-xs text-slate-500">
+                                        Separa los correos por comas o saltos de línea. El solicitante siempre recibirá su propia copia.
+                                    </p>
+                                </div>
                             </div>
                         </div>
 

@@ -493,11 +493,14 @@ const PublicCreditForm = () => {
       }
       if (signatureFile) formData.append('signature_file', signatureFile);
 
-      await axios.post('/api/public/credit-request/submit', formData, {
+      const response = await axios.post('/api/public/credit-request/submit', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      setStatus({ type: 'success', message: 'Solicitud enviada correctamente. Revisa tu correo y el seguimiento comercial.' });
+      setStatus({
+        type: 'success',
+        message: response?.data?.message || 'Solicitud enviada correctamente. Revisa tu correo y el seguimiento comercial.',
+      });
       setForm(createEmptyForm());
       setDocumentFront(null);
       setDocumentBack(null);
@@ -873,7 +876,7 @@ const PublicCreditForm = () => {
                           <div className="flex gap-3">
                             <input className={inputClassName} value={form.consent.verificationCode} onChange={(e) => updateSection('consent', 'verificationCode', e.target.value)} />
                             <button type="button" onClick={verifyCode} disabled={!verificationSent || verifyingCode} className="rounded-xl px-4 py-3 text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: theme.secondary }}>
-                              {verifyingCode ? 'Validando...' : 'Validar'}
+                              {verifyingCode ? 'Confirmando...' : 'Confirmar codigo'}
                             </button>
                           </div>
                         </div>
@@ -899,7 +902,7 @@ const PublicCreditForm = () => {
                     </button>
                   ) : (
                     <button type="button" onClick={handleSubmit} disabled={submitting} className="rounded-xl px-5 py-3 text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: theme.primary }}>
-                      {submitting ? 'Enviando...' : 'Enviar'}
+                      {submitting ? 'Enviando...' : 'Enviar formulario'}
                     </button>
                   )}
                 </div>

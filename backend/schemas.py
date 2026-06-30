@@ -404,6 +404,7 @@ class IntegrationSettingsBase(BaseModel):
     smtp_password: Optional[str] = None
     smtp_from: Optional[str] = None
     smtp_use_tls: Optional[bool] = True
+    smtp_always_recipients: Optional[str] = None
 
 class IntegrationSettingsUpdate(IntegrationSettingsBase):
     pass

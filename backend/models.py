@@ -630,6 +630,7 @@ class IntegrationSettings(Base):
     smtp_password = Column(Text, nullable=True)
     smtp_from = Column(String(255), nullable=True)
     smtp_use_tls = Column(Boolean, default=True)
+    smtp_always_recipients = Column(Text, nullable=True)
 
     company = relationship("Company", back_populates="integration_settings")
 
