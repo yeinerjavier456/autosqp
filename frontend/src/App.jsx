@@ -11,6 +11,7 @@ import PublicCreditCapture from './pages/PublicCreditCapture';
 import TikTokLanding from './pages/TikTokLanding';
 import VehicleDetail from './pages/VehicleDetail'; // Import VehicleDetail
 import LoginPage from './pages/LoginPage';
+import LicenseRenewalPage from './pages/LicenseRenewalPage';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import CompaniesList from './pages/CompaniesList';
@@ -81,6 +82,7 @@ function App() {
           <Route path="/autos" element={<PublicInventory />} />
           <Route path="/credito" element={<PublicCreditForm />} />
           <Route path="/credito/captura/:token" element={<PublicCreditCapture />} />
+          <Route path="/renovar-licencia" element={<LicenseRenewalPage />} />
           <Route path="/tiktok" element={<TikTokLanding />} />
           <Route path="/autos/:id" element={<VehicleDetail />} /> {/* New Route */}
 

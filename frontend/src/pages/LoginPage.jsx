@@ -72,12 +72,16 @@ const LoginPage = () => {
         } catch (err) {
             console.error(err);
             const statusCode = err?.response?.status;
+            const errorDetail = err?.response?.data?.detail || '';
             if (statusCode === 401) {
                 setError('Credenciales invalidas. Por favor intenta de nuevo.');
+            } else if (statusCode === 403 && String(errorDetail).toLowerCase().includes('licencia')) {
+                sessionStorage.setItem('license_notice', errorDetail);
+                navigate('/renovar-licencia', { replace: true });
             } else if (err?.code === 'ECONNABORTED') {
                 setError('La solicitud de inicio de sesion tardo demasiado. Intenta nuevamente.');
             } else {
-                setError(err?.response?.data?.detail || 'No se pudo iniciar sesion. Revisa si el backend esta respondiendo correctamente.');
+                setError(errorDetail || 'No se pudo iniciar sesion. Revisa si el backend esta respondiendo correctamente.');
             }
         } finally {
             setSubmitting(false);

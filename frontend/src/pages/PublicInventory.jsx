@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import PublicSalesChatbot from '../components/PublicSalesChatbot';
 import PublicBrandLogo from '../components/PublicBrandLogo';
 import { normalizeMediaUrl } from '../utils/media';
@@ -29,6 +29,7 @@ const normalizeArrayPayload = (payload) => {
 
 const PublicInventory = () => {
     const company = usePublicCompany();
+    const navigate = useNavigate();
     const [vehicles, setVehicles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [makes, setMakes] = useState([]);
@@ -56,6 +57,15 @@ const PublicInventory = () => {
         fetchMakes();
         fetchVehicles();
     }, []);
+
+    useEffect(() => {
+        if (['expired', 'pending'].includes(company?.license_status)) {
+            if (company?.license_notice) {
+                sessionStorage.setItem('license_notice', company.license_notice);
+            }
+            navigate('/renovar-licencia', { replace: true });
+        }
+    }, [company?.license_status, company?.license_notice, navigate]);
 
     useEffect(() => {
         const delayDebounceFn = setTimeout(() => {

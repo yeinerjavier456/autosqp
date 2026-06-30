@@ -82,6 +82,9 @@ DEFAULT_PUBLIC_COMPANY_CONTEXT = {
     "primary_color": "#2563eb",
     "secondary_color": "#0f172a",
     "enabled_modules": [],
+    "license_status": "unlimited",
+    "license_notice": None,
+    "license_days_remaining": None,
 }
 
 DEFAULT_COMPANY_ENABLED_MODULES = sorted(COMPANY_VIEW_IDS)
@@ -400,6 +403,7 @@ def resolve_public_company(db: Session, request: Optional[Request]) -> Optional[
 def serialize_public_company(company: Optional[models.Company]) -> schemas.PublicCompanyContext:
     if not company:
         return schemas.PublicCompanyContext(**DEFAULT_PUBLIC_COMPANY_CONTEXT)
+    license_state = get_company_license_state(company)
     return schemas.PublicCompanyContext(
         id=company.id,
         name=company.name or DEFAULT_PUBLIC_COMPANY_CONTEXT["name"],
@@ -409,6 +413,9 @@ def serialize_public_company(company: Optional[models.Company]) -> schemas.Publi
         primary_color=company.primary_color or DEFAULT_PUBLIC_COMPANY_CONTEXT["primary_color"],
         secondary_color=company.secondary_color or DEFAULT_PUBLIC_COMPANY_CONTEXT["secondary_color"],
         enabled_modules=get_company_enabled_modules(company),
+        license_status=license_state["status"],
+        license_notice=license_state["notice"],
+        license_days_remaining=license_state["days_remaining"],
     )
 
 
@@ -4989,11 +4996,11 @@ def delete_role(
 @app.put("/companies/{company_id}/integrations", response_model=schemas.IntegrationSettings)
 def update_integration_settings(company_id: int, settings_update: schemas.IntegrationSettingsUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     # Check permissions (only admins or super admins)
-    role_name = current_user.role.name if current_user.role else "user"
+    role_name = get_user_role_name(current_user)
     if role_name not in ["super_admin", "admin"]:
          raise HTTPException(status_code=403, detail="Not authorized")
 
-    if current_user.company_id and current_user.company_id != company_id:
+    if role_name != "super_admin" and current_user.company_id and current_user.company_id != company_id:
         raise HTTPException(status_code=403, detail="Not authorized to modify these settings")
         
     settings = db.query(models.IntegrationSettings).filter(models.IntegrationSettings.company_id == company_id).first()

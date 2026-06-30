@@ -179,6 +179,9 @@ class PublicCompanyContext(BaseModel):
     primary_color: str = "#000000"
     secondary_color: str = "#ffffff"
     enabled_modules: List[str] = Field(default_factory=list)
+    license_status: Optional[str] = None
+    license_notice: Optional[str] = None
+    license_days_remaining: Optional[int] = None
 
 
 class PublicCreditRequestCreate(BaseModel):

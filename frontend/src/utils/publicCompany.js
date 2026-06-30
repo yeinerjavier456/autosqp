@@ -88,6 +88,9 @@ const DEFAULT_PUBLIC_COMPANY = {
   logo_url: '',
   primary_color: '#2563eb',
   secondary_color: '#0f172a',
+  license_status: 'unlimited',
+  license_notice: null,
+  license_days_remaining: null,
 };
 
 export const usePublicCompany = () => {
