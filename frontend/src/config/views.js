@@ -14,6 +14,7 @@ export const SYSTEM_VIEWS = [
     { id: 'sales', label: 'Finanzas y ventas', path: '/admin/sales', menuLabel: 'Finanzas y Ventas', section: 'crm', scope: 'company' },
     { id: 'my_sales', label: 'Mis ventas', path: '/admin/my-sales', menuLabel: 'Mis Ventas', section: 'crm', scope: 'company' },
     { id: 'credits', label: 'Tablero de solicitudes de credito', path: '/admin/credits', menuLabel: 'Solicitudes de Credito', section: 'crm', scope: 'company' },
+    { id: 'public_credit_submissions', label: 'Solicitudes publicas de credito', path: '/admin/public-credit-submissions', menuLabel: 'Solicitudes Publicas', section: 'crm', scope: 'company' },
     { id: 'gmail_credit_audit', label: 'Correos verificados de credito', path: '/admin/gmail-credit-audit', menuLabel: 'Correos de Credito', section: 'crm', scope: 'company' },
     { id: 'purchase_board', label: 'Tablero de compras y busquedas', path: '/admin/purchases', menuLabel: 'Solicitudes de Compra', section: 'crm', scope: 'company' },
     { id: 'facebook_leads', label: 'Facebook leads', path: '/admin/leads/facebook', menuLabel: 'Facebook Leads', section: 'channels', scope: 'company' },
@@ -22,6 +23,26 @@ export const SYSTEM_VIEWS = [
     { id: 'instagram_leads', label: 'Instagram leads', path: '/admin/leads/instagram', menuLabel: 'Instagram', section: 'channels', scope: 'company' },
     { id: 'internal_chat', label: 'Chat interno', path: '/internal-chat', menuLabel: 'Chat Interno', section: 'channels', scope: 'company' },
     { id: 'whatsapp_dashboard', label: 'Mensajeria WhatsApp', path: '/admin/whatsapp', menuLabel: 'Mensajeria WhatsApp', section: 'channels', scope: 'company' },
+];
+
+export const COMPANY_MODULE_OPTIONS = [
+    ...SYSTEM_VIEWS.filter((view) => view.scope === 'company'),
+    {
+        id: 'public_credit_form',
+        label: 'Formulario público de crédito',
+        menuLabel: 'Formulario público de crédito',
+        section: 'crm',
+        scope: 'company',
+        configOnly: true,
+    },
+    {
+        id: 'public_sales_chat',
+        label: 'Chat público de ventas',
+        menuLabel: 'Chat público de ventas',
+        section: 'channels',
+        scope: 'company',
+        configOnly: true,
+    },
 ];
 
 export const VIEW_SECTIONS = {
@@ -41,7 +62,7 @@ export const DEFAULT_ROLE_VIEW_ACCESS = {
     super_admin: SYSTEM_VIEWS.map((view) => view.id),
     admin: [
         'dashboard', 'users', 'roles', 'integrations', 'logs', 'inventory',
-        'leads_board', 'appointments_calendar', 'deleted_leads', 'ally_board', 'alerts', 'sales', 'credits', 'purchase_board',
+        'leads_board', 'appointments_calendar', 'deleted_leads', 'ally_board', 'alerts', 'sales', 'credits', 'public_credit_submissions', 'purchase_board',
         'gmail_credit_audit',
         'facebook_leads', 'tiktok_leads', 'whatsapp_leads', 'instagram_leads',
         'internal_chat', 'whatsapp_dashboard'
@@ -50,7 +71,7 @@ export const DEFAULT_ROLE_VIEW_ACCESS = {
         'dashboard', 'inventory', 'leads_board', 'appointments_calendar', 'my_sales', 'credits', 'gmail_credit_audit', 'internal_chat'
     ],
     gestion_creditos: [
-        'dashboard', 'leads_board', 'appointments_calendar', 'credits', 'gmail_credit_audit', 'internal_chat'
+        'dashboard', 'leads_board', 'appointments_calendar', 'credits', 'public_credit_submissions', 'gmail_credit_audit', 'internal_chat'
     ],
     aliado: [
         'dashboard', 'ally_board', 'appointments_calendar', 'credits', 'gmail_credit_audit', 'internal_chat', 'inventory'

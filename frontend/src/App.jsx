@@ -6,6 +6,7 @@ import { NotificationsProvider } from './context/NotificationsContext';
 import AdminCompanySettings from './pages/AdminCompanySettings';
 import AdminAlerts from './pages/AdminAlerts'; // Import AdminAlerts
 import PublicInventory from './pages/PublicInventory';
+import PublicCreditForm from './pages/PublicCreditForm';
 import TikTokLanding from './pages/TikTokLanding';
 import VehicleDetail from './pages/VehicleDetail'; // Import VehicleDetail
 import LoginPage from './pages/LoginPage';
@@ -31,6 +32,7 @@ import InstagramLeads from './pages/leads/InstagramLeads';
 import Reports from './pages/Reports';
 import WhatsAppDashboard from './pages/WhatsAppDashboard';
 import CreditBoard from './pages/CreditBoard';
+import PublicCreditSubmissions from './pages/PublicCreditSubmissions';
 import GmailCreditAudit from './pages/GmailCreditAudit';
 import PurchaseBoard from './pages/PurchaseBoard';
 import InternalChat from './pages/InternalChat';
@@ -76,6 +78,7 @@ function App() {
         <Routes>
           {/* Public Routes */}
           <Route path="/autos" element={<PublicInventory />} />
+          <Route path="/credito" element={<PublicCreditForm />} />
           <Route path="/tiktok" element={<TikTokLanding />} />
           <Route path="/autos/:id" element={<VehicleDetail />} /> {/* New Route */}
 
@@ -146,6 +149,10 @@ function App() {
 
               <Route element={<PrivateRoute requiredView="credits" />}>
                 <Route path="/admin/credits" element={<CreditBoard />} />
+              </Route>
+
+              <Route element={<PrivateRoute requiredView="public_credit_submissions" />}>
+                <Route path="/admin/public-credit-submissions" element={<PublicCreditSubmissions />} />
               </Route>
 
               <Route element={<PrivateRoute requiredView="gmail_credit_audit" />}>

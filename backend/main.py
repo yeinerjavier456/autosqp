@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Query, Query, Body
+from fastapi import FastAPI, Depends, HTTPException, status, Query, Query, Body, UploadFile, File, Form
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session, joinedload, selectinload, noload
@@ -18,7 +18,12 @@ import time
 import re
 import json
 import random
+import base64
+import smtplib
+import ssl
+from html import escape
 from io import BytesIO
+from email.message import EmailMessage
 from zoneinfo import ZoneInfo
 from view_registry import SYSTEM_VIEWS, DEFAULT_ROLE_VIEW_ACCESS, DEFAULT_ROLE_MENU_ORDER, VALID_VIEW_IDS, COMPANY_VIEW_IDS
 from fastapi import Request
@@ -73,6 +78,7 @@ DEFAULT_PUBLIC_COMPANY_CONTEXT = {
     "logo_url": None,
     "primary_color": "#2563eb",
     "secondary_color": "#0f172a",
+    "enabled_modules": [],
 }
 
 DEFAULT_COMPANY_ENABLED_MODULES = sorted(COMPANY_VIEW_IDS)
@@ -146,6 +152,21 @@ def company_has_enabled_module(
         target_company = get_company_by_id(db, company_id)
     enabled_modules = set(get_company_enabled_modules(target_company))
     return module_id in enabled_modules
+
+
+def ensure_public_chat_enabled_for_company(
+    db: Session,
+    *,
+    company_id: Optional[int] = None,
+    company: Optional[models.Company] = None,
+) -> models.Company:
+    target_company = company or get_company_by_id(db, company_id)
+    if not company_has_enabled_module("public_sales_chat", company=target_company):
+        raise HTTPException(
+            status_code=403,
+            detail="El chat pUblico no estA habilitado para esta empresa",
+        )
+    return target_company
 
 
 def get_company_allowed_lead_statuses(company: Optional[models.Company]) -> List[str]:
@@ -384,7 +405,222 @@ def serialize_public_company(company: Optional[models.Company]) -> schemas.Publi
         logo_url=company.logo_url,
         primary_color=company.primary_color or DEFAULT_PUBLIC_COMPANY_CONTEXT["primary_color"],
         secondary_color=company.secondary_color or DEFAULT_PUBLIC_COMPANY_CONTEXT["secondary_color"],
+        enabled_modules=get_company_enabled_modules(company),
     )
+
+
+PUBLIC_CREDIT_POLICY_TEXT = """
+AUTORIZO A AUTOS QP SAS Y A LAS ENTIDADES QUE PERTENEZCAN O LLEGAREN A PERTENECER A SU GRUPO EMPRESARIAL DE ACUERDO CON LA LEY, SUS FILIALES Y/O SUBSIDIARIAS, O A LAS ENTIDADES EN LAS CUALES ÉSTAS, DIRECTA O INDIRECTAMENTE, TENGAN PARTICIPACIÓN ACCIONARIA O SEAN ASOCIADAS, DOMICILIADAS EN COLOMBIA Y/O EN EL EXTERIOR, O A QUIEN REPRESENTE SUS DERECHOS U OSTENTE EN EL FUTURO LA CALIDAD DE ACREEDOR, CESIONARIO O CUALQUIER OTRA CALIDAD FRENTE A MÍ COMO TITULAR DE LA INFORMACIÓN, EN ADELANTE LAS ENTIDADES; Y AUTORIZO A LAS ENTIDADES FINANCIERAS ALIADAS CON LAS QUE LAS ENTIDADES CONSIDEREN Y SOSTENGAN RELACIÓN COMERCIAL, A QUIENES AUTORIZO EN FORMA PERMANENTE PARA QUE: (I) LIBEREN LA INFORMACIÓN NECESARIA QUE LES SOLICITEN SEGÚN MI PERFIL Y SUS POLÍTICAS DE OTORGAMIENTO CREDITICIO, PARA LA BÚSQUEDA DE MI CUPO DE CRÉDITO ANTE LAS ENTIDADES FINANCIERAS ALIADAS, ENTIDADES AVALADORAS U OTRAS, PARA QUE ME SEAN ENVIADAS OFERTAS O AVISOS COMERCIALES RELACIONADOS CON EL TIPO DE CRÉDITO QUE ESTOY SOLICITANDO O CON PRODUCTOS AFINES. ENTIENDO QUE LAS ENTIDADES NO ASUMEN RESPONSABILIDAD ALGUNA POR LA APROBACIÓN O NEGACIÓN DEL CRÉDITO POR PARTE DE LAS ENTIDADES FINANCIERAS ALIADAS, AVALADORAS U OTRAS, NI SE COMPROMETEN A OBTENER SU APROBACIÓN, POR CUANTO SIMPLEMENTE ACTÚAN COMO CANAL DE INFORMACIÓN ENTRE EL SOLICITANTE DEL CRÉDITO Y LA ENTIDAD FINANCIERA, LA ENTIDAD AVALADORA U OTRA. (II) SOLICITEN, CONSULTEN, COMPARTAN, INFORMEN, REPORTEN, PROCESEN, MODIFIQUEN, ACTUALICEN, ACLAREN, RETIREN O DIVULGUEN, ANTE LAS ENTIDADES DE CONSULTA DE BASES DE DATOS U OPERADORES DE INFORMACIÓN Y RIESGO, O ANTE CUALQUIER ENTIDAD QUE MANEJE O ADMINISTRE BASES DE DATOS CON LOS FINES LEGALMENTE DEFINIDOS PARA ESTE TIPO DE ENTIDADES, TODO LO REFERENTE A MI INFORMACIÓN FINANCIERA, COMERCIAL Y CREDITICIA, PRESENTE, PASADA O FUTURA, MI ENDEUDAMIENTO Y EL NACIMIENTO, MODIFICACIÓN Y EXTINCIÓN DE MIS DERECHOS Y OBLIGACIONES ORIGINADOS EN VIRTUD DE CUALQUIER CONTRATO CELEBRADO U OPERACIÓN REALIZADA O QUE LLEGARE A CELEBRAR O REALIZAR CON CUALQUIERA DE LAS ENTIDADES. (III) CONSULTEN, SOLICITEN O VERIFIQUEN INFORMACIÓN SOBRE MIS DATOS DE UBICACIÓN O CONTACTO, LOS BIENES O DERECHOS QUE POSEO O LLEGARE A POSEER Y QUE REPOSEN EN BASES DE DATOS DE ENTIDADES PÚBLICAS O PRIVADAS, O QUE CONOZCAN PERSONAS NATURALES O JURÍDICAS, O SE ENCUENTREN EN BUSCADORES PÚBLICOS, REDES SOCIALES O PUBLICACIONES FÍSICAS O ELECTRÓNICAS, BIEN SEA EN COLOMBIA O EN EL EXTERIOR. (IV) ME CONTACTEN A TRAVÉS DEL ENVÍO DE MENSAJES A MI TERMINAL MÓVIL DE TELECOMUNICACIONES Y/O A TRAVÉS DE CORREO ELECTRÓNICO Y/O REDES SOCIALES EN LAS CUALES ESTÉ INSCRITO. (V) CONSERVEN MI INFORMACIÓN Y DOCUMENTACIÓN AUN CUANDO NO SE HAYA PERFECCIONADO UNA RELACIÓN CONTRACTUAL O DESPUÉS DE FINALIZADA LA MISMA CON CUALQUIERA DE LAS ENTIDADES, IGUALMENTE PARA RECOLECTARLA, ACTUALIZARLA, MODIFICARLA, PROCESARLA Y ELIMINARLA DE CONFORMIDAD CON LA LEY APLICABLE. (VI) LAS ENTIDADES COMPARTAN, REMITAN Y ACCEDAN ENTRE SÍ A MI INFORMACIÓN O DOCUMENTACIÓN CONSIGNADA O ANEXA EN LAS SOLICITUDES DE VINCULACIÓN, ACTUALIZACIONES EN LOS DIFERENTES DOCUMENTOS DE DEPÓSITO Y/O CRÉDITO, OPERACIONES Y/O SISTEMAS DE INFORMACIÓN, ASÍ COMO INFORMACIÓN Y/O DOCUMENTACIÓN RELACIONADA CON LOS PRODUCTOS Y/O SERVICIOS QUE POSEO EN CUALQUIERA DE ELLAS. (VII) ELABOREN ESTADÍSTICAS Y DERIVEN MEDIANTE MODELOS MATEMÁTICOS CONCLUSIONES A PARTIR DE ELLAS. DECLARO HABER LEÍDO CUIDADOSAMENTE EL CONTENIDO DE ESTA CLÁUSULA Y HABERLA COMPRENDIDO A CABALIDAD, RAZÓN POR LA CUAL ENTIENDO SUS ALCANCES E IMPLICACIONES.
+""".strip()
+
+
+def _sanitize_public_credit_filename(file_name: Optional[str], fallback: str) -> str:
+    raw_name = str(file_name or fallback).strip() or fallback
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", raw_name)
+    return safe_name or fallback
+
+
+def _save_public_credit_upload(upload, subdirectory: str, fallback_name: str) -> Optional[str]:
+    if not upload:
+        return None
+
+    os.makedirs(os.path.join("static", "public-credit", subdirectory), exist_ok=True)
+    original_name = getattr(upload, "filename", None)
+    extension = os.path.splitext(original_name or fallback_name)[1] or ".bin"
+    unique_name = f"{uuid.uuid4().hex}{extension}"
+    safe_name = _sanitize_public_credit_filename(unique_name, fallback_name)
+    target_path = os.path.join("static", "public-credit", subdirectory, safe_name)
+
+    if isinstance(upload, UploadFile):
+        with open(target_path, "wb") as buffer:
+            shutil.copyfileobj(upload.file, buffer)
+    else:
+        with open(target_path, "wb") as buffer:
+            buffer.write(upload)
+
+    return f"/api/static/public-credit/{subdirectory}/{safe_name}".replace("\\", "/")
+
+
+def _save_public_credit_data_url(data_url: Optional[str], subdirectory: str, fallback_name: str) -> Optional[str]:
+    raw_value = str(data_url or "").strip()
+    if not raw_value or "," not in raw_value:
+        return None
+
+    header, encoded = raw_value.split(",", 1)
+    mime_match = re.search(r"data:(.*?);base64", header)
+    mime_type = mime_match.group(1).lower() if mime_match else "image/png"
+    extension = ".png"
+    if "jpeg" in mime_type or "jpg" in mime_type:
+        extension = ".jpg"
+    elif "webp" in mime_type:
+        extension = ".webp"
+
+    binary_content = base64.b64decode(encoded)
+    return _save_public_credit_upload(binary_content, subdirectory, f"{fallback_name}{extension}")
+
+
+def _get_public_credit_smtp_settings() -> Dict[str, Any]:
+    host = (os.getenv("SMTP_HOST") or "").strip()
+    port = int((os.getenv("SMTP_PORT") or "587").strip() or 587)
+    username = (os.getenv("SMTP_USERNAME") or "").strip()
+    password = (os.getenv("SMTP_PASSWORD") or "").strip()
+    sender = (os.getenv("SMTP_FROM") or username or "").strip()
+    use_tls = str(os.getenv("SMTP_USE_TLS") or "true").strip().lower() not in {"0", "false", "no"}
+
+    if not host or not sender:
+        raise HTTPException(
+            status_code=500,
+            detail="El servidor no tiene configurado el envío de correos SMTP para validar el formulario de crédito.",
+        )
+
+    return {
+        "host": host,
+        "port": port,
+        "username": username,
+        "password": password,
+        "sender": sender,
+        "use_tls": use_tls,
+    }
+
+
+def _build_public_credit_verification_email_html(
+    company_name: str,
+    verification_code: str,
+    primary_color: Optional[str] = None,
+    secondary_color: Optional[str] = None,
+    logo_url: Optional[str] = None,
+) -> str:
+    safe_company_name = escape(company_name or "AutosQP")
+    safe_code = escape(verification_code)
+    brand_primary = (primary_color or "#2563eb").strip() or "#2563eb"
+    brand_secondary = (secondary_color or "#0f172a").strip() or "#0f172a"
+    logo_block = ""
+    if logo_url:
+        logo_block = (
+            f'<div style="margin-bottom:24px;text-align:center;">'
+            f'<img src="{escape(logo_url)}" alt="{safe_company_name}" '
+            f'style="max-width:180px;max-height:64px;object-fit:contain;" />'
+            f"</div>"
+        )
+
+    return f"""
+    <html>
+      <body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;color:#0f172a;">
+        <div style="max-width:640px;margin:0 auto;padding:32px 20px;">
+          <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:24px;overflow:hidden;box-shadow:0 12px 30px rgba(15,23,42,0.08);">
+            <div style="padding:28px;background:linear-gradient(135deg,{brand_secondary}, {brand_primary});color:#ffffff;">
+              <div style="font-size:12px;letter-spacing:0.16em;text-transform:uppercase;opacity:0.8;">Validación de correo</div>
+              <div style="margin-top:10px;font-size:28px;font-weight:800;">Código de verificación</div>
+              <div style="margin-top:8px;font-size:14px;opacity:0.9;">Usa este código para continuar tu solicitud de crédito.</div>
+            </div>
+            <div style="padding:32px;">
+              {logo_block}
+              <div style="font-size:16px;line-height:1.6;margin-bottom:20px;">
+                Recibimos una solicitud de verificación para continuar el formulario público de crédito de <strong>{safe_company_name}</strong>.
+              </div>
+              <div style="margin:24px 0;padding:22px;border:1px dashed {brand_primary};border-radius:18px;background:#f8fbff;text-align:center;">
+                <div style="font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#64748b;margin-bottom:10px;">Tu código</div>
+                <div style="font-size:38px;font-weight:800;letter-spacing:0.3em;color:{brand_secondary};">{safe_code}</div>
+              </div>
+              <div style="font-size:14px;line-height:1.7;color:#475569;">
+                Este código vence en <strong>10 minutos</strong>.<br/>
+                Si no solicitaste este proceso, puedes ignorar este correo.
+              </div>
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
+    """.strip()
+
+
+def _send_public_credit_verification_email(target_email: str, company: Optional[models.Company], verification_code: str):
+    smtp_settings = _get_public_credit_smtp_settings()
+    company_name = getattr(company, "name", None) or "AutosQP"
+
+    message = EmailMessage()
+    message["Subject"] = f"Código de verificación - {company_name}"
+    message["From"] = smtp_settings["sender"]
+    message["To"] = target_email
+    message.set_content(
+        (
+            f"Hola.\n\n"
+            f"Tu código de verificación para continuar con la solicitud de crédito es: {verification_code}\n\n"
+            f"Este código vence en 10 minutos.\n"
+            f"Si no solicitaste este proceso, puedes ignorar este correo."
+        ),
+        charset="utf-8",
+    )
+    message.add_alternative(
+        _build_public_credit_verification_email_html(
+            company_name=company_name,
+            verification_code=verification_code,
+            primary_color=getattr(company, "primary_color", None),
+            secondary_color=getattr(company, "secondary_color", None),
+            logo_url=getattr(company, "logo_url", None),
+        ),
+        subtype="html",
+    )
+
+    if smtp_settings["use_tls"]:
+        context = ssl.create_default_context()
+        with smtplib.SMTP(smtp_settings["host"], smtp_settings["port"]) as server:
+            server.starttls(context=context)
+            if smtp_settings["username"]:
+                server.login(smtp_settings["username"], smtp_settings["password"])
+            server.send_message(message)
+    else:
+        with smtplib.SMTP_SSL(smtp_settings["host"], smtp_settings["port"]) as server:
+            if smtp_settings["username"]:
+                server.login(smtp_settings["username"], smtp_settings["password"])
+            server.send_message(message)
+
+
+def _build_public_credit_lead_message(payload: Dict[str, Any]) -> str:
+    vehicle = payload.get("vehicle", {}) or {}
+    personal = payload.get("personal", {}) or {}
+    employment = payload.get("employment", {}) or {}
+    income = payload.get("income", {}) or {}
+    references = payload.get("references", {}) or {}
+
+    message_parts = ["Solicitud pública de crédito"]
+    desired_vehicle = vehicle.get("label") or payload.get("desired_vehicle") or ""
+    if desired_vehicle:
+        message_parts.append(f"Vehículo: {desired_vehicle}")
+    if vehicle.get("requestedAmount"):
+        message_parts.append(f"Monto solicitado: ${int(vehicle['requestedAmount']):,}".replace(",", "."))
+    if income.get("totalIncome"):
+        message_parts.append(f"Ingresos totales: ${int(income['totalIncome']):,}".replace(",", "."))
+    if personal.get("city"):
+        message_parts.append(f"Ciudad: {personal['city']}")
+    if employment.get("activity"):
+        message_parts.append(f"Actividad: {employment['activity']}")
+    if references.get("summary"):
+        message_parts.append(str(references["summary"]))
+    return " | ".join([part for part in message_parts if part])
+
+
+def serialize_public_credit_submission(submission: models.PublicCreditSubmission) -> dict:
+    lead = getattr(submission, "lead", None)
+    return {
+        "id": submission.id,
+        "company_id": submission.company_id,
+        "lead_id": submission.lead_id,
+        "applicant_name": submission.applicant_name,
+        "email": submission.email,
+        "document_number": submission.document_number,
+        "phone": submission.phone,
+        "desired_vehicle": submission.desired_vehicle,
+        "status": submission.status,
+        "verification_verified_at": submission.verification_verified_at,
+        "created_at": submission.created_at,
+        "updated_at": submission.updated_at,
+        "lead_name": getattr(lead, "name", None),
+        "lead_status": getattr(lead, "status", None),
+        "form_payload": submission.form_payload or {},
+        "attachments": submission.attachments or {},
+        "consent_text": submission.consent_text,
+    }
 
 
 def build_lead_summary_query(db: Session):
@@ -2501,6 +2737,12 @@ def ensure_role_management_permissions(current_user: models.User):
         raise HTTPException(status_code=403, detail="Not authorized")
 
 
+def ensure_public_credit_review_permissions(current_user: models.User):
+    role_name = get_user_role_name(current_user) or ""
+    if role_name not in {"admin", "super_admin", "gestion_creditos"}:
+        raise HTTPException(status_code=403, detail="No autorizado para revisar solicitudes públicas de crédito")
+
+
 ensure_role_view_defaults_synced()
 
 
@@ -3335,6 +3577,428 @@ def update_company(company_id: int, company_update: schemas.CompanyCreate, db: S
 def read_public_company_context(request: Request, db: Session = Depends(get_db)):
     company = resolve_public_company(db, request)
     return serialize_public_company(company)
+
+
+@app.post("/public/credit-request/send-code", response_model=schemas.PublicCreditVerificationResponse)
+def send_public_credit_verification_code(
+    payload: schemas.PublicCreditVerificationSendRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    company = resolve_public_company(db, request)
+    if not company:
+        raise HTTPException(status_code=404, detail="No se encontró una empresa asociada a este dominio")
+    if not company_has_enabled_module("public_credit_form", company=company):
+        raise HTTPException(status_code=403, detail="El formulario de crédito no está habilitado para esta empresa")
+
+    email_value = str(payload.email).strip().lower()
+    verification_code = f"{random.randint(100000, 999999)}"
+    now = datetime.datetime.now()
+
+    db.query(models.PublicCreditEmailVerification).filter(
+        models.PublicCreditEmailVerification.company_id == company.id,
+        func.lower(models.PublicCreditEmailVerification.email) == email_value,
+        models.PublicCreditEmailVerification.verified_at.is_(None),
+    ).delete(synchronize_session=False)
+
+    verification = models.PublicCreditEmailVerification(
+        company_id=company.id,
+        email=email_value,
+        code=verification_code,
+        expires_at=now + datetime.timedelta(minutes=10),
+    )
+    db.add(verification)
+    db.commit()
+
+    try:
+        _send_public_credit_verification_email(email_value, company, verification_code)
+    except HTTPException:
+        db.delete(verification)
+        db.commit()
+        raise
+    except Exception as exc:
+        db.delete(verification)
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"No se pudo enviar el correo de validación: {exc}")
+
+    return schemas.PublicCreditVerificationResponse(
+        status="ok",
+        message="Se envió un código de verificación al correo indicado.",
+        verified=False,
+    )
+
+
+@app.post("/public/credit-request/verify-code", response_model=schemas.PublicCreditVerificationResponse)
+def verify_public_credit_verification_code(
+    payload: schemas.PublicCreditVerificationVerifyRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    company = resolve_public_company(db, request)
+    if not company:
+        raise HTTPException(status_code=404, detail="No se encontró una empresa asociada a este dominio")
+
+    email_value = str(payload.email).strip().lower()
+    code_value = str(payload.code or "").strip()
+    now = datetime.datetime.now()
+
+    verification = db.query(models.PublicCreditEmailVerification).filter(
+        models.PublicCreditEmailVerification.company_id == company.id,
+        func.lower(models.PublicCreditEmailVerification.email) == email_value,
+        models.PublicCreditEmailVerification.code == code_value,
+    ).order_by(models.PublicCreditEmailVerification.created_at.desc()).first()
+
+    if not verification:
+        raise HTTPException(status_code=400, detail="El código de verificación no es válido.")
+    if verification.expires_at < now:
+        raise HTTPException(status_code=400, detail="El código de verificación ya expiró.")
+
+    verification.verified_at = now
+    db.commit()
+
+    return schemas.PublicCreditVerificationResponse(
+        status="ok",
+        message="Correo validado correctamente.",
+        verified=True,
+    )
+
+
+@app.post("/public/credit-request/submit", response_model=schemas.PublicCreditSubmissionResponse)
+async def submit_public_credit_request(
+    request: Request,
+    payload_json: str = Form(...),
+    document_front: Optional[UploadFile] = File(None),
+    document_back: Optional[UploadFile] = File(None),
+    signature_file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+):
+    company = resolve_public_company(db, request)
+    if not company:
+        raise HTTPException(status_code=404, detail="No se encontró una empresa asociada a este dominio")
+    if not company_has_enabled_module("public_credit_form", company=company):
+        raise HTTPException(status_code=403, detail="El formulario de crédito no está habilitado para esta empresa")
+
+    try:
+        payload = json.loads(payload_json)
+    except Exception:
+        raise HTTPException(status_code=400, detail="La estructura del formulario no es válida.")
+
+    consent = payload.get("consent", {}) or {}
+    personal = payload.get("personal", {}) or {}
+    vehicle = payload.get("vehicle", {}) or {}
+    employment = payload.get("employment", {}) or {}
+    income = payload.get("income", {}) or {}
+    references = payload.get("references", {}) or {}
+
+    applicant_email = str(personal.get("email") or "").strip().lower()
+    applicant_phone = str(personal.get("mobilePhone") or "").strip()
+    applicant_name = " ".join(
+        [
+            str(personal.get("firstName") or "").strip(),
+            str(personal.get("lastName") or "").strip(),
+        ]
+    ).strip()
+    desired_vehicle = str(vehicle.get("label") or "").strip()
+    document_number = str(personal.get("documentNumber") or "").strip()
+    verification_code = str(consent.get("verificationCode") or "").strip()
+
+    if not applicant_name or not applicant_email or not applicant_phone or not desired_vehicle or not document_number:
+        raise HTTPException(status_code=400, detail="Faltan datos obligatorios del formulario.")
+    if not bool(consent.get("accepted")):
+        raise HTTPException(status_code=400, detail="Debes aceptar la política de tratamiento de datos.")
+
+    verification = db.query(models.PublicCreditEmailVerification).filter(
+        models.PublicCreditEmailVerification.company_id == company.id,
+        func.lower(models.PublicCreditEmailVerification.email) == applicant_email,
+        models.PublicCreditEmailVerification.code == verification_code,
+    ).order_by(models.PublicCreditEmailVerification.created_at.desc()).first()
+
+    if not verification or verification.verified_at is None:
+        raise HTTPException(status_code=400, detail="Debes validar el código enviado al correo antes de continuar.")
+    if verification.expires_at < datetime.datetime.now():
+        raise HTTPException(status_code=400, detail="La validación por correo expiró. Solicita un nuevo código.")
+
+    ensure_company_lead_creation_capacity(db, company.id)
+
+    document_front_url = _save_public_credit_upload(document_front, "documents", "document_front")
+    document_back_url = _save_public_credit_upload(document_back, "documents", "document_back")
+    signature_upload_url = _save_public_credit_upload(signature_file, "signatures", "signature_upload")
+    signature_drawn_url = _save_public_credit_data_url(consent.get("signatureDrawnDataUrl"), "signatures", "signature_drawn")
+
+    attachments = {
+        "document_front": document_front_url,
+        "document_back": document_back_url,
+        "signature_upload": signature_upload_url,
+        "signature_drawn": signature_drawn_url,
+    }
+
+    assigned_user_id = None
+    auto_assigned_user = choose_auto_assign_user(db, company.id)
+    if auto_assigned_user:
+        assigned_user_id = auto_assigned_user.id
+
+    effective_status = normalize_company_lead_status(
+        models.LeadStatus.CREDIT_STUDY.value,
+        company,
+        models.LeadStatus.NEW.value,
+    )
+    assigned_user_id, supervisor_ids, credit_coordinator = maybe_assign_credit_coordinator(
+        db=db,
+        lead_company_id=company.id,
+        previous_status=None,
+        target_status=effective_status,
+        assigned_to_id=assigned_user_id,
+        supervisor_ids=[],
+        current_user_id=None,
+        previous_assigned_to_id=None,
+    )
+
+    lead_message = _build_public_credit_lead_message(payload)
+
+    new_lead = models.Lead(
+        source=models.LeadSource.WEB.value,
+        name=applicant_name,
+        email=applicant_email,
+        phone=applicant_phone,
+        message=lead_message,
+        status=effective_status,
+        company_id=company.id,
+        assigned_to_id=assigned_user_id,
+        created_by_id=None,
+        created_at=datetime.datetime.now(),
+    )
+    db.add(new_lead)
+    db.flush()
+
+    sync_lead_supervisors(db, new_lead, supervisor_ids, None)
+
+    process_detail = models.LeadProcessDetail(
+        lead_id=new_lead.id,
+        has_vehicle=False,
+        desired_vehicle=desired_vehicle,
+    )
+    db.add(process_detail)
+
+    history_note = "Formulario público de crédito enviado"
+    if credit_coordinator:
+        history_note += f" (Coordinador de crédito añadido como supervisor: {credit_coordinator.full_name or credit_coordinator.email})"
+
+    db.add(models.LeadHistory(
+        lead_id=new_lead.id,
+        user_id=None,
+        previous_status=None,
+        new_status=new_lead.status,
+        comment=history_note,
+    ))
+
+    summary_lines = [
+        f"Solicitud pública de crédito enviada por {applicant_name}.",
+        f"Vehículo de interés: {desired_vehicle}.",
+        f"Documento: {personal.get('documentType') or 'N/A'} {document_number}.",
+        f"Valor vehículo: ${int(vehicle.get('vehicleValue') or 0):,}".replace(",", "."),
+        f"Monto solicitado: ${int(vehicle.get('requestedAmount') or 0):,}".replace(",", "."),
+        f"Ingresos totales: ${int(income.get('totalIncome') or 0):,}".replace(",", "."),
+        f"Actividad económica: {employment.get('activity') or 'N/A'}.",
+    ]
+    if personal.get("city"):
+        summary_lines.append(f"Ciudad: {personal.get('city')}.")
+    if personal.get("address"):
+        summary_lines.append(f"Dirección: {personal.get('address')}.")
+    if references:
+        summary_lines.append("Referencias registradas en formulario público.")
+
+    db.flush()
+    upsert_credit_application_from_lead(db, new_lead, " ".join(summary_lines))
+
+    related_credit = next(
+        (
+            record for record in db.query(models.CreditApplication).filter(
+                models.CreditApplication.lead_id == new_lead.id
+            ).order_by(
+                models.CreditApplication.updated_at.desc(),
+                models.CreditApplication.created_at.desc()
+            ).all()
+            if not is_purchase_request_record(record)
+        ),
+        None
+    )
+
+    if related_credit:
+        related_credit.client_name = applicant_name
+        related_credit.phone = applicant_phone
+        related_credit.email = applicant_email
+        related_credit.desired_vehicle = desired_vehicle
+        related_credit.monthly_income = int(income.get("salaryIncome") or 0)
+        related_credit.other_income = int(income.get("otherIncome") or 0)
+        related_credit.down_payment = int(consent.get("declaredDownPayment") or 0)
+        related_credit.occupation = str(employment.get("activity") or "employee")
+        related_credit.application_mode = "individual"
+        related_credit.notes = "\n".join(summary_lines)
+
+    if document_front_url:
+        db.add(models.LeadFile(
+            lead_id=new_lead.id,
+            user_id=None,
+            file_name="cedula_frontal",
+            file_path=document_front_url,
+            file_type=getattr(document_front, "content_type", None),
+        ))
+    if document_back_url:
+        db.add(models.LeadFile(
+            lead_id=new_lead.id,
+            user_id=None,
+            file_name="cedula_posterior",
+            file_path=document_back_url,
+            file_type=getattr(document_back, "content_type", None),
+        ))
+    if signature_upload_url or signature_drawn_url:
+        db.add(models.LeadFile(
+            lead_id=new_lead.id,
+            user_id=None,
+            file_name="firma_cliente",
+            file_path=signature_upload_url or signature_drawn_url,
+            file_type=getattr(signature_file, "content_type", None) or "image/png",
+        ))
+
+    submission = models.PublicCreditSubmission(
+        company_id=company.id,
+        lead_id=new_lead.id,
+        email=applicant_email,
+        applicant_name=applicant_name,
+        document_number=document_number,
+        phone=applicant_phone,
+        desired_vehicle=desired_vehicle,
+        status="submitted",
+        verification_code=verification.code,
+        verification_verified_at=verification.verified_at,
+        form_payload=payload,
+        attachments=attachments,
+        consent_text=PUBLIC_CREDIT_POLICY_TEXT,
+    )
+    db.add(submission)
+    db.commit()
+    db.refresh(submission)
+
+    return schemas.PublicCreditSubmissionResponse(
+        status="ok",
+        message="Solicitud de crédito enviada correctamente.",
+        lead_id=new_lead.id,
+        submission_id=submission.id,
+    )
+
+
+@app.get("/public-credit-submissions", response_model=schemas.PublicCreditSubmissionList)
+def read_public_credit_submissions(
+    q: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    ensure_public_credit_review_permissions(current_user)
+
+    query = db.query(models.PublicCreditSubmission).options(
+        joinedload(models.PublicCreditSubmission.lead)
+    )
+
+    if current_user.company_id:
+        query = query.filter(models.PublicCreditSubmission.company_id == current_user.company_id)
+
+    normalized_status = str(status or "").strip().lower()
+    if normalized_status:
+        query = query.filter(func.lower(models.PublicCreditSubmission.status) == normalized_status)
+
+    normalized_q = str(q or "").strip().lower()
+    if normalized_q:
+        like_value = f"%{normalized_q}%"
+        query = query.filter(
+            or_(
+                func.lower(models.PublicCreditSubmission.applicant_name).like(like_value),
+                func.lower(models.PublicCreditSubmission.email).like(like_value),
+                func.lower(func.coalesce(models.PublicCreditSubmission.document_number, "")).like(like_value),
+                func.lower(func.coalesce(models.PublicCreditSubmission.phone, "")).like(like_value),
+                func.lower(func.coalesce(models.PublicCreditSubmission.desired_vehicle, "")).like(like_value),
+            )
+        )
+
+    total = query.count()
+    items = query.order_by(
+        models.PublicCreditSubmission.created_at.desc(),
+        models.PublicCreditSubmission.id.desc(),
+    ).offset(skip).limit(limit).all()
+
+    return schemas.PublicCreditSubmissionList(
+        items=[schemas.PublicCreditSubmissionItem(**serialize_public_credit_submission(item)) for item in items],
+        total=total,
+    )
+
+
+@app.get("/public-credit-submissions/{submission_id}", response_model=schemas.PublicCreditSubmissionDetail)
+def read_public_credit_submission_detail(
+    submission_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    ensure_public_credit_review_permissions(current_user)
+
+    query = db.query(models.PublicCreditSubmission).options(
+        joinedload(models.PublicCreditSubmission.lead)
+    ).filter(models.PublicCreditSubmission.id == submission_id)
+
+    if current_user.company_id:
+        query = query.filter(models.PublicCreditSubmission.company_id == current_user.company_id)
+
+    submission = query.first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Solicitud pública no encontrada")
+
+    return schemas.PublicCreditSubmissionDetail(**serialize_public_credit_submission(submission))
+
+
+@app.put("/public-credit-submissions/{submission_id}", response_model=schemas.PublicCreditSubmissionDetail)
+def update_public_credit_submission(
+    submission_id: int,
+    payload: schemas.PublicCreditSubmissionUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    ensure_public_credit_review_permissions(current_user)
+
+    query = db.query(models.PublicCreditSubmission).options(
+        joinedload(models.PublicCreditSubmission.lead)
+    ).filter(models.PublicCreditSubmission.id == submission_id)
+
+    if current_user.company_id:
+        query = query.filter(models.PublicCreditSubmission.company_id == current_user.company_id)
+
+    submission = query.first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Solicitud pública no encontrada")
+
+    normalized_status = str(payload.status or "").strip().lower()
+    allowed_statuses = {"submitted", "reviewing", "approved", "rejected"}
+    if normalized_status not in allowed_statuses:
+        raise HTTPException(status_code=400, detail="Estado de solicitud pública no válido")
+
+    submission.status = normalized_status
+    submission.updated_at = datetime.datetime.now()
+    db.commit()
+    db.refresh(submission)
+
+    return schemas.PublicCreditSubmissionDetail(**serialize_public_credit_submission(submission))
+
+
+@app.post("/public/credit-request", response_model=schemas.PublicCreditRequestResponse)
+def create_public_credit_request(
+    payload: schemas.PublicCreditRequestCreate,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    raise HTTPException(
+        status_code=410,
+        detail="Este endpoint quedó obsoleto. Usa /public/credit-request/send-code, /verify-code y /submit.",
+    )
 
 @app.get("/companies/{company_id}/integrations", response_model=schemas.IntegrationSettings)
 def read_integration_settings(company_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -5620,6 +6284,7 @@ def maybe_create_public_chat_lead(
 @app.post("/public-chat/session", response_model=schemas.PublicChatSession)
 def create_public_chat_session(payload: schemas.PublicChatSessionCreate, db: Session = Depends(get_db)):
     company_id = get_public_company_id(db, payload.company_id)
+    ensure_public_chat_enabled_for_company(db, company_id=company_id)
     session_token = str(uuid.uuid4())
     session = models.PublicChatSession(
         session_token=session_token,
@@ -5639,6 +6304,7 @@ def get_public_chat_config(payload: schemas.PublicChatInactiveCheck, db: Session
     ).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    ensure_public_chat_enabled_for_company(db, company_id=session.company_id)
 
     bot_name, typing_min_ms, typing_max_ms = get_company_chatbot_settings(db, session.company_id)
     return {
@@ -5652,6 +6318,7 @@ def get_public_chat_messages(session_token: str, db: Session = Depends(get_db)):
     session = db.query(models.PublicChatSession).filter(models.PublicChatSession.session_token == session_token).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    ensure_public_chat_enabled_for_company(db, company_id=session.company_id)
     messages = db.query(models.PublicChatMessage).filter(
         models.PublicChatMessage.session_id == session.id
     ).order_by(models.PublicChatMessage.created_at.asc()).all()
@@ -5670,6 +6337,7 @@ def public_chat_check_inactive(payload: schemas.PublicChatInactiveCheck, db: Ses
     session = db.query(models.PublicChatSession).filter(models.PublicChatSession.session_token == token).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    ensure_public_chat_enabled_for_company(db, company_id=session.company_id)
 
     last_message = db.query(models.PublicChatMessage).filter(
         models.PublicChatMessage.session_id == session.id
@@ -5719,6 +6387,7 @@ def public_chat_message(payload: schemas.PublicChatMessageCreate, db: Session = 
     ).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    ensure_public_chat_enabled_for_company(db, company_id=session.company_id)
 
     if payload.source_page:
         session.source_page = payload.source_page

@@ -178,6 +178,82 @@ class PublicCompanyContext(BaseModel):
     logo_url: Optional[str] = None
     primary_color: str = "#000000"
     secondary_color: str = "#ffffff"
+    enabled_modules: List[str] = Field(default_factory=list)
+
+
+class PublicCreditRequestCreate(BaseModel):
+    name: str
+    phone: str
+    email: Optional[str] = None
+    desired_vehicle: str
+    monthly_income: Optional[int] = 0
+    other_income: Optional[int] = 0
+    down_payment: Optional[int] = 0
+    occupation: Optional[str] = "employee"
+    city: Optional[str] = None
+    message: Optional[str] = None
+
+
+class PublicCreditRequestResponse(BaseModel):
+    status: str
+    message: str
+    lead_id: int
+
+
+class PublicCreditVerificationSendRequest(BaseModel):
+    email: EmailStr
+
+
+class PublicCreditVerificationVerifyRequest(BaseModel):
+    email: EmailStr
+    code: str
+
+
+class PublicCreditVerificationResponse(BaseModel):
+    status: str
+    message: str
+    verified: bool = False
+
+
+class PublicCreditSubmissionResponse(BaseModel):
+    status: str
+    message: str
+    lead_id: int
+    submission_id: int
+
+
+class PublicCreditSubmissionItem(BaseModel):
+    id: int
+    company_id: int
+    lead_id: Optional[int] = None
+    applicant_name: str
+    email: str
+    document_number: Optional[str] = None
+    phone: Optional[str] = None
+    desired_vehicle: Optional[str] = None
+    status: str
+    verification_verified_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    lead_name: Optional[str] = None
+    lead_status: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PublicCreditSubmissionList(BaseModel):
+    items: List[PublicCreditSubmissionItem]
+    total: int
+
+
+class PublicCreditSubmissionDetail(PublicCreditSubmissionItem):
+    form_payload: Dict[str, Any] = Field(default_factory=dict)
+    attachments: Dict[str, Any] = Field(default_factory=dict)
+    consent_text: Optional[str] = None
+
+
+class PublicCreditSubmissionUpdate(BaseModel):
+    status: str
 
 # --- NOTIFICATIONS & REMINDERS ---
 
