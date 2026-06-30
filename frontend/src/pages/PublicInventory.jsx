@@ -111,6 +111,9 @@ const PublicInventory = () => {
 
     const publicHomeUrl = getPublicCompanyHomeUrl(company.public_domain);
     const brandName = company.name || 'AutosQP';
+    const enabledModules = new Set(Array.isArray(company?.enabled_modules) ? company.enabled_modules : []);
+    const isCreditFormEnabled = enabledModules.has('public_credit_form');
+    const isPublicChatEnabled = enabledModules.has('public_sales_chat');
     const primaryColor = company.primary_color || '#2563eb';
     const secondaryColor = company.secondary_color || '#0f172a';
     const primarySoft = withAlpha(primaryColor, '14');
@@ -185,6 +188,15 @@ const PublicInventory = () => {
                     </div>
 
                     <nav className="flex items-center gap-4 text-sm font-bold">
+                        {isCreditFormEnabled && (
+                            <Link
+                                to="/credito"
+                                className="transition px-4 py-2 rounded-lg border text-white"
+                                style={{ borderColor: withAlpha(primaryColor, '55'), backgroundColor: withAlpha(secondaryColor, '44') }}
+                            >
+                                Formulario de crédito
+                            </Link>
+                        )}
                         <Link
                             to="/login"
                             className="text-white transition px-4 py-2 rounded-lg"
@@ -569,10 +581,12 @@ const PublicInventory = () => {
                     )}
                 </div>
             </main>
-            <PublicSalesChatbot
-                brandName={brandName}
-                sessionStorageKey={`public_chat_session_${company.public_domain || window.location.host}`}
-            />
+            {isPublicChatEnabled && (
+                <PublicSalesChatbot
+                    brandName={brandName}
+                    sessionStorageKey={`public_chat_session_${company.public_domain || window.location.host}`}
+                />
+            )}
         </div>
     );
 };

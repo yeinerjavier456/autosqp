@@ -1,9 +1,9 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams } from 'react-router-dom';
-import { SYSTEM_VIEWS } from '../config/views';
+import { COMPANY_MODULE_OPTIONS } from '../config/views';
 
-const COMPANY_VIEWS = SYSTEM_VIEWS.filter((view) => view.scope === 'company');
+const COMPANY_VIEWS = COMPANY_MODULE_OPTIONS;
 const COMPANY_VIEW_GROUPS = COMPANY_VIEWS.reduce((acc, view) => {
     if (!acc[view.section]) acc[view.section] = [];
     acc[view.section].push(view);

@@ -89,6 +89,44 @@ class Company(Base):
         return normalized
 
 
+class PublicCreditEmailVerification(Base):
+    __tablename__ = "public_credit_email_verifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    email = Column(String(150), nullable=False, index=True)
+    code = Column(String(12), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    verified_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    company = relationship("Company")
+
+
+class PublicCreditSubmission(Base):
+    __tablename__ = "public_credit_submissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True, index=True)
+    email = Column(String(150), nullable=False, index=True)
+    applicant_name = Column(String(180), nullable=False)
+    document_number = Column(String(80), nullable=True)
+    phone = Column(String(50), nullable=True)
+    desired_vehicle = Column(String(200), nullable=True)
+    status = Column(String(30), default="submitted", nullable=False)
+    verification_code = Column(String(12), nullable=True)
+    verification_verified_at = Column(DateTime, nullable=True)
+    form_payload = Column(JSON, nullable=True)
+    attachments = Column(JSON, nullable=True)
+    consent_text = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    company = relationship("Company")
+    lead = relationship("Lead")
+
+
 class Role(Base):
     __tablename__ = "roles"
     

@@ -57,6 +57,9 @@ const VehicleDetail = () => {
 
     const publicHomeUrl = getPublicCompanyHomeUrl(company.public_domain);
     const brandName = company.name || 'AutosQP';
+    const enabledModules = new Set(Array.isArray(company?.enabled_modules) ? company.enabled_modules : []);
+    const isCreditFormEnabled = enabledModules.has('public_credit_form');
+    const isPublicChatEnabled = enabledModules.has('public_sales_chat');
 
     const nextImage = (e) => {
         if (e) e.stopPropagation();
@@ -102,6 +105,14 @@ const VehicleDetail = () => {
                         )}
                     </a>
                     <nav className="flex items-center gap-4 text-sm font-bold">
+                        {isCreditFormEnabled && (
+                            <Link
+                                to="/credito"
+                                className="text-white hover:text-blue-400 transition bg-white/10 px-4 py-2 rounded-lg hover:bg-white/20"
+                            >
+                                Formulario de crédito
+                            </Link>
+                        )}
                         <Link
                             to="/login"
                             className="text-white hover:text-blue-400 transition bg-white/10 px-4 py-2 rounded-lg hover:bg-white/20"
@@ -329,11 +340,13 @@ const VehicleDetail = () => {
                     )}
                 </div>
             )}
-            <PublicSalesChatbot
-                vehicleId={Number(id)}
-                brandName={brandName}
-                sessionStorageKey={`public_chat_session_${company.public_domain || window.location.host}`}
-            />
+            {isPublicChatEnabled && (
+                <PublicSalesChatbot
+                    vehicleId={Number(id)}
+                    brandName={brandName}
+                    sessionStorageKey={`public_chat_session_${company.public_domain || window.location.host}`}
+                />
+            )}
         </div>
     );
 };

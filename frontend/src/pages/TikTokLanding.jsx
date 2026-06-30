@@ -7,6 +7,7 @@ const TikTokLanding = () => {
     const company = usePublicCompany();
     const publicHomeUrl = getPublicCompanyHomeUrl(company.public_domain);
     const brandName = company.name || 'AutosQP';
+    const isPublicChatEnabled = new Set(Array.isArray(company?.enabled_modules) ? company.enabled_modules : []).has('public_sales_chat');
 
     return (
         <div className="min-h-screen bg-[radial-gradient(circle_at_top,#fff6e8_0%,#f7fafc_42%,#e2e8f0_100%)] text-slate-900">
@@ -36,16 +37,22 @@ const TikTokLanding = () => {
                         <div className="absolute -right-10 bottom-10 hidden h-40 w-40 rounded-full bg-blue-200/40 blur-3xl lg:block" />
 
                         <div className="relative z-10 flex min-h-0 flex-1 flex-col rounded-[24px] border border-slate-200 bg-slate-50 p-2 sm:p-3">
-                            <PublicSalesChatbot
-                                autoOpen={true}
-                                hideLauncher={true}
-                                embedded={true}
-                                forceFreshSession={true}
-                                sourcePage="/autos"
-                                brandName={brandName}
-                                sessionStorageKey={`public_chat_session_tiktok_${company.public_domain || window.location.host}`}
-                                initialAssistantMessage={`Hola, bienvenido a ${brandName}. Soy tu asesora virtual y voy a ayudarte a perfilar tu solicitud. Para empezar, cuéntame qué vehículo te interesa.`}
-                            />
+                            {isPublicChatEnabled ? (
+                                <PublicSalesChatbot
+                                    autoOpen={true}
+                                    hideLauncher={true}
+                                    embedded={true}
+                                    forceFreshSession={true}
+                                    sourcePage="/autos"
+                                    brandName={brandName}
+                                    sessionStorageKey={`public_chat_session_tiktok_${company.public_domain || window.location.host}`}
+                                    initialAssistantMessage={`Hola, bienvenido a ${brandName}. Soy tu asesora virtual y voy a ayudarte a perfilar tu solicitud. Para empezar, cuéntame qué vehículo te interesa.`}
+                                />
+                            ) : (
+                                <div className="flex min-h-[420px] flex-1 items-center justify-center rounded-[20px] border border-dashed border-slate-300 bg-white/80 px-6 text-center text-sm text-slate-500">
+                                    El chat comercial no estA habilitado para esta empresa.
+                                </div>
+                            )}
                         </div>
                     </section>
                 </main>

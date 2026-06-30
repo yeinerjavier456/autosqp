@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import { normalizeMediaUrl } from './media';
 
 const inferCompanyNameFromHost = () => {
   if (typeof window === 'undefined') {
@@ -21,10 +22,36 @@ const formatPublicTitle = (companyName) => {
   return normalized || 'AutosQP';
 };
 
+const DEFAULT_FAVICON = 'https://autosqp.com/wp-content/uploads/2025/12/cropped-Horizontal-Base_-v3-1.03.18-p.m.png';
+
+const setDocumentFavicon = (logoUrl) => {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  const baseHref = logoUrl ? normalizeMediaUrl(logoUrl) : DEFAULT_FAVICON;
+  const separator = baseHref.includes('?') ? '&' : '?';
+  const faviconHref = `${baseHref}${separator}v=${encodeURIComponent(baseHref)}`;
+  const relValues = ['icon', 'shortcut icon', 'apple-touch-icon'];
+
+  relValues.forEach((relValue) => {
+    let favicon = document.querySelector(`link[rel="${relValue}"]`);
+
+    if (!favicon) {
+      favicon = document.createElement('link');
+      favicon.setAttribute('rel', relValue);
+      document.head.appendChild(favicon);
+    }
+
+    favicon.setAttribute('href', faviconHref);
+  });
+};
+
 const DEFAULT_PUBLIC_COMPANY = {
   id: null,
   name: inferCompanyNameFromHost(),
   public_domain: null,
+  enabled_modules: [],
   logo_url: '',
   primary_color: '#2563eb',
   secondary_color: '#0f172a',
@@ -61,6 +88,7 @@ export const usePublicCompany = () => {
       return;
     }
     document.title = formatPublicTitle(company?.name);
+    setDocumentFavicon(company?.logo_url);
   }, [company]);
 
   return company;
