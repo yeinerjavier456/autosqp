@@ -78,6 +78,7 @@ DEFAULT_PUBLIC_COMPANY_CONTEXT = {
     "name": "AutosQP",
     "public_domain": None,
     "public_domains": [],
+    "website_url": None,
     "logo_url": None,
     "primary_color": "#2563eb",
     "secondary_color": "#0f172a",
@@ -409,6 +410,7 @@ def serialize_public_company(company: Optional[models.Company]) -> schemas.Publi
         name=company.name or DEFAULT_PUBLIC_COMPANY_CONTEXT["name"],
         public_domain=company.public_domain,
         public_domains=normalize_public_domains(getattr(company, "public_domains", []), company.public_domain),
+        website_url=getattr(company, "website_url", None),
         logo_url=company.logo_url,
         primary_color=company.primary_color or DEFAULT_PUBLIC_COMPANY_CONTEXT["primary_color"],
         secondary_color=company.secondary_color or DEFAULT_PUBLIC_COMPANY_CONTEXT["secondary_color"],
@@ -1476,6 +1478,7 @@ def ensure_company_public_domain_columns():
             "license_start_date": "ALTER TABLE companies ADD COLUMN license_start_date DATE NULL",
             "license_end_date": "ALTER TABLE companies ADD COLUMN license_end_date DATE NULL",
             "enabled_modules_json": "ALTER TABLE companies ADD COLUMN enabled_modules_json TEXT NULL",
+            "website_url": "ALTER TABLE companies ADD COLUMN website_url VARCHAR(500) NULL",
         }
         for column_name, ddl in company_columns.items():
             exists = conn.execute(text(
@@ -3956,6 +3959,7 @@ def create_company(company: schemas.CompanyCreate, db: Session = Depends(get_db)
         name=company.name,
         public_domain=public_domains[0] if public_domains else None,
         public_domains_json=json.dumps(public_domains),
+        website_url=company.website_url,
         logo_url=company.logo_url,
         primary_color=company.primary_color,
         secondary_color=company.secondary_color,
@@ -3999,6 +4003,7 @@ def update_company(company_id: int, company_update: schemas.CompanyCreate, db: S
     db_company.name = company_update.name
     db_company.public_domain = public_domains[0] if public_domains else None
     db_company.public_domains_json = json.dumps(public_domains)
+    db_company.website_url = company_update.website_url
     db_company.logo_url = company_update.logo_url
     db_company.primary_color = company_update.primary_color
     db_company.secondary_color = company_update.secondary_color

@@ -122,7 +122,7 @@ const PublicInventory = () => {
         return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(price);
     };
 
-    const publicHomeUrl = getPublicCompanyHomeUrl(company.public_domain);
+    const publicHomeUrl = getPublicCompanyHomeUrl(company);
     const brandName = company.name || 'AutosQP';
     const enabledModules = new Set(Array.isArray(company?.enabled_modules) ? company.enabled_modules : []);
     const isCreditFormEnabled = enabledModules.has('public_credit_form');

@@ -26,6 +26,7 @@ class Company(Base):
     name = Column(String(100), unique=True, index=True)
     public_domain = Column(String(255), nullable=True, unique=True, index=True)
     public_domains_json = Column(Text, nullable=True)
+    website_url = Column(String(500), nullable=True)
     logo_url = Column(String(500), nullable=True)
     primary_color = Column(String(50), default="#000000")
     secondary_color = Column(String(50), default="#ffffff")

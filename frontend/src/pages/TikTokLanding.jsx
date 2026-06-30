@@ -5,7 +5,7 @@ import { getPublicCompanyHomeUrl, usePublicCompany } from '../utils/publicCompan
 
 const TikTokLanding = () => {
     const company = usePublicCompany();
-    const publicHomeUrl = getPublicCompanyHomeUrl(company.public_domain);
+    const publicHomeUrl = getPublicCompanyHomeUrl(company);
     const brandName = company.name || 'AutosQP';
     const isPublicChatEnabled = new Set(Array.isArray(company?.enabled_modules) ? company.enabled_modules : []).has('public_sales_chat');
 

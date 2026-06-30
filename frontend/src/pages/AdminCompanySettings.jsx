@@ -22,6 +22,7 @@ const AdminCompanySettings = () => {
         name: 'Nueva Empresa',
         public_domain: '',
         public_domains: [],
+        website_url: '',
         logo_url: 'https://via.placeholder.com/150',
         primary_color: '#3B82F6', // Blue-500
         secondary_color: '#1E40AF', // Blue-800
@@ -256,6 +257,21 @@ const AdminCompanySettings = () => {
                                 onChange={handleChange}
                                 className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
                             />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-slate-600 mb-1">URL del sitio web</label>
+                            <input
+                                type="text"
+                                name="website_url"
+                                value={company.website_url || ''}
+                                onChange={handleChange}
+                                placeholder="Ej: https://benitezcars.com o https://miweb.com"
+                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                            />
+                            <p className="mt-1 text-xs text-slate-400">
+                                Si lo dejas vacío, el botón enviará al inventario público /crm/autos.
+                            </p>
                         </div>
 
                         <div className="space-y-3">

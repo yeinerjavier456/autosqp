@@ -84,6 +84,7 @@ const DEFAULT_PUBLIC_COMPANY = {
   id: null,
   name: inferCompanyNameFromHost(),
   public_domain: null,
+  website_url: '',
   enabled_modules: [],
   logo_url: '',
   primary_color: '#2563eb',
@@ -146,10 +147,28 @@ export const usePublicCompany = () => {
   return company;
 };
 
-export const getPublicCompanyHomeUrl = (publicDomain) => {
-  const normalizedDomain = String(publicDomain || '').trim();
-  if (!normalizedDomain) {
-    return window.location.origin;
+const normalizeAbsolutePublicUrl = (value) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    return '';
   }
-  return `${window.location.protocol}//${normalizedDomain}`;
+  if (/^https?:\/\//i.test(normalized)) {
+    return normalized;
+  }
+  return `https://${normalized}`;
+};
+
+export const getPublicCompanyHomeUrl = (companyOrDomain) => {
+  const company = typeof companyOrDomain === 'object' && companyOrDomain !== null ? companyOrDomain : null;
+  const websiteUrl = normalizeAbsolutePublicUrl(company?.website_url);
+  if (websiteUrl) {
+    return websiteUrl;
+  }
+
+  const publicDomain = company ? company.public_domain : companyOrDomain;
+  const normalizedDomain = String(publicDomain || '').trim();
+  const publicBaseUrl = normalizedDomain
+    ? `${window.location.protocol}//${normalizedDomain}`
+    : window.location.origin;
+  return `${publicBaseUrl}/crm/autos`;
 };

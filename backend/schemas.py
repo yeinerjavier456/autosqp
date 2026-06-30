@@ -103,6 +103,8 @@ class UserLeadRedistributeResponse(BaseModel):
 class UserCompany(BaseModel):
     id: int
     name: str
+    public_domain: Optional[str] = None
+    website_url: Optional[str] = None
     logo_url: Optional[str] = None
     primary_color: Optional[str] = "#000000"
     secondary_color: Optional[str] = "#ffffff"
@@ -147,6 +149,7 @@ class CompanyBase(BaseModel):
     name: str
     public_domain: Optional[str] = None
     public_domains: List[str] = Field(default_factory=list)
+    website_url: Optional[str] = None
     logo_url: Optional[str] = None
     primary_color: Optional[str] = "#000000"
     secondary_color: Optional[str] = "#ffffff"
@@ -175,6 +178,7 @@ class PublicCompanyContext(BaseModel):
     name: str
     public_domain: Optional[str] = None
     public_domains: List[str] = Field(default_factory=list)
+    website_url: Optional[str] = None
     logo_url: Optional[str] = None
     primary_color: str = "#000000"
     secondary_color: str = "#ffffff"

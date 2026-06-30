@@ -6,6 +6,7 @@ import Swal from 'sweetalert2';
 import NotificationBell from './NotificationBell';
 import FloatingChatButton from './FloatingChatButton';
 import { getGroupedMenuViews, getRoleName } from '../config/views';
+import { getPublicCompanyHomeUrl } from '../utils/publicCompany';
 
 const MENU_ICONS = {
     dashboard: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>,
@@ -60,6 +61,7 @@ const Layout = () => {
     const primaryColor = user?.company?.primary_color || '#0f172a';
     const secondaryColor = user?.company?.secondary_color || '#2563eb';
     const groupedMenuViews = getGroupedMenuViews(user);
+    const publicWebUrl = getPublicCompanyHomeUrl(user?.company || null);
 
     const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
     const closeSidebar = () => setIsSidebarOpen(false);
@@ -218,7 +220,7 @@ const Layout = () => {
 
                 <div className="p-4 border-t border-white/10">
                     <a
-                        href="/autos"
+                        href={publicWebUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className={`
