@@ -100,8 +100,24 @@ export const usePublicCompany = () => {
     let ignore = false;
 
     const loadCompany = async () => {
+      const endpoints = ['/api/public/company-context', '/crm/api/public/company-context'];
+
       try {
-        const response = await axios.get('/api/public/company-context');
+        let response = null;
+
+        for (const endpoint of endpoints) {
+          try {
+            response = await axios.get(endpoint);
+            break;
+          } catch {
+            response = null;
+          }
+        }
+
+        if (!response) {
+          throw new Error('No public company context endpoint responded');
+        }
+
         if (!ignore && response?.data) {
           setCompany({ ...DEFAULT_PUBLIC_COMPANY, ...response.data });
         }

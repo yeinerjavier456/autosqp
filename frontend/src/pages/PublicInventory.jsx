@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import PublicSalesChatbot from '../components/PublicSalesChatbot';
 import PublicBrandLogo from '../components/PublicBrandLogo';
 import { normalizeMediaUrl } from '../utils/media';
 import { getPublicCompanyHomeUrl, usePublicCompany } from '../utils/publicCompany';
+
+const APP_BASE_PATH = import.meta.env.BASE_URL === '/' ? '' : import.meta.env.BASE_URL.replace(/\/$/, '');
 
 const withAlpha = (hex, alpha = '14') => {
     if (typeof hex !== 'string') return hex;
@@ -29,7 +31,6 @@ const normalizeArrayPayload = (payload) => {
 
 const PublicInventory = () => {
     const company = usePublicCompany();
-    const navigate = useNavigate();
     const [vehicles, setVehicles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [makes, setMakes] = useState([]);
@@ -59,13 +60,14 @@ const PublicInventory = () => {
     }, []);
 
     useEffect(() => {
-        if (['expired', 'pending'].includes(company?.license_status)) {
+        const licenseStatus = String(company?.license_status || '').toLowerCase();
+        if (['expired', 'pending'].includes(licenseStatus)) {
             if (company?.license_notice) {
                 sessionStorage.setItem('license_notice', company.license_notice);
             }
-            navigate('/renovar-licencia', { replace: true });
+            window.location.replace(`${APP_BASE_PATH}/renovar-licencia`);
         }
-    }, [company?.license_status, company?.license_notice, navigate]);
+    }, [company?.license_status, company?.license_notice]);
 
     useEffect(() => {
         const delayDebounceFn = setTimeout(() => {
