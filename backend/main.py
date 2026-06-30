@@ -19,6 +19,7 @@ import re
 import json
 import random
 import base64
+import secrets
 import smtplib
 import ssl
 from html import escape
@@ -3702,6 +3703,98 @@ def verify_public_credit_verification_code(
     )
 
 
+def _serialize_public_credit_capture_session(session: models.PublicCreditCaptureSession) -> schemas.PublicCreditCaptureSessionResponse:
+    return schemas.PublicCreditCaptureSessionResponse(
+        status="ok",
+        token=session.token,
+        side=session.side,
+        uploaded=bool(session.file_path),
+        file_url=session.file_path,
+        file_type=session.file_type,
+        original_file_name=session.original_file_name,
+        expires_at=session.expires_at,
+    )
+
+
+def _get_public_credit_capture_session(
+    db: Session,
+    token: str,
+    company_id: Optional[int] = None,
+    require_upload: bool = False,
+) -> models.PublicCreditCaptureSession:
+    session = db.query(models.PublicCreditCaptureSession).filter(
+        models.PublicCreditCaptureSession.token == token
+    ).first()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="La sesión de captura no existe o expiró.")
+    if company_id and session.company_id != company_id:
+        raise HTTPException(status_code=403, detail="La captura no pertenece a esta empresa.")
+    if session.expires_at < datetime.datetime.now():
+        raise HTTPException(status_code=410, detail="La sesión de captura expiró. Genera un nuevo QR.")
+    if require_upload and not session.file_path:
+        raise HTTPException(status_code=400, detail="Aún no se ha cargado la foto del documento.")
+
+    return session
+
+
+@app.post("/public/credit-request/capture-session", response_model=schemas.PublicCreditCaptureSessionResponse)
+def create_public_credit_capture_session(
+    payload: schemas.PublicCreditCaptureSessionCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    company = resolve_public_company(db, request)
+    if not company:
+        raise HTTPException(status_code=404, detail="No se encontró una empresa asociada a este dominio")
+    if not company_has_enabled_module("public_credit_form", company=company):
+        raise HTTPException(status_code=403, detail="El formulario de crédito no está habilitado para esta empresa")
+
+    side = str(payload.side or "").strip().lower()
+    if side not in {"front", "back"}:
+        raise HTTPException(status_code=400, detail="El lado del documento no es válido.")
+
+    session = models.PublicCreditCaptureSession(
+        company_id=company.id,
+        token=secrets.token_urlsafe(32),
+        side=side,
+        expires_at=datetime.datetime.now() + datetime.timedelta(minutes=30),
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return _serialize_public_credit_capture_session(session)
+
+
+@app.get("/public/credit-request/capture-session/{token}", response_model=schemas.PublicCreditCaptureSessionResponse)
+def read_public_credit_capture_session(
+    token: str,
+    db: Session = Depends(get_db),
+):
+    session = _get_public_credit_capture_session(db, token)
+    return _serialize_public_credit_capture_session(session)
+
+
+@app.post("/public/credit-request/capture-session/{token}/upload", response_model=schemas.PublicCreditCaptureSessionResponse)
+async def upload_public_credit_capture_session_file(
+    token: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    session = _get_public_credit_capture_session(db, token)
+    if not file:
+        raise HTTPException(status_code=400, detail="Debes adjuntar una foto del documento.")
+
+    file_url = _save_public_credit_upload(file, "documents", f"document_{session.side}")
+    session.file_path = file_url
+    session.file_type = getattr(file, "content_type", None)
+    session.original_file_name = getattr(file, "filename", None)
+    session.uploaded_at = datetime.datetime.now()
+    db.commit()
+    db.refresh(session)
+    return _serialize_public_credit_capture_session(session)
+
+
 @app.post("/public/credit-request/submit", response_model=schemas.PublicCreditSubmissionResponse)
 async def submit_public_credit_request(
     request: Request,
@@ -3709,6 +3802,8 @@ async def submit_public_credit_request(
     document_front: Optional[UploadFile] = File(None),
     document_back: Optional[UploadFile] = File(None),
     signature_file: Optional[UploadFile] = File(None),
+    document_front_capture_token: Optional[str] = Form(None),
+    document_back_capture_token: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     company = resolve_public_company(db, request)
@@ -3759,8 +3854,29 @@ async def submit_public_credit_request(
 
     ensure_company_lead_creation_capacity(db, company.id)
 
-    document_front_url = _save_public_credit_upload(document_front, "documents", "document_front")
-    document_back_url = _save_public_credit_upload(document_back, "documents", "document_back")
+    front_capture = None
+    back_capture = None
+    if document_front_capture_token:
+        front_capture = _get_public_credit_capture_session(
+            db,
+            str(document_front_capture_token).strip(),
+            company_id=company.id,
+            require_upload=True,
+        )
+        if front_capture.side != "front":
+            raise HTTPException(status_code=400, detail="La captura frontal no corresponde a la cara frontal.")
+    if document_back_capture_token:
+        back_capture = _get_public_credit_capture_session(
+            db,
+            str(document_back_capture_token).strip(),
+            company_id=company.id,
+            require_upload=True,
+        )
+        if back_capture.side != "back":
+            raise HTTPException(status_code=400, detail="La captura posterior no corresponde a la cara posterior.")
+
+    document_front_url = _save_public_credit_upload(document_front, "documents", "document_front") if document_front else (front_capture.file_path if front_capture else None)
+    document_back_url = _save_public_credit_upload(document_back, "documents", "document_back") if document_back else (back_capture.file_path if back_capture else None)
     signature_upload_url = _save_public_credit_upload(signature_file, "signatures", "signature_upload")
     signature_drawn_url = _save_public_credit_data_url(consent.get("signatureDrawnDataUrl"), "signatures", "signature_drawn")
 
@@ -3880,7 +3996,7 @@ async def submit_public_credit_request(
             user_id=None,
             file_name="cedula_frontal",
             file_path=document_front_url,
-            file_type=getattr(document_front, "content_type", None),
+            file_type=getattr(document_front, "content_type", None) if document_front else getattr(front_capture, "file_type", None),
         ))
     if document_back_url:
         db.add(models.LeadFile(
@@ -3888,7 +4004,7 @@ async def submit_public_credit_request(
             user_id=None,
             file_name="cedula_posterior",
             file_path=document_back_url,
-            file_type=getattr(document_back, "content_type", None),
+            file_type=getattr(document_back, "content_type", None) if document_back else getattr(back_capture, "file_type", None),
         ))
     if signature_upload_url or signature_drawn_url:
         db.add(models.LeadFile(

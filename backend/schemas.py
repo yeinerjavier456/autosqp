@@ -222,6 +222,21 @@ class PublicCreditSubmissionResponse(BaseModel):
     submission_id: int
 
 
+class PublicCreditCaptureSessionCreate(BaseModel):
+    side: str
+
+
+class PublicCreditCaptureSessionResponse(BaseModel):
+    status: str
+    token: str
+    side: str
+    uploaded: bool = False
+    file_url: Optional[str] = None
+    file_type: Optional[str] = None
+    original_file_name: Optional[str] = None
+    expires_at: datetime
+
+
 class PublicCreditSubmissionItem(BaseModel):
     id: int
     company_id: int

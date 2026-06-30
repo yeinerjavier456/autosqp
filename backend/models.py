@@ -127,6 +127,23 @@ class PublicCreditSubmission(Base):
     lead = relationship("Lead")
 
 
+class PublicCreditCaptureSession(Base):
+    __tablename__ = "public_credit_capture_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    token = Column(String(120), unique=True, nullable=False, index=True)
+    side = Column(String(20), nullable=False)
+    file_path = Column(String(500), nullable=True)
+    file_type = Column(String(120), nullable=True)
+    original_file_name = Column(String(255), nullable=True)
+    expires_at = Column(DateTime, nullable=False)
+    uploaded_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    company = relationship("Company")
+
+
 class Role(Base):
     __tablename__ = "roles"
     

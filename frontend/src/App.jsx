@@ -7,6 +7,7 @@ import AdminCompanySettings from './pages/AdminCompanySettings';
 import AdminAlerts from './pages/AdminAlerts'; // Import AdminAlerts
 import PublicInventory from './pages/PublicInventory';
 import PublicCreditForm from './pages/PublicCreditForm';
+import PublicCreditCapture from './pages/PublicCreditCapture';
 import TikTokLanding from './pages/TikTokLanding';
 import VehicleDetail from './pages/VehicleDetail'; // Import VehicleDetail
 import LoginPage from './pages/LoginPage';
@@ -79,6 +80,7 @@ function App() {
           {/* Public Routes */}
           <Route path="/autos" element={<PublicInventory />} />
           <Route path="/credito" element={<PublicCreditForm />} />
+          <Route path="/credito/captura/:token" element={<PublicCreditCapture />} />
           <Route path="/tiktok" element={<TikTokLanding />} />
           <Route path="/autos/:id" element={<VehicleDetail />} /> {/* New Route */}
 

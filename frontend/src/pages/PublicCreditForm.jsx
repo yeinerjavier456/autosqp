@@ -18,6 +18,13 @@ const STEP_TITLES = [
 const getBogotaCurrentDate = () =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
 
+const formatBogotaDateLabel = (dateValue) => {
+  if (!dateValue) return '';
+  const [year, month, day] = String(dateValue).split('-');
+  if (!year || !month || !day) return dateValue;
+  return `${day}/${month}/${year}`;
+};
+
 const createEmptyForm = () => ({
   vehicle: {
     vehicleValue: '',
@@ -97,6 +104,15 @@ const withAlpha = (hex, alpha = '18') => {
 
 const filePreviewUrl = (file) => (file ? URL.createObjectURL(file) : '');
 
+const buildCapturePageUrl = (token) => {
+  if (typeof window === 'undefined' || !token) return '';
+  const basePath = import.meta.env.BASE_URL === '/' ? '' : import.meta.env.BASE_URL.replace(/\/$/, '');
+  return `${window.location.origin}${basePath}/credito/captura/${token}`;
+};
+
+const buildQrImageUrl = (url) =>
+  `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=10&data=${encodeURIComponent(url)}`;
+
 const buildVehicleLabel = (vehicle) => {
   return [vehicle.make, vehicle.model, vehicle.vehicleType].filter(Boolean).join(' ').trim();
 };
@@ -110,6 +126,7 @@ const PublicCreditForm = () => {
   const [form, setForm] = useState(createEmptyForm);
   const [documentFront, setDocumentFront] = useState(null);
   const [documentBack, setDocumentBack] = useState(null);
+  const [documentCaptures, setDocumentCaptures] = useState({ documentFront: null, documentBack: null });
   const [signatureFile, setSignatureFile] = useState(null);
   const [documentFrontPreview, setDocumentFrontPreview] = useState('');
   const [documentBackPreview, setDocumentBackPreview] = useState('');
@@ -119,6 +136,7 @@ const PublicCreditForm = () => {
   const [sendingCode, setSendingCode] = useState(false);
   const [verifyingCode, setVerifyingCode] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [creatingCapture, setCreatingCapture] = useState('');
   const [status, setStatus] = useState({ type: '', message: '' });
 
   const enabledModules = new Set(Array.isArray(company?.enabled_modules) ? company.enabled_modules : []);
@@ -152,6 +170,39 @@ const PublicCreditForm = () => {
     if (documentBackPreview) URL.revokeObjectURL(documentBackPreview);
     if (signaturePreview) URL.revokeObjectURL(signaturePreview);
   }, [documentFrontPreview, documentBackPreview, signaturePreview]);
+
+  useEffect(() => {
+    const pendingCaptures = Object.entries(documentCaptures).filter(([, capture]) => capture?.token && !capture?.uploaded);
+    if (!pendingCaptures.length) return undefined;
+
+    const intervalId = window.setInterval(async () => {
+      await Promise.all(pendingCaptures.map(async ([key, capture]) => {
+        try {
+          const response = await axios.get(`/api/public/credit-request/capture-session/${capture.token}`);
+          if (response?.data?.uploaded) {
+            setDocumentCaptures((prev) => ({
+              ...prev,
+              [key]: {
+                ...prev[key],
+                ...response.data,
+                previewUrl: response.data.file_url,
+              },
+            }));
+          }
+        } catch {
+          setDocumentCaptures((prev) => ({
+            ...prev,
+            [key]: {
+              ...prev[key],
+              error: 'No se pudo consultar la captura. Genera un nuevo QR.',
+            },
+          }));
+        }
+      }));
+    }, 3000);
+
+    return () => window.clearInterval(intervalId);
+  }, [documentCaptures]);
 
   useEffect(() => {
     setForm((prev) => {
@@ -216,7 +267,9 @@ const PublicCreditForm = () => {
     }
     if (stepIndex === 1) {
       const { firstName, lastName, documentNumber, mobilePhone, address, email } = form.personal;
-      return Boolean(firstName && lastName && documentNumber && mobilePhone && address && email && documentFront && documentBack);
+      const hasFrontDocument = Boolean(documentFront || documentCaptures.documentFront?.uploaded);
+      const hasBackDocument = Boolean(documentBack || documentCaptures.documentBack?.uploaded);
+      return Boolean(firstName && lastName && documentNumber && mobilePhone && address && email && hasFrontDocument && hasBackDocument);
     }
     if (stepIndex === 2) {
       const { activity, companyName, salary } = form.employment;
@@ -306,16 +359,43 @@ const PublicCreditForm = () => {
       if (documentFrontPreview) URL.revokeObjectURL(documentFrontPreview);
       setDocumentFront(file);
       setDocumentFrontPreview(filePreviewUrl(file));
+      setDocumentCaptures((prev) => ({ ...prev, documentFront: null }));
     }
     if (type === 'documentBack') {
       if (documentBackPreview) URL.revokeObjectURL(documentBackPreview);
       setDocumentBack(file);
       setDocumentBackPreview(filePreviewUrl(file));
+      setDocumentCaptures((prev) => ({ ...prev, documentBack: null }));
     }
     if (type === 'signatureFile') {
       if (signaturePreview) URL.revokeObjectURL(signaturePreview);
       setSignatureFile(file);
       setSignaturePreview(filePreviewUrl(file));
+    }
+  };
+
+  const createDocumentCaptureSession = async (type) => {
+    resetStatus();
+    const side = type === 'documentFront' ? 'front' : 'back';
+    setCreatingCapture(type);
+    try {
+      const response = await axios.post('/api/public/credit-request/capture-session', { side });
+      setDocumentCaptures((prev) => ({
+        ...prev,
+        [type]: {
+          ...response.data,
+          captureUrl: buildCapturePageUrl(response.data.token),
+          previewUrl: response.data.file_url || '',
+          error: '',
+        },
+      }));
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error?.response?.data?.detail || 'No se pudo generar el QR de captura.',
+      });
+    } finally {
+      setCreatingCapture('');
     }
   };
 
@@ -405,6 +485,12 @@ const PublicCreditForm = () => {
       formData.append('payload_json', JSON.stringify(payload));
       if (documentFront) formData.append('document_front', documentFront);
       if (documentBack) formData.append('document_back', documentBack);
+      if (!documentFront && documentCaptures.documentFront?.uploaded) {
+        formData.append('document_front_capture_token', documentCaptures.documentFront.token);
+      }
+      if (!documentBack && documentCaptures.documentBack?.uploaded) {
+        formData.append('document_back_capture_token', documentCaptures.documentBack.token);
+      }
       if (signatureFile) formData.append('signature_file', signatureFile);
 
       await axios.post('/api/public/credit-request/submit', formData, {
@@ -415,6 +501,7 @@ const PublicCreditForm = () => {
       setForm(createEmptyForm());
       setDocumentFront(null);
       setDocumentBack(null);
+      setDocumentCaptures({ documentFront: null, documentBack: null });
       setSignatureFile(null);
       setVerificationSent(false);
       setVerificationVerified(false);
@@ -452,6 +539,60 @@ const PublicCreditForm = () => {
       {file && <p className="mt-2 truncate text-xs text-slate-500">{file.name}</p>}
     </div>
   );
+
+  const renderDocumentCaptureBox = (type, label) => {
+    const capture = documentCaptures[type];
+    const captureUrl = capture?.captureUrl || buildCapturePageUrl(capture?.token);
+    const isUploaded = Boolean(capture?.uploaded && capture?.file_url);
+
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-slate-900">Capturar desde celular</p>
+            <p className="text-xs text-slate-500">Genera un QR para abrir la cámara del teléfono y subir {label.toLowerCase()}.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => createDocumentCaptureSession(type)}
+            disabled={creatingCapture === type}
+            className="rounded-xl px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+            style={{ backgroundColor: theme.secondary }}
+          >
+            {creatingCapture === type ? 'Generando...' : capture?.token ? 'Nuevo QR' : 'Generar QR'}
+          </button>
+        </div>
+
+        {capture?.token && (
+          <div className="mt-4 grid gap-4 md:grid-cols-[auto_1fr]">
+            <img
+              src={buildQrImageUrl(captureUrl)}
+              alt={`QR ${label}`}
+              className="h-44 w-44 rounded-2xl border border-slate-200 bg-white p-2"
+            />
+            <div className="space-y-3 text-sm text-slate-600">
+              <p>Escanea este QR con el celular y toma la foto. Esta pantalla detecta la carga automáticamente.</p>
+              <a href={captureUrl} target="_blank" rel="noreferrer" className="inline-flex rounded-xl border border-slate-300 px-4 py-2 font-semibold text-slate-700">
+                Abrir enlace de captura
+              </a>
+              {isUploaded ? (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 font-semibold text-emerald-700">
+                  Foto recibida correctamente.
+                </div>
+              ) : (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 font-semibold text-amber-700">
+                  Esperando foto desde el celular...
+                </div>
+              )}
+              {capture?.error && <p className="text-sm font-semibold text-red-600">{capture.error}</p>}
+            </div>
+          </div>
+        )}
+
+        {isUploaded && renderPreviewBox(`${label} recibida por QR`, capture.file_url, { name: capture.original_file_name || 'foto_cedula.jpg' })}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-slate-100" style={{ background: `linear-gradient(135deg, ${theme.secondary} 0%, ${theme.primary} 100%)` }}>
@@ -522,7 +663,8 @@ const PublicCreditForm = () => {
                       </div>
                       <div>
                         {renderFieldLabel('Fecha de Solicitud', true)}
-                        <input type="date" className={requiredInputClassName} value={form.vehicle.requestDate} onChange={(e) => updateSection('vehicle', 'requestDate', e.target.value)} />
+                        <input className={`${requiredInputClassName} bg-slate-100 text-slate-600`} value={formatBogotaDateLabel(form.vehicle.requestDate)} readOnly />
+                        <p className="mt-1 text-xs text-slate-500">Fecha automática según Bogotá, Colombia.</p>
                       </div>
                     </div>
                     <div className="grid gap-4 md:grid-cols-3">
@@ -584,11 +726,13 @@ const PublicCreditForm = () => {
                         {renderFieldLabel('Cédula Ciudadanía Cara Frontal', true)}
                         <input type="file" accept="image/*,application/pdf" capture="environment" onChange={(e) => handleFileSelection('documentFront', e.target.files?.[0])} className="block w-full text-sm text-slate-600" />
                         {renderPreviewBox('Documento frontal', documentFrontPreview, documentFront)}
+                        {renderDocumentCaptureBox('documentFront', 'Documento frontal')}
                       </div>
                       <div className="space-y-3">
                         {renderFieldLabel('Cédula Ciudadanía Cara Posterior', true)}
                         <input type="file" accept="image/*,application/pdf" capture="environment" onChange={(e) => handleFileSelection('documentBack', e.target.files?.[0])} className="block w-full text-sm text-slate-600" />
                         {renderPreviewBox('Documento posterior', documentBackPreview, documentBack)}
+                        {renderDocumentCaptureBox('documentBack', 'Documento posterior')}
                       </div>
                     </div>
                   </section>
