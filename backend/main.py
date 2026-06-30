@@ -473,7 +473,15 @@ def _get_public_credit_smtp_settings(db: Session, company: Optional[models.Compa
             models.IntegrationSettings.company_id == company.id
         ).first()
 
-    use_company_smtp = bool(integration_settings and getattr(integration_settings, "smtp_enabled", False))
+    company_smtp_has_values = bool(
+        integration_settings
+        and str(getattr(integration_settings, "smtp_host", "") or "").strip()
+        and str(getattr(integration_settings, "smtp_from", "") or getattr(integration_settings, "smtp_username", "") or "").strip()
+    )
+    use_company_smtp = bool(
+        integration_settings
+        and (getattr(integration_settings, "smtp_enabled", False) or company_smtp_has_values)
+    )
     host = ((getattr(integration_settings, "smtp_host", None) if use_company_smtp else None) or os.getenv("SMTP_HOST") or "").strip()
     port = int(
         (
