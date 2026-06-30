@@ -1,0 +1,738 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import axios from 'axios';
+import { Link } from 'react-router-dom';
+import { normalizeMediaUrl } from '../utils/media';
+import { usePublicCompany } from '../utils/publicCompany';
+
+const POLICY_TEXT = `AUTORIZO A AUTOS QP SAS Y A LAS ENTIDADES QUE PERTENEZCAN O LLEGAREN A PERTENECER A SU GRUPO EMPRESARIAL DE ACUERDO CON LA LEY, SUS FILIALES Y/O SUBSIDIARIAS, O A LAS ENTIDADES EN LAS CUALES ÉSTAS, DIRECTA O INDIRECTAMENTE, TENGAN PARTICIPACIÓN ACCIONARIA O SEAN ASOCIADAS, DOMICILIADAS EN COLOMBIA Y/O EN EL EXTERIOR, O A QUIEN REPRESENTE SUS DERECHOS U OSTENTE EN EL FUTURO LA CALIDAD DE ACREEDOR, CESIONARIO O CUALQUIER OTRA CALIDAD FRENTE A MÍ COMO TITULAR DE LA INFORMACIÓN, EN ADELANTE LAS ENTIDADES; Y AUTORIZO A LAS ENTIDADES FINANCIERAS ALIADAS CON LAS QUE LAS ENTIDADES CONSIDEREN Y SOSTENGAN RELACIÓN COMERCIAL, A QUIENES AUTORIZO EN FORMA PERMANENTE PARA QUE: (I) LIBEREN LA INFORMACIÓN NECESARIA QUE LES SOLICITEN SEGÚN MI PERFIL Y SUS POLÍTICAS DE OTORGAMIENTO CREDITICIO, PARA LA BÚSQUEDA DE MI CUPO DE CRÉDITO ANTE LAS ENTIDADES FINANCIERAS ALIADAS, ENTIDADES AVALADORAS U OTRAS, PARA QUE ME SEAN ENVIADAS OFERTAS O AVISOS COMERCIALES RELACIONADOS CON EL TIPO DE CRÉDITO QUE ESTOY SOLICITANDO O CON PRODUCTOS AFINES. ENTIENDO QUE LAS ENTIDADES NO ASUMEN RESPONSABILIDAD ALGUNA POR LA APROBACIÓN O NEGACIÓN DEL CRÉDITO POR PARTE DE LAS ENTIDADES FINANCIERAS ALIADAS, AVALADORAS U OTRAS, NI SE COMPROMETEN A OBTENER SU APROBACIÓN, POR CUANTO SIMPLEMENTE ACTÚAN COMO CANAL DE INFORMACIÓN ENTRE EL SOLICITANTE DEL CRÉDITO Y LA ENTIDAD FINANCIERA, LA ENTIDAD AVALADORA U OTRA. (II) SOLICITEN, CONSULTEN, COMPARTAN, INFORMEN, REPORTEN, PROCESEN, MODIFIQUEN, ACTUALICEN, ACLAREN, RETIREN O DIVULGUEN, ANTE LAS ENTIDADES DE CONSULTA DE BASES DE DATOS U OPERADORES DE INFORMACIÓN Y RIESGO, O ANTE CUALQUIER ENTIDAD QUE MANEJE O ADMINISTRE BASES DE DATOS CON LOS FINES LEGALMENTE DEFINIDOS PARA ESTE TIPO DE ENTIDADES, TODO LO REFERENTE A MI INFORMACIÓN FINANCIERA, COMERCIAL Y CREDITICIA, PRESENTE, PASADA O FUTURA, MI ENDEUDAMIENTO Y EL NACIMIENTO, MODIFICACIÓN Y EXTINCIÓN DE MIS DERECHOS Y OBLIGACIONES ORIGINADOS EN VIRTUD DE CUALQUIER CONTRATO CELEBRADO U OPERACIÓN REALIZADA O QUE LLEGARE A CELEBRAR O REALIZAR CON CUALQUIERA DE LAS ENTIDADES. (III) CONSULTEN, SOLICITEN O VERIFIQUEN INFORMACIÓN SOBRE MIS DATOS DE UBICACIÓN O CONTACTO, LOS BIENES O DERECHOS QUE POSEO O LLEGARE A POSEER Y QUE REPOSEN EN BASES DE DATOS DE ENTIDADES PÚBLICAS O PRIVADAS, O QUE CONOZCAN PERSONAS NATURALES O JURÍDICAS, O SE ENCUENTREN EN BUSCADORES PÚBLICOS, REDES SOCIALES O PUBLICACIONES FÍSICAS O ELECTRÓNICAS, BIEN SEA EN COLOMBIA O EN EL EXTERIOR. (IV) ME CONTACTEN A TRAVÉS DEL ENVÍO DE MENSAJES A MI TERMINAL MÓVIL DE TELECOMUNICACIONES Y/O A TRAVÉS DE CORREO ELECTRÓNICO Y/O REDES SOCIALES EN LAS CUALES ESTÉ INSCRITO. (V) CONSERVEN MI INFORMACIÓN Y DOCUMENTACIÓN AUN CUANDO NO SE HAYA PERFECCIONADO UNA RELACIÓN CONTRACTUAL O DESPUÉS DE FINALIZADA LA MISMA CON CUALQUIERA DE LAS ENTIDADES, IGUALMENTE PARA RECOLECTARLA, ACTUALIZARLA, MODIFICARLA, PROCESARLA Y ELIMINARLA DE CONFORMIDAD CON LA LEY APLICABLE. (VI) LAS ENTIDADES COMPARTAN, REMITAN Y ACCEDAN ENTRE SÍ A MI INFORMACIÓN O DOCUMENTACIÓN CONSIGNADA O ANEXA EN LAS SOLICITUDES DE VINCULACIÓN, ACTUALIZACIONES EN LOS DIFERENTES DOCUMENTOS DE DEPÓSITO Y/O CRÉDITO, OPERACIONES Y/O SISTEMAS DE INFORMACIÓN, ASÍ COMO INFORMACIÓN Y/O DOCUMENTACIÓN RELACIONADA CON LOS PRODUCTOS Y/O SERVICIOS QUE POSEO EN CUALQUIERA DE ELLAS. (VII) ELABOREN ESTADÍSTICAS Y DERIVEN MEDIANTE MODELOS MATEMÁTICOS CONCLUSIONES A PARTIR DE ELLAS. DECLARO HABER LEÍDO CUIDADOSAMENTE EL CONTENIDO DE ESTA CLÁUSULA Y HABERLA COMPRENDIDO A CABALIDAD, RAZÓN POR LA CUAL ENTIENDO SUS ALCANCES E IMPLICACIONES.`;
+
+const STEP_TITLES = [
+  'Datos del Vehículo',
+  'Datos Personales',
+  'Datos Laborales',
+  'Ingresos',
+  'Referencias',
+  'Consentimiento y Firma',
+];
+
+const createEmptyForm = () => ({
+  vehicle: {
+    vehicleValue: '',
+    requestedAmount: '',
+    advisor: '',
+    requestDate: '',
+    make: '',
+    model: '',
+    vehicleType: 'Automóvil',
+  },
+  personal: {
+    firstName: '',
+    lastName: '',
+    documentType: 'C.C',
+    documentNumber: '',
+    issuePlace: '',
+    birthDate: '',
+    gender: 'M',
+    profession: '',
+    birthPlace: '',
+    maritalStatus: 'Soltero',
+    childrenCount: 'Sin Hijos',
+    educationLevel: 'Primaria',
+    livesWith: 'Cónyuge',
+    housingType: 'Familiar',
+    mobilePhone: '',
+    city: '',
+    address: '',
+    email: '',
+  },
+  employment: {
+    activity: 'Empleado',
+    companyName: '',
+    companyCity: '',
+    companyAddress: '',
+    jobTitle: '',
+    companyEmail: '',
+    startDate: '',
+    salary: '',
+    contractType: 'Indefinido',
+    previousCompanyName: '',
+    previousCompanyActivity: '',
+    previousCompanyRole: '',
+    previousEmploymentTime: '0 a 6 Meses',
+  },
+  income: {
+    salaryIncome: '',
+    commissionsIncome: '',
+    otherIncome: '',
+    otherIncomeDetail: '',
+    totalIncome: '',
+  },
+  references: {
+    commercial: { names: '', lastNames: '', phone: '', city: '' },
+    personal1: { names: '', lastNames: '', phone: '', city: '' },
+    personal2: { names: '', lastNames: '', phone: '', city: '' },
+  },
+  consent: {
+    accepted: false,
+    signatureMode: 'draw',
+    signatureName: '',
+    verificationCode: '',
+    signatureDrawnDataUrl: '',
+  },
+});
+
+const withAlpha = (hex, alpha = '18') => {
+  if (typeof hex !== 'string') return hex;
+  const normalized = hex.trim();
+  if (!normalized.startsWith('#')) return normalized;
+  if (normalized.length === 7) return `${normalized}${alpha}`;
+  if (normalized.length === 4) {
+    const expanded = `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`;
+    return `${expanded}${alpha}`;
+  }
+  return normalized;
+};
+
+const filePreviewUrl = (file) => (file ? URL.createObjectURL(file) : '');
+
+const buildVehicleLabel = (vehicle) => {
+  return [vehicle.make, vehicle.model, vehicle.vehicleType].filter(Boolean).join(' ').trim();
+};
+
+const PublicCreditForm = () => {
+  const company = usePublicCompany();
+  const canvasRef = useRef(null);
+  const drawingRef = useRef(false);
+
+  const [step, setStep] = useState(0);
+  const [form, setForm] = useState(createEmptyForm);
+  const [documentFront, setDocumentFront] = useState(null);
+  const [documentBack, setDocumentBack] = useState(null);
+  const [signatureFile, setSignatureFile] = useState(null);
+  const [documentFrontPreview, setDocumentFrontPreview] = useState('');
+  const [documentBackPreview, setDocumentBackPreview] = useState('');
+  const [signaturePreview, setSignaturePreview] = useState('');
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [verificationVerified, setVerificationVerified] = useState(false);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [verifyingCode, setVerifyingCode] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState({ type: '', message: '' });
+
+  const enabledModules = new Set(Array.isArray(company?.enabled_modules) ? company.enabled_modules : []);
+  const isEnabled = enabledModules.has('public_credit_form');
+
+  const theme = useMemo(() => {
+    const primary = company?.primary_color || '#2563eb';
+    const secondary = company?.secondary_color || '#0f172a';
+    return {
+      primary,
+      secondary,
+      primarySoft: withAlpha(primary, '14'),
+      primaryBorder: withAlpha(primary, '38'),
+      secondarySoft: withAlpha(secondary, '12'),
+    };
+  }, [company]);
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = theme.secondary;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+  }, [theme.secondary]);
+
+  useEffect(() => () => {
+    if (documentFrontPreview) URL.revokeObjectURL(documentFrontPreview);
+    if (documentBackPreview) URL.revokeObjectURL(documentBackPreview);
+    if (signaturePreview) URL.revokeObjectURL(signaturePreview);
+  }, [documentFrontPreview, documentBackPreview, signaturePreview]);
+
+  const updateSection = (section, key, value) => {
+    setForm((prev) => ({
+      ...prev,
+      [section]: {
+        ...prev[section],
+        [key]: value,
+      },
+    }));
+  };
+
+  const updateReference = (referenceKey, field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      references: {
+        ...prev.references,
+        [referenceKey]: {
+          ...prev.references[referenceKey],
+          [field]: value,
+        },
+      },
+    }));
+  };
+
+  const inputClassName = 'w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-2';
+
+  const resetStatus = () => setStatus({ type: '', message: '' });
+
+  const validateStep = (stepIndex) => {
+    if (stepIndex === 0) {
+      const { vehicleValue, requestedAmount, advisor, make, model } = form.vehicle;
+      return Boolean(vehicleValue && requestedAmount && advisor && make && model);
+    }
+    if (stepIndex === 1) {
+      const { firstName, lastName, documentNumber, mobilePhone, address, email } = form.personal;
+      return Boolean(firstName && lastName && documentNumber && mobilePhone && address && email && documentFront && documentBack);
+    }
+    if (stepIndex === 2) {
+      const { activity, companyName, salary } = form.employment;
+      return Boolean(activity && companyName && salary);
+    }
+    if (stepIndex === 3) {
+      const { salaryIncome, totalIncome } = form.income;
+      return Boolean(salaryIncome && totalIncome);
+    }
+    if (stepIndex === 4) {
+      const { personal1, personal2 } = form.references;
+      return Boolean(personal1.names && personal1.phone && personal2.names && personal2.phone);
+    }
+    if (stepIndex === 5) {
+      const hasDrawnSignature = Boolean(form.consent.signatureDrawnDataUrl);
+      const hasUploadedSignature = Boolean(signatureFile);
+      return Boolean(
+        form.consent.accepted &&
+        form.consent.signatureName &&
+        verificationVerified &&
+        ((form.consent.signatureMode === 'draw' && hasDrawnSignature) ||
+          (form.consent.signatureMode === 'upload' && hasUploadedSignature))
+      );
+    }
+    return true;
+  };
+
+  const nextStep = () => {
+    resetStatus();
+    if (!validateStep(step)) {
+      setStatus({ type: 'error', message: 'Completa los campos obligatorios antes de continuar.' });
+      return;
+    }
+    setStep((prev) => Math.min(prev + 1, STEP_TITLES.length - 1));
+  };
+
+  const prevStep = () => {
+    resetStatus();
+    setStep((prev) => Math.max(prev - 1, 0));
+  };
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    updateSection('consent', 'signatureDrawnDataUrl', '');
+  };
+
+  const getCanvasPosition = (event) => {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const touch = event.touches?.[0];
+    const clientX = touch ? touch.clientX : event.clientX;
+    const clientY = touch ? touch.clientY : event.clientY;
+    return { x: clientX - rect.left, y: clientY - rect.top };
+  };
+
+  const startDrawing = (event) => {
+    drawingRef.current = true;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    const { x, y } = getCanvasPosition(event);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const draw = (event) => {
+    if (!drawingRef.current) return;
+    event.preventDefault();
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    const { x, y } = getCanvasPosition(event);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    updateSection('consent', 'signatureDrawnDataUrl', canvas.toDataURL('image/png'));
+  };
+
+  const stopDrawing = () => {
+    drawingRef.current = false;
+  };
+
+  const handleFileSelection = (type, file) => {
+    if (!file) return;
+    if (type === 'documentFront') {
+      if (documentFrontPreview) URL.revokeObjectURL(documentFrontPreview);
+      setDocumentFront(file);
+      setDocumentFrontPreview(filePreviewUrl(file));
+    }
+    if (type === 'documentBack') {
+      if (documentBackPreview) URL.revokeObjectURL(documentBackPreview);
+      setDocumentBack(file);
+      setDocumentBackPreview(filePreviewUrl(file));
+    }
+    if (type === 'signatureFile') {
+      if (signaturePreview) URL.revokeObjectURL(signaturePreview);
+      setSignatureFile(file);
+      setSignaturePreview(filePreviewUrl(file));
+    }
+  };
+
+  const sendVerificationCode = async () => {
+    resetStatus();
+    if (!form.personal.email) {
+      setStatus({ type: 'error', message: 'Debes diligenciar el correo antes de solicitar el código.' });
+      return;
+    }
+    setSendingCode(true);
+    try {
+      await axios.post('/api/public/credit-request/send-code', { email: form.personal.email });
+      setVerificationSent(true);
+      setVerificationVerified(false);
+      setStatus({ type: 'success', message: 'Se envió un código de verificación al correo indicado.' });
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error?.response?.data?.detail || 'No se pudo enviar el código de verificación.',
+      });
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
+  const verifyCode = async () => {
+    resetStatus();
+    if (!form.consent.verificationCode) {
+      setStatus({ type: 'error', message: 'Ingresa el código recibido por correo.' });
+      return;
+    }
+    setVerifyingCode(true);
+    try {
+      await axios.post('/api/public/credit-request/verify-code', {
+        email: form.personal.email,
+        code: form.consent.verificationCode,
+      });
+      setVerificationVerified(true);
+      setStatus({ type: 'success', message: 'Correo validado correctamente.' });
+    } catch (error) {
+      setVerificationVerified(false);
+      setStatus({
+        type: 'error',
+        message: error?.response?.data?.detail || 'No se pudo validar el código.',
+      });
+    } finally {
+      setVerifyingCode(false);
+    }
+  };
+
+  const buildPayload = () => {
+    const referencesSummary = [
+      form.references.commercial.names ? `Ref. comercial: ${form.references.commercial.names} ${form.references.commercial.lastNames}`.trim() : '',
+      form.references.personal1.names ? `Ref. personal 1: ${form.references.personal1.names} ${form.references.personal1.lastNames}`.trim() : '',
+      form.references.personal2.names ? `Ref. personal 2: ${form.references.personal2.names} ${form.references.personal2.lastNames}`.trim() : '',
+    ]
+      .filter(Boolean)
+      .join(' | ');
+
+    return {
+      vehicle: {
+        ...form.vehicle,
+        label: buildVehicleLabel(form.vehicle),
+      },
+      personal: form.personal,
+      employment: form.employment,
+      income: form.income,
+      references: {
+        ...form.references,
+        summary: referencesSummary,
+      },
+      consent: form.consent,
+    };
+  };
+
+  const handleSubmit = async () => {
+    resetStatus();
+    if (!validateStep(5)) {
+      setStatus({ type: 'error', message: 'Completa la validación, la firma y la aceptación de la política antes de enviar.' });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const payload = buildPayload();
+      const formData = new FormData();
+      formData.append('payload_json', JSON.stringify(payload));
+      if (documentFront) formData.append('document_front', documentFront);
+      if (documentBack) formData.append('document_back', documentBack);
+      if (signatureFile) formData.append('signature_file', signatureFile);
+
+      await axios.post('/api/public/credit-request/submit', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      setStatus({ type: 'success', message: 'Solicitud enviada correctamente. Revisa tu correo y el seguimiento comercial.' });
+      setForm(createEmptyForm());
+      setDocumentFront(null);
+      setDocumentBack(null);
+      setSignatureFile(null);
+      setVerificationSent(false);
+      setVerificationVerified(false);
+      setStep(0);
+      clearCanvas();
+      if (documentFrontPreview) URL.revokeObjectURL(documentFrontPreview);
+      if (documentBackPreview) URL.revokeObjectURL(documentBackPreview);
+      if (signaturePreview) URL.revokeObjectURL(signaturePreview);
+      setDocumentFrontPreview('');
+      setDocumentBackPreview('');
+      setSignaturePreview('');
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error?.response?.data?.detail || 'No se pudo enviar la solicitud de crédito.',
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const brandName = company?.name || 'AutosQP';
+  const progress = ((step + 1) / STEP_TITLES.length) * 100;
+
+  const renderPreviewBox = (label, preview, file) => (
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-3">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      {preview ? (
+        <img src={preview} alt={label} className="h-36 w-full rounded-xl object-cover" />
+      ) : (
+        <div className="flex h-36 items-center justify-center rounded-xl bg-white text-sm text-slate-400">
+          Sin vista previa
+        </div>
+      )}
+      {file && <p className="mt-2 truncate text-xs text-slate-500">{file.name}</p>}
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-100" style={{ background: `linear-gradient(135deg, ${theme.secondary} 0%, ${theme.primary} 100%)` }}>
+      <header className="sticky top-0 z-40 border-b bg-white/95 backdrop-blur" style={{ borderColor: theme.primarySoft }}>
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
+          <Link to="/autos" className="flex items-center gap-3">
+            {company?.logo_url ? (
+              <img src={normalizeMediaUrl(company.logo_url)} alt={brandName} className="h-12 w-auto object-contain" />
+            ) : (
+              <span className="text-2xl font-black" style={{ color: theme.secondary }}>{brandName}</span>
+            )}
+          </Link>
+          <div className="flex items-center gap-3">
+            <Link to="/autos" className="rounded-xl border px-4 py-2 text-sm font-semibold text-slate-700" style={{ borderColor: theme.primaryBorder }}>
+              Ver inventario
+            </Link>
+            <Link to="/login" className="rounded-xl px-4 py-2 text-sm font-bold text-white" style={{ backgroundColor: theme.primary }}>
+              Ingresa
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-7xl px-4 py-10">
+        <div className="rounded-[2rem] bg-white p-6 shadow-2xl md:p-10">
+          <div className="mx-auto max-w-6xl">
+            <div className="mb-8">
+              <h1 className="text-4xl font-black text-slate-900">Formulario de Crédito</h1>
+              <p className="mt-2 text-slate-500">Paso {step + 1} de {STEP_TITLES.length}</p>
+              <div className="mt-4 h-2 w-full rounded-full bg-slate-200">
+                <div className="h-2 rounded-full transition-all" style={{ width: `${progress}%`, backgroundColor: theme.primary }} />
+              </div>
+            </div>
+
+            {status.message && (
+              <div className={`mb-6 rounded-2xl border px-4 py-3 text-sm font-medium ${
+                status.type === 'success'
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                  : 'border-red-200 bg-red-50 text-red-700'
+              }`}>
+                {status.message}
+              </div>
+            )}
+
+            {!isEnabled ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-700">
+                El formulario público de crédito no está habilitado para esta empresa.
+              </div>
+            ) : (
+              <>
+                {step === 0 && (
+                  <section className="space-y-6">
+                    <h2 className="border-b pb-3 text-2xl font-bold text-slate-900">{STEP_TITLES[0]}</h2>
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <div>
+                        <label className="mb-1 block text-sm font-semibold text-slate-700">Valor Vehículo $</label>
+                        <input className={inputClassName} value={form.vehicle.vehicleValue} onChange={(e) => updateSection('vehicle', 'vehicleValue', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-semibold text-slate-700">Monto Solicitado $</label>
+                        <input className={inputClassName} value={form.vehicle.requestedAmount} onChange={(e) => updateSection('vehicle', 'requestedAmount', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-semibold text-slate-700">Asesor Comercial</label>
+                        <input className={inputClassName} value={form.vehicle.advisor} onChange={(e) => updateSection('vehicle', 'advisor', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-semibold text-slate-700">Fecha de Solicitud</label>
+                        <input type="date" className={inputClassName} value={form.vehicle.requestDate} onChange={(e) => updateSection('vehicle', 'requestDate', e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div>
+                        <label className="mb-1 block text-sm font-semibold text-slate-700">Marca</label>
+                        <input className={inputClassName} value={form.vehicle.make} onChange={(e) => updateSection('vehicle', 'make', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-semibold text-slate-700">Modelo</label>
+                        <input className={inputClassName} value={form.vehicle.model} onChange={(e) => updateSection('vehicle', 'model', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-semibold text-slate-700">Tipo</label>
+                        <select className={inputClassName} value={form.vehicle.vehicleType} onChange={(e) => updateSection('vehicle', 'vehicleType', e.target.value)}>
+                          <option>Automóvil</option>
+                          <option>Camioneta</option>
+                          <option>SUV</option>
+                          <option>Camión</option>
+                          <option>Moto</option>
+                        </select>
+                      </div>
+                    </div>
+                  </section>
+                )}
+
+                {step === 1 && (
+                  <section className="space-y-6">
+                    <h2 className="border-b pb-3 text-2xl font-bold text-slate-900">{STEP_TITLES[1]}</h2>
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Nombres</label><input className={inputClassName} value={form.personal.firstName} onChange={(e) => updateSection('personal', 'firstName', e.target.value)} /></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Apellidos</label><input className={inputClassName} value={form.personal.lastName} onChange={(e) => updateSection('personal', 'lastName', e.target.value)} /></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Documento</label><select className={inputClassName} value={form.personal.documentType} onChange={(e) => updateSection('personal', 'documentType', e.target.value)}><option>C.C</option><option>C.E</option><option>Pasaporte</option><option>NIT</option></select></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">N° Documento</label><input className={inputClassName} value={form.personal.documentNumber} onChange={(e) => updateSection('personal', 'documentNumber', e.target.value)} /></div>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Lugar Expedición</label><input className={inputClassName} value={form.personal.issuePlace} onChange={(e) => updateSection('personal', 'issuePlace', e.target.value)} /></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Fecha Nacimiento</label><input type="date" className={inputClassName} value={form.personal.birthDate} onChange={(e) => updateSection('personal', 'birthDate', e.target.value)} /></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Sexo</label><select className={inputClassName} value={form.personal.gender} onChange={(e) => updateSection('personal', 'gender', e.target.value)}><option>M</option><option>F</option><option>Otro</option></select></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Profesión</label><input className={inputClassName} value={form.personal.profession} onChange={(e) => updateSection('personal', 'profession', e.target.value)} /></div>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Lugar Nacimiento</label><input className={inputClassName} value={form.personal.birthPlace} onChange={(e) => updateSection('personal', 'birthPlace', e.target.value)} /></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Estado Civil</label><select className={inputClassName} value={form.personal.maritalStatus} onChange={(e) => updateSection('personal', 'maritalStatus', e.target.value)}><option>Soltero</option><option>Casado</option><option>Unión libre</option><option>Separado</option></select></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">N° de Hijos</label><select className={inputClassName} value={form.personal.childrenCount} onChange={(e) => updateSection('personal', 'childrenCount', e.target.value)}><option>Sin Hijos</option><option>1</option><option>2</option><option>3 o más</option></select></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Nivel de Estudio</label><select className={inputClassName} value={form.personal.educationLevel} onChange={(e) => updateSection('personal', 'educationLevel', e.target.value)}><option>Primaria</option><option>Bachillerato</option><option>Técnico</option><option>Tecnólogo</option><option>Universitario</option><option>Posgrado</option></select></div>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">¿Con quién vive?</label><select className={inputClassName} value={form.personal.livesWith} onChange={(e) => updateSection('personal', 'livesWith', e.target.value)}><option>Cónyuge</option><option>Padres</option><option>Solo</option><option>Familia</option></select></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">¿Tipo de vivienda?</label><select className={inputClassName} value={form.personal.housingType} onChange={(e) => updateSection('personal', 'housingType', e.target.value)}><option>Familiar</option><option>Propia</option><option>Arrendada</option></select></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Teléfono Móvil</label><input className={inputClassName} value={form.personal.mobilePhone} onChange={(e) => updateSection('personal', 'mobilePhone', e.target.value)} /></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Ciudad</label><input className={inputClassName} value={form.personal.city} onChange={(e) => updateSection('personal', 'city', e.target.value)} /></div>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Dirección</label><input className={inputClassName} value={form.personal.address} onChange={(e) => updateSection('personal', 'address', e.target.value)} /></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Email</label><input type="email" className={inputClassName} value={form.personal.email} onChange={(e) => updateSection('personal', 'email', e.target.value)} /></div>
+                    </div>
+                    <div className="grid gap-6 md:grid-cols-2">
+                      <div className="space-y-3">
+                        <label className="block text-sm font-semibold text-slate-700">Cédula Ciudadanía Cara Frontal</label>
+                        <input type="file" accept="image/*,application/pdf" capture="environment" onChange={(e) => handleFileSelection('documentFront', e.target.files?.[0])} className="block w-full text-sm text-slate-600" />
+                        {renderPreviewBox('Documento frontal', documentFrontPreview, documentFront)}
+                      </div>
+                      <div className="space-y-3">
+                        <label className="block text-sm font-semibold text-slate-700">Cédula Ciudadanía Cara Posterior</label>
+                        <input type="file" accept="image/*,application/pdf" capture="environment" onChange={(e) => handleFileSelection('documentBack', e.target.files?.[0])} className="block w-full text-sm text-slate-600" />
+                        {renderPreviewBox('Documento posterior', documentBackPreview, documentBack)}
+                      </div>
+                    </div>
+                  </section>
+                )}
+
+                {step === 2 && (
+                  <section className="space-y-6">
+                    <h2 className="border-b pb-3 text-2xl font-bold text-slate-900">{STEP_TITLES[2]}</h2>
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Actividad Económica</label><select className={inputClassName} value={form.employment.activity} onChange={(e) => updateSection('employment', 'activity', e.target.value)}><option>Empleado</option><option>Independiente</option><option>Pensionado</option><option>Comerciante</option></select></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Nombre Empresa</label><input className={inputClassName} value={form.employment.companyName} onChange={(e) => updateSection('employment', 'companyName', e.target.value)} /></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Ciudad</label><input className={inputClassName} value={form.employment.companyCity} onChange={(e) => updateSection('employment', 'companyCity', e.target.value)} /></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Dirección</label><input className={inputClassName} value={form.employment.companyAddress} onChange={(e) => updateSection('employment', 'companyAddress', e.target.value)} /></div>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Ocupación o Cargo</label><input className={inputClassName} value={form.employment.jobTitle} onChange={(e) => updateSection('employment', 'jobTitle', e.target.value)} /></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Email de la empresa</label><input type="email" className={inputClassName} value={form.employment.companyEmail} onChange={(e) => updateSection('employment', 'companyEmail', e.target.value)} /></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Fecha Ingreso</label><input type="date" className={inputClassName} value={form.employment.startDate} onChange={(e) => updateSection('employment', 'startDate', e.target.value)} /></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Salario</label><input className={inputClassName} value={form.employment.salary} onChange={(e) => updateSection('employment', 'salary', e.target.value)} /></div>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Tipo de contrato</label><select className={inputClassName} value={form.employment.contractType} onChange={(e) => updateSection('employment', 'contractType', e.target.value)}><option>Indefinido</option><option>Fijo</option><option>Prestación de servicios</option><option>Temporal</option></select></div>
+                    </div>
+                    <div className="pt-4">
+                      <h3 className="border-b pb-3 text-xl font-bold text-slate-900">Empresa Anterior</h3>
+                      <div className="mt-4 grid gap-4 md:grid-cols-4">
+                        <div><label className="mb-1 block text-sm font-semibold text-slate-700">Nombre Empresa</label><input className={inputClassName} value={form.employment.previousCompanyName} onChange={(e) => updateSection('employment', 'previousCompanyName', e.target.value)} /></div>
+                        <div><label className="mb-1 block text-sm font-semibold text-slate-700">Actividad Empresa</label><input className={inputClassName} value={form.employment.previousCompanyActivity} onChange={(e) => updateSection('employment', 'previousCompanyActivity', e.target.value)} /></div>
+                        <div><label className="mb-1 block text-sm font-semibold text-slate-700">Cargo</label><input className={inputClassName} value={form.employment.previousCompanyRole} onChange={(e) => updateSection('employment', 'previousCompanyRole', e.target.value)} /></div>
+                        <div><label className="mb-1 block text-sm font-semibold text-slate-700">Tiempo Laborado</label><select className={inputClassName} value={form.employment.previousEmploymentTime} onChange={(e) => updateSection('employment', 'previousEmploymentTime', e.target.value)}><option>0 a 6 Meses</option><option>6 a 12 Meses</option><option>1 a 2 Años</option><option>Más de 2 Años</option></select></div>
+                      </div>
+                    </div>
+                  </section>
+                )}
+
+                {step === 3 && (
+                  <section className="space-y-6">
+                    <h2 className="border-b pb-3 text-2xl font-bold text-slate-900">{STEP_TITLES[3]}</h2>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Sueldo $</label><input className={inputClassName} value={form.income.salaryIncome} onChange={(e) => updateSection('income', 'salaryIncome', e.target.value)} /></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Comisiones $</label><input className={inputClassName} value={form.income.commissionsIncome} onChange={(e) => updateSection('income', 'commissionsIncome', e.target.value)} /></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Otros Ingresos Permanentes</label><input className={inputClassName} value={form.income.otherIncome} onChange={(e) => updateSection('income', 'otherIncome', e.target.value)} /></div>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Detalle de Otros Ingresos</label><input className={inputClassName} value={form.income.otherIncomeDetail} onChange={(e) => updateSection('income', 'otherIncomeDetail', e.target.value)} /></div>
+                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Total Ingresos</label><input className={inputClassName} value={form.income.totalIncome} onChange={(e) => updateSection('income', 'totalIncome', e.target.value)} /></div>
+                    </div>
+                  </section>
+                )}
+
+                {step === 4 && (
+                  <section className="space-y-6">
+                    <h2 className="border-b pb-3 text-2xl font-bold text-slate-900">{STEP_TITLES[4]}</h2>
+                    <div className="space-y-6">
+                      {[
+                        ['commercial', 'Referencias Comerciales'],
+                        ['personal1', 'Referencia Personal 1'],
+                        ['personal2', 'Referencia Personal 2'],
+                      ].map(([key, label]) => (
+                        <div key={key}>
+                          <h3 className="mb-3 text-xl font-bold text-slate-900">{label}</h3>
+                          <div className="grid gap-4 md:grid-cols-4">
+                            <div><label className="mb-1 block text-sm font-semibold text-slate-700">Nombres</label><input className={inputClassName} value={form.references[key].names} onChange={(e) => updateReference(key, 'names', e.target.value)} /></div>
+                            <div><label className="mb-1 block text-sm font-semibold text-slate-700">Apellidos</label><input className={inputClassName} value={form.references[key].lastNames} onChange={(e) => updateReference(key, 'lastNames', e.target.value)} /></div>
+                            <div><label className="mb-1 block text-sm font-semibold text-slate-700">Teléfono</label><input className={inputClassName} value={form.references[key].phone} onChange={(e) => updateReference(key, 'phone', e.target.value)} /></div>
+                            <div><label className="mb-1 block text-sm font-semibold text-slate-700">Ciudad</label><input className={inputClassName} value={form.references[key].city} onChange={(e) => updateReference(key, 'city', e.target.value)} /></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {step === 5 && (
+                  <section className="space-y-6">
+                    <h2 className="border-b pb-3 text-2xl font-bold text-slate-900">{STEP_TITLES[5]}</h2>
+                    <div className="rounded-2xl border border-slate-200 p-5">
+                      <label className="mb-3 flex items-start gap-3 text-sm text-slate-700">
+                        <input type="checkbox" checked={form.consent.accepted} onChange={(e) => updateSection('consent', 'accepted', e.target.checked)} className="mt-1 h-4 w-4" />
+                        <span>Estoy de acuerdo con la política de privacidad y autorizaciones de tratamiento de datos.</span>
+                      </label>
+                      <textarea readOnly value={POLICY_TEXT} className="h-64 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-600 outline-none" />
+                    </div>
+
+                    <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+                      <div className="space-y-4 rounded-2xl border border-slate-200 p-5">
+                        <h3 className="text-lg font-bold text-slate-900">Firma</h3>
+                        <div className="flex gap-3">
+                          <button type="button" onClick={() => updateSection('consent', 'signatureMode', 'draw')} className={`rounded-xl px-4 py-2 text-sm font-semibold ${form.consent.signatureMode === 'draw' ? 'text-white' : 'bg-slate-100 text-slate-700'}`} style={form.consent.signatureMode === 'draw' ? { backgroundColor: theme.primary } : undefined}>Firmar aquí</button>
+                          <button type="button" onClick={() => updateSection('consent', 'signatureMode', 'upload')} className={`rounded-xl px-4 py-2 text-sm font-semibold ${form.consent.signatureMode === 'upload' ? 'text-white' : 'bg-slate-100 text-slate-700'}`} style={form.consent.signatureMode === 'upload' ? { backgroundColor: theme.primary } : undefined}>Subir imagen</button>
+                        </div>
+
+                        {form.consent.signatureMode === 'draw' ? (
+                          <div className="space-y-3">
+                            <div className="overflow-hidden rounded-2xl border border-dashed border-slate-300">
+                              <canvas
+                                ref={canvasRef}
+                                width={720}
+                                height={220}
+                                className="h-56 w-full touch-none bg-white"
+                                onMouseDown={startDrawing}
+                                onMouseMove={draw}
+                                onMouseUp={stopDrawing}
+                                onMouseLeave={stopDrawing}
+                                onTouchStart={startDrawing}
+                                onTouchMove={draw}
+                                onTouchEnd={stopDrawing}
+                              />
+                            </div>
+                            <button type="button" onClick={clearCanvas} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">
+                              Limpiar firma
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <input type="file" accept="image/*" capture="environment" onChange={(e) => handleFileSelection('signatureFile', e.target.files?.[0])} className="block w-full text-sm text-slate-600" />
+                            {renderPreviewBox('Firma cargada', signaturePreview, signatureFile)}
+                          </div>
+                        )}
+
+                        <div>
+                          <label className="mb-1 block text-sm font-semibold text-slate-700">Nombre de quien firma</label>
+                          <input className={inputClassName} value={form.consent.signatureName} onChange={(e) => updateSection('consent', 'signatureName', e.target.value)} />
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 rounded-2xl border border-slate-200 p-5">
+                        <h3 className="text-lg font-bold text-slate-900">Validación por correo</h3>
+                        <p className="text-sm text-slate-500">Se enviará un código aleatorio al correo registrado para validar la solicitud.</p>
+                        <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
+                          <strong>Correo:</strong> {form.personal.email || 'Aún no registrado'}
+                        </div>
+                        <button type="button" onClick={sendVerificationCode} disabled={sendingCode} className="rounded-xl px-4 py-3 text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: theme.primary }}>
+                          {sendingCode ? 'Enviando...' : verificationSent ? 'Reenviar código' : 'Enviar código'}
+                        </button>
+                        <div>
+                          <label className="mb-1 block text-sm font-semibold text-slate-700">Código de verificación</label>
+                          <div className="flex gap-3">
+                            <input className={inputClassName} value={form.consent.verificationCode} onChange={(e) => updateSection('consent', 'verificationCode', e.target.value)} />
+                            <button type="button" onClick={verifyCode} disabled={!verificationSent || verifyingCode} className="rounded-xl px-4 py-3 text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: theme.secondary }}>
+                              {verifyingCode ? 'Validando...' : 'Validar'}
+                            </button>
+                          </div>
+                        </div>
+                        {verificationVerified && (
+                          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+                            Correo validado correctamente.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </section>
+                )}
+
+                <div className="mt-8 flex flex-wrap items-center gap-3">
+                  {step > 0 && (
+                    <button type="button" onClick={prevStep} className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700">
+                      Anterior
+                    </button>
+                  )}
+                  {step < STEP_TITLES.length - 1 ? (
+                    <button type="button" onClick={nextStep} className="rounded-xl px-5 py-3 text-sm font-bold text-white" style={{ backgroundColor: theme.primary }}>
+                      Siguiente
+                    </button>
+                  ) : (
+                    <button type="button" onClick={handleSubmit} disabled={submitting} className="rounded-xl px-5 py-3 text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: theme.primary }}>
+                      {submitting ? 'Enviando...' : 'Enviar'}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+};
+
+export default PublicCreditForm;
