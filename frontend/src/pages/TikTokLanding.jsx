@@ -1,6 +1,6 @@
 import React from 'react';
 import PublicSalesChatbot from '../components/PublicSalesChatbot';
-import { normalizeMediaUrl } from '../utils/media';
+import PublicBrandLogo from '../components/PublicBrandLogo';
 import { getPublicCompanyHomeUrl, usePublicCompany } from '../utils/publicCompany';
 
 const TikTokLanding = () => {
@@ -18,16 +18,16 @@ const TikTokLanding = () => {
                         title={brandName}
                         className="rounded-full border border-white/70 bg-white/90 px-4 py-2 shadow-sm backdrop-blur transition-opacity hover:opacity-90"
                     >
-                        {company.logo_url ? (
-                            <img
-                                src={normalizeMediaUrl(company.logo_url)}
-                                alt={brandName}
-                                className="h-11 w-auto object-contain md:h-12"
-                                style={{ aspectRatio: '512 / 300' }}
-                            />
-                        ) : (
-                            <span className="text-lg font-extrabold">{brandName}</span>
-                        )}
+                        <PublicBrandLogo
+                            company={company}
+                            brandName={brandName}
+                            className="h-11 w-auto object-contain md:h-12"
+                            fallbackClassName="flex h-11 w-11 items-center justify-center rounded-xl text-sm font-black text-white md:h-12 md:w-12"
+                            showText={!company?.logo_url}
+                            textClassName="text-lg font-extrabold"
+                            primaryColor={company?.primary_color || '#2563eb'}
+                            secondaryColor={company?.secondary_color || '#0f172a'}
+                        />
                     </a>
                 </header>
 

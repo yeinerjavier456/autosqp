@@ -2,8 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import PublicSalesChatbot from '../components/PublicSalesChatbot';
+import PublicBrandLogo from '../components/PublicBrandLogo';
 import { normalizeMediaUrl } from '../utils/media';
 import { getPublicCompanyHomeUrl, usePublicCompany } from '../utils/publicCompany';
+
+const withAlpha = (hex, alpha = '14') => {
+    if (typeof hex !== 'string') return hex;
+    const normalized = hex.trim();
+    if (!normalized.startsWith('#')) return normalized;
+    if (normalized.length === 7) return `${normalized}${alpha}`;
+    if (normalized.length === 4) {
+        const expanded = `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`;
+        return `${expanded}${alpha}`;
+    }
+    return normalized;
+};
 
 const VehicleDetail = () => {
     const { id } = useParams();
@@ -60,6 +73,10 @@ const VehicleDetail = () => {
     const enabledModules = new Set(Array.isArray(company?.enabled_modules) ? company.enabled_modules : []);
     const isCreditFormEnabled = enabledModules.has('public_credit_form');
     const isPublicChatEnabled = enabledModules.has('public_sales_chat');
+    const primaryColor = company.primary_color || '#2563eb';
+    const secondaryColor = company.secondary_color || '#0f172a';
+    const lightBorder = withAlpha(primaryColor, '22');
+    const primarySoft = withAlpha(primaryColor, '18');
 
     const nextImage = (e) => {
         if (e) e.stopPropagation();
@@ -89,33 +106,45 @@ const VehicleDetail = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-100 font-sans pb-12">
+        <div
+            className="min-h-screen font-sans pb-12"
+            style={{ background: `linear-gradient(180deg, ${withAlpha(primaryColor, '12')} 0%, #f8fafc 24%, #eef2f7 100%)` }}
+        >
             {/* Navbar */}
-            <header className="bg-slate-900 shadow-lg sticky top-0 z-50">
+            <header
+                className="shadow-lg sticky top-0 z-50 border-b"
+                style={{
+                    background: `linear-gradient(90deg, ${secondaryColor} 0%, ${withAlpha(primaryColor, 'dd')} 100%)`,
+                    borderColor: withAlpha(primaryColor, '30'),
+                }}
+            >
                 <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-                    <a href={`${publicHomeUrl}/autos`} className="text-2xl font-extrabold text-white tracking-tight">
-                        {company.logo_url ? (
-                            <img
-                                src={normalizeMediaUrl(company.logo_url)}
-                                alt={brandName}
-                                className="h-11 w-auto object-contain md:h-12"
-                            />
-                        ) : (
-                            brandName
-                        )}
+                    <a href={`${publicHomeUrl}/autos`} className="flex items-center gap-3 text-2xl font-extrabold text-white tracking-tight">
+                        <PublicBrandLogo
+                            company={company}
+                            brandName={brandName}
+                            className="h-11 w-auto object-contain md:h-12"
+                            fallbackClassName="flex h-11 w-11 items-center justify-center rounded-xl text-sm font-black text-white md:h-12 md:w-12"
+                            showText={Boolean(company?.logo_url)}
+                            textClassName="hidden text-sm font-semibold text-white/85 md:inline"
+                            primaryColor={primaryColor}
+                            secondaryColor={secondaryColor}
+                        />
                     </a>
                     <nav className="flex items-center gap-4 text-sm font-bold">
                         {isCreditFormEnabled && (
                             <Link
                                 to="/credito"
-                                className="text-white hover:text-blue-400 transition bg-white/10 px-4 py-2 rounded-lg hover:bg-white/20"
+                                className="text-white transition px-4 py-2 rounded-lg border"
+                                style={{ borderColor: withAlpha(primaryColor, '55'), backgroundColor: withAlpha(secondaryColor, '44') }}
                             >
                                 Formulario de crédito
                             </Link>
                         )}
                         <Link
                             to="/login"
-                            className="text-white hover:text-blue-400 transition bg-white/10 px-4 py-2 rounded-lg hover:bg-white/20"
+                            className="text-white transition px-4 py-2 rounded-lg"
+                            style={{ backgroundColor: primaryColor }}
                         >
                             Ingresa
                         </Link>
@@ -126,15 +155,18 @@ const VehicleDetail = () => {
             <main className="container mx-auto px-4 py-6">
                 {/* Breadcrumb */}
                 <nav className="text-xs text-gray-500 mb-6 flex items-center gap-2">
-                    <a href={`${publicHomeUrl}/autos`} className="hover:text-blue-600 hover:underline">Volver al listado</a>
+                    <a href={`${publicHomeUrl}/autos`} className="hover:underline" style={{ color: primaryColor }}>Volver al listado</a>
                     <span>/</span>
                     <span className="text-gray-800 font-semibold">{vehicle.make} {vehicle.model}</span>
                 </nav>
 
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div
+                    className="bg-white rounded-xl shadow-sm border overflow-hidden"
+                    style={{ borderColor: lightBorder }}
+                >
                     <div className="flex flex-col lg:flex-row">
                         {/* Left Column: Gallery */}
-                        <div className="lg:w-2/3 p-4 bg-gray-50">
+                        <div className="lg:w-2/3 p-4 bg-gray-50" style={{ backgroundColor: withAlpha(primaryColor, '08') }}>
                             {/* Main Image */}
                             <div
                                 className="aspect-[4/3] w-full rounded-lg overflow-hidden bg-gray-200 mb-4 cursor-zoom-in relative group"
@@ -195,8 +227,9 @@ const VehicleDetail = () => {
                                             onClick={() => setSelectedImage(photo)}
                                             className={`
                                                 flex-shrink-0 w-20 h-20 rounded-md overflow-hidden border-2 transition-all
-                                                ${selectedImage === photo ? 'border-blue-500 ring-2 ring-blue-200' : 'border-transparent hover:border-gray-300'}
+                                                ${selectedImage === photo ? 'ring-2' : 'border-transparent hover:border-gray-300'}
                                             `}
+                                            style={selectedImage === photo ? { borderColor: primaryColor, boxShadow: `0 0 0 2px ${primarySoft}` } : undefined}
                                         >
                                             <img src={photo} alt={`Thumbnail ${index + 1}`} className="w-full h-full object-cover" />
                                         </button>
@@ -206,7 +239,7 @@ const VehicleDetail = () => {
                         </div>
 
                         {/* Right Column: Details */}
-                        <div className="lg:w-1/3 p-6 lg:border-l border-gray-100 flex flex-col">
+                        <div className="lg:w-1/3 p-6 lg:border-l border-gray-100 flex flex-col" style={{ borderColor: lightBorder }}>
                             <div className="mb-6">
                                 <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1 block">
                                     {vehicle.year} · {vehicle.mileage?.toLocaleString()} Km
@@ -214,7 +247,7 @@ const VehicleDetail = () => {
                                 <h1 className="text-3xl font-bold text-gray-900 mb-2 leading-tight">
                                     {vehicle.make} {vehicle.model}
                                 </h1>
-                                <p className="text-4xl font-light text-slate-900 mb-4">
+                                <p className="text-4xl font-light mb-4" style={{ color: secondaryColor }}>
                                     {formatPrice(vehicle.price)}
                                 </p>
                             </div>

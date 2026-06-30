@@ -31,6 +31,13 @@ const AdminCompanySettings = () => {
         license_start_date: '',
         license_end_date: '',
         enabled_modules: COMPANY_VIEWS.map((view) => view.id),
+        smtp_enabled: false,
+        smtp_host: '',
+        smtp_port: 587,
+        smtp_username: '',
+        smtp_password: '',
+        smtp_from: '',
+        smtp_use_tls: true,
     });
     const [domainDraft, setDomainDraft] = useState('');
     const [isEditing, setIsEditing] = useState(false);
@@ -43,22 +50,35 @@ const AdminCompanySettings = () => {
             const fetchCompany = async () => {
                 try {
                     const token = localStorage.getItem('token');
-                    const response = await axios.get(`/api/companies/${id}`, {
-                        headers: { Authorization: `Bearer ${token}` }
-                    });
+                    const [companyResponse, integrationsResponse] = await Promise.all([
+                        axios.get(`/api/companies/${id}`, {
+                            headers: { Authorization: `Bearer ${token}` }
+                        }),
+                        axios.get(`/api/companies/${id}/integrations`, {
+                            headers: { Authorization: `Bearer ${token}` }
+                        }).catch(() => ({ data: {} })),
+                    ]);
+                    const integrationSettings = integrationsResponse.data || {};
                     setCompany({
-                        ...response.data,
-                        public_domains: Array.isArray(response.data.public_domains)
-                            ? response.data.public_domains
-                            : (response.data.public_domain ? [response.data.public_domain] : []),
-                        max_users: response.data.max_users ?? '',
-                        max_leads: response.data.max_leads ?? '',
-                        max_active_accounts: response.data.max_active_accounts ?? '',
-                        license_start_date: response.data.license_start_date || '',
-                        license_end_date: response.data.license_end_date || '',
-                        enabled_modules: Array.isArray(response.data.enabled_modules)
-                            ? response.data.enabled_modules
+                        ...companyResponse.data,
+                        public_domains: Array.isArray(companyResponse.data.public_domains)
+                            ? companyResponse.data.public_domains
+                            : (companyResponse.data.public_domain ? [companyResponse.data.public_domain] : []),
+                        max_users: companyResponse.data.max_users ?? '',
+                        max_leads: companyResponse.data.max_leads ?? '',
+                        max_active_accounts: companyResponse.data.max_active_accounts ?? '',
+                        license_start_date: companyResponse.data.license_start_date || '',
+                        license_end_date: companyResponse.data.license_end_date || '',
+                        enabled_modules: Array.isArray(companyResponse.data.enabled_modules)
+                            ? companyResponse.data.enabled_modules
                             : COMPANY_VIEWS.map((view) => view.id),
+                        smtp_enabled: Boolean(integrationSettings.smtp_enabled),
+                        smtp_host: integrationSettings.smtp_host || '',
+                        smtp_port: integrationSettings.smtp_port ?? 587,
+                        smtp_username: integrationSettings.smtp_username || '',
+                        smtp_password: integrationSettings.smtp_password || '',
+                        smtp_from: integrationSettings.smtp_from || '',
+                        smtp_use_tls: integrationSettings.smtp_use_tls ?? true,
                     });
                 } catch (error) {
                     console.error("Error fetching company", error);
@@ -142,23 +162,44 @@ const AdminCompanySettings = () => {
         try {
             const token = localStorage.getItem('token');
             const headers = { Authorization: `Bearer ${token}` };
+            const {
+                smtp_enabled,
+                smtp_host,
+                smtp_port,
+                smtp_username,
+                smtp_password,
+                smtp_from,
+                smtp_use_tls,
+                ...companyOnlyFields
+            } = company;
             const payload = {
-                ...company,
-                public_domain: company.public_domains?.[0] || '',
-                public_domains: company.public_domains || [],
-                max_users: company.max_users === '' ? null : parseInt(company.max_users, 10),
-                max_leads: company.max_leads === '' ? null : parseInt(company.max_leads, 10),
-                max_active_accounts: company.max_active_accounts === '' ? null : parseInt(company.max_active_accounts, 10),
-                license_start_date: company.license_start_date || null,
-                license_end_date: company.license_end_date || null,
-                enabled_modules: company.enabled_modules || [],
+                ...companyOnlyFields,
+                public_domain: companyOnlyFields.public_domains?.[0] || '',
+                public_domains: companyOnlyFields.public_domains || [],
+                max_users: companyOnlyFields.max_users === '' ? null : parseInt(companyOnlyFields.max_users, 10),
+                max_leads: companyOnlyFields.max_leads === '' ? null : parseInt(companyOnlyFields.max_leads, 10),
+                max_active_accounts: companyOnlyFields.max_active_accounts === '' ? null : parseInt(companyOnlyFields.max_active_accounts, 10),
+                license_start_date: companyOnlyFields.license_start_date || null,
+                license_end_date: companyOnlyFields.license_end_date || null,
+                enabled_modules: companyOnlyFields.enabled_modules || [],
+            };
+            const integrationPayload = {
+                smtp_enabled: Boolean(smtp_enabled),
+                smtp_host: smtp_host || '',
+                smtp_port: smtp_port === '' ? 587 : parseInt(smtp_port, 10),
+                smtp_username: smtp_username || '',
+                smtp_password: smtp_password || '',
+                smtp_from: smtp_from || '',
+                smtp_use_tls: Boolean(smtp_use_tls),
             };
 
             if (isEditing) {
                 await axios.put(`/api/companies/${id}`, payload, { headers });
+                await axios.put(`/api/companies/${id}/integrations`, integrationPayload, { headers });
                 setStatus({ type: 'success', message: `Empresa "${company.name}" actualizada exitosamente!` });
             } else {
                 const response = await axios.post('/api/companies/', payload, { headers });
+                await axios.put(`/api/companies/${response.data.id}/integrations`, integrationPayload, { headers });
                 setStatus({ type: 'success', message: `Empresa "${response.data.name}" creada exitosamente!` });
             }
         } catch (error) {
@@ -342,6 +383,94 @@ const AdminCompanySettings = () => {
                                         className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
                                     />
                                 </div>
+                            </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-100">
+                            <h3 className="text-lg font-bold mb-4 text-slate-700">Correo SMTP de la empresa</h3>
+                            <label className="mb-4 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                <input
+                                    type="checkbox"
+                                    name="smtp_enabled"
+                                    checked={Boolean(company.smtp_enabled)}
+                                    onChange={(e) => setCompany((prev) => ({ ...prev, smtp_enabled: e.target.checked }))}
+                                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <div>
+                                    <p className="font-medium text-slate-800">Usar SMTP propio para esta empresa</p>
+                                    <p className="text-xs text-slate-500">Se usa para OTP y correos públicos del formulario de crédito.</p>
+                                </div>
+                            </label>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Servidor SMTP</label>
+                                    <input
+                                        type="text"
+                                        name="smtp_host"
+                                        value={company.smtp_host}
+                                        onChange={handleChange}
+                                        placeholder="smtp.gmail.com"
+                                        className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Puerto</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        name="smtp_port"
+                                        value={company.smtp_port}
+                                        onChange={handleChange}
+                                        className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Usuario SMTP</label>
+                                    <input
+                                        type="text"
+                                        name="smtp_username"
+                                        value={company.smtp_username}
+                                        onChange={handleChange}
+                                        placeholder="notificaciones@empresa.com"
+                                        className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Correo remitente</label>
+                                    <input
+                                        type="email"
+                                        name="smtp_from"
+                                        value={company.smtp_from}
+                                        onChange={handleChange}
+                                        placeholder="no-reply@empresa.com"
+                                        className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="mt-4 space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Contrasena SMTP</label>
+                                    <input
+                                        type="password"
+                                        name="smtp_password"
+                                        value={company.smtp_password}
+                                        onChange={handleChange}
+                                        placeholder="App password o credencial SMTP"
+                                        className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                    />
+                                </div>
+                                <label className="flex items-center gap-3 text-sm text-slate-700">
+                                    <input
+                                        type="checkbox"
+                                        name="smtp_use_tls"
+                                        checked={Boolean(company.smtp_use_tls)}
+                                        onChange={(e) => setCompany((prev) => ({ ...prev, smtp_use_tls: e.target.checked }))}
+                                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span>Usar TLS / STARTTLS</span>
+                                </label>
                             </div>
                         </div>
 

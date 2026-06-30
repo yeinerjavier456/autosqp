@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import PublicSalesChatbot from '../components/PublicSalesChatbot';
+import PublicBrandLogo from '../components/PublicBrandLogo';
 import { normalizeMediaUrl } from '../utils/media';
 import { getPublicCompanyHomeUrl, usePublicCompany } from '../utils/publicCompany';
 
@@ -135,11 +136,12 @@ const PublicInventory = () => {
 
     return (
         <div
-            className="min-h-screen bg-slate-100 font-sans"
+            className="min-h-screen font-sans"
             style={{
                 '--public-primary': primaryColor,
                 '--public-secondary': secondaryColor,
                 '--public-primary-soft': primarySoft,
+                background: `linear-gradient(180deg, ${withAlpha(primaryColor, '12')} 0%, #f8fafc 24%, #eef2f7 100%)`,
             }}
         >
             {/* Navbar */}
@@ -155,18 +157,18 @@ const PublicInventory = () => {
                         <a
                             href={publicHomeUrl}
                             title={brandName}
-                            className="flex items-center rounded-lg transition-opacity hover:opacity-90"
+                            className="flex items-center gap-3 rounded-lg transition-opacity hover:opacity-90"
                         >
-                            {company.logo_url ? (
-                                <img
-                                    src={normalizeMediaUrl(company.logo_url)}
-                                    alt={brandName}
-                                    className="h-11 w-auto object-contain md:h-12"
-                                    style={{ aspectRatio: '512 / 300' }}
-                                />
-                            ) : (
-                                <span className="text-2xl font-extrabold tracking-tight text-white">{brandName}</span>
-                            )}
+                            <PublicBrandLogo
+                                company={company}
+                                brandName={brandName}
+                                className="h-11 w-auto object-contain md:h-12"
+                                fallbackClassName="flex h-11 w-11 items-center justify-center rounded-xl text-sm font-black text-white md:h-12 md:w-12"
+                                showText={Boolean(company?.logo_url)}
+                                textClassName="hidden text-sm font-semibold text-white/85 md:inline"
+                                primaryColor={primaryColor}
+                                secondaryColor={secondaryColor}
+                            />
                         </a>
                     </div>
 
@@ -441,9 +443,9 @@ const PublicInventory = () => {
                                 <option value="mileage_asc">Kilometraje: menor a mayor</option>
                             </select>
                             <button
-                                className="md:hidden flex items-center gap-2 text-slate-700 font-bold bg-white px-4 py-2 rounded-lg shadow-sm"
+                                className="md:hidden flex items-center gap-2 font-bold bg-white px-4 py-2 rounded-lg shadow-sm border"
                                 onClick={() => setShowFilters(!showFilters)}
-                                style={{ color: secondaryColor }}
+                                style={{ color: secondaryColor, borderColor: lightBorder }}
                             >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
                                 Filtros
@@ -455,17 +457,27 @@ const PublicInventory = () => {
                     {loading ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-pulse">
                             {[1, 2, 3, 4, 5, 6].map(i => (
-                                <div key={i} className="bg-white h-80 rounded-2xl shadow-sm"></div>
-                            ))}
-                        </div>
+                                    <div
+                                        key={i}
+                                        className="h-80 rounded-2xl shadow-sm"
+                                        style={{
+                                            background: `linear-gradient(180deg, #ffffff 0%, ${withAlpha(primaryColor, '08')} 100%)`,
+                                            border: `1px solid ${withAlpha(primaryColor, '18')}`,
+                                        }}
+                                    ></div>
+                                ))}
+                            </div>
                     ) : (
                         <>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
                                 {safeVehicles.map(vehicle => (
                                     <div
                                         key={vehicle.id}
-                                        className="bg-white rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 group relative border-2 border-slate-100 flex flex-col"
-                                        style={{ borderColor: withAlpha(primaryColor, '18') }}
+                                        className="rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 group relative border-2 flex flex-col"
+                                        style={{
+                                            borderColor: withAlpha(primaryColor, '18'),
+                                            background: `linear-gradient(180deg, #ffffff 0%, ${withAlpha(primaryColor, '08')} 100%)`,
+                                        }}
                                     >
                                         {/* Image Container with Overlay */}
                                         <Link to={`/autos/${vehicle.id}`} className="block relative aspect-[4/3] overflow-hidden">
@@ -523,17 +535,20 @@ const PublicInventory = () => {
 
                                             <Link to={`/autos/${vehicle.id}`} className="block">
                                                 <h3
-                                                    className="text-lg font-bold text-gray-800 mb-1 transition-colors line-clamp-1"
+                                                    className="text-lg font-bold mb-1 transition-colors line-clamp-1"
                                                     style={{ color: secondaryColor }}
                                                 >
                                                     {vehicle.make} {vehicle.model}
                                                 </h3>
                                             </Link>
 
-                                            <div className="flex justify-between items-end mt-4 pt-4 border-t border-gray-50">
+                                            <div
+                                                className="flex justify-between items-end mt-4 pt-4 border-t"
+                                                style={{ borderColor: withAlpha(primaryColor, '14') }}
+                                            >
                                                 <div className="flex flex-col">
                                                     <span className="text-xs text-gray-400 uppercase font-medium">Precio</span>
-                                                    <span className="text-xl font-extrabold text-slate-900">
+                                                    <span className="text-xl font-extrabold" style={{ color: secondaryColor }}>
                                                         {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(vehicle.price)}
                                                     </span>
                                                 </div>
@@ -555,7 +570,14 @@ const PublicInventory = () => {
                             </div>
 
                             {safeVehicles.length === 0 && (
-                                <div className="col-span-full p-12 text-center text-gray-500">
+                                <div
+                                    className="col-span-full rounded-2xl p-12 text-center"
+                                    style={{
+                                        color: secondaryColor,
+                                        backgroundColor: '#ffffff',
+                                        border: `1px solid ${withAlpha(primaryColor, '18')}`,
+                                    }}
+                                >
                                     <p className="text-lg">No encontramos vehículos que coincidan con tu búsqueda.</p>
                                     <button
                                         onClick={() => setFilters({

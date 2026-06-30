@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
-import { normalizeMediaUrl } from '../utils/media';
+import PublicBrandLogo from '../components/PublicBrandLogo';
 import { usePublicCompany } from '../utils/publicCompany';
 
 const POLICY_TEXT = `AUTORIZO A AUTOS QP SAS Y A LAS ENTIDADES QUE PERTENEZCAN O LLEGAREN A PERTENECER A SU GRUPO EMPRESARIAL DE ACUERDO CON LA LEY, SUS FILIALES Y/O SUBSIDIARIAS, O A LAS ENTIDADES EN LAS CUALES ÉSTAS, DIRECTA O INDIRECTAMENTE, TENGAN PARTICIPACIÓN ACCIONARIA O SEAN ASOCIADAS, DOMICILIADAS EN COLOMBIA Y/O EN EL EXTERIOR, O A QUIEN REPRESENTE SUS DERECHOS U OSTENTE EN EL FUTURO LA CALIDAD DE ACREEDOR, CESIONARIO O CUALQUIER OTRA CALIDAD FRENTE A MÍ COMO TITULAR DE LA INFORMACIÓN, EN ADELANTE LAS ENTIDADES; Y AUTORIZO A LAS ENTIDADES FINANCIERAS ALIADAS CON LAS QUE LAS ENTIDADES CONSIDEREN Y SOSTENGAN RELACIÓN COMERCIAL, A QUIENES AUTORIZO EN FORMA PERMANENTE PARA QUE: (I) LIBEREN LA INFORMACIÓN NECESARIA QUE LES SOLICITEN SEGÚN MI PERFIL Y SUS POLÍTICAS DE OTORGAMIENTO CREDITICIO, PARA LA BÚSQUEDA DE MI CUPO DE CRÉDITO ANTE LAS ENTIDADES FINANCIERAS ALIADAS, ENTIDADES AVALADORAS U OTRAS, PARA QUE ME SEAN ENVIADAS OFERTAS O AVISOS COMERCIALES RELACIONADOS CON EL TIPO DE CRÉDITO QUE ESTOY SOLICITANDO O CON PRODUCTOS AFINES. ENTIENDO QUE LAS ENTIDADES NO ASUMEN RESPONSABILIDAD ALGUNA POR LA APROBACIÓN O NEGACIÓN DEL CRÉDITO POR PARTE DE LAS ENTIDADES FINANCIERAS ALIADAS, AVALADORAS U OTRAS, NI SE COMPROMETEN A OBTENER SU APROBACIÓN, POR CUANTO SIMPLEMENTE ACTÚAN COMO CANAL DE INFORMACIÓN ENTRE EL SOLICITANTE DEL CRÉDITO Y LA ENTIDAD FINANCIERA, LA ENTIDAD AVALADORA U OTRA. (II) SOLICITEN, CONSULTEN, COMPARTAN, INFORMEN, REPORTEN, PROCESEN, MODIFIQUEN, ACTUALICEN, ACLAREN, RETIREN O DIVULGUEN, ANTE LAS ENTIDADES DE CONSULTA DE BASES DE DATOS U OPERADORES DE INFORMACIÓN Y RIESGO, O ANTE CUALQUIER ENTIDAD QUE MANEJE O ADMINISTRE BASES DE DATOS CON LOS FINES LEGALMENTE DEFINIDOS PARA ESTE TIPO DE ENTIDADES, TODO LO REFERENTE A MI INFORMACIÓN FINANCIERA, COMERCIAL Y CREDITICIA, PRESENTE, PASADA O FUTURA, MI ENDEUDAMIENTO Y EL NACIMIENTO, MODIFICACIÓN Y EXTINCIÓN DE MIS DERECHOS Y OBLIGACIONES ORIGINADOS EN VIRTUD DE CUALQUIER CONTRATO CELEBRADO U OPERACIÓN REALIZADA O QUE LLEGARE A CELEBRAR O REALIZAR CON CUALQUIERA DE LAS ENTIDADES. (III) CONSULTEN, SOLICITEN O VERIFIQUEN INFORMACIÓN SOBRE MIS DATOS DE UBICACIÓN O CONTACTO, LOS BIENES O DERECHOS QUE POSEO O LLEGARE A POSEER Y QUE REPOSEN EN BASES DE DATOS DE ENTIDADES PÚBLICAS O PRIVADAS, O QUE CONOZCAN PERSONAS NATURALES O JURÍDICAS, O SE ENCUENTREN EN BUSCADORES PÚBLICOS, REDES SOCIALES O PUBLICACIONES FÍSICAS O ELECTRÓNICAS, BIEN SEA EN COLOMBIA O EN EL EXTERIOR. (IV) ME CONTACTEN A TRAVÉS DEL ENVÍO DE MENSAJES A MI TERMINAL MÓVIL DE TELECOMUNICACIONES Y/O A TRAVÉS DE CORREO ELECTRÓNICO Y/O REDES SOCIALES EN LAS CUALES ESTÉ INSCRITO. (V) CONSERVEN MI INFORMACIÓN Y DOCUMENTACIÓN AUN CUANDO NO SE HAYA PERFECCIONADO UNA RELACIÓN CONTRACTUAL O DESPUÉS DE FINALIZADA LA MISMA CON CUALQUIERA DE LAS ENTIDADES, IGUALMENTE PARA RECOLECTARLA, ACTUALIZARLA, MODIFICARLA, PROCESARLA Y ELIMINARLA DE CONFORMIDAD CON LA LEY APLICABLE. (VI) LAS ENTIDADES COMPARTAN, REMITAN Y ACCEDAN ENTRE SÍ A MI INFORMACIÓN O DOCUMENTACIÓN CONSIGNADA O ANEXA EN LAS SOLICITUDES DE VINCULACIÓN, ACTUALIZACIONES EN LOS DIFERENTES DOCUMENTOS DE DEPÓSITO Y/O CRÉDITO, OPERACIONES Y/O SISTEMAS DE INFORMACIÓN, ASÍ COMO INFORMACIÓN Y/O DOCUMENTACIÓN RELACIONADA CON LOS PRODUCTOS Y/O SERVICIOS QUE POSEO EN CUALQUIERA DE ELLAS. (VII) ELABOREN ESTADÍSTICAS Y DERIVEN MEDIANTE MODELOS MATEMÁTICOS CONCLUSIONES A PARTIR DE ELLAS. DECLARO HABER LEÍDO CUIDADOSAMENTE EL CONTENIDO DE ESTA CLÁUSULA Y HABERLA COMPRENDIDO A CABALIDAD, RAZÓN POR LA CUAL ENTIENDO SUS ALCANCES E IMPLICACIONES.`;
@@ -15,12 +15,14 @@ const STEP_TITLES = [
   'Consentimiento y Firma',
 ];
 
+const getBogotaCurrentDate = () =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+
 const createEmptyForm = () => ({
   vehicle: {
     vehicleValue: '',
     requestedAmount: '',
-    advisor: '',
-    requestDate: '',
+    requestDate: getBogotaCurrentDate(),
     make: '',
     model: '',
     vehicleType: 'Automóvil',
@@ -151,6 +153,28 @@ const PublicCreditForm = () => {
     if (signaturePreview) URL.revokeObjectURL(signaturePreview);
   }, [documentFrontPreview, documentBackPreview, signaturePreview]);
 
+  useEffect(() => {
+    setForm((prev) => {
+      const salaryIncome = Number(String(prev.income.salaryIncome || '').replace(/[^\d.-]/g, '')) || 0;
+      const commissionsIncome = Number(String(prev.income.commissionsIncome || '').replace(/[^\d.-]/g, '')) || 0;
+      const otherIncome = Number(String(prev.income.otherIncome || '').replace(/[^\d.-]/g, '')) || 0;
+      const nextTotal = salaryIncome + commissionsIncome + otherIncome;
+      const nextValue = nextTotal > 0 ? String(nextTotal) : '';
+
+      if (prev.income.totalIncome === nextValue) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        income: {
+          ...prev.income,
+          totalIncome: nextValue,
+        },
+      };
+    });
+  }, [form.income.salaryIncome, form.income.commissionsIncome, form.income.otherIncome]);
+
   const updateSection = (section, key, value) => {
     setForm((prev) => ({
       ...prev,
@@ -175,13 +199,20 @@ const PublicCreditForm = () => {
   };
 
   const inputClassName = 'w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-2';
+  const requiredInputClassName = `${inputClassName} border-red-200 bg-red-50/30 focus:ring-red-200`;
+  const renderFieldLabel = (label, required = false) => (
+    <label className="mb-1 block text-sm font-semibold text-slate-700">
+      {label}
+      {required ? <span className="ml-1 text-red-500">(Obligatorio)</span> : null}
+    </label>
+  );
 
   const resetStatus = () => setStatus({ type: '', message: '' });
 
   const validateStep = (stepIndex) => {
     if (stepIndex === 0) {
-      const { vehicleValue, requestedAmount, advisor, make, model } = form.vehicle;
-      return Boolean(vehicleValue && requestedAmount && advisor && make && model);
+      const { vehicleValue, requestedAmount, requestDate, make, model } = form.vehicle;
+      return Boolean(vehicleValue && requestedAmount && requestDate && make && model);
     }
     if (stepIndex === 1) {
       const { firstName, lastName, documentNumber, mobilePhone, address, email } = form.personal;
@@ -427,11 +458,16 @@ const PublicCreditForm = () => {
       <header className="sticky top-0 z-40 border-b bg-white/95 backdrop-blur" style={{ borderColor: theme.primarySoft }}>
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
           <Link to="/autos" className="flex items-center gap-3">
-            {company?.logo_url ? (
-              <img src={normalizeMediaUrl(company.logo_url)} alt={brandName} className="h-12 w-auto object-contain" />
-            ) : (
-              <span className="text-2xl font-black" style={{ color: theme.secondary }}>{brandName}</span>
-            )}
+            <PublicBrandLogo
+              company={company}
+              brandName={brandName}
+              className="h-12 w-auto object-contain"
+              fallbackClassName="flex h-12 w-12 items-center justify-center rounded-xl text-sm font-black text-white"
+              showText={false}
+              primaryColor={theme.primary}
+              secondaryColor={theme.secondary}
+            />
+            <span className="text-2xl font-black" style={{ color: theme.secondary }}>{brandName}</span>
           </Link>
           <div className="flex items-center gap-3">
             <Link to="/autos" className="rounded-xl border px-4 py-2 text-sm font-semibold text-slate-700" style={{ borderColor: theme.primaryBorder }}>
@@ -450,6 +486,7 @@ const PublicCreditForm = () => {
             <div className="mb-8">
               <h1 className="text-4xl font-black text-slate-900">Formulario de Crédito</h1>
               <p className="mt-2 text-slate-500">Paso {step + 1} de {STEP_TITLES.length}</p>
+              <p className="mt-2 text-sm font-medium text-red-500">Los campos marcados como obligatorios deben completarse para continuar.</p>
               <div className="mt-4 h-2 w-full rounded-full bg-slate-200">
                 <div className="h-2 rounded-full transition-all" style={{ width: `${progress}%`, backgroundColor: theme.primary }} />
               </div>
@@ -474,35 +511,31 @@ const PublicCreditForm = () => {
                 {step === 0 && (
                   <section className="space-y-6">
                     <h2 className="border-b pb-3 text-2xl font-bold text-slate-900">{STEP_TITLES[0]}</h2>
-                    <div className="grid gap-4 md:grid-cols-4">
+                    <div className="grid gap-4 md:grid-cols-3">
                       <div>
-                        <label className="mb-1 block text-sm font-semibold text-slate-700">Valor Vehículo $</label>
-                        <input className={inputClassName} value={form.vehicle.vehicleValue} onChange={(e) => updateSection('vehicle', 'vehicleValue', e.target.value)} />
+                        {renderFieldLabel('Valor Vehículo $', true)}
+                        <input className={requiredInputClassName} value={form.vehicle.vehicleValue} onChange={(e) => updateSection('vehicle', 'vehicleValue', e.target.value)} />
                       </div>
                       <div>
-                        <label className="mb-1 block text-sm font-semibold text-slate-700">Monto Solicitado $</label>
-                        <input className={inputClassName} value={form.vehicle.requestedAmount} onChange={(e) => updateSection('vehicle', 'requestedAmount', e.target.value)} />
+                        {renderFieldLabel('Monto Solicitado $', true)}
+                        <input className={requiredInputClassName} value={form.vehicle.requestedAmount} onChange={(e) => updateSection('vehicle', 'requestedAmount', e.target.value)} />
                       </div>
                       <div>
-                        <label className="mb-1 block text-sm font-semibold text-slate-700">Asesor Comercial</label>
-                        <input className={inputClassName} value={form.vehicle.advisor} onChange={(e) => updateSection('vehicle', 'advisor', e.target.value)} />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-semibold text-slate-700">Fecha de Solicitud</label>
-                        <input type="date" className={inputClassName} value={form.vehicle.requestDate} onChange={(e) => updateSection('vehicle', 'requestDate', e.target.value)} />
+                        {renderFieldLabel('Fecha de Solicitud', true)}
+                        <input type="date" className={requiredInputClassName} value={form.vehicle.requestDate} onChange={(e) => updateSection('vehicle', 'requestDate', e.target.value)} />
                       </div>
                     </div>
                     <div className="grid gap-4 md:grid-cols-3">
                       <div>
-                        <label className="mb-1 block text-sm font-semibold text-slate-700">Marca</label>
-                        <input className={inputClassName} value={form.vehicle.make} onChange={(e) => updateSection('vehicle', 'make', e.target.value)} />
+                        {renderFieldLabel('Marca', true)}
+                        <input className={requiredInputClassName} value={form.vehicle.make} onChange={(e) => updateSection('vehicle', 'make', e.target.value)} />
                       </div>
                       <div>
-                        <label className="mb-1 block text-sm font-semibold text-slate-700">Modelo</label>
-                        <input className={inputClassName} value={form.vehicle.model} onChange={(e) => updateSection('vehicle', 'model', e.target.value)} />
+                        {renderFieldLabel('Modelo', true)}
+                        <input className={requiredInputClassName} value={form.vehicle.model} onChange={(e) => updateSection('vehicle', 'model', e.target.value)} />
                       </div>
                       <div>
-                        <label className="mb-1 block text-sm font-semibold text-slate-700">Tipo</label>
+                        {renderFieldLabel('Tipo')}
                         <select className={inputClassName} value={form.vehicle.vehicleType} onChange={(e) => updateSection('vehicle', 'vehicleType', e.target.value)}>
                           <option>Automóvil</option>
                           <option>Camioneta</option>
@@ -519,10 +552,10 @@ const PublicCreditForm = () => {
                   <section className="space-y-6">
                     <h2 className="border-b pb-3 text-2xl font-bold text-slate-900">{STEP_TITLES[1]}</h2>
                     <div className="grid gap-4 md:grid-cols-4">
-                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Nombres</label><input className={inputClassName} value={form.personal.firstName} onChange={(e) => updateSection('personal', 'firstName', e.target.value)} /></div>
-                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Apellidos</label><input className={inputClassName} value={form.personal.lastName} onChange={(e) => updateSection('personal', 'lastName', e.target.value)} /></div>
-                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Documento</label><select className={inputClassName} value={form.personal.documentType} onChange={(e) => updateSection('personal', 'documentType', e.target.value)}><option>C.C</option><option>C.E</option><option>Pasaporte</option><option>NIT</option></select></div>
-                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">N° Documento</label><input className={inputClassName} value={form.personal.documentNumber} onChange={(e) => updateSection('personal', 'documentNumber', e.target.value)} /></div>
+                      <div>{renderFieldLabel('Nombres', true)}<input className={requiredInputClassName} value={form.personal.firstName} onChange={(e) => updateSection('personal', 'firstName', e.target.value)} /></div>
+                      <div>{renderFieldLabel('Apellidos', true)}<input className={requiredInputClassName} value={form.personal.lastName} onChange={(e) => updateSection('personal', 'lastName', e.target.value)} /></div>
+                      <div>{renderFieldLabel('Documento')}<select className={inputClassName} value={form.personal.documentType} onChange={(e) => updateSection('personal', 'documentType', e.target.value)}><option>C.C</option><option>C.E</option><option>Pasaporte</option><option>NIT</option></select></div>
+                      <div>{renderFieldLabel('N° Documento', true)}<input className={requiredInputClassName} value={form.personal.documentNumber} onChange={(e) => updateSection('personal', 'documentNumber', e.target.value)} /></div>
                     </div>
                     <div className="grid gap-4 md:grid-cols-4">
                       <div><label className="mb-1 block text-sm font-semibold text-slate-700">Lugar Expedición</label><input className={inputClassName} value={form.personal.issuePlace} onChange={(e) => updateSection('personal', 'issuePlace', e.target.value)} /></div>
@@ -539,21 +572,21 @@ const PublicCreditForm = () => {
                     <div className="grid gap-4 md:grid-cols-4">
                       <div><label className="mb-1 block text-sm font-semibold text-slate-700">¿Con quién vive?</label><select className={inputClassName} value={form.personal.livesWith} onChange={(e) => updateSection('personal', 'livesWith', e.target.value)}><option>Cónyuge</option><option>Padres</option><option>Solo</option><option>Familia</option></select></div>
                       <div><label className="mb-1 block text-sm font-semibold text-slate-700">¿Tipo de vivienda?</label><select className={inputClassName} value={form.personal.housingType} onChange={(e) => updateSection('personal', 'housingType', e.target.value)}><option>Familiar</option><option>Propia</option><option>Arrendada</option></select></div>
-                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Teléfono Móvil</label><input className={inputClassName} value={form.personal.mobilePhone} onChange={(e) => updateSection('personal', 'mobilePhone', e.target.value)} /></div>
-                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Ciudad</label><input className={inputClassName} value={form.personal.city} onChange={(e) => updateSection('personal', 'city', e.target.value)} /></div>
+                      <div>{renderFieldLabel('Teléfono Móvil', true)}<input className={requiredInputClassName} value={form.personal.mobilePhone} onChange={(e) => updateSection('personal', 'mobilePhone', e.target.value)} /></div>
+                      <div>{renderFieldLabel('Ciudad')}<input className={inputClassName} value={form.personal.city} onChange={(e) => updateSection('personal', 'city', e.target.value)} /></div>
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
-                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Dirección</label><input className={inputClassName} value={form.personal.address} onChange={(e) => updateSection('personal', 'address', e.target.value)} /></div>
-                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Email</label><input type="email" className={inputClassName} value={form.personal.email} onChange={(e) => updateSection('personal', 'email', e.target.value)} /></div>
+                      <div>{renderFieldLabel('Dirección', true)}<input className={requiredInputClassName} value={form.personal.address} onChange={(e) => updateSection('personal', 'address', e.target.value)} /></div>
+                      <div>{renderFieldLabel('Email', true)}<input type="email" className={requiredInputClassName} value={form.personal.email} onChange={(e) => updateSection('personal', 'email', e.target.value)} /></div>
                     </div>
                     <div className="grid gap-6 md:grid-cols-2">
                       <div className="space-y-3">
-                        <label className="block text-sm font-semibold text-slate-700">Cédula Ciudadanía Cara Frontal</label>
+                        {renderFieldLabel('Cédula Ciudadanía Cara Frontal', true)}
                         <input type="file" accept="image/*,application/pdf" capture="environment" onChange={(e) => handleFileSelection('documentFront', e.target.files?.[0])} className="block w-full text-sm text-slate-600" />
                         {renderPreviewBox('Documento frontal', documentFrontPreview, documentFront)}
                       </div>
                       <div className="space-y-3">
-                        <label className="block text-sm font-semibold text-slate-700">Cédula Ciudadanía Cara Posterior</label>
+                        {renderFieldLabel('Cédula Ciudadanía Cara Posterior', true)}
                         <input type="file" accept="image/*,application/pdf" capture="environment" onChange={(e) => handleFileSelection('documentBack', e.target.files?.[0])} className="block w-full text-sm text-slate-600" />
                         {renderPreviewBox('Documento posterior', documentBackPreview, documentBack)}
                       </div>
@@ -565,8 +598,8 @@ const PublicCreditForm = () => {
                   <section className="space-y-6">
                     <h2 className="border-b pb-3 text-2xl font-bold text-slate-900">{STEP_TITLES[2]}</h2>
                     <div className="grid gap-4 md:grid-cols-4">
-                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Actividad Económica</label><select className={inputClassName} value={form.employment.activity} onChange={(e) => updateSection('employment', 'activity', e.target.value)}><option>Empleado</option><option>Independiente</option><option>Pensionado</option><option>Comerciante</option></select></div>
-                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Nombre Empresa</label><input className={inputClassName} value={form.employment.companyName} onChange={(e) => updateSection('employment', 'companyName', e.target.value)} /></div>
+                      <div>{renderFieldLabel('Actividad Económica', true)}<select className={requiredInputClassName} value={form.employment.activity} onChange={(e) => updateSection('employment', 'activity', e.target.value)}><option>Empleado</option><option>Independiente</option><option>Pensionado</option><option>Comerciante</option></select></div>
+                      <div>{renderFieldLabel('Nombre Empresa', true)}<input className={requiredInputClassName} value={form.employment.companyName} onChange={(e) => updateSection('employment', 'companyName', e.target.value)} /></div>
                       <div><label className="mb-1 block text-sm font-semibold text-slate-700">Ciudad</label><input className={inputClassName} value={form.employment.companyCity} onChange={(e) => updateSection('employment', 'companyCity', e.target.value)} /></div>
                       <div><label className="mb-1 block text-sm font-semibold text-slate-700">Dirección</label><input className={inputClassName} value={form.employment.companyAddress} onChange={(e) => updateSection('employment', 'companyAddress', e.target.value)} /></div>
                     </div>
@@ -574,7 +607,7 @@ const PublicCreditForm = () => {
                       <div><label className="mb-1 block text-sm font-semibold text-slate-700">Ocupación o Cargo</label><input className={inputClassName} value={form.employment.jobTitle} onChange={(e) => updateSection('employment', 'jobTitle', e.target.value)} /></div>
                       <div><label className="mb-1 block text-sm font-semibold text-slate-700">Email de la empresa</label><input type="email" className={inputClassName} value={form.employment.companyEmail} onChange={(e) => updateSection('employment', 'companyEmail', e.target.value)} /></div>
                       <div><label className="mb-1 block text-sm font-semibold text-slate-700">Fecha Ingreso</label><input type="date" className={inputClassName} value={form.employment.startDate} onChange={(e) => updateSection('employment', 'startDate', e.target.value)} /></div>
-                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Salario</label><input className={inputClassName} value={form.employment.salary} onChange={(e) => updateSection('employment', 'salary', e.target.value)} /></div>
+                      <div>{renderFieldLabel('Salario', true)}<input className={requiredInputClassName} value={form.employment.salary} onChange={(e) => updateSection('employment', 'salary', e.target.value)} /></div>
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
                       <div><label className="mb-1 block text-sm font-semibold text-slate-700">Tipo de contrato</label><select className={inputClassName} value={form.employment.contractType} onChange={(e) => updateSection('employment', 'contractType', e.target.value)}><option>Indefinido</option><option>Fijo</option><option>Prestación de servicios</option><option>Temporal</option></select></div>
@@ -595,13 +628,13 @@ const PublicCreditForm = () => {
                   <section className="space-y-6">
                     <h2 className="border-b pb-3 text-2xl font-bold text-slate-900">{STEP_TITLES[3]}</h2>
                     <div className="grid gap-4 md:grid-cols-3">
-                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Sueldo $</label><input className={inputClassName} value={form.income.salaryIncome} onChange={(e) => updateSection('income', 'salaryIncome', e.target.value)} /></div>
-                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Comisiones $</label><input className={inputClassName} value={form.income.commissionsIncome} onChange={(e) => updateSection('income', 'commissionsIncome', e.target.value)} /></div>
-                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Otros Ingresos Permanentes</label><input className={inputClassName} value={form.income.otherIncome} onChange={(e) => updateSection('income', 'otherIncome', e.target.value)} /></div>
+                      <div>{renderFieldLabel('Sueldo $', true)}<input className={requiredInputClassName} value={form.income.salaryIncome} onChange={(e) => updateSection('income', 'salaryIncome', e.target.value)} /></div>
+                      <div>{renderFieldLabel('Comisiones $')}<input className={inputClassName} value={form.income.commissionsIncome} onChange={(e) => updateSection('income', 'commissionsIncome', e.target.value)} /></div>
+                      <div>{renderFieldLabel('Otros Ingresos Permanentes')}<input className={inputClassName} value={form.income.otherIncome} onChange={(e) => updateSection('income', 'otherIncome', e.target.value)} /></div>
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
-                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Detalle de Otros Ingresos</label><input className={inputClassName} value={form.income.otherIncomeDetail} onChange={(e) => updateSection('income', 'otherIncomeDetail', e.target.value)} /></div>
-                      <div><label className="mb-1 block text-sm font-semibold text-slate-700">Total Ingresos</label><input className={inputClassName} value={form.income.totalIncome} onChange={(e) => updateSection('income', 'totalIncome', e.target.value)} /></div>
+                      <div>{renderFieldLabel('Detalle de Otros Ingresos')}<input className={inputClassName} value={form.income.otherIncomeDetail} onChange={(e) => updateSection('income', 'otherIncomeDetail', e.target.value)} /></div>
+                      <div>{renderFieldLabel('Total Ingresos', true)}<input className={`${requiredInputClassName} bg-slate-50`} value={form.income.totalIncome} readOnly /></div>
                     </div>
                   </section>
                 )}
@@ -618,9 +651,9 @@ const PublicCreditForm = () => {
                         <div key={key}>
                           <h3 className="mb-3 text-xl font-bold text-slate-900">{label}</h3>
                           <div className="grid gap-4 md:grid-cols-4">
-                            <div><label className="mb-1 block text-sm font-semibold text-slate-700">Nombres</label><input className={inputClassName} value={form.references[key].names} onChange={(e) => updateReference(key, 'names', e.target.value)} /></div>
+                            <div>{renderFieldLabel('Nombres', key !== 'commercial')}<input className={key !== 'commercial' ? requiredInputClassName : inputClassName} value={form.references[key].names} onChange={(e) => updateReference(key, 'names', e.target.value)} /></div>
                             <div><label className="mb-1 block text-sm font-semibold text-slate-700">Apellidos</label><input className={inputClassName} value={form.references[key].lastNames} onChange={(e) => updateReference(key, 'lastNames', e.target.value)} /></div>
-                            <div><label className="mb-1 block text-sm font-semibold text-slate-700">Teléfono</label><input className={inputClassName} value={form.references[key].phone} onChange={(e) => updateReference(key, 'phone', e.target.value)} /></div>
+                            <div>{renderFieldLabel('Teléfono', key !== 'commercial')}<input className={key !== 'commercial' ? requiredInputClassName : inputClassName} value={form.references[key].phone} onChange={(e) => updateReference(key, 'phone', e.target.value)} /></div>
                             <div><label className="mb-1 block text-sm font-semibold text-slate-700">Ciudad</label><input className={inputClassName} value={form.references[key].city} onChange={(e) => updateReference(key, 'city', e.target.value)} /></div>
                           </div>
                         </div>

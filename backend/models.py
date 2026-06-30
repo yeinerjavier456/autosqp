@@ -606,6 +606,13 @@ class IntegrationSettings(Base):
     gmail_label = Column(String(120), nullable=True)
     gmail_sync_days = Column(Integer, default=7)
     gmail_sync_max_results = Column(Integer, default=20)
+    smtp_enabled = Column(Boolean, default=False)
+    smtp_host = Column(String(255), nullable=True)
+    smtp_port = Column(Integer, default=587)
+    smtp_username = Column(String(255), nullable=True)
+    smtp_password = Column(Text, nullable=True)
+    smtp_from = Column(String(255), nullable=True)
+    smtp_use_tls = Column(Boolean, default=True)
 
     company = relationship("Company", back_populates="integration_settings")
 

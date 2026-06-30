@@ -459,13 +459,30 @@ def _save_public_credit_data_url(data_url: Optional[str], subdirectory: str, fal
     return _save_public_credit_upload(binary_content, subdirectory, f"{fallback_name}{extension}")
 
 
-def _get_public_credit_smtp_settings() -> Dict[str, Any]:
-    host = (os.getenv("SMTP_HOST") or "").strip()
-    port = int((os.getenv("SMTP_PORT") or "587").strip() or 587)
-    username = (os.getenv("SMTP_USERNAME") or "").strip()
-    password = (os.getenv("SMTP_PASSWORD") or "").strip()
-    sender = (os.getenv("SMTP_FROM") or username or "").strip()
-    use_tls = str(os.getenv("SMTP_USE_TLS") or "true").strip().lower() not in {"0", "false", "no"}
+def _get_public_credit_smtp_settings(db: Session, company: Optional[models.Company] = None) -> Dict[str, Any]:
+    integration_settings = None
+    if company and getattr(company, "id", None):
+        integration_settings = db.query(models.IntegrationSettings).filter(
+            models.IntegrationSettings.company_id == company.id
+        ).first()
+
+    use_company_smtp = bool(integration_settings and getattr(integration_settings, "smtp_enabled", False))
+    host = ((getattr(integration_settings, "smtp_host", None) if use_company_smtp else None) or os.getenv("SMTP_HOST") or "").strip()
+    port = int(
+        (
+            str(getattr(integration_settings, "smtp_port", "") if use_company_smtp else "").strip()
+            or (os.getenv("SMTP_PORT") or "587").strip()
+            or 587
+        )
+    )
+    username = ((getattr(integration_settings, "smtp_username", None) if use_company_smtp else None) or os.getenv("SMTP_USERNAME") or "").strip()
+    password = ((getattr(integration_settings, "smtp_password", None) if use_company_smtp else None) or os.getenv("SMTP_PASSWORD") or "").strip()
+    sender = ((getattr(integration_settings, "smtp_from", None) if use_company_smtp else None) or os.getenv("SMTP_FROM") or username or "").strip()
+    use_tls = (
+        bool(getattr(integration_settings, "smtp_use_tls", True))
+        if use_company_smtp
+        else str(os.getenv("SMTP_USE_TLS") or "true").strip().lower() not in {"0", "false", "no"}
+    )
 
     if not host or not sender:
         raise HTTPException(
@@ -534,8 +551,8 @@ def _build_public_credit_verification_email_html(
     """.strip()
 
 
-def _send_public_credit_verification_email(target_email: str, company: Optional[models.Company], verification_code: str):
-    smtp_settings = _get_public_credit_smtp_settings()
+def _send_public_credit_verification_email(target_email: str, db: Session, company: Optional[models.Company], verification_code: str):
+    smtp_settings = _get_public_credit_smtp_settings(db, company)
     company_name = getattr(company, "name", None) or "AutosQP"
 
     message = EmailMessage()
@@ -1302,6 +1319,28 @@ def ensure_gmail_settings_columns():
         print(f"Warning: could not ensure gmail settings columns: {exc}", flush=True)
 
 ensure_gmail_settings_columns()
+
+def ensure_company_smtp_settings_columns():
+    try:
+        with engine.begin() as connection:
+            smtp_columns = {
+                "smtp_enabled": "ADD COLUMN smtp_enabled BOOLEAN NULL DEFAULT 0",
+                "smtp_host": "ADD COLUMN smtp_host VARCHAR(255) NULL",
+                "smtp_port": "ADD COLUMN smtp_port INT NULL DEFAULT 587",
+                "smtp_username": "ADD COLUMN smtp_username VARCHAR(255) NULL",
+                "smtp_password": "ADD COLUMN smtp_password TEXT NULL",
+                "smtp_from": "ADD COLUMN smtp_from VARCHAR(255) NULL",
+                "smtp_use_tls": "ADD COLUMN smtp_use_tls BOOLEAN NULL DEFAULT 1",
+            }
+            for _, ddl in smtp_columns.items():
+                try:
+                    connection.execute(text(f"ALTER TABLE integration_settings {ddl}"))
+                except Exception:
+                    pass
+    except Exception as exc:
+        print(f"Warning: could not ensure smtp settings columns: {exc}", flush=True)
+
+ensure_company_smtp_settings_columns()
 
 def ensure_chatbot_settings_columns():
     """
@@ -3611,7 +3650,7 @@ def send_public_credit_verification_code(
     db.commit()
 
     try:
-        _send_public_credit_verification_email(email_value, company, verification_code)
+        _send_public_credit_verification_email(email_value, db, company, verification_code)
     except HTTPException:
         db.delete(verification)
         db.commit()

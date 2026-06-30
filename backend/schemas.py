@@ -382,6 +382,13 @@ class IntegrationSettingsBase(BaseModel):
     gmail_label: Optional[str] = None
     gmail_sync_days: Optional[int] = 7
     gmail_sync_max_results: Optional[int] = 20
+    smtp_enabled: Optional[bool] = False
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[int] = 587
+    smtp_username: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_from: Optional[str] = None
+    smtp_use_tls: Optional[bool] = True
 
 class IntegrationSettingsUpdate(IntegrationSettingsBase):
     pass

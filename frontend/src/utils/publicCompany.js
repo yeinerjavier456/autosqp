@@ -22,28 +22,61 @@ const formatPublicTitle = (companyName) => {
   return normalized || 'AutosQP';
 };
 
-const DEFAULT_FAVICON = 'https://autosqp.com/wp-content/uploads/2025/12/cropped-Horizontal-Base_-v3-1.03.18-p.m.png';
+const buildCompanyFaviconDataUrl = (companyName, primaryColor = '#2563eb', secondaryColor = '#0f172a') => {
+  const label = String(companyName || 'A').trim().slice(0, 1).toUpperCase() || 'A';
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="${secondaryColor}" />
+          <stop offset="100%" stop-color="${primaryColor}" />
+        </linearGradient>
+      </defs>
+      <rect width="64" height="64" rx="16" fill="url(#g)" />
+      <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#ffffff">${label}</text>
+    </svg>
+  `.trim();
 
-const setDocumentFavicon = (logoUrl) => {
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+};
+
+const setDocumentFavicon = (company) => {
   if (typeof document === 'undefined') {
     return;
   }
 
-  const baseHref = logoUrl ? normalizeMediaUrl(logoUrl) : DEFAULT_FAVICON;
-  const separator = baseHref.includes('?') ? '&' : '?';
-  const faviconHref = `${baseHref}${separator}v=${encodeURIComponent(baseHref)}`;
-  const relValues = ['icon', 'shortcut icon', 'apple-touch-icon'];
+  const brandName = String(company?.name || inferCompanyNameFromHost()).trim() || 'AutosQP';
+  const primaryColor = company?.primary_color || '#2563eb';
+  const secondaryColor = company?.secondary_color || '#0f172a';
+  const generatedFavicon = buildCompanyFaviconDataUrl(brandName, primaryColor, secondaryColor);
+  const appleTouchIconHref = company?.logo_url ? normalizeMediaUrl(company.logo_url) : generatedFavicon;
 
-  relValues.forEach((relValue) => {
-    let favicon = document.querySelector(`link[rel="${relValue}"]`);
+  const relConfigurations = [
+    { rel: 'icon', href: generatedFavicon, type: 'image/svg+xml', sizes: 'any' },
+    { rel: 'shortcut icon', href: generatedFavicon, type: 'image/svg+xml', sizes: 'any' },
+    { rel: 'apple-touch-icon', href: appleTouchIconHref, type: undefined, sizes: undefined },
+  ];
+
+  relConfigurations.forEach(({ rel, href, type, sizes }) => {
+    let favicon = document.querySelector(`link[rel="${rel}"]`);
 
     if (!favicon) {
       favicon = document.createElement('link');
-      favicon.setAttribute('rel', relValue);
+      favicon.setAttribute('rel', rel);
       document.head.appendChild(favicon);
     }
 
-    favicon.setAttribute('href', faviconHref);
+    favicon.setAttribute('href', href);
+    if (type) {
+      favicon.setAttribute('type', type);
+    } else {
+      favicon.removeAttribute('type');
+    }
+    if (sizes) {
+      favicon.setAttribute('sizes', sizes);
+    } else {
+      favicon.removeAttribute('sizes');
+    }
   });
 };
 
@@ -88,7 +121,7 @@ export const usePublicCompany = () => {
       return;
     }
     document.title = formatPublicTitle(company?.name);
-    setDocumentFavicon(company?.logo_url);
+    setDocumentFavicon(company);
   }, [company]);
 
   return company;
