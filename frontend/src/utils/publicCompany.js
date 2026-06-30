@@ -16,6 +16,11 @@ const inferCompanyNameFromHost = () => {
   return label || 'AutosQP';
 };
 
+const formatPublicTitle = (companyName) => {
+  const normalized = String(companyName || '').trim();
+  return normalized || 'AutosQP';
+};
+
 const DEFAULT_PUBLIC_COMPANY = {
   id: null,
   name: inferCompanyNameFromHost(),
@@ -55,7 +60,7 @@ export const usePublicCompany = () => {
     if (typeof document === 'undefined') {
       return;
     }
-    document.title = company?.name || 'AutosQP';
+    document.title = formatPublicTitle(company?.name);
   }, [company]);
 
   return company;

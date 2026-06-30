@@ -7,6 +7,21 @@
   <link rel="icon" href="https://autosqp.com/wp-content/uploads/2025/12/cropped-Horizontal-Base_-v3-1.03.18-p.m.png" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Autos QP</title>
+  <script>
+    (function () {
+      try {
+        var hostname = String(window.location.hostname || '').trim().toLowerCase();
+        if (!hostname || hostname === 'localhost' || hostname === '127.0.0.1') return;
+        var normalized = hostname.replace(/^www\./, '');
+        var label = normalized.split('.')[0];
+        if (label) {
+          document.title = label;
+        }
+      } catch (error) {
+        console.warn('Unable to set public page title from hostname.', error);
+      }
+    })();
+  </script>
 </head>
 
 <body>
