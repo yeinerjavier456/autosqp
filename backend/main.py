@@ -20,8 +20,10 @@ import json
 import random
 import base64
 import secrets
+import shutil
 import smtplib
 import ssl
+import uuid
 from html import escape
 from io import BytesIO
 from email.message import EmailMessage
@@ -432,8 +434,12 @@ def _save_public_credit_upload(upload, subdirectory: str, fallback_name: str) ->
     safe_name = _sanitize_public_credit_filename(unique_name, fallback_name)
     target_path = os.path.join("static", "public-credit", subdirectory, safe_name)
 
-    if isinstance(upload, UploadFile):
+    if hasattr(upload, "file"):
         with open(target_path, "wb") as buffer:
+            try:
+                upload.file.seek(0)
+            except Exception:
+                pass
             shutil.copyfileobj(upload.file, buffer)
     else:
         with open(target_path, "wb") as buffer:
