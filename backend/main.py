@@ -887,6 +887,8 @@ def _build_public_credit_submission_pdf(
         "signature_upload": "Firma adjunta",
         "signature_drawn": "Firma realizada en el formulario",
     }
+    consent_payload = payload.get("consent") if isinstance(payload.get("consent"), dict) else {}
+    signer_name = str(consent_payload.get("signatureName") or submission.applicant_name or "").strip()
     for attachment_key, attachment_url in attachments.items():
         local_path = _public_credit_attachment_path(attachment_url)
         if not local_path:
@@ -898,12 +900,17 @@ def _build_public_credit_submission_pdf(
             display_height = min(10 * cm, display_width * image_height / max(image_width, 1))
             story.append(Paragraph(escape(attachment_labels.get(attachment_key, "Archivo adjunto")), styles["CreditSection"]))
             story.append(RLImage(local_path, width=display_width, height=display_height))
+            if attachment_key in {"signature_upload", "signature_drawn"} and signer_name:
+                story.append(Spacer(1, 6))
+                story.append(Paragraph(f"Firmado por: <b>{escape(signer_name)}</b>", styles["CreditSmall"]))
             story.append(Spacer(1, 10))
         except Exception:
             story.append(Paragraph(
                 f"{escape(attachment_labels.get(attachment_key, 'Archivo adjunto'))}: archivo disponible en el sistema.",
                 styles["CreditSmall"],
             ))
+            if attachment_key in {"signature_upload", "signature_drawn"} and signer_name:
+                story.append(Paragraph(f"Firmado por: <b>{escape(signer_name)}</b>", styles["CreditSmall"]))
 
     document.build(story)
     return buffer.getvalue()
