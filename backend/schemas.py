@@ -270,6 +270,10 @@ class PublicCreditSubmissionDetail(PublicCreditSubmissionItem):
 class PublicCreditSubmissionUpdate(BaseModel):
     status: str
 
+
+class LeadCreditFormUpsert(BaseModel):
+    form_payload: Dict[str, Any] = Field(default_factory=dict)
+
 # --- NOTIFICATIONS & REMINDERS ---
 
 class NotificationBase(BaseModel):

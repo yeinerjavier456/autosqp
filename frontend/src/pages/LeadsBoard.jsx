@@ -9,6 +9,289 @@ import { formatBogotaDateTime } from '../utils/dateTime';
 const API_BASE_URL = `${window.location.origin}/crm/api`;
 const BOARD_PAGE_SIZE = 20;
 
+const resolveLeadFileUrl = (filePath) => {
+    const value = String(filePath || '').trim();
+    if (!value) return '';
+    if (/^https?:\/\//i.test(value)) return value;
+    if (value.startsWith('/api/') || value.startsWith('/crm/api/')) {
+        return `${window.location.origin}${value}`;
+    }
+    return `${API_BASE_URL}${value.startsWith('/') ? value : `/${value}`}`;
+};
+
+const isLeadImageFile = (file) => {
+    const fileType = String(file?.file_type || '').toLowerCase();
+    const filePath = String(file?.file_path || '').toLowerCase();
+    return fileType.startsWith('image/') || /\.(png|jpe?g|webp|gif)(\?.*)?$/.test(filePath);
+};
+
+const CREDIT_FORM_SECTIONS = [
+    {
+        id: 'vehicle',
+        title: 'Datos del vehículo',
+        fields: [
+            ['label', 'Vehículo solicitado'],
+            ['vehicleValue', 'Valor del vehículo', 'number'],
+            ['requestedAmount', 'Monto solicitado', 'number'],
+            ['requestDate', 'Fecha de solicitud', 'date'],
+            ['make', 'Marca'],
+            ['model', 'Modelo'],
+            ['vehicleType', 'Tipo de vehículo'],
+        ],
+    },
+    {
+        id: 'personal',
+        title: 'Datos personales',
+        fields: [
+            ['firstName', 'Nombres'], ['lastName', 'Apellidos'],
+            ['documentType', 'Tipo de documento'], ['documentNumber', 'Número de documento'],
+            ['issuePlace', 'Lugar de expedición'], ['birthDate', 'Fecha de nacimiento', 'date'],
+            ['gender', 'Sexo'], ['profession', 'Profesión'],
+            ['birthPlace', 'Lugar de nacimiento'], ['maritalStatus', 'Estado civil'],
+            ['childrenCount', 'Número de hijos'], ['educationLevel', 'Nivel de estudio'],
+            ['livesWith', 'Con quién vive'], ['housingType', 'Tipo de vivienda'],
+            ['mobilePhone', 'Teléfono móvil'], ['city', 'Ciudad'],
+            ['address', 'Dirección'], ['email', 'Correo electrónico', 'email'],
+        ],
+    },
+    {
+        id: 'employment',
+        title: 'Datos laborales',
+        fields: [
+            ['activity', 'Actividad económica'], ['companyName', 'Empresa actual'],
+            ['companyCity', 'Ciudad de la empresa'], ['companyAddress', 'Dirección de la empresa'],
+            ['jobTitle', 'Cargo u ocupación'], ['companyEmail', 'Correo de la empresa', 'email'],
+            ['startDate', 'Fecha de ingreso', 'date'], ['salary', 'Salario', 'number'],
+            ['contractType', 'Tipo de contrato'], ['previousCompanyName', 'Empresa anterior'],
+            ['previousCompanyActivity', 'Actividad de empresa anterior'], ['previousCompanyRole', 'Cargo anterior'],
+            ['previousEmploymentTime', 'Tiempo laborado anteriormente'],
+        ],
+    },
+    {
+        id: 'income',
+        title: 'Ingresos',
+        fields: [
+            ['salaryIncome', 'Ingreso por salario', 'number'],
+            ['commissionsIncome', 'Ingreso por comisiones', 'number'],
+            ['otherIncome', 'Otros ingresos', 'number'],
+            ['otherIncomeDetail', 'Detalle de otros ingresos'],
+            ['totalIncome', 'Total de ingresos', 'number', true],
+        ],
+    },
+];
+
+const CREDIT_REFERENCE_GROUPS = [
+    ['commercial', 'Referencia comercial'],
+    ['personal1', 'Primera referencia personal'],
+    ['personal2', 'Segunda referencia personal'],
+];
+
+const createInternalCreditForm = (lead) => ({
+    vehicle: {
+        label: lead?.process_detail?.desired_vehicle || '',
+        vehicleValue: '', requestedAmount: '', requestDate: '', make: '', model: '', vehicleType: 'Automóvil',
+    },
+    personal: {
+        firstName: lead?.name || '', lastName: '', documentType: 'C.C', documentNumber: '', issuePlace: '',
+        birthDate: '', gender: '', profession: '', birthPlace: '', maritalStatus: '', childrenCount: '',
+        educationLevel: '', livesWith: '', housingType: '', mobilePhone: lead?.phone || '', city: '',
+        address: '', email: lead?.email || '',
+    },
+    employment: {
+        activity: '', companyName: '', companyCity: '', companyAddress: '', jobTitle: '', companyEmail: '',
+        startDate: '', salary: '', contractType: '', previousCompanyName: '', previousCompanyActivity: '',
+        previousCompanyRole: '', previousEmploymentTime: '',
+    },
+    income: { salaryIncome: '', commissionsIncome: '', otherIncome: '', otherIncomeDetail: '', totalIncome: '' },
+    references: {
+        commercial: { names: '', lastNames: '', phone: '', city: '' },
+        personal1: { names: '', lastNames: '', phone: '', city: '' },
+        personal2: { names: '', lastNames: '', phone: '', city: '' },
+    },
+    consent: { accepted: false, signatureMode: '', signatureName: '' },
+});
+
+const mergeInternalCreditForm = (lead, payload) => {
+    const defaults = createInternalCreditForm(lead);
+    const source = payload && typeof payload === 'object' ? payload : {};
+    return {
+        ...defaults,
+        ...source,
+        vehicle: { ...defaults.vehicle, ...(source.vehicle || {}) },
+        personal: { ...defaults.personal, ...(source.personal || {}) },
+        employment: { ...defaults.employment, ...(source.employment || {}) },
+        income: { ...defaults.income, ...(source.income || {}) },
+        references: {
+            ...defaults.references,
+            ...(source.references || {}),
+            commercial: { ...defaults.references.commercial, ...(source.references?.commercial || {}) },
+            personal1: { ...defaults.references.personal1, ...(source.references?.personal1 || {}) },
+            personal2: { ...defaults.references.personal2, ...(source.references?.personal2 || {}) },
+        },
+        consent: { ...defaults.consent, ...(source.consent || {}) },
+    };
+};
+
+const LeadCreditFormTab = ({ lead, canModify }) => {
+    const [form, setForm] = useState(() => createInternalCreditForm(lead));
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [origin, setOrigin] = useState('internal');
+    const [exists, setExists] = useState(false);
+
+    useEffect(() => {
+        let active = true;
+        const loadForm = async () => {
+            setLoading(true);
+            try {
+                const token = localStorage.getItem('token');
+                const response = await axios.get(`${API_BASE_URL}/leads/${lead.id}/credit-form`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                if (!active) return;
+                setForm(mergeInternalCreditForm(lead, response.data?.form_payload));
+                setOrigin(response.data?.origin || 'internal');
+                setExists(Boolean(response.data?.exists));
+            } catch (error) {
+                console.error('Error loading lead credit form', error);
+                if (active) setForm(createInternalCreditForm(lead));
+            } finally {
+                if (active) setLoading(false);
+            }
+        };
+        loadForm();
+        return () => { active = false; };
+    }, [lead?.id]);
+
+    const updateField = (section, field, value) => {
+        setForm((current) => {
+            const nextSection = { ...(current[section] || {}), [field]: value };
+            if (section === 'income' && ['salaryIncome', 'commissionsIncome', 'otherIncome'].includes(field)) {
+                const total = ['salaryIncome', 'commissionsIncome', 'otherIncome']
+                    .reduce((sum, key) => sum + (Number(nextSection[key]) || 0), 0);
+                nextSection.totalIncome = total ? String(total) : '';
+            }
+            return { ...current, [section]: nextSection };
+        });
+    };
+
+    const updateReference = (group, field, value) => {
+        setForm((current) => ({
+            ...current,
+            references: {
+                ...current.references,
+                [group]: { ...(current.references?.[group] || {}), [field]: value },
+            },
+        }));
+    };
+
+    const saveForm = async () => {
+        setSaving(true);
+        try {
+            const token = localStorage.getItem('token');
+            await axios.put(
+                `${API_BASE_URL}/leads/${lead.id}/credit-form`,
+                { form_payload: form },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            setExists(true);
+            Swal.fire('Formulario guardado', 'La información de crédito quedó asociada al lead.', 'success');
+        } catch (error) {
+            console.error('Error saving lead credit form', error);
+            Swal.fire('Error', error?.response?.data?.detail || 'No se pudo guardar el formulario.', 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) {
+        return <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">Cargando formulario...</div>;
+    }
+
+    const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100';
+
+    return (
+        <div className="space-y-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h3 className="text-lg font-bold text-slate-900">Formulario de crédito</h3>
+                    <p className="text-sm text-slate-500">
+                        {origin === 'public' ? 'Enviado y validado por el cliente desde la web.' : exists ? 'Formulario diligenciado internamente.' : 'Aún no se ha diligenciado; completa los datos del cliente.'}
+                    </p>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-bold ${origin === 'public' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
+                    {origin === 'public' ? 'Origen público' : 'Origen interno'}
+                </span>
+            </div>
+
+            {CREDIT_FORM_SECTIONS.map((section) => (
+                <section key={section.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <h4 className="mb-4 font-bold text-slate-800">{section.title}</h4>
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        {section.fields.map(([field, label, type = 'text', readOnly = false]) => (
+                            <label key={field} className="block text-xs font-bold uppercase tracking-wide text-slate-500">
+                                {label}
+                                <input
+                                    type={type}
+                                    value={form?.[section.id]?.[field] ?? ''}
+                                    onChange={(event) => updateField(section.id, field, event.target.value)}
+                                    disabled={!canModify || readOnly}
+                                    className={`${inputClass} mt-1 font-normal normal-case tracking-normal`}
+                                />
+                            </label>
+                        ))}
+                    </div>
+                </section>
+            ))}
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                <h4 className="mb-4 font-bold text-slate-800">Referencias</h4>
+                <div className="grid gap-4 xl:grid-cols-3">
+                    {CREDIT_REFERENCE_GROUPS.map(([group, title]) => (
+                        <div key={group} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <h5 className="mb-3 text-sm font-bold text-slate-700">{title}</h5>
+                            <div className="space-y-3">
+                                {[['names', 'Nombres'], ['lastNames', 'Apellidos'], ['phone', 'Teléfono'], ['city', 'Ciudad']].map(([field, label]) => (
+                                    <label key={field} className="block text-xs font-semibold text-slate-500">
+                                        {label}
+                                        <input
+                                            type="text"
+                                            value={form?.references?.[group]?.[field] ?? ''}
+                                            onChange={(event) => updateReference(group, field, event.target.value)}
+                                            disabled={!canModify}
+                                            className={`${inputClass} mt-1 font-normal`}
+                                        />
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                <h4 className="font-bold text-slate-800">Consentimiento del cliente</h4>
+                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-xl bg-slate-50 p-3 text-sm"><strong>Aceptado:</strong> {form?.consent?.accepted ? 'Sí' : 'No registrado'}</div>
+                    <div className="rounded-xl bg-slate-50 p-3 text-sm"><strong>Firma:</strong> {form?.consent?.signatureMode === 'draw' ? 'Dibujada' : form?.consent?.signatureMode === 'upload' ? 'Adjunta' : 'No registrada'}</div>
+                    <div className="rounded-xl bg-slate-50 p-3 text-sm"><strong>Firmante:</strong> {form?.consent?.signatureName || 'No registrado'}</div>
+                </div>
+            </section>
+
+            {canModify && (
+                <button
+                    type="button"
+                    onClick={saveForm}
+                    disabled={saving}
+                    className="w-full rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
+                >
+                    {saving ? 'Guardando...' : exists ? 'Guardar cambios del formulario' : 'Crear formulario de crédito'}
+                </button>
+            )}
+        </div>
+    );
+};
+
 const extractCreditVehicleTrace = (comment) => {
     const text = (comment || '').trim();
     if (!text) return { vehicleTrace: '', mainComment: '' };
@@ -1239,6 +1522,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
 
     const detailTabs = [
         { id: 'resumen', label: 'Resumen' },
+        { id: 'formulario-credito', label: 'Formulario de crédito' },
         { id: 'credito', label: 'Crédito' },
         { id: 'compras', label: 'Compras' },
         ...(showPurchasedTabs ? [
@@ -2214,6 +2498,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                         </button>
                     </div>
 
+                    {activeDetailTab === 'formulario-credito' && (
+                        <LeadCreditFormTab lead={lead} canModify={canModifyLead} />
+                    )}
+
                     {activeDetailTab === 'citas' && (
                         <div className="space-y-4">
                             <div className="bg-indigo-50/60 p-4 rounded-xl border border-indigo-100">
@@ -2465,10 +2753,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
                                         {leadFiles.map((file) => (
                                             <div key={file.id} className="bg-white p-2 rounded border border-gray-200 shadow-sm flex flex-col gap-2">
-                                                    <a href={`${API_BASE_URL}${file.file_path}`} target="_blank" rel="noopener noreferrer" className="hover:border-orange-500 transition flex flex-col items-center gap-1 group">
-                                                    {file.file_type && file.file_type.includes('image') ? (
-                                                        <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center overflow-hidden">
-                                                            <img src={`${API_BASE_URL}${file.file_path}`} alt="File" className="w-full h-full object-cover" />
+                                                    <a href={resolveLeadFileUrl(file.file_path)} target="_blank" rel="noopener noreferrer" className="hover:border-orange-500 transition flex flex-col items-center gap-1 group">
+                                                    {isLeadImageFile(file) ? (
+                                                        <div className="h-28 w-full rounded bg-gray-100 flex items-center justify-center overflow-hidden">
+                                                            <img src={resolveLeadFileUrl(file.file_path)} alt={file.file_name || 'Documento del lead'} className="w-full h-full object-contain" />
                                                         </div>
                                                     ) : (
                                                         <svg className="w-8 h-8 text-gray-400 group-hover:text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
@@ -2774,10 +3062,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-72 overflow-y-auto pr-2 custom-scrollbar">
                                             {leadFiles.map((file) => (
                                                 <div key={file.id} className="bg-white p-2 rounded border border-gray-200 shadow-sm flex flex-col gap-2">
-                                                    <a href={`${API_BASE_URL}${file.file_path}`} target="_blank" rel="noopener noreferrer" className="hover:border-orange-500 transition flex flex-col items-center gap-1 group">
-                                                        {file.file_type && file.file_type.includes('image') ? (
-                                                            <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center overflow-hidden">
-                                                                <img src={`${API_BASE_URL}${file.file_path}`} alt="File" className="w-full h-full object-cover" />
+                                                    <a href={resolveLeadFileUrl(file.file_path)} target="_blank" rel="noopener noreferrer" className="hover:border-orange-500 transition flex flex-col items-center gap-1 group">
+                                                        {isLeadImageFile(file) ? (
+                                                            <div className="h-28 w-full rounded bg-gray-100 flex items-center justify-center overflow-hidden">
+                                                                <img src={resolveLeadFileUrl(file.file_path)} alt={file.file_name || 'Documento del lead'} className="w-full h-full object-contain" />
                                                             </div>
                                                         ) : (
                                                             <svg className="w-8 h-8 text-gray-400 group-hover:text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>

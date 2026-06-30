@@ -4586,6 +4586,188 @@ def update_public_credit_submission(
     return schemas.PublicCreditSubmissionDetail(**serialize_public_credit_submission(submission))
 
 
+def _get_accessible_lead_for_credit_form(
+    db: Session,
+    current_user: models.User,
+    lead_id: int,
+) -> models.Lead:
+    query = apply_lead_access_filters(db.query(models.Lead), db, current_user)
+    lead = query.filter(models.Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead no encontrado o sin acceso")
+    return lead
+
+
+def _default_internal_credit_form_payload(lead: models.Lead) -> Dict[str, Any]:
+    process_detail = getattr(lead, "process_detail", None)
+    return {
+        "vehicle": {
+            "vehicleValue": "",
+            "requestedAmount": "",
+            "requestDate": bogota_today().isoformat(),
+            "make": "",
+            "model": "",
+            "vehicleType": "Automóvil",
+            "label": getattr(process_detail, "desired_vehicle", None) or "",
+        },
+        "personal": {
+            "firstName": lead.name or "",
+            "lastName": "",
+            "documentType": "C.C",
+            "documentNumber": "",
+            "issuePlace": "",
+            "birthDate": "",
+            "gender": "",
+            "profession": "",
+            "birthPlace": "",
+            "maritalStatus": "",
+            "childrenCount": "",
+            "educationLevel": "",
+            "livesWith": "",
+            "housingType": "",
+            "mobilePhone": lead.phone or "",
+            "city": "",
+            "address": "",
+            "email": lead.email or "",
+        },
+        "employment": {
+            "activity": "",
+            "companyName": "",
+            "companyCity": "",
+            "companyAddress": "",
+            "jobTitle": "",
+            "companyEmail": "",
+            "startDate": "",
+            "salary": "",
+            "contractType": "",
+            "previousCompanyName": "",
+            "previousCompanyActivity": "",
+            "previousCompanyRole": "",
+            "previousEmploymentTime": "",
+        },
+        "income": {
+            "salaryIncome": "",
+            "commissionsIncome": "",
+            "otherIncome": "",
+            "otherIncomeDetail": "",
+            "totalIncome": "",
+        },
+        "references": {
+            "commercial": {"names": "", "lastNames": "", "phone": "", "city": ""},
+            "personal1": {"names": "", "lastNames": "", "phone": "", "city": ""},
+            "personal2": {"names": "", "lastNames": "", "phone": "", "city": ""},
+        },
+        "consent": {
+            "accepted": False,
+            "signatureMode": "",
+            "signatureName": "",
+        },
+    }
+
+
+@app.get("/leads/{lead_id}/credit-form")
+def read_lead_credit_form(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    lead = _get_accessible_lead_for_credit_form(db, current_user, lead_id)
+    submission = db.query(models.PublicCreditSubmission).filter(
+        models.PublicCreditSubmission.lead_id == lead.id
+    ).order_by(
+        models.PublicCreditSubmission.updated_at.desc(),
+        models.PublicCreditSubmission.id.desc(),
+    ).first()
+    if submission:
+        return {
+            "exists": True,
+            "origin": "public" if submission.verification_verified_at else "internal",
+            "submission": serialize_public_credit_submission(submission),
+            "form_payload": submission.form_payload or _default_internal_credit_form_payload(lead),
+        }
+    return {
+        "exists": False,
+        "origin": "internal",
+        "submission": None,
+        "form_payload": _default_internal_credit_form_payload(lead),
+    }
+
+
+@app.put("/leads/{lead_id}/credit-form", response_model=schemas.PublicCreditSubmissionDetail)
+def save_lead_credit_form(
+    lead_id: int,
+    payload: schemas.LeadCreditFormUpsert,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    lead = db.query(models.Lead).options(joinedload(models.Lead.supervisors)).filter(
+        models.Lead.id == lead_id
+    ).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead no encontrado")
+    if current_user.company_id and lead.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    ensure_can_modify_lead(current_user, lead)
+
+    form_payload = payload.form_payload if isinstance(payload.form_payload, dict) else {}
+    personal = form_payload.get("personal", {}) or {}
+    vehicle = form_payload.get("vehicle", {}) or {}
+    applicant_name = " ".join(filter(None, [
+        str(personal.get("firstName") or "").strip(),
+        str(personal.get("lastName") or "").strip(),
+    ])).strip() or lead.name or "Cliente"
+    applicant_email = str(personal.get("email") or lead.email or "").strip().lower()
+    applicant_phone = str(personal.get("mobilePhone") or lead.phone or "").strip()
+    desired_vehicle = str(vehicle.get("label") or " ".join(filter(None, [
+        vehicle.get("make"), vehicle.get("model"), vehicle.get("vehicleType")
+    ]))).strip()
+
+    submission = db.query(models.PublicCreditSubmission).filter(
+        models.PublicCreditSubmission.lead_id == lead.id
+    ).order_by(
+        models.PublicCreditSubmission.updated_at.desc(),
+        models.PublicCreditSubmission.id.desc(),
+    ).first()
+    created = submission is None
+    if created:
+        submission = models.PublicCreditSubmission(
+            company_id=lead.company_id,
+            lead_id=lead.id,
+            email=applicant_email,
+            applicant_name=applicant_name,
+            status="reviewing",
+            attachments={},
+            consent_text=PUBLIC_CREDIT_POLICY_TEXT,
+        )
+        db.add(submission)
+    else:
+        previous_consent = (submission.form_payload or {}).get("consent", {}) or {}
+        if submission.verification_verified_at:
+            form_payload["consent"] = previous_consent
+
+    submission.email = applicant_email
+    submission.applicant_name = applicant_name
+    submission.document_number = str(personal.get("documentNumber") or "").strip() or None
+    submission.phone = applicant_phone or None
+    submission.desired_vehicle = desired_vehicle or None
+    submission.form_payload = form_payload
+    submission.updated_at = datetime.datetime.now()
+
+    db.add(models.LeadHistory(
+        lead_id=lead.id,
+        user_id=current_user.id,
+        previous_status=lead.status,
+        new_status=lead.status,
+        comment=(
+            "Formulario de crédito interno creado por el asesor"
+            if created else "Formulario de crédito actualizado desde el detalle del lead"
+        ),
+    ))
+    db.commit()
+    db.refresh(submission)
+    return schemas.PublicCreditSubmissionDetail(**serialize_public_credit_submission(submission))
+
+
 @app.post("/public/credit-request", response_model=schemas.PublicCreditRequestResponse)
 def create_public_credit_request(
     payload: schemas.PublicCreditRequestCreate,
