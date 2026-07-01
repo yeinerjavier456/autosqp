@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationsContext';
@@ -8,6 +8,14 @@ import { formatBogotaDateTime } from '../utils/dateTime';
 
 const API_BASE_URL = `${window.location.origin}/crm/api`;
 const BOARD_PAGE_SIZE = 20;
+
+const buildCreditCapturePageUrl = (token) => {
+    if (!token) return '';
+    return `${window.location.origin}/crm/credito/captura/${token}`;
+};
+
+const buildCreditQrImageUrl = (url) =>
+    `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=8&data=${encodeURIComponent(url)}`;
 
 const resolveLeadFileUrl = (filePath) => {
     const value = String(filePath || '').trim();
@@ -108,7 +116,7 @@ const createInternalCreditForm = (lead) => ({
         personal1: { names: '', lastNames: '', phone: '', city: '' },
         personal2: { names: '', lastNames: '', phone: '', city: '' },
     },
-    consent: { accepted: false, signatureMode: '', signatureName: '' },
+    consent: { accepted: false, signatureMode: 'draw', signatureName: '', signatureDrawnDataUrl: '' },
 });
 
 const mergeInternalCreditForm = (lead, payload) => {
@@ -133,11 +141,23 @@ const mergeInternalCreditForm = (lead, payload) => {
 };
 
 const LeadCreditFormTab = ({ lead, canModify }) => {
+    const canvasRef = useRef(null);
+    const drawingRef = useRef(false);
     const [form, setForm] = useState(() => createInternalCreditForm(lead));
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [sendingAccess, setSendingAccess] = useState(false);
     const [origin, setOrigin] = useState('internal');
     const [exists, setExists] = useState(false);
+    const [submission, setSubmission] = useState(null);
+    const [documentFront, setDocumentFront] = useState(null);
+    const [documentBack, setDocumentBack] = useState(null);
+    const [signatureFile, setSignatureFile] = useState(null);
+    const [documentFrontPreview, setDocumentFrontPreview] = useState('');
+    const [documentBackPreview, setDocumentBackPreview] = useState('');
+    const [signaturePreview, setSignaturePreview] = useState('');
+    const [documentCaptures, setDocumentCaptures] = useState({ documentFront: null, documentBack: null });
+    const [creatingCapture, setCreatingCapture] = useState('');
 
     useEffect(() => {
         let active = true;
@@ -152,6 +172,7 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
                 setForm(mergeInternalCreditForm(lead, response.data?.form_payload));
                 setOrigin(response.data?.origin || 'internal');
                 setExists(Boolean(response.data?.exists));
+                setSubmission(response.data?.submission || null);
             } catch (error) {
                 console.error('Error loading lead credit form', error);
                 if (active) setForm(createInternalCreditForm(lead));
@@ -162,6 +183,56 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
         loadForm();
         return () => { active = false; };
     }, [lead?.id]);
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+    }, [form?.consent?.signatureMode]);
+
+    useEffect(() => () => {
+        if (documentFrontPreview?.startsWith('blob:')) URL.revokeObjectURL(documentFrontPreview);
+        if (documentBackPreview?.startsWith('blob:')) URL.revokeObjectURL(documentBackPreview);
+        if (signaturePreview?.startsWith('blob:')) URL.revokeObjectURL(signaturePreview);
+    }, [documentFrontPreview, documentBackPreview, signaturePreview]);
+
+    useEffect(() => {
+        const pendingCaptures = Object.entries(documentCaptures).filter(([, capture]) => capture?.token && !capture?.uploaded);
+        if (!pendingCaptures.length) return undefined;
+
+        const intervalId = window.setInterval(async () => {
+            await Promise.all(pendingCaptures.map(async ([key, capture]) => {
+                try {
+                    const response = await axios.get(`${API_BASE_URL}/public/credit-request/capture-session/${capture.token}`);
+                    if (response?.data?.uploaded) {
+                        setDocumentCaptures((prev) => ({
+                            ...prev,
+                            [key]: {
+                                ...prev[key],
+                                ...response.data,
+                                previewUrl: response.data.file_url,
+                            },
+                        }));
+                    }
+                } catch (error) {
+                    setDocumentCaptures((prev) => ({
+                        ...prev,
+                        [key]: {
+                            ...prev[key],
+                            error: error?.response?.data?.detail || 'No se pudo consultar la captura.',
+                        },
+                    }));
+                }
+            }));
+        }, 3000);
+
+        return () => window.clearInterval(intervalId);
+    }, [documentCaptures]);
 
     const updateField = (section, field, value) => {
         setForm((current) => {
@@ -185,16 +256,147 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
         }));
     };
 
+    const updateConsent = (field, value) => {
+        setForm((current) => ({
+            ...current,
+            consent: { ...(current.consent || {}), [field]: value },
+        }));
+    };
+
+    const getCanvasPosition = (event) => {
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+        const touch = event.touches?.[0];
+        const clientX = touch ? touch.clientX : event.clientX;
+        const clientY = touch ? touch.clientY : event.clientY;
+        return { x: clientX - rect.left, y: clientY - rect.top };
+    };
+
+    const startDrawing = (event) => {
+        if (!canModify) return;
+        drawingRef.current = true;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        const { x, y } = getCanvasPosition(event);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+    };
+
+    const draw = (event) => {
+        if (!drawingRef.current || !canModify) return;
+        event.preventDefault();
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        const { x, y } = getCanvasPosition(event);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+        updateConsent('signatureDrawnDataUrl', canvas.toDataURL('image/png'));
+    };
+
+    const stopDrawing = () => {
+        drawingRef.current = false;
+    };
+
+    const clearCanvas = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        updateConsent('signatureDrawnDataUrl', '');
+    };
+
+    const handleFileSelection = (type, file) => {
+        if (!file) return;
+        const previewUrl = URL.createObjectURL(file);
+        if (type === 'documentFront') {
+            if (documentFrontPreview?.startsWith('blob:')) URL.revokeObjectURL(documentFrontPreview);
+            setDocumentFront(file);
+            setDocumentFrontPreview(previewUrl);
+            setDocumentCaptures((prev) => ({ ...prev, documentFront: null }));
+        }
+        if (type === 'documentBack') {
+            if (documentBackPreview?.startsWith('blob:')) URL.revokeObjectURL(documentBackPreview);
+            setDocumentBack(file);
+            setDocumentBackPreview(previewUrl);
+            setDocumentCaptures((prev) => ({ ...prev, documentBack: null }));
+        }
+        if (type === 'signatureFile') {
+            if (signaturePreview?.startsWith('blob:')) URL.revokeObjectURL(signaturePreview);
+            setSignatureFile(file);
+            setSignaturePreview(previewUrl);
+            updateConsent('signatureMode', 'upload');
+        }
+    };
+
+    const createDocumentCaptureSession = async (type) => {
+        const side = type === 'documentFront' ? 'front' : 'back';
+        setCreatingCapture(type);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post(
+                `${API_BASE_URL}/leads/${lead.id}/credit-form/capture-session`,
+                { side },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            setDocumentCaptures((prev) => ({
+                ...prev,
+                [type]: {
+                    ...response.data,
+                    captureUrl: buildCreditCapturePageUrl(response.data.token),
+                    previewUrl: response.data.file_url || '',
+                    error: '',
+                },
+            }));
+        } catch (error) {
+            Swal.fire('Error', error?.response?.data?.detail || 'No se pudo generar el QR de captura.', 'error');
+        } finally {
+            setCreatingCapture('');
+        }
+    };
+
+    const sendAccess = async () => {
+        setSendingAccess(true);
+        try {
+            const token = localStorage.getItem('token');
+            await axios.post(
+                `${API_BASE_URL}/leads/${lead.id}/credit-form/send-access`,
+                {},
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            Swal.fire('Acceso enviado', 'Se envió el enlace del formulario al correo del cliente.', 'success');
+        } catch (error) {
+            Swal.fire('Error', error?.response?.data?.detail || 'No se pudo enviar el acceso al cliente.', 'error');
+        } finally {
+            setSendingAccess(false);
+        }
+    };
+
     const saveForm = async () => {
         setSaving(true);
         try {
             const token = localStorage.getItem('token');
-            await axios.put(
-                `${API_BASE_URL}/leads/${lead.id}/credit-form`,
-                { form_payload: form },
+            const formData = new FormData();
+            formData.append('payload_json', JSON.stringify(form));
+            if (documentFront) formData.append('document_front', documentFront);
+            if (documentBack) formData.append('document_back', documentBack);
+            if (signatureFile) formData.append('signature_file', signatureFile);
+            if (documentCaptures.documentFront?.uploaded) {
+                formData.append('document_front_capture_token', documentCaptures.documentFront.token);
+            }
+            if (documentCaptures.documentBack?.uploaded) {
+                formData.append('document_back_capture_token', documentCaptures.documentBack.token);
+            }
+            const response = await axios.put(
+                `${API_BASE_URL}/leads/${lead.id}/credit-form/files`,
+                formData,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             setExists(true);
+            setSubmission(response.data || null);
+            setDocumentFront(null);
+            setDocumentBack(null);
+            setSignatureFile(null);
             Swal.fire('Formulario guardado', 'La información de crédito quedó asociada al lead.', 'success');
         } catch (error) {
             console.error('Error saving lead credit form', error);
@@ -209,6 +411,63 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
     }
 
     const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100';
+    const attachments = submission?.attachments || {};
+    const attachmentPreview = (key) => {
+        const value = attachments[key];
+        return value ? resolveLeadFileUrl(value) : '';
+    };
+
+    const renderPreviewBox = (label, previewUrl, file) => {
+        const isImage = previewUrl && !String(previewUrl).toLowerCase().endsWith('.pdf');
+        return (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3">
+                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p>
+                {previewUrl ? (
+                    isImage ? (
+                        <img src={previewUrl} alt={label} className="h-40 w-full rounded-lg object-contain bg-white" />
+                    ) : (
+                        <a href={previewUrl} target="_blank" rel="noreferrer" className="text-sm font-bold text-blue-600">Ver archivo</a>
+                    )
+                ) : (
+                    <p className="text-sm text-slate-400">{file?.name || 'Sin archivo cargado.'}</p>
+                )}
+            </div>
+        );
+    };
+
+    const renderDocumentCaptureBox = (type, label) => {
+        const capture = documentCaptures[type];
+        return (
+            <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Tomar foto con celular</p>
+                        <p className="text-xs text-blue-600">Genera un QR para abrir la cámara desde el teléfono.</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => createDocumentCaptureSession(type)}
+                        disabled={!canModify || creatingCapture === type}
+                        className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
+                    >
+                        {creatingCapture === type ? 'Generando...' : 'Generar QR'}
+                    </button>
+                </div>
+                {capture?.captureUrl && (
+                    <div className="mt-3 grid gap-3 sm:grid-cols-[180px_1fr]">
+                        <img src={buildCreditQrImageUrl(capture.captureUrl)} alt={`QR ${label}`} className="h-44 w-44 rounded-xl bg-white p-2" />
+                        <div className="text-xs text-blue-700">
+                            <p className="font-bold">Escanea este QR para cargar {label.toLowerCase()}.</p>
+                            <a href={capture.captureUrl} target="_blank" rel="noreferrer" className="mt-2 block break-all font-semibold underline">{capture.captureUrl}</a>
+                            {capture.uploaded && <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 font-bold text-emerald-700">Foto recibida correctamente.</p>}
+                            {capture.error && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-bold text-red-700">{capture.error}</p>}
+                        </div>
+                    </div>
+                )}
+                {capture?.previewUrl && renderPreviewBox(`${label} desde celular`, resolveLeadFileUrl(capture.previewUrl), null)}
+            </div>
+        );
+    };
 
     return (
         <div className="space-y-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
@@ -223,6 +482,19 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
                     {origin === 'public' ? 'Origen público' : 'Origen interno'}
                 </span>
             </div>
+            {canModify && (
+                <div className="flex flex-wrap gap-2 rounded-2xl border border-blue-100 bg-blue-50 p-3">
+                    <button
+                        type="button"
+                        onClick={sendAccess}
+                        disabled={sendingAccess || !lead?.email}
+                        className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+                    >
+                        {sendingAccess ? 'Enviando acceso...' : 'Enviar acceso al cliente'}
+                    </button>
+                    {!lead?.email && <span className="self-center text-xs font-semibold text-amber-700">Agrega correo al lead para enviar el acceso.</span>}
+                </div>
+            )}
 
             {CREDIT_FORM_SECTIONS.map((section) => (
                 <section key={section.id} className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -270,11 +542,123 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
             </section>
 
             <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                <h4 className="mb-4 font-bold text-slate-800">Documentos del cliente</h4>
+                <div className="grid gap-5 xl:grid-cols-2">
+                    <div className="space-y-3">
+                        <label className="block text-xs font-bold uppercase tracking-wide text-slate-500">
+                            Cédula cara frontal
+                            <input
+                                type="file"
+                                accept="image/*,application/pdf"
+                                capture="environment"
+                                onChange={(event) => handleFileSelection('documentFront', event.target.files?.[0])}
+                                disabled={!canModify}
+                                className="mt-2 block w-full text-sm text-slate-600"
+                            />
+                        </label>
+                        {renderPreviewBox('Cédula frontal', documentFrontPreview || attachmentPreview('document_front'), documentFront)}
+                        {canModify && renderDocumentCaptureBox('documentFront', 'Documento frontal')}
+                    </div>
+                    <div className="space-y-3">
+                        <label className="block text-xs font-bold uppercase tracking-wide text-slate-500">
+                            Cédula cara posterior
+                            <input
+                                type="file"
+                                accept="image/*,application/pdf"
+                                capture="environment"
+                                onChange={(event) => handleFileSelection('documentBack', event.target.files?.[0])}
+                                disabled={!canModify}
+                                className="mt-2 block w-full text-sm text-slate-600"
+                            />
+                        </label>
+                        {renderPreviewBox('Cédula posterior', documentBackPreview || attachmentPreview('document_back'), documentBack)}
+                        {canModify && renderDocumentCaptureBox('documentBack', 'Documento posterior')}
+                    </div>
+                </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-4">
                 <h4 className="font-bold text-slate-800">Consentimiento del cliente</h4>
-                <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-xl bg-slate-50 p-3 text-sm"><strong>Aceptado:</strong> {form?.consent?.accepted ? 'Sí' : 'No registrado'}</div>
-                    <div className="rounded-xl bg-slate-50 p-3 text-sm"><strong>Firma:</strong> {form?.consent?.signatureMode === 'draw' ? 'Dibujada' : form?.consent?.signatureMode === 'upload' ? 'Adjunta' : 'No registrada'}</div>
-                    <div className="rounded-xl bg-slate-50 p-3 text-sm"><strong>Firmante:</strong> {form?.consent?.signatureName || 'No registrado'}</div>
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                    <label className="flex items-center gap-2 rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-700">
+                        <input
+                            type="checkbox"
+                            checked={Boolean(form?.consent?.accepted)}
+                            onChange={(event) => updateConsent('accepted', event.target.checked)}
+                            disabled={!canModify}
+                        />
+                        Política aceptada
+                    </label>
+                    <label className="block rounded-xl bg-slate-50 p-3 text-xs font-bold uppercase tracking-wide text-slate-500 md:col-span-2">
+                        Nombre de quien firma
+                        <input
+                            type="text"
+                            value={form?.consent?.signatureName || ''}
+                            onChange={(event) => updateConsent('signatureName', event.target.value)}
+                            disabled={!canModify}
+                            className={`${inputClass} mt-1 font-normal normal-case tracking-normal`}
+                        />
+                    </label>
+                </div>
+                <div className="mt-4 grid gap-5 lg:grid-cols-2">
+                    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                onClick={() => updateConsent('signatureMode', 'draw')}
+                                disabled={!canModify}
+                                className={`rounded-lg px-3 py-2 text-xs font-bold ${form?.consent?.signatureMode === 'draw' ? 'bg-blue-600 text-white' : 'bg-white text-slate-700 border border-slate-200'}`}
+                            >
+                                Firmar aquí
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => updateConsent('signatureMode', 'upload')}
+                                disabled={!canModify}
+                                className={`rounded-lg px-3 py-2 text-xs font-bold ${form?.consent?.signatureMode === 'upload' ? 'bg-blue-600 text-white' : 'bg-white text-slate-700 border border-slate-200'}`}
+                            >
+                                Subir imagen
+                            </button>
+                            <button type="button" onClick={clearCanvas} disabled={!canModify} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 disabled:opacity-60">
+                                Limpiar firma
+                            </button>
+                        </div>
+                        {form?.consent?.signatureMode === 'upload' ? (
+                            <div>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    onChange={(event) => handleFileSelection('signatureFile', event.target.files?.[0])}
+                                    disabled={!canModify}
+                                    className="block w-full text-sm text-slate-600"
+                                />
+                                {renderPreviewBox('Firma adjunta', signaturePreview || attachmentPreview('signature_upload'), signatureFile)}
+                            </div>
+                        ) : (
+                            <div className="overflow-hidden rounded-xl border border-dashed border-slate-300 bg-white">
+                                <canvas
+                                    ref={canvasRef}
+                                    width={720}
+                                    height={220}
+                                    className="h-56 w-full touch-none bg-white"
+                                    onMouseDown={startDrawing}
+                                    onMouseMove={draw}
+                                    onMouseUp={stopDrawing}
+                                    onMouseLeave={stopDrawing}
+                                    onTouchStart={startDrawing}
+                                    onTouchMove={draw}
+                                    onTouchEnd={stopDrawing}
+                                />
+                            </div>
+                        )}
+                    </div>
+                    <div className="space-y-3">
+                        {renderPreviewBox('Firma guardada', attachmentPreview('signature_drawn') || attachmentPreview('signature_upload'), null)}
+                        <div className="rounded-xl bg-slate-50 p-3 text-sm">
+                            <strong>Firma:</strong> {form?.consent?.signatureMode === 'draw' ? 'Dibujada' : form?.consent?.signatureMode === 'upload' ? 'Adjunta' : 'No registrada'}
+                        </div>
+                    </div>
                 </div>
             </section>
 
