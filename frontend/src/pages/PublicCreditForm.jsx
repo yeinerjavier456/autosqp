@@ -171,6 +171,7 @@ const PublicCreditForm = () => {
 
   const enabledModules = new Set(Array.isArray(company?.enabled_modules) ? company.enabled_modules : []);
   const isEnabled = enabledModules.has('public_credit_form');
+  const requiresEmailValidation = accessContext?.requires_email_validation ?? company?.public_credit_requires_email_validation ?? true;
 
   const theme = useMemo(() => {
     const primary = company?.primary_color || '#2563eb';
@@ -196,10 +197,12 @@ const PublicCreditForm = () => {
         setAccessAttachments(response.data?.attachments || {});
         setForm(mergeCreditForm(response.data?.form_payload || {}));
         setVerificationSent(true);
-        setVerificationVerified(Boolean(response.data?.verified));
+        setVerificationVerified(!response.data?.requires_email_validation || Boolean(response.data?.verified));
         setStatus({
           type: 'success',
-          message: 'Acceso ligado al lead cargado. Ingresa el código recibido por correo para validar y firmar.',
+          message: response.data?.requires_email_validation
+            ? 'Acceso ligado al lead cargado. Ingresa el código recibido por correo para validar y firmar.'
+            : 'Acceso ligado al lead cargado. Revisa la información pendiente y firma el formulario.',
         });
       } catch (error) {
         if (!active) return;
@@ -350,7 +353,7 @@ const PublicCreditForm = () => {
       return Boolean(
         form.consent.accepted &&
         form.consent.signatureName &&
-        verificationVerified &&
+        (!requiresEmailValidation || verificationVerified) &&
         ((form.consent.signatureMode === 'draw' && hasDrawnSignature) ||
           (form.consent.signatureMode === 'upload' && hasUploadedSignature))
       );
@@ -462,6 +465,12 @@ const PublicCreditForm = () => {
 
   const sendVerificationCode = async () => {
     resetStatus();
+    if (!requiresEmailValidation) {
+      setVerificationSent(true);
+      setVerificationVerified(true);
+      setStatus({ type: 'success', message: 'Esta empresa no requiere código de validación por correo.' });
+      return;
+    }
     if (accessToken) {
       setVerificationSent(true);
       setStatus({ type: 'success', message: 'Usa el código de validación que recibiste junto con este enlace.' });
@@ -489,6 +498,12 @@ const PublicCreditForm = () => {
 
   const verifyCode = async () => {
     resetStatus();
+    if (!requiresEmailValidation) {
+      setVerificationSent(true);
+      setVerificationVerified(true);
+      setStatus({ type: 'success', message: 'Esta empresa no requiere código de validación por correo.' });
+      return;
+    }
     if (!form.consent.verificationCode) {
       setStatus({ type: 'error', message: 'Ingresa el código recibido por correo.' });
       return;
@@ -547,7 +562,12 @@ const PublicCreditForm = () => {
   const handleSubmit = async () => {
     resetStatus();
     if (!validateStep(5)) {
-      setStatus({ type: 'error', message: 'Completa la validación, la firma y la aceptación de la política antes de enviar.' });
+      setStatus({
+        type: 'error',
+        message: requiresEmailValidation
+          ? 'Completa la validación, la firma y la aceptación de la política antes de enviar.'
+          : 'Completa la firma y la aceptación de la política antes de enviar.',
+      });
       return;
     }
 
@@ -949,25 +969,33 @@ const PublicCreditForm = () => {
 
                       <div className="space-y-4 rounded-2xl border border-slate-200 p-5">
                         <h3 className="text-lg font-bold text-slate-900">Validación por correo</h3>
-                        <p className="text-sm text-slate-500">Se enviará un código aleatorio al correo registrado para validar la solicitud.</p>
-                        <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
-                          <strong>Correo:</strong> {form.personal.email || 'Aún no registrado'}
-                        </div>
-                        <button type="button" onClick={sendVerificationCode} disabled={sendingCode} className="rounded-xl px-4 py-3 text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: theme.primary }}>
-                          {sendingCode ? 'Enviando...' : accessToken ? 'Código enviado por asesor' : verificationSent ? 'Reenviar código' : 'Enviar código'}
-                        </button>
-                        <div>
-                          <label className="mb-1 block text-sm font-semibold text-slate-700">Código de verificación</label>
-                          <div className="flex gap-3">
-                            <input className={inputClassName} value={form.consent.verificationCode} onChange={(e) => updateSection('consent', 'verificationCode', e.target.value)} />
-                            <button type="button" onClick={verifyCode} disabled={!verificationSent || verifyingCode} className="rounded-xl px-4 py-3 text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: theme.secondary }}>
-                              {verifyingCode ? 'Confirmando...' : 'Confirmar código'}
+                        {requiresEmailValidation ? (
+                          <>
+                            <p className="text-sm text-slate-500">Se enviará un código aleatorio al correo registrado para validar la solicitud.</p>
+                            <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
+                              <strong>Correo:</strong> {form.personal.email || 'Aún no registrado'}
+                            </div>
+                            <button type="button" onClick={sendVerificationCode} disabled={sendingCode} className="rounded-xl px-4 py-3 text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: theme.primary }}>
+                              {sendingCode ? 'Enviando...' : accessToken ? 'Código enviado por asesor' : verificationSent ? 'Reenviar código' : 'Enviar código'}
                             </button>
+                            <div>
+                              <label className="mb-1 block text-sm font-semibold text-slate-700">Código de verificación</label>
+                              <div className="flex gap-3">
+                                <input className={inputClassName} value={form.consent.verificationCode} onChange={(e) => updateSection('consent', 'verificationCode', e.target.value)} />
+                                <button type="button" onClick={verifyCode} disabled={!verificationSent || verifyingCode} className="rounded-xl px-4 py-3 text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: theme.secondary }}>
+                                  {verifyingCode ? 'Confirmando...' : 'Confirmar código'}
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+                            Esta empresa no requiere código de validación por correo. Puedes firmar y enviar el formulario.
                           </div>
-                        </div>
+                        )}
                         {verificationVerified && (
                           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-                            Correo validado correctamente.
+                            {requiresEmailValidation ? 'Correo validado correctamente.' : 'Validación por correo omitida por configuración de la empresa.'}
                           </div>
                         )}
                       </div>

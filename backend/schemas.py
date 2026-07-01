@@ -106,6 +106,11 @@ class UserCompany(BaseModel):
     public_domain: Optional[str] = None
     website_url: Optional[str] = None
     logo_url: Optional[str] = None
+    contact_address: Optional[str] = None
+    contact_phone: Optional[str] = None
+    social_instagram: Optional[str] = None
+    social_tiktok: Optional[str] = None
+    social_facebook: Optional[str] = None
     primary_color: Optional[str] = "#000000"
     secondary_color: Optional[str] = "#ffffff"
     max_users: Optional[int] = None
@@ -114,6 +119,7 @@ class UserCompany(BaseModel):
     license_start_date: Optional[date] = None
     license_end_date: Optional[date] = None
     enabled_modules: List[str] = Field(default_factory=list)
+    public_credit_requires_email_validation: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -151,6 +157,11 @@ class CompanyBase(BaseModel):
     public_domains: List[str] = Field(default_factory=list)
     website_url: Optional[str] = None
     logo_url: Optional[str] = None
+    contact_address: Optional[str] = None
+    contact_phone: Optional[str] = None
+    social_instagram: Optional[str] = None
+    social_tiktok: Optional[str] = None
+    social_facebook: Optional[str] = None
     primary_color: Optional[str] = "#000000"
     secondary_color: Optional[str] = "#ffffff"
     max_users: Optional[int] = None
@@ -159,6 +170,7 @@ class CompanyBase(BaseModel):
     license_start_date: Optional[date] = None
     license_end_date: Optional[date] = None
     enabled_modules: List[str] = Field(default_factory=list)
+    public_credit_requires_email_validation: bool = True
 
 class CompanyCreate(CompanyBase):
     pass
@@ -180,9 +192,15 @@ class PublicCompanyContext(BaseModel):
     public_domains: List[str] = Field(default_factory=list)
     website_url: Optional[str] = None
     logo_url: Optional[str] = None
+    contact_address: Optional[str] = None
+    contact_phone: Optional[str] = None
+    social_instagram: Optional[str] = None
+    social_tiktok: Optional[str] = None
+    social_facebook: Optional[str] = None
     primary_color: str = "#000000"
     secondary_color: str = "#ffffff"
     enabled_modules: List[str] = Field(default_factory=list)
+    public_credit_requires_email_validation: bool = True
     license_status: Optional[str] = None
     license_notice: Optional[str] = None
     license_days_remaining: Optional[int] = None

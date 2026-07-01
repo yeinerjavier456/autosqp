@@ -80,9 +80,15 @@ DEFAULT_PUBLIC_COMPANY_CONTEXT = {
     "public_domains": [],
     "website_url": None,
     "logo_url": None,
+    "contact_address": None,
+    "contact_phone": None,
+    "social_instagram": None,
+    "social_tiktok": None,
+    "social_facebook": None,
     "primary_color": "#2563eb",
     "secondary_color": "#0f172a",
     "enabled_modules": [],
+    "public_credit_requires_email_validation": True,
     "license_status": "unlimited",
     "license_notice": None,
     "license_days_remaining": None,
@@ -412,13 +418,25 @@ def serialize_public_company(company: Optional[models.Company]) -> schemas.Publi
         public_domains=normalize_public_domains(getattr(company, "public_domains", []), company.public_domain),
         website_url=getattr(company, "website_url", None),
         logo_url=company.logo_url,
+        contact_address=getattr(company, "contact_address", None),
+        contact_phone=getattr(company, "contact_phone", None),
+        social_instagram=getattr(company, "social_instagram", None),
+        social_tiktok=getattr(company, "social_tiktok", None),
+        social_facebook=getattr(company, "social_facebook", None),
         primary_color=company.primary_color or DEFAULT_PUBLIC_COMPANY_CONTEXT["primary_color"],
         secondary_color=company.secondary_color or DEFAULT_PUBLIC_COMPANY_CONTEXT["secondary_color"],
         enabled_modules=get_company_enabled_modules(company),
+        public_credit_requires_email_validation=bool(getattr(company, "public_credit_requires_email_validation", True)),
         license_status=license_state["status"],
         license_notice=license_state["notice"],
         license_days_remaining=license_state["days_remaining"],
     )
+
+
+def company_requires_public_credit_email_validation(company: Optional[models.Company]) -> bool:
+    if not company:
+        return True
+    return bool(getattr(company, "public_credit_requires_email_validation", True))
 
 
 PUBLIC_CREDIT_POLICY_TEXT = """
@@ -1486,6 +1504,12 @@ def ensure_company_public_domain_columns():
             "license_end_date": "ALTER TABLE companies ADD COLUMN license_end_date DATE NULL",
             "enabled_modules_json": "ALTER TABLE companies ADD COLUMN enabled_modules_json TEXT NULL",
             "website_url": "ALTER TABLE companies ADD COLUMN website_url VARCHAR(500) NULL",
+            "contact_address": "ALTER TABLE companies ADD COLUMN contact_address VARCHAR(500) NULL",
+            "contact_phone": "ALTER TABLE companies ADD COLUMN contact_phone VARCHAR(80) NULL",
+            "social_instagram": "ALTER TABLE companies ADD COLUMN social_instagram VARCHAR(255) NULL",
+            "social_tiktok": "ALTER TABLE companies ADD COLUMN social_tiktok VARCHAR(255) NULL",
+            "social_facebook": "ALTER TABLE companies ADD COLUMN social_facebook VARCHAR(255) NULL",
+            "public_credit_requires_email_validation": "ALTER TABLE companies ADD COLUMN public_credit_requires_email_validation BOOLEAN NOT NULL DEFAULT 1",
         }
         for column_name, ddl in company_columns.items():
             exists = conn.execute(text(
@@ -3968,6 +3992,11 @@ def create_company(company: schemas.CompanyCreate, db: Session = Depends(get_db)
         public_domains_json=json.dumps(public_domains),
         website_url=company.website_url,
         logo_url=company.logo_url,
+        contact_address=company.contact_address,
+        contact_phone=company.contact_phone,
+        social_instagram=company.social_instagram,
+        social_tiktok=company.social_tiktok,
+        social_facebook=company.social_facebook,
         primary_color=company.primary_color,
         secondary_color=company.secondary_color,
         max_users=company.max_users,
@@ -3975,7 +4004,8 @@ def create_company(company: schemas.CompanyCreate, db: Session = Depends(get_db)
         max_active_accounts=company.max_active_accounts,
         license_start_date=company.license_start_date,
         license_end_date=company.license_end_date,
-        enabled_modules_json=json.dumps(normalize_company_enabled_modules(company.enabled_modules))
+        enabled_modules_json=json.dumps(normalize_company_enabled_modules(company.enabled_modules)),
+        public_credit_requires_email_validation=bool(company.public_credit_requires_email_validation),
     )
     db.add(new_company)
     db.commit()
@@ -4012,6 +4042,11 @@ def update_company(company_id: int, company_update: schemas.CompanyCreate, db: S
     db_company.public_domains_json = json.dumps(public_domains)
     db_company.website_url = company_update.website_url
     db_company.logo_url = company_update.logo_url
+    db_company.contact_address = company_update.contact_address
+    db_company.contact_phone = company_update.contact_phone
+    db_company.social_instagram = company_update.social_instagram
+    db_company.social_tiktok = company_update.social_tiktok
+    db_company.social_facebook = company_update.social_facebook
     db_company.primary_color = company_update.primary_color
     db_company.secondary_color = company_update.secondary_color
     db_company.max_users = company_update.max_users
@@ -4020,6 +4055,7 @@ def update_company(company_id: int, company_update: schemas.CompanyCreate, db: S
     db_company.license_start_date = company_update.license_start_date
     db_company.license_end_date = company_update.license_end_date
     db_company.enabled_modules_json = json.dumps(normalize_company_enabled_modules(company_update.enabled_modules))
+    db_company.public_credit_requires_email_validation = bool(company_update.public_credit_requires_email_validation)
     
     try:
         db.commit()
@@ -4047,6 +4083,12 @@ def send_public_credit_verification_code(
         raise HTTPException(status_code=404, detail="No se encontró una empresa asociada a este dominio")
     if not company_has_enabled_module("public_credit_form", company=company):
         raise HTTPException(status_code=403, detail="El formulario de crédito no está habilitado para esta empresa")
+    if not company_requires_public_credit_email_validation(company):
+        return schemas.PublicCreditVerificationResponse(
+            status="ok",
+            message="Esta empresa no requiere código de validación por correo para enviar el formulario.",
+            verified=True,
+        )
 
     email_value = str(payload.email).strip().lower()
     verification_code = f"{random.randint(100000, 999999)}"
@@ -4094,6 +4136,12 @@ def verify_public_credit_verification_code(
     company = resolve_public_company(db, request)
     if not company:
         raise HTTPException(status_code=404, detail="No se encontró una empresa asociada a este dominio")
+    if not company_requires_public_credit_email_validation(company):
+        return schemas.PublicCreditVerificationResponse(
+            status="ok",
+            message="Esta empresa no requiere código de validación por correo.",
+            verified=True,
+        )
 
     email_value = str(payload.email).strip().lower()
     code_value = str(payload.code or "").strip()
@@ -4149,6 +4197,7 @@ def read_public_credit_lead_access(
         "email": access.email,
         "applicant_name": lead.name,
         "verified": bool(access.verified_at),
+        "requires_email_validation": company_requires_public_credit_email_validation(company),
         "expires_at": access.expires_at,
         "form_payload": _build_lead_credit_access_payload(db, lead),
         "attachments": submission.attachments if submission and isinstance(submission.attachments, dict) else {},
@@ -4166,6 +4215,15 @@ def verify_public_credit_lead_access_code(
     if not company:
         raise HTTPException(status_code=404, detail="No se encontró una empresa asociada a este dominio")
     access = _get_public_credit_lead_access(db, token, company_id=company.id)
+    if not company_requires_public_credit_email_validation(company):
+        if access.verified_at is None:
+            access.verified_at = datetime.datetime.now()
+            db.commit()
+        return schemas.PublicCreditVerificationResponse(
+            status="ok",
+            message="Esta empresa no requiere código de validación por correo.",
+            verified=True,
+        )
     email_value = str(payload.email or "").strip().lower()
     code_value = str(payload.code or "").strip()
     if email_value != str(access.email or "").strip().lower():
@@ -4405,6 +4463,8 @@ async def submit_public_credit_request(
     if not bool(consent.get("accepted")):
         raise HTTPException(status_code=400, detail="Debes aceptar la política de tratamiento de datos.")
 
+    requires_email_validation = company_requires_public_credit_email_validation(company)
+    auto_verified_at = datetime.datetime.now()
     verification = None
     linked_access = None
     linked_lead = None
@@ -4412,24 +4472,25 @@ async def submit_public_credit_request(
         linked_access = _get_public_credit_lead_access(db, str(access_token).strip(), company_id=company.id)
         if applicant_email != str(linked_access.email or "").strip().lower():
             raise HTTPException(status_code=400, detail="El correo no corresponde al acceso enviado por el asesor.")
-        if verification_code != str(linked_access.code or "").strip():
+        if requires_email_validation and verification_code != str(linked_access.code or "").strip():
             raise HTTPException(status_code=400, detail="El código de validación no es correcto.")
         if linked_access.verified_at is None:
-            linked_access.verified_at = datetime.datetime.now()
+            linked_access.verified_at = auto_verified_at
         linked_lead = linked_access.lead
         if not linked_lead:
             raise HTTPException(status_code=404, detail="El lead asociado a este acceso ya no existe.")
     else:
-        verification = db.query(models.PublicCreditEmailVerification).filter(
-            models.PublicCreditEmailVerification.company_id == company.id,
-            func.lower(models.PublicCreditEmailVerification.email) == applicant_email,
-            models.PublicCreditEmailVerification.code == verification_code,
-        ).order_by(models.PublicCreditEmailVerification.created_at.desc()).first()
+        if requires_email_validation:
+            verification = db.query(models.PublicCreditEmailVerification).filter(
+                models.PublicCreditEmailVerification.company_id == company.id,
+                func.lower(models.PublicCreditEmailVerification.email) == applicant_email,
+                models.PublicCreditEmailVerification.code == verification_code,
+            ).order_by(models.PublicCreditEmailVerification.created_at.desc()).first()
 
-        if not verification or verification.verified_at is None:
-            raise HTTPException(status_code=400, detail="Debes validar el código enviado al correo antes de continuar.")
-        if verification.expires_at < datetime.datetime.now():
-            raise HTTPException(status_code=400, detail="La validación por correo expiró. Solicita un nuevo código.")
+            if not verification or verification.verified_at is None:
+                raise HTTPException(status_code=400, detail="Debes validar el código enviado al correo antes de continuar.")
+            if verification.expires_at < datetime.datetime.now():
+                raise HTTPException(status_code=400, detail="La validación por correo expiró. Solicita un nuevo código.")
 
         ensure_company_lead_creation_capacity(db, company.id)
 
@@ -4583,7 +4644,7 @@ async def submit_public_credit_request(
         submission.phone = applicant_phone
         submission.desired_vehicle = desired_vehicle
         submission.status = "submitted"
-        submission.verification_code = linked_access.code
+        submission.verification_code = linked_access.code if requires_email_validation else None
         submission.verification_verified_at = linked_access.verified_at
         submission.form_payload = payload
         current_attachments = submission.attachments or {}
@@ -4754,8 +4815,8 @@ async def submit_public_credit_request(
         phone=applicant_phone,
         desired_vehicle=desired_vehicle,
         status="submitted",
-        verification_code=verification.code,
-        verification_verified_at=verification.verified_at,
+        verification_code=verification.code if verification else None,
+        verification_verified_at=verification.verified_at if verification else auto_verified_at,
         form_payload=payload,
         attachments=attachments,
         consent_text=PUBLIC_CREDIT_POLICY_TEXT,
@@ -5310,6 +5371,7 @@ def send_lead_credit_form_access(
         raise HTTPException(status_code=400, detail="El lead no tiene correo para enviar el acceso.")
 
     company = db.query(models.Company).filter(models.Company.id == lead.company_id).first()
+    requires_email_validation = company_requires_public_credit_email_validation(company)
     verification_code = f"{random.randint(100000, 999999)}"
     access = models.PublicCreditLeadAccess(
         company_id=lead.company_id,
@@ -5326,9 +5388,27 @@ def send_lead_credit_form_access(
     form_url = f"{_build_company_public_credit_form_url(company, request)}?access={access.token}"
     smtp_settings = _get_public_credit_smtp_settings(db, company)
     company_name = getattr(company, "name", None) or "AutosQP"
+    code_text_lines = []
+    if requires_email_validation:
+        code_text_lines = [
+            f"Código de validación: {verification_code}",
+            "",
+        ]
+    code_html = ""
+    if requires_email_validation:
+        code_html = f"""
+                <div style="margin:18px 0;padding:18px;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0;text-align:center;">
+                  <div style="font-size:13px;color:#64748b;">Código de validación</div>
+                  <div style="font-size:32px;font-weight:800;letter-spacing:6px;color:#0f172a;">{escape(verification_code)}</div>
+                </div>
+        """.strip()
 
     message = EmailMessage()
-    message["Subject"] = f"Código y firma del formulario de crédito - {company_name}"
+    message["Subject"] = (
+        f"Código y firma del formulario de crédito - {company_name}"
+        if requires_email_validation
+        else f"Firma del formulario de crédito - {company_name}"
+    )
     message["From"] = smtp_settings["sender"]
     message["To"] = target_email
     message.set_content(
@@ -5336,8 +5416,7 @@ def send_lead_credit_form_access(
             f"Hola {lead.name or ''}.".strip(),
             "",
             "Tu asesor está diligenciando tu formulario de crédito.",
-            f"Código de validación: {verification_code}",
-            "",
+            *code_text_lines,
             "Ingresa al siguiente enlace para revisar, adjuntar documentos y firmar:",
             form_url,
             "",
@@ -5356,10 +5435,7 @@ def send_lead_credit_form_access(
               </div>
               <div style="padding:28px;">
                 <p style="margin-top:0;color:#475569;">Hola {escape(lead.name or '')}, tu asesor está diligenciando tu formulario de crédito. Revisa la información, adjunta los documentos pendientes y firma desde este acceso.</p>
-                <div style="margin:18px 0;padding:18px;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0;text-align:center;">
-                  <div style="font-size:13px;color:#64748b;">Código de validación</div>
-                  <div style="font-size:32px;font-weight:800;letter-spacing:6px;color:#0f172a;">{escape(verification_code)}</div>
-                </div>
+                {code_html}
                 <a href="{escape(form_url)}" style="display:inline-block;margin-top:14px;border-radius:14px;background:{escape(getattr(company, 'primary_color', None) or '#2563eb')};color:#fff;text-decoration:none;font-weight:700;padding:14px 20px;">Abrir formulario</a>
                 <p style="margin-top:24px;color:#64748b;font-size:13px;">Si el botón no abre, copia este enlace: {escape(form_url)}</p>
                 <p style="margin-top:8px;color:#64748b;font-size:13px;">Este acceso vence en 7 días.</p>
@@ -5376,10 +5452,21 @@ def send_lead_credit_form_access(
         user_id=current_user.id,
         previous_status=lead.status,
         new_status=lead.status,
-        comment="Código y acceso de firma del formulario de crédito enviados al cliente por correo",
+        comment=(
+            "Código y acceso de firma del formulario de crédito enviados al cliente por correo"
+            if requires_email_validation
+            else "Acceso de firma del formulario de crédito enviado al cliente por correo"
+        ),
     ))
     db.commit()
-    return {"status": "ok", "message": "Código y acceso enviados al correo del cliente."}
+    return {
+        "status": "ok",
+        "message": (
+            "Código y acceso enviados al correo del cliente."
+            if requires_email_validation
+            else "Acceso enviado al correo del cliente."
+        ),
+    }
 
 
 @app.post("/public/credit-request", response_model=schemas.PublicCreditRequestResponse)

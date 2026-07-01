@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams } from 'react-router-dom';
 import { COMPANY_MODULE_OPTIONS } from '../config/views';
+import { normalizeMediaUrl } from '../utils/media';
 
 const COMPANY_VIEWS = COMPANY_MODULE_OPTIONS;
 const COMPANY_VIEW_GROUPS = COMPANY_VIEWS.reduce((acc, view) => {
@@ -24,6 +25,11 @@ const AdminCompanySettings = () => {
         public_domains: [],
         website_url: '',
         logo_url: 'https://via.placeholder.com/150',
+        contact_address: '',
+        contact_phone: '',
+        social_instagram: '',
+        social_tiktok: '',
+        social_facebook: '',
         primary_color: '#3B82F6', // Blue-500
         secondary_color: '#1E40AF', // Blue-800
         max_users: '',
@@ -32,6 +38,7 @@ const AdminCompanySettings = () => {
         license_start_date: '',
         license_end_date: '',
         enabled_modules: COMPANY_VIEWS.map((view) => view.id),
+        public_credit_requires_email_validation: true,
         smtp_enabled: false,
         smtp_host: '',
         smtp_port: 587,
@@ -43,6 +50,7 @@ const AdminCompanySettings = () => {
     });
     const [domainDraft, setDomainDraft] = useState('');
     const [isEditing, setIsEditing] = useState(false);
+    const [uploadingLogo, setUploadingLogo] = useState(false);
     const [status, setStatus] = useState({ type: '', message: '' });
     const groupedViews = useMemo(() => COMPANY_VIEW_GROUPS, []);
 
@@ -71,9 +79,15 @@ const AdminCompanySettings = () => {
                         max_active_accounts: companyResponse.data.max_active_accounts ?? '',
                         license_start_date: companyResponse.data.license_start_date || '',
                         license_end_date: companyResponse.data.license_end_date || '',
+                        contact_address: companyResponse.data.contact_address || '',
+                        contact_phone: companyResponse.data.contact_phone || '',
+                        social_instagram: companyResponse.data.social_instagram || '',
+                        social_tiktok: companyResponse.data.social_tiktok || '',
+                        social_facebook: companyResponse.data.social_facebook || '',
                         enabled_modules: Array.isArray(companyResponse.data.enabled_modules)
                             ? companyResponse.data.enabled_modules
                             : COMPANY_VIEWS.map((view) => view.id),
+                        public_credit_requires_email_validation: companyResponse.data.public_credit_requires_email_validation ?? true,
                         smtp_enabled: Boolean(integrationSettings.smtp_enabled),
                         smtp_host: integrationSettings.smtp_host || '',
                         smtp_port: integrationSettings.smtp_port ?? 587,
@@ -97,6 +111,42 @@ const AdminCompanySettings = () => {
             ...company,
             [e.target.name]: e.target.value,
         });
+    };
+
+    const handleLogoUpload = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            setStatus({ type: 'error', message: 'El logo debe ser una imagen.' });
+            event.target.value = '';
+            return;
+        }
+
+        setUploadingLogo(true);
+        try {
+            const token = localStorage.getItem('token');
+            const formData = new FormData();
+            formData.append('file', file);
+            const response = await axios.post('/api/upload/', formData, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
+            const uploadedUrl = response.data?.url_relative || response.data?.url;
+            if (!uploadedUrl) {
+                throw new Error('El servidor no devolvió la URL del logo.');
+            }
+            setCompany((prev) => ({ ...prev, logo_url: uploadedUrl }));
+            setStatus({ type: 'success', message: 'Logo cargado. Recuerda guardar los cambios de la empresa.' });
+        } catch (error) {
+            console.error('Error uploading company logo', error);
+            setStatus({ type: 'error', message: 'No se pudo cargar el logo.' });
+        } finally {
+            setUploadingLogo(false);
+            event.target.value = '';
+        }
     };
 
     const handleModuleToggle = (moduleId) => {
@@ -186,6 +236,7 @@ const AdminCompanySettings = () => {
                 license_start_date: companyOnlyFields.license_start_date || null,
                 license_end_date: companyOnlyFields.license_end_date || null,
                 enabled_modules: companyOnlyFields.enabled_modules || [],
+                public_credit_requires_email_validation: Boolean(companyOnlyFields.public_credit_requires_email_validation),
             };
             const integrationPayload = {
                 smtp_enabled: Boolean(smtp_enabled),
@@ -250,13 +301,38 @@ const AdminCompanySettings = () => {
 
                         <div>
                             <label className="block text-sm font-medium text-slate-600 mb-1">URL del Logo</label>
-                            <input
-                                type="text"
-                                name="logo_url"
-                                value={company.logo_url}
-                                onChange={handleChange}
-                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
-                            />
+                            <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-blue-100 bg-slate-50">
+                                    {company.logo_url ? (
+                                        <img src={normalizeMediaUrl(company.logo_url)} alt="Logo" className="h-full w-full object-contain" />
+                                    ) : (
+                                        <span className="text-xs text-slate-400">Sin logo</span>
+                                    )}
+                                </div>
+                                <div className="flex-1 space-y-2">
+                                    <input
+                                        type="text"
+                                        name="logo_url"
+                                        value={company.logo_url}
+                                        onChange={handleChange}
+                                        placeholder="Pega una URL o carga una imagen"
+                                        className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                    />
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <label className={`inline-flex cursor-pointer items-center rounded-lg px-4 py-2 text-sm font-semibold ${uploadingLogo ? 'bg-slate-200 text-slate-500' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}>
+                                            {uploadingLogo ? 'Cargando logo...' : 'Cargar logo'}
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={handleLogoUpload}
+                                                disabled={uploadingLogo}
+                                            />
+                                        </label>
+                                        <span className="text-xs text-slate-400">Formatos recomendados: PNG, JPG o WEBP.</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div>
@@ -345,6 +421,69 @@ const AdminCompanySettings = () => {
                         </div>
 
                         <div className="pt-2 border-t border-slate-100">
+                            <h3 className="text-lg font-bold mb-4 text-slate-700">Datos de contacto y redes</h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Dirección</label>
+                                    <input
+                                        type="text"
+                                        name="contact_address"
+                                        value={company.contact_address || ''}
+                                        onChange={handleChange}
+                                        placeholder="Ej: Av. de las Americas #62-84 Local 128 segundo piso"
+                                        className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Teléfono</label>
+                                    <input
+                                        type="text"
+                                        name="contact_phone"
+                                        value={company.contact_phone || ''}
+                                        onChange={handleChange}
+                                        placeholder="Ej: +573044113335"
+                                        className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-600 mb-1">Instagram</label>
+                                        <input
+                                            type="text"
+                                            name="social_instagram"
+                                            value={company.social_instagram || ''}
+                                            onChange={handleChange}
+                                            placeholder="Ej: benitezcars_ / tomasbenitezcars"
+                                            className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-600 mb-1">TikTok</label>
+                                        <input
+                                            type="text"
+                                            name="social_tiktok"
+                                            value={company.social_tiktok || ''}
+                                            onChange={handleChange}
+                                            placeholder="Ej: benitezcars_"
+                                            className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-600 mb-1">Facebook</label>
+                                        <input
+                                            type="text"
+                                            name="social_facebook"
+                                            value={company.social_facebook || ''}
+                                            onChange={handleChange}
+                                            placeholder="Ej: Benitez Cars"
+                                            className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-100">
                             <h3 className="text-lg font-bold mb-4 text-slate-700">Licencia y Limites</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
@@ -408,6 +547,24 @@ const AdminCompanySettings = () => {
 
                         <div className="pt-2 border-t border-slate-100">
                             <h3 className="text-lg font-bold mb-4 text-slate-700">Correo SMTP de la empresa</h3>
+                            <label className="mb-4 flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                                <input
+                                    type="checkbox"
+                                    name="public_credit_requires_email_validation"
+                                    checked={Boolean(company.public_credit_requires_email_validation)}
+                                    onChange={(e) => setCompany((prev) => ({
+                                        ...prev,
+                                        public_credit_requires_email_validation: e.target.checked,
+                                    }))}
+                                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <div>
+                                    <p className="font-medium text-slate-800">Requerir código de validación por correo</p>
+                                    <p className="text-xs text-slate-500">
+                                        Si está desactivado, el formulario de crédito se puede enviar sin OTP. El correo SMTP seguirá enviando copias y PDFs si está configurado.
+                                    </p>
+                                </div>
+                            </label>
                             <label className="mb-4 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                                 <input
                                     type="checkbox"
@@ -564,7 +721,9 @@ const AdminCompanySettings = () => {
                                 </div>
                                 <span className="font-semibold tracking-wide truncate max-w-[150px]">{company.name}</span>
                                 <div className="w-8 h-8 rounded-full overflow-hidden bg-white border-2 border-white/50">
-                                    <img src={company.logo_url} alt="Logo" className="w-full h-full object-cover" />
+                                    {company.logo_url ? (
+                                        <img src={normalizeMediaUrl(company.logo_url)} alt="Logo" className="w-full h-full object-cover" />
+                                    ) : null}
                                 </div>
                             </div>
 

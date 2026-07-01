@@ -29,6 +29,21 @@ const normalizeArrayPayload = (payload) => {
     return [];
 };
 
+const getSocialLabel = (value) => String(value || '').trim();
+
+const getSocialHref = (network, value) => {
+    const rawValue = getSocialLabel(value);
+    if (!rawValue) return '';
+    const firstValue = rawValue.split(/[\/,;|]/).map((item) => item.trim()).filter(Boolean)[0] || rawValue;
+    if (/^https?:\/\//i.test(firstValue)) return firstValue;
+    const handle = firstValue.replace(/^@/, '');
+
+    if (network === 'instagram') return `https://www.instagram.com/${encodeURIComponent(handle)}`;
+    if (network === 'tiktok') return `https://www.tiktok.com/@${encodeURIComponent(handle)}`;
+    if (network === 'facebook') return `https://www.facebook.com/search/top?q=${encodeURIComponent(firstValue)}`;
+    return '';
+};
+
 const PublicInventory = () => {
     const company = usePublicCompany();
     const [vehicles, setVehicles] = useState([]);
@@ -135,6 +150,16 @@ const PublicInventory = () => {
     const controlDark = withAlpha(secondaryColor, 'e8');
     const darkBorder = withAlpha(primaryColor, '28');
     const lightBorder = withAlpha(primaryColor, '22');
+    const contactItems = [
+        company.contact_address ? { label: 'Dirección', value: company.contact_address } : null,
+        company.contact_phone ? { label: 'Teléfono', value: company.contact_phone } : null,
+    ].filter(Boolean);
+    const socialLinks = [
+        company.social_instagram ? { label: 'Instagram', value: company.social_instagram, href: getSocialHref('instagram', company.social_instagram) } : null,
+        company.social_tiktok ? { label: 'TikTok', value: company.social_tiktok, href: getSocialHref('tiktok', company.social_tiktok) } : null,
+        company.social_facebook ? { label: 'Facebook', value: company.social_facebook, href: getSocialHref('facebook', company.social_facebook) } : null,
+    ].filter(Boolean);
+    const hasFooterContact = contactItems.length > 0 || socialLinks.length > 0;
 
     const darkInputStyle = {
         backgroundColor: controlDark,
@@ -615,6 +640,55 @@ const PublicInventory = () => {
                     )}
                 </div>
             </main>
+            {hasFooterContact && (
+                <footer
+                    className="border-t px-6 py-8 md:px-10"
+                    style={{
+                        background: `linear-gradient(90deg, ${secondaryColor} 0%, ${withAlpha(secondaryColor, 'f2')} 100%)`,
+                        borderColor: withAlpha(primaryColor, '30'),
+                        color: '#ffffff',
+                    }}
+                >
+                    <div className="mx-auto flex max-w-7xl flex-col gap-6 md:flex-row md:items-start md:justify-between">
+                        <div>
+                            <p className="text-lg font-extrabold">{brandName}</p>
+                            <p className="mt-1 text-sm text-white/70">Información de contacto</p>
+                        </div>
+
+                        {contactItems.length > 0 && (
+                            <div className="grid gap-3 text-sm md:min-w-[320px]">
+                                {contactItems.map((item) => (
+                                    <div key={item.label}>
+                                        <p className="text-xs font-bold uppercase tracking-wide" style={{ color: primaryColor }}>{item.label}</p>
+                                        <p className="mt-1 text-white/90">{item.value}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {socialLinks.length > 0 && (
+                            <div className="flex flex-wrap gap-3">
+                                {socialLinks.map((social) => (
+                                    <a
+                                        key={social.label}
+                                        href={social.href || undefined}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="rounded-full border px-4 py-2 text-sm font-bold transition hover:-translate-y-0.5"
+                                        style={{
+                                            borderColor: withAlpha(primaryColor, '55'),
+                                            backgroundColor: withAlpha(primaryColor, '20'),
+                                            color: '#ffffff',
+                                        }}
+                                    >
+                                        {social.label}: {social.value}
+                                    </a>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </footer>
+            )}
             {isPublicChatEnabled && (
                 <PublicSalesChatbot
                     brandName={brandName}
