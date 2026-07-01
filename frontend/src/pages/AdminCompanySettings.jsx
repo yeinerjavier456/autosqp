@@ -44,6 +44,7 @@ const AdminCompanySettings = () => {
         smtp_port: 587,
         smtp_username: '',
         smtp_password: '',
+        smtp_password_configured: false,
         smtp_from: '',
         smtp_use_tls: true,
         smtp_always_recipients: '',
@@ -92,7 +93,8 @@ const AdminCompanySettings = () => {
                         smtp_host: integrationSettings.smtp_host || '',
                         smtp_port: integrationSettings.smtp_port ?? 587,
                         smtp_username: integrationSettings.smtp_username || '',
-                        smtp_password: integrationSettings.smtp_password || '',
+                        smtp_password: '',
+                        smtp_password_configured: Boolean(integrationSettings.smtp_password_configured),
                         smtp_from: integrationSettings.smtp_from || '',
                         smtp_use_tls: integrationSettings.smtp_use_tls ?? true,
                         smtp_always_recipients: integrationSettings.smtp_always_recipients || '',
@@ -221,6 +223,7 @@ const AdminCompanySettings = () => {
                 smtp_port,
                 smtp_username,
                 smtp_password,
+                smtp_password_configured,
                 smtp_from,
                 smtp_use_tls,
                 smtp_always_recipients,
@@ -243,7 +246,7 @@ const AdminCompanySettings = () => {
                 smtp_host: smtp_host || '',
                 smtp_port: smtp_port === '' ? 587 : parseInt(smtp_port, 10),
                 smtp_username: smtp_username || '',
-                smtp_password: smtp_password || '',
+                smtp_password: smtp_password ? smtp_password : null,
                 smtp_from: smtp_from || '',
                 smtp_use_tls: Boolean(smtp_use_tls),
                 smtp_always_recipients: smtp_always_recipients || '',
@@ -252,10 +255,20 @@ const AdminCompanySettings = () => {
             if (isEditing) {
                 await axios.put(`/api/companies/${id}`, payload, { headers });
                 await axios.put(`/api/companies/${id}/integrations`, integrationPayload, { headers });
+                setCompany((prev) => ({
+                    ...prev,
+                    smtp_password: '',
+                    smtp_password_configured: Boolean(prev.smtp_password_configured || smtp_password),
+                }));
                 setStatus({ type: 'success', message: `Empresa "${company.name}" actualizada exitosamente!` });
             } else {
                 const response = await axios.post('/api/companies/', payload, { headers });
                 await axios.put(`/api/companies/${response.data.id}/integrations`, integrationPayload, { headers });
+                setCompany((prev) => ({
+                    ...prev,
+                    smtp_password: '',
+                    smtp_password_configured: Boolean(smtp_password),
+                }));
                 setStatus({ type: 'success', message: `Empresa "${response.data.name}" creada exitosamente!` });
             }
         } catch (error) {
@@ -634,9 +647,14 @@ const AdminCompanySettings = () => {
                                         name="smtp_password"
                                         value={company.smtp_password}
                                         onChange={handleChange}
-                                        placeholder="App password o credencial SMTP"
+                                        placeholder={company.smtp_password_configured ? 'Deja vacio para conservar la contrasena actual' : 'App password o credencial SMTP'}
                                         className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
                                     />
+                                    {company.smtp_password_configured && (
+                                        <p className="mt-1 text-xs text-slate-500">
+                                            Ya hay una contrasena SMTP guardada. Escribe una nueva solo si quieres reemplazarla.
+                                        </p>
+                                    )}
                                 </div>
                                 <label className="flex items-center gap-3 text-sm text-slate-700">
                                     <input

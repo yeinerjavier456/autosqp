@@ -44,6 +44,60 @@ const getSocialHref = (network, value) => {
     return '';
 };
 
+const SocialIcon = ({ network }) => {
+    if (network === 'instagram') {
+        return (
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 shrink-0">
+                <path
+                    fill="currentColor"
+                    d="M7.8 2h8.4A5.8 5.8 0 0 1 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8A5.8 5.8 0 0 1 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2Zm0 2A3.8 3.8 0 0 0 4 7.8v8.4A3.8 3.8 0 0 0 7.8 20h8.4a3.8 3.8 0 0 0 3.8-3.8V7.8A3.8 3.8 0 0 0 16.2 4H7.8Zm4.2 3.1a4.9 4.9 0 1 1 0 9.8 4.9 4.9 0 0 1 0-9.8Zm0 2a2.9 2.9 0 1 0 0 5.8 2.9 2.9 0 0 0 0-5.8Zm5.1-2.35a1.15 1.15 0 1 1 0 2.3 1.15 1.15 0 0 1 0-2.3Z"
+                />
+            </svg>
+        );
+    }
+    if (network === 'tiktok') {
+        return (
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 shrink-0">
+                <path
+                    fill="currentColor"
+                    d="M16.6 2c.35 2.22 1.58 3.55 3.8 3.69v3.05a7.2 7.2 0 0 1-3.75-1.1v6.54c0 4.1-2.6 6.82-6.45 6.82-3.35 0-6.2-2.23-6.2-5.87 0-3.74 2.9-5.89 6.28-5.89.48 0 .86.04 1.22.14v3.25a3.4 3.4 0 0 0-1.23-.23c-1.6 0-2.9.94-2.9 2.67 0 1.62 1.2 2.63 2.78 2.63 1.75 0 2.83-1.05 2.83-3.07V2h3.62Z"
+                />
+            </svg>
+        );
+    }
+    return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 shrink-0">
+            <path
+                fill="currentColor"
+                d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5.02 3.66 9.18 8.44 9.94v-7.03H7.9v-2.91h2.54V9.84c0-2.52 1.5-3.91 3.77-3.91 1.09 0 2.23.2 2.23.2v2.47h-1.25c-1.24 0-1.63.77-1.63 1.56v1.9h2.77l-.44 2.91h-2.33V22C18.34 21.24 22 17.08 22 12.06Z"
+            />
+        </svg>
+    );
+};
+
+const getSocialButtonStyle = (network) => {
+    if (network === 'instagram') {
+        return {
+            background: 'linear-gradient(135deg, #f58529 0%, #dd2a7b 45%, #8134af 70%, #515bd4 100%)',
+            borderColor: 'rgba(255,255,255,0.28)',
+            color: '#ffffff',
+        };
+    }
+    if (network === 'tiktok') {
+        return {
+            background: '#050505',
+            borderColor: 'rgba(255,255,255,0.22)',
+            color: '#ffffff',
+            boxShadow: 'inset 3px 0 0 #25F4EE, inset -3px 0 0 #FE2C55',
+        };
+    }
+    return {
+        background: '#1877F2',
+        borderColor: 'rgba(255,255,255,0.24)',
+        color: '#ffffff',
+    };
+};
+
 const PublicInventory = () => {
     const company = usePublicCompany();
     const [vehicles, setVehicles] = useState([]);
@@ -155,9 +209,9 @@ const PublicInventory = () => {
         company.contact_phone ? { label: 'Teléfono', value: company.contact_phone } : null,
     ].filter(Boolean);
     const socialLinks = [
-        company.social_instagram ? { label: 'Instagram', value: company.social_instagram, href: getSocialHref('instagram', company.social_instagram) } : null,
-        company.social_tiktok ? { label: 'TikTok', value: company.social_tiktok, href: getSocialHref('tiktok', company.social_tiktok) } : null,
-        company.social_facebook ? { label: 'Facebook', value: company.social_facebook, href: getSocialHref('facebook', company.social_facebook) } : null,
+        company.social_instagram ? { network: 'instagram', label: 'Instagram', value: company.social_instagram, href: getSocialHref('instagram', company.social_instagram) } : null,
+        company.social_tiktok ? { network: 'tiktok', label: 'TikTok', value: company.social_tiktok, href: getSocialHref('tiktok', company.social_tiktok) } : null,
+        company.social_facebook ? { network: 'facebook', label: 'Facebook', value: company.social_facebook, href: getSocialHref('facebook', company.social_facebook) } : null,
     ].filter(Boolean);
     const hasFooterContact = contactItems.length > 0 || socialLinks.length > 0;
 
@@ -674,14 +728,13 @@ const PublicInventory = () => {
                                         href={social.href || undefined}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="rounded-full border px-4 py-2 text-sm font-bold transition hover:-translate-y-0.5"
-                                        style={{
-                                            borderColor: withAlpha(primaryColor, '55'),
-                                            backgroundColor: withAlpha(primaryColor, '20'),
-                                            color: '#ffffff',
-                                        }}
+                                        aria-label={`Abrir ${social.label} de ${brandName}`}
+                                        className="inline-flex items-center gap-3 rounded-full border px-4 py-2 text-sm font-extrabold shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
+                                        style={getSocialButtonStyle(social.network)}
                                     >
-                                        {social.label}: {social.value}
+                                        <SocialIcon network={social.network} />
+                                        <span>{social.label}</span>
+                                        <span className="max-w-[180px] truncate text-xs font-semibold opacity-85">{social.value}</span>
                                     </a>
                                 ))}
                             </div>

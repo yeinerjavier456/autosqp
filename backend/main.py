@@ -5480,6 +5480,14 @@ def create_public_credit_request(
         detail="Este endpoint quedó obsoleto. Usa /public/credit-request/send-code, /verify-code y /submit.",
     )
 
+def serialize_integration_settings(settings: models.IntegrationSettings) -> Dict[str, Any]:
+    data = schemas.IntegrationSettings.model_validate(settings).model_dump()
+    data["smtp_password_configured"] = bool((getattr(settings, "smtp_password", None) or "").strip())
+    # Never return stored SMTP secrets to the browser. A blank value means "keep current password".
+    data["smtp_password"] = ""
+    return data
+
+
 @app.get("/companies/{company_id}/integrations", response_model=schemas.IntegrationSettings)
 def read_integration_settings(company_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     # Check permissions
@@ -5494,7 +5502,7 @@ def read_integration_settings(company_id: int, db: Session = Depends(get_db), cu
         db.commit()
         db.refresh(settings)
         
-    return settings
+    return serialize_integration_settings(settings)
 
 @app.get("/roles/views")
 def read_role_views(current_user: models.User = Depends(get_current_user)):
@@ -5702,8 +5710,12 @@ def update_integration_settings(company_id: int, settings_update: schemas.Integr
         settings = models.IntegrationSettings(company_id=company_id)
         db.add(settings)
     
-    # Update fields
+    # Update fields. Empty SMTP password must preserve the current saved secret.
     for field, value in settings_update.dict(exclude_unset=True).items():
+        if field == "smtp_password" and (value is None or str(value).strip() == ""):
+            continue
+        if field == "smtp_password_configured":
+            continue
         setattr(settings, field, value)
         
     try:
@@ -5713,8 +5725,7 @@ def update_integration_settings(company_id: int, settings_update: schemas.Integr
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
         
-    return settings
-    return settings
+    return serialize_integration_settings(settings)
 
 # --- LEADS ENDPOINTS ---
 

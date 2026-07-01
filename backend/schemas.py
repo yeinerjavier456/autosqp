@@ -431,6 +431,7 @@ class IntegrationSettingsBase(BaseModel):
     smtp_port: Optional[int] = 587
     smtp_username: Optional[str] = None
     smtp_password: Optional[str] = None
+    smtp_password_configured: Optional[bool] = False
     smtp_from: Optional[str] = None
     smtp_use_tls: Optional[bool] = True
     smtp_always_recipients: Optional[str] = None
