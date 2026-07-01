@@ -22,6 +22,65 @@ const formatPublicTitle = (companyName) => {
   return normalized || 'AutosQP';
 };
 
+const upsertMetaTag = (selector, attributes) => {
+  if (typeof document === 'undefined') {
+    return;
+  }
+  let meta = document.querySelector(selector);
+  if (!meta) {
+    meta = document.createElement('meta');
+    Object.entries(attributes.identity || {}).forEach(([key, value]) => meta.setAttribute(key, value));
+    document.head.appendChild(meta);
+  }
+  Object.entries(attributes.values || {}).forEach(([key, value]) => meta.setAttribute(key, value));
+};
+
+const setPublicSeoMetadata = (company) => {
+  if (typeof document === 'undefined') {
+    return;
+  }
+  const brandName = formatPublicTitle(company?.name || inferCompanyNameFromHost());
+  const description = `Consulta carros y camionetas disponibles en ${brandName}.`;
+  const logoUrl = company?.logo_url ? normalizeMediaUrl(company.logo_url) : '';
+  document.title = brandName;
+  upsertMetaTag('meta[name="description"]', {
+    identity: { name: 'description' },
+    values: { content: description },
+  });
+  upsertMetaTag('meta[property="og:title"]', {
+    identity: { property: 'og:title' },
+    values: { content: brandName },
+  });
+  upsertMetaTag('meta[property="og:description"]', {
+    identity: { property: 'og:description' },
+    values: { content: description },
+  });
+  upsertMetaTag('meta[property="og:url"]', {
+    identity: { property: 'og:url' },
+    values: { content: window.location.href },
+  });
+  if (logoUrl) {
+    upsertMetaTag('meta[property="og:image"]', {
+      identity: { property: 'og:image' },
+      values: { content: logoUrl },
+    });
+  }
+  upsertMetaTag('meta[name="twitter:title"]', {
+    identity: { name: 'twitter:title' },
+    values: { content: brandName },
+  });
+  upsertMetaTag('meta[name="twitter:description"]', {
+    identity: { name: 'twitter:description' },
+    values: { content: description },
+  });
+  if (logoUrl) {
+    upsertMetaTag('meta[name="twitter:image"]', {
+      identity: { name: 'twitter:image' },
+      values: { content: logoUrl },
+    });
+  }
+};
+
 const buildCompanyFaviconDataUrl = (companyName, primaryColor = '#2563eb', secondaryColor = '#0f172a') => {
   const label = String(companyName || 'A').trim().slice(0, 1).toUpperCase() || 'A';
   const svg = `
@@ -49,12 +108,13 @@ const setDocumentFavicon = (company) => {
   const primaryColor = company?.primary_color || '#2563eb';
   const secondaryColor = company?.secondary_color || '#0f172a';
   const generatedFavicon = buildCompanyFaviconDataUrl(brandName, primaryColor, secondaryColor);
-  const appleTouchIconHref = company?.logo_url ? normalizeMediaUrl(company.logo_url) : generatedFavicon;
+  const logoHref = company?.logo_url ? normalizeMediaUrl(company.logo_url) : '';
+  const faviconHref = logoHref || generatedFavicon;
 
   const relConfigurations = [
-    { rel: 'icon', href: generatedFavicon, type: 'image/svg+xml', sizes: 'any' },
-    { rel: 'shortcut icon', href: generatedFavicon, type: 'image/svg+xml', sizes: 'any' },
-    { rel: 'apple-touch-icon', href: appleTouchIconHref, type: undefined, sizes: undefined },
+    { rel: 'icon', href: faviconHref, type: logoHref ? undefined : 'image/svg+xml', sizes: logoHref ? undefined : 'any' },
+    { rel: 'shortcut icon', href: faviconHref, type: logoHref ? undefined : 'image/svg+xml', sizes: logoHref ? undefined : 'any' },
+    { rel: 'apple-touch-icon', href: faviconHref, type: undefined, sizes: undefined },
   ];
 
   relConfigurations.forEach(({ rel, href, type, sizes }) => {
@@ -146,7 +206,7 @@ export const usePublicCompany = () => {
     if (typeof document === 'undefined') {
       return;
     }
-    document.title = formatPublicTitle(company?.name);
+    setPublicSeoMetadata(company);
     setDocumentFavicon(company);
   }, [company]);
 

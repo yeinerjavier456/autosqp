@@ -34,7 +34,8 @@ const getSocialLabel = (value) => String(value || '').trim();
 const getSocialHref = (network, value) => {
     const rawValue = getSocialLabel(value);
     if (!rawValue) return '';
-    const firstValue = rawValue.split(/[\/,;|]/).map((item) => item.trim()).filter(Boolean)[0] || rawValue;
+    if (/^https?:\/\//i.test(rawValue)) return rawValue;
+    const firstValue = rawValue.split(/[,;|]/).map((item) => item.trim()).filter(Boolean)[0] || rawValue;
     if (/^https?:\/\//i.test(firstValue)) return firstValue;
     const handle = firstValue.replace(/^@/, '');
 
@@ -43,6 +44,22 @@ const getSocialHref = (network, value) => {
     if (network === 'facebook') return `https://www.facebook.com/search/top?q=${encodeURIComponent(firstValue)}`;
     return '';
 };
+
+const getWhatsAppHref = (value) => {
+    const rawValue = String(value || '').trim();
+    const phone = rawValue.replace(/[^\d]/g, '');
+    if (!phone) return '';
+    return `https://wa.me/${phone}`;
+};
+
+const WhatsAppIcon = () => (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 shrink-0">
+        <path
+            fill="currentColor"
+            d="M12.04 2a9.9 9.9 0 0 0-8.58 14.85L2.2 22l5.28-1.23A9.95 9.95 0 1 0 12.04 2Zm0 1.9a8.05 8.05 0 1 1 0 16.1 8 8 0 0 1-4.08-1.12l-.36-.21-3.08.72.73-3-.24-.38A8.05 8.05 0 0 1 12.04 3.9Zm-3.42 3.7c-.18 0-.47.07-.72.35-.25.27-.95.93-.95 2.27s.98 2.64 1.12 2.82c.14.18 1.9 3.05 4.72 4.15 2.34.91 2.82.73 3.33.68.51-.05 1.65-.67 1.88-1.32.23-.65.23-1.2.16-1.32-.07-.12-.25-.19-.53-.33-.28-.14-1.65-.81-1.9-.9-.26-.1-.44-.14-.63.14-.18.28-.72.9-.88 1.08-.16.18-.32.2-.6.07-.28-.14-1.18-.44-2.25-1.39-.83-.74-1.39-1.65-1.55-1.93-.16-.28-.02-.43.12-.57.13-.13.28-.33.42-.49.14-.16.18-.28.28-.47.09-.18.05-.35-.02-.49-.07-.14-.62-1.54-.86-2.1-.23-.54-.46-.55-.64-.56h-.55Z"
+        />
+    </svg>
+);
 
 const SocialIcon = ({ network }) => {
     if (network === 'instagram') {
@@ -206,14 +223,14 @@ const PublicInventory = () => {
     const lightBorder = withAlpha(primaryColor, '22');
     const contactItems = [
         company.contact_address ? { label: 'Dirección', value: company.contact_address } : null,
-        company.contact_phone ? { label: 'Teléfono', value: company.contact_phone } : null,
     ].filter(Boolean);
+    const whatsappHref = getWhatsAppHref(company.contact_phone);
     const socialLinks = [
         company.social_instagram ? { network: 'instagram', label: 'Instagram', value: company.social_instagram, href: getSocialHref('instagram', company.social_instagram) } : null,
         company.social_tiktok ? { network: 'tiktok', label: 'TikTok', value: company.social_tiktok, href: getSocialHref('tiktok', company.social_tiktok) } : null,
         company.social_facebook ? { network: 'facebook', label: 'Facebook', value: company.social_facebook, href: getSocialHref('facebook', company.social_facebook) } : null,
     ].filter(Boolean);
-    const hasFooterContact = contactItems.length > 0 || socialLinks.length > 0;
+    const hasFooterContact = contactItems.length > 0 || Boolean(whatsappHref) || socialLinks.length > 0;
 
     const darkInputStyle = {
         backgroundColor: controlDark,
@@ -720,8 +737,25 @@ const PublicInventory = () => {
                             </div>
                         )}
 
-                        {socialLinks.length > 0 && (
+                        {(whatsappHref || socialLinks.length > 0) && (
                             <div className="flex flex-wrap gap-3">
+                                {whatsappHref && (
+                                    <a
+                                        href={whatsappHref}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        aria-label={`Abrir WhatsApp de ${brandName}`}
+                                        className="inline-flex items-center gap-3 rounded-full border px-4 py-2 text-sm font-extrabold text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
+                                        style={{
+                                            background: '#25D366',
+                                            borderColor: 'rgba(255,255,255,0.26)',
+                                        }}
+                                    >
+                                        <WhatsAppIcon />
+                                        <span>WhatsApp</span>
+                                        <span className="max-w-[180px] truncate text-xs font-semibold opacity-90">{company.contact_phone}</span>
+                                    </a>
+                                )}
                                 {socialLinks.map((social) => (
                                     <a
                                         key={social.label}
