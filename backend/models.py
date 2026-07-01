@@ -128,6 +128,26 @@ class PublicCreditSubmission(Base):
     lead = relationship("Lead")
 
 
+class PublicCreditLeadAccess(Base):
+    __tablename__ = "public_credit_lead_accesses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=False, index=True)
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    email = Column(String(150), nullable=False, index=True)
+    token = Column(String(120), unique=True, nullable=False, index=True)
+    code = Column(String(12), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    verified_at = Column(DateTime, nullable=True)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    company = relationship("Company")
+    lead = relationship("Lead")
+    created_by = relationship("User")
+
+
 class PublicCreditCaptureSession(Base):
     __tablename__ = "public_credit_capture_sessions"
 

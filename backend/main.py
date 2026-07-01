@@ -4120,6 +4120,68 @@ def verify_public_credit_verification_code(
     )
 
 
+@app.get("/public/credit-request/access/{token}")
+def read_public_credit_lead_access(
+    token: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    company = resolve_public_company(db, request)
+    if not company:
+        raise HTTPException(status_code=404, detail="No se encontró una empresa asociada a este dominio")
+    if not company_has_enabled_module("public_credit_form", company=company):
+        raise HTTPException(status_code=403, detail="El formulario de crédito no está habilitado para esta empresa")
+
+    access = _get_public_credit_lead_access(db, token, company_id=company.id)
+    lead = access.lead
+    if not lead:
+        raise HTTPException(status_code=404, detail="El lead asociado a este acceso ya no existe.")
+    submission = db.query(models.PublicCreditSubmission).filter(
+        models.PublicCreditSubmission.lead_id == lead.id
+    ).order_by(
+        models.PublicCreditSubmission.updated_at.desc(),
+        models.PublicCreditSubmission.id.desc(),
+    ).first()
+
+    return {
+        "status": "ok",
+        "lead_id": lead.id,
+        "email": access.email,
+        "applicant_name": lead.name,
+        "verified": bool(access.verified_at),
+        "expires_at": access.expires_at,
+        "form_payload": _build_lead_credit_access_payload(db, lead),
+        "attachments": submission.attachments if submission and isinstance(submission.attachments, dict) else {},
+    }
+
+
+@app.post("/public/credit-request/access/{token}/verify-code", response_model=schemas.PublicCreditVerificationResponse)
+def verify_public_credit_lead_access_code(
+    token: str,
+    payload: schemas.PublicCreditVerificationVerifyRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    company = resolve_public_company(db, request)
+    if not company:
+        raise HTTPException(status_code=404, detail="No se encontró una empresa asociada a este dominio")
+    access = _get_public_credit_lead_access(db, token, company_id=company.id)
+    email_value = str(payload.email or "").strip().lower()
+    code_value = str(payload.code or "").strip()
+    if email_value != str(access.email or "").strip().lower():
+        raise HTTPException(status_code=400, detail="El correo no corresponde a este acceso.")
+    if code_value != str(access.code or "").strip():
+        raise HTTPException(status_code=400, detail="El código no es válido.")
+
+    access.verified_at = datetime.datetime.now()
+    db.commit()
+    return schemas.PublicCreditVerificationResponse(
+        status="ok",
+        message="Código validado correctamente.",
+        verified=True,
+    )
+
+
 def _serialize_public_credit_capture_session(session: models.PublicCreditCaptureSession) -> schemas.PublicCreditCaptureSessionResponse:
     return schemas.PublicCreditCaptureSessionResponse(
         status="ok",
@@ -4131,6 +4193,90 @@ def _serialize_public_credit_capture_session(session: models.PublicCreditCapture
         original_file_name=session.original_file_name,
         expires_at=session.expires_at,
     )
+
+
+def _get_public_credit_lead_access(
+    db: Session,
+    token: str,
+    company_id: Optional[int] = None,
+    require_valid: bool = True,
+) -> models.PublicCreditLeadAccess:
+    access = db.query(models.PublicCreditLeadAccess).options(
+        joinedload(models.PublicCreditLeadAccess.lead)
+    ).filter(
+        models.PublicCreditLeadAccess.token == str(token or "").strip()
+    ).first()
+    if not access:
+        raise HTTPException(status_code=404, detail="El acceso al formulario no existe o expiró.")
+    if company_id and access.company_id != company_id:
+        raise HTTPException(status_code=403, detail="El acceso no corresponde a esta empresa.")
+    if require_valid and access.expires_at < datetime.datetime.now():
+        raise HTTPException(status_code=400, detail="El acceso al formulario expiró. Solicita uno nuevo al asesor.")
+    return access
+
+
+def _build_lead_credit_access_payload(db: Session, lead: models.Lead) -> Dict[str, Any]:
+    submission = db.query(models.PublicCreditSubmission).filter(
+        models.PublicCreditSubmission.lead_id == lead.id
+    ).order_by(
+        models.PublicCreditSubmission.updated_at.desc(),
+        models.PublicCreditSubmission.id.desc(),
+    ).first()
+    if submission and isinstance(submission.form_payload, dict):
+        return submission.form_payload
+
+    name_parts = str(lead.name or "").strip().split()
+    first_name = " ".join(name_parts[:-1]) if len(name_parts) > 1 else (name_parts[0] if name_parts else "")
+    last_name = name_parts[-1] if len(name_parts) > 1 else ""
+    process_detail = db.query(models.LeadProcessDetail).filter(
+        models.LeadProcessDetail.lead_id == lead.id
+    ).first()
+    desired_vehicle = str(
+        (process_detail.desired_vehicle if process_detail else None)
+        or lead.message
+        or ""
+    ).strip()
+    return {
+        "vehicle": {
+            "vehicleValue": "",
+            "requestedAmount": "",
+            "requestDate": datetime.datetime.now(ZoneInfo("America/Bogota")).date().isoformat(),
+            "make": desired_vehicle,
+            "model": "",
+            "vehicleType": "Automóvil",
+            "label": desired_vehicle,
+        },
+        "personal": {
+            "firstName": first_name,
+            "lastName": last_name,
+            "documentType": "C.C",
+            "documentNumber": "",
+            "issuePlace": "",
+            "birthDate": "",
+            "gender": "M",
+            "profession": "",
+            "birthPlace": "",
+            "maritalStatus": "Soltero",
+            "childrenCount": "Sin Hijos",
+            "educationLevel": "Primaria",
+            "livesWith": "Cónyuge",
+            "housingType": "Familiar",
+            "mobilePhone": lead.phone or "",
+            "city": "",
+            "address": "",
+            "email": lead.email or "",
+        },
+        "employment": {},
+        "income": {},
+        "references": {},
+        "consent": {
+            "accepted": False,
+            "signatureMode": "draw",
+            "signatureName": lead.name or "",
+            "verificationCode": "",
+            "signatureDrawnDataUrl": "",
+        },
+    }
 
 
 def _get_public_credit_capture_session(
@@ -4216,6 +4362,7 @@ async def upload_public_credit_capture_session_file(
 async def submit_public_credit_request(
     request: Request,
     payload_json: str = Form(...),
+    access_token: Optional[str] = Form(None),
     document_front: Optional[UploadFile] = File(None),
     document_back: Optional[UploadFile] = File(None),
     signature_file: Optional[UploadFile] = File(None),
@@ -4258,18 +4405,33 @@ async def submit_public_credit_request(
     if not bool(consent.get("accepted")):
         raise HTTPException(status_code=400, detail="Debes aceptar la política de tratamiento de datos.")
 
-    verification = db.query(models.PublicCreditEmailVerification).filter(
-        models.PublicCreditEmailVerification.company_id == company.id,
-        func.lower(models.PublicCreditEmailVerification.email) == applicant_email,
-        models.PublicCreditEmailVerification.code == verification_code,
-    ).order_by(models.PublicCreditEmailVerification.created_at.desc()).first()
+    verification = None
+    linked_access = None
+    linked_lead = None
+    if access_token:
+        linked_access = _get_public_credit_lead_access(db, str(access_token).strip(), company_id=company.id)
+        if applicant_email != str(linked_access.email or "").strip().lower():
+            raise HTTPException(status_code=400, detail="El correo no corresponde al acceso enviado por el asesor.")
+        if verification_code != str(linked_access.code or "").strip():
+            raise HTTPException(status_code=400, detail="El código de validación no es correcto.")
+        if linked_access.verified_at is None:
+            linked_access.verified_at = datetime.datetime.now()
+        linked_lead = linked_access.lead
+        if not linked_lead:
+            raise HTTPException(status_code=404, detail="El lead asociado a este acceso ya no existe.")
+    else:
+        verification = db.query(models.PublicCreditEmailVerification).filter(
+            models.PublicCreditEmailVerification.company_id == company.id,
+            func.lower(models.PublicCreditEmailVerification.email) == applicant_email,
+            models.PublicCreditEmailVerification.code == verification_code,
+        ).order_by(models.PublicCreditEmailVerification.created_at.desc()).first()
 
-    if not verification or verification.verified_at is None:
-        raise HTTPException(status_code=400, detail="Debes validar el código enviado al correo antes de continuar.")
-    if verification.expires_at < datetime.datetime.now():
-        raise HTTPException(status_code=400, detail="La validación por correo expiró. Solicita un nuevo código.")
+        if not verification or verification.verified_at is None:
+            raise HTTPException(status_code=400, detail="Debes validar el código enviado al correo antes de continuar.")
+        if verification.expires_at < datetime.datetime.now():
+            raise HTTPException(status_code=400, detail="La validación por correo expiró. Solicita un nuevo código.")
 
-    ensure_company_lead_creation_capacity(db, company.id)
+        ensure_company_lead_creation_capacity(db, company.id)
 
     front_capture = None
     back_capture = None
@@ -4303,6 +4465,157 @@ async def submit_public_credit_request(
         "signature_upload": signature_upload_url,
         "signature_drawn": signature_drawn_url,
     }
+
+    if linked_lead:
+        linked_lead.name = applicant_name or linked_lead.name
+        linked_lead.email = applicant_email or linked_lead.email
+        linked_lead.phone = applicant_phone or linked_lead.phone
+        linked_lead.message = _build_public_credit_lead_message(payload)
+        linked_lead.updated_at = datetime.datetime.now()
+
+        process_detail = db.query(models.LeadProcessDetail).filter(
+            models.LeadProcessDetail.lead_id == linked_lead.id
+        ).first()
+        if not process_detail:
+            process_detail = models.LeadProcessDetail(
+                lead_id=linked_lead.id,
+                has_vehicle=False,
+                desired_vehicle=desired_vehicle,
+            )
+            db.add(process_detail)
+        else:
+            process_detail.desired_vehicle = desired_vehicle or process_detail.desired_vehicle
+
+        summary_lines = [
+            f"Formulario de crédito completado por {applicant_name}.",
+            f"Vehículo de interés: {desired_vehicle}.",
+            f"Documento: {personal.get('documentType') or 'N/A'} {document_number}.",
+            f"Valor vehículo: ${int(vehicle.get('vehicleValue') or 0):,}".replace(",", "."),
+            f"Monto solicitado: ${int(vehicle.get('requestedAmount') or 0):,}".replace(",", "."),
+            f"Ingresos totales: ${int(income.get('totalIncome') or 0):,}".replace(",", "."),
+            f"Actividad económica: {employment.get('activity') or 'N/A'}.",
+        ]
+        if personal.get("city"):
+            summary_lines.append(f"Ciudad: {personal.get('city')}.")
+        if personal.get("address"):
+            summary_lines.append(f"Dirección: {personal.get('address')}.")
+        if references:
+            summary_lines.append("Referencias registradas en formulario de crédito.")
+
+        db.add(models.LeadHistory(
+            lead_id=linked_lead.id,
+            user_id=None,
+            previous_status=linked_lead.status,
+            new_status=linked_lead.status,
+            comment="Formulario de crédito validado y firmado por el cliente desde el acceso enviado por el asesor.",
+        ))
+
+        upsert_credit_application_from_lead(db, linked_lead, " ".join(summary_lines))
+        related_credit = next(
+            (
+                record for record in db.query(models.CreditApplication).filter(
+                    models.CreditApplication.lead_id == linked_lead.id
+                ).order_by(
+                    models.CreditApplication.updated_at.desc(),
+                    models.CreditApplication.created_at.desc()
+                ).all()
+                if not is_purchase_request_record(record)
+            ),
+            None
+        )
+        if related_credit:
+            related_credit.client_name = applicant_name
+            related_credit.phone = applicant_phone
+            related_credit.email = applicant_email
+            related_credit.desired_vehicle = desired_vehicle
+            related_credit.monthly_income = int(income.get("salaryIncome") or 0)
+            related_credit.other_income = int(income.get("otherIncome") or 0)
+            related_credit.down_payment = int(consent.get("declaredDownPayment") or 0)
+            related_credit.occupation = str(employment.get("activity") or "employee")
+            related_credit.application_mode = "individual"
+            related_credit.notes = "\n".join(summary_lines)
+
+        if document_front_url:
+            db.add(models.LeadFile(
+                lead_id=linked_lead.id,
+                user_id=None,
+                file_name="cedula_frontal",
+                file_path=document_front_url,
+                file_type=getattr(document_front, "content_type", None) if document_front else getattr(front_capture, "file_type", None),
+            ))
+        if document_back_url:
+            db.add(models.LeadFile(
+                lead_id=linked_lead.id,
+                user_id=None,
+                file_name="cedula_posterior",
+                file_path=document_back_url,
+                file_type=getattr(document_back, "content_type", None) if document_back else getattr(back_capture, "file_type", None),
+            ))
+        if signature_upload_url or signature_drawn_url:
+            db.add(models.LeadFile(
+                lead_id=linked_lead.id,
+                user_id=None,
+                file_name="firma_cliente",
+                file_path=signature_upload_url or signature_drawn_url,
+                file_type=getattr(signature_file, "content_type", None) or "image/png",
+            ))
+
+        submission = db.query(models.PublicCreditSubmission).filter(
+            models.PublicCreditSubmission.lead_id == linked_lead.id
+        ).order_by(
+            models.PublicCreditSubmission.updated_at.desc(),
+            models.PublicCreditSubmission.id.desc(),
+        ).first()
+        if not submission:
+            submission = models.PublicCreditSubmission(
+                company_id=company.id,
+                lead_id=linked_lead.id,
+                email=applicant_email,
+                applicant_name=applicant_name,
+                status="submitted",
+                attachments={},
+                consent_text=PUBLIC_CREDIT_POLICY_TEXT,
+            )
+            db.add(submission)
+        submission.email = applicant_email
+        submission.applicant_name = applicant_name
+        submission.document_number = document_number
+        submission.phone = applicant_phone
+        submission.desired_vehicle = desired_vehicle
+        submission.status = "submitted"
+        submission.verification_code = linked_access.code
+        submission.verification_verified_at = linked_access.verified_at
+        submission.form_payload = payload
+        current_attachments = submission.attachments or {}
+        current_attachments.update({key: value for key, value in attachments.items() if value})
+        submission.attachments = current_attachments
+        submission.consent_text = PUBLIC_CREDIT_POLICY_TEXT
+        submission.updated_at = datetime.datetime.now()
+        linked_access.used_at = datetime.datetime.now()
+
+        db.commit()
+        db.refresh(submission)
+
+        response_message = "Formulario de crédito guardado y asociado al lead correctamente."
+        try:
+            pdf_bytes = _build_public_credit_submission_pdf(company, submission)
+            _send_public_credit_submission_email(db, company, submission, pdf_bytes)
+        except Exception as exc:
+            print(
+                f"Warning: linked public credit submission {submission.id} was saved but email delivery failed: {exc}",
+                flush=True,
+            )
+            response_message = (
+                "Formulario guardado correctamente, pero no fue posible enviar el correo con el PDF. "
+                "La empresa puede descargarlo desde Solicitudes Públicas."
+            )
+
+        return schemas.PublicCreditSubmissionResponse(
+            status="ok",
+            message=response_message,
+            lead_id=linked_lead.id,
+            submission_id=submission.id,
+        )
 
     assigned_user_id = None
     auto_assigned_user = choose_auto_assign_user(db, company.id)
@@ -4997,22 +5310,38 @@ def send_lead_credit_form_access(
         raise HTTPException(status_code=400, detail="El lead no tiene correo para enviar el acceso.")
 
     company = db.query(models.Company).filter(models.Company.id == lead.company_id).first()
-    form_url = _build_company_public_credit_form_url(company, request)
+    verification_code = f"{random.randint(100000, 999999)}"
+    access = models.PublicCreditLeadAccess(
+        company_id=lead.company_id,
+        lead_id=lead.id,
+        created_by_id=current_user.id,
+        email=target_email,
+        token=secrets.token_urlsafe(32),
+        code=verification_code,
+        expires_at=datetime.datetime.now() + datetime.timedelta(days=7),
+    )
+    db.add(access)
+    db.flush()
+
+    form_url = f"{_build_company_public_credit_form_url(company, request)}?access={access.token}"
     smtp_settings = _get_public_credit_smtp_settings(db, company)
     company_name = getattr(company, "name", None) or "AutosQP"
 
     message = EmailMessage()
-    message["Subject"] = f"Acceso al formulario de crédito - {company_name}"
+    message["Subject"] = f"Código y firma del formulario de crédito - {company_name}"
     message["From"] = smtp_settings["sender"]
     message["To"] = target_email
     message.set_content(
         "\n".join([
             f"Hola {lead.name or ''}.".strip(),
             "",
-            f"Puedes completar tu formulario de crédito en este enlace:",
+            "Tu asesor está diligenciando tu formulario de crédito.",
+            f"Código de validación: {verification_code}",
+            "",
+            "Ingresa al siguiente enlace para revisar, adjuntar documentos y firmar:",
             form_url,
             "",
-            "Si ya lo diligenciaste, ignora este mensaje.",
+            "Este acceso vence en 7 días.",
         ]),
         charset="utf-8",
     )
@@ -5026,9 +5355,14 @@ def send_lead_credit_form_access(
                 <h1 style="margin:8px 0 0;font-size:26px;">Formulario de crédito</h1>
               </div>
               <div style="padding:28px;">
-                <p style="margin-top:0;color:#475569;">Hola {escape(lead.name or '')}, completa tu solicitud de crédito desde el siguiente acceso.</p>
+                <p style="margin-top:0;color:#475569;">Hola {escape(lead.name or '')}, tu asesor está diligenciando tu formulario de crédito. Revisa la información, adjunta los documentos pendientes y firma desde este acceso.</p>
+                <div style="margin:18px 0;padding:18px;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0;text-align:center;">
+                  <div style="font-size:13px;color:#64748b;">Código de validación</div>
+                  <div style="font-size:32px;font-weight:800;letter-spacing:6px;color:#0f172a;">{escape(verification_code)}</div>
+                </div>
                 <a href="{escape(form_url)}" style="display:inline-block;margin-top:14px;border-radius:14px;background:{escape(getattr(company, 'primary_color', None) or '#2563eb')};color:#fff;text-decoration:none;font-weight:700;padding:14px 20px;">Abrir formulario</a>
                 <p style="margin-top:24px;color:#64748b;font-size:13px;">Si el botón no abre, copia este enlace: {escape(form_url)}</p>
+                <p style="margin-top:8px;color:#64748b;font-size:13px;">Este acceso vence en 7 días.</p>
               </div>
             </div>
           </div>
@@ -5042,10 +5376,10 @@ def send_lead_credit_form_access(
         user_id=current_user.id,
         previous_status=lead.status,
         new_status=lead.status,
-        comment="Acceso al formulario público de crédito enviado al cliente por correo",
+        comment="Código y acceso de firma del formulario de crédito enviados al cliente por correo",
     ))
     db.commit()
-    return {"status": "ok", "message": "Acceso enviado al correo del cliente."}
+    return {"status": "ok", "message": "Código y acceso enviados al correo del cliente."}
 
 
 @app.post("/public/credit-request", response_model=schemas.PublicCreditRequestResponse)

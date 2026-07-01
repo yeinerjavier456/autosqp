@@ -364,7 +364,7 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
                 {},
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-            Swal.fire('Acceso enviado', 'Se envió el enlace del formulario al correo del cliente.', 'success');
+            Swal.fire('Acceso enviado', 'Se envió el código de validación y el enlace de firma al correo del cliente.', 'success');
         } catch (error) {
             Swal.fire('Error', error?.response?.data?.detail || 'No se pudo enviar el acceso al cliente.', 'error');
         } finally {
@@ -490,7 +490,7 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
                         disabled={sendingAccess || !lead?.email}
                         className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
                     >
-                        {sendingAccess ? 'Enviando acceso...' : 'Enviar acceso al cliente'}
+                        {sendingAccess ? 'Enviando acceso...' : 'Enviar código y enlace de firma'}
                     </button>
                     {!lead?.email && <span className="self-center text-xs font-semibold text-amber-700">Agrega correo al lead para enviar el acceso.</span>}
                 </div>

@@ -90,6 +90,29 @@ const createEmptyForm = () => ({
   },
 });
 
+const mergeCreditForm = (source = {}) => {
+  const defaults = createEmptyForm();
+  return {
+    vehicle: { ...defaults.vehicle, ...(source.vehicle || {}) },
+    personal: { ...defaults.personal, ...(source.personal || {}) },
+    employment: { ...defaults.employment, ...(source.employment || {}) },
+    income: { ...defaults.income, ...(source.income || {}) },
+    references: {
+      ...defaults.references,
+      ...(source.references || {}),
+      commercial: { ...defaults.references.commercial, ...(source.references?.commercial || {}) },
+      personal1: { ...defaults.references.personal1, ...(source.references?.personal1 || {}) },
+      personal2: { ...defaults.references.personal2, ...(source.references?.personal2 || {}) },
+    },
+    consent: {
+      ...defaults.consent,
+      ...(source.consent || {}),
+      verificationCode: '',
+      signatureDrawnDataUrl: '',
+    },
+  };
+};
+
 const withAlpha = (hex, alpha = '18') => {
   if (typeof hex !== 'string') return hex;
   const normalized = hex.trim();
@@ -121,9 +144,16 @@ const PublicCreditForm = () => {
   const company = usePublicCompany();
   const canvasRef = useRef(null);
   const drawingRef = useRef(false);
+  const accessToken = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get('access') || '';
+  }, []);
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState(createEmptyForm);
+  const [accessContext, setAccessContext] = useState(null);
+  const [accessAttachments, setAccessAttachments] = useState({});
+  const [loadingAccess, setLoadingAccess] = useState(false);
   const [documentFront, setDocumentFront] = useState(null);
   const [documentBack, setDocumentBack] = useState(null);
   const [documentCaptures, setDocumentCaptures] = useState({ documentFront: null, documentBack: null });
@@ -153,6 +183,37 @@ const PublicCreditForm = () => {
       secondarySoft: withAlpha(secondary, '12'),
     };
   }, [company]);
+
+  useEffect(() => {
+    if (!accessToken) return undefined;
+    let active = true;
+    const loadAccess = async () => {
+      setLoadingAccess(true);
+      try {
+        const response = await axios.get(`/api/public/credit-request/access/${accessToken}`);
+        if (!active) return;
+        setAccessContext(response.data || null);
+        setAccessAttachments(response.data?.attachments || {});
+        setForm(mergeCreditForm(response.data?.form_payload || {}));
+        setVerificationSent(true);
+        setVerificationVerified(Boolean(response.data?.verified));
+        setStatus({
+          type: 'success',
+          message: 'Acceso ligado al lead cargado. Ingresa el código recibido por correo para validar y firmar.',
+        });
+      } catch (error) {
+        if (!active) return;
+        setStatus({
+          type: 'error',
+          message: error?.response?.data?.detail || 'No se pudo abrir el acceso enviado por el asesor.',
+        });
+      } finally {
+        if (active) setLoadingAccess(false);
+      }
+    };
+    loadAccess();
+    return () => { active = false; };
+  }, [accessToken]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -267,8 +328,8 @@ const PublicCreditForm = () => {
     }
     if (stepIndex === 1) {
       const { firstName, lastName, documentNumber, mobilePhone, address, email } = form.personal;
-      const hasFrontDocument = Boolean(documentFront || documentCaptures.documentFront?.uploaded);
-      const hasBackDocument = Boolean(documentBack || documentCaptures.documentBack?.uploaded);
+      const hasFrontDocument = Boolean(documentFront || documentCaptures.documentFront?.uploaded || accessAttachments.document_front);
+      const hasBackDocument = Boolean(documentBack || documentCaptures.documentBack?.uploaded || accessAttachments.document_back);
       return Boolean(firstName && lastName && documentNumber && mobilePhone && address && email && hasFrontDocument && hasBackDocument);
     }
     if (stepIndex === 2) {
@@ -401,6 +462,11 @@ const PublicCreditForm = () => {
 
   const sendVerificationCode = async () => {
     resetStatus();
+    if (accessToken) {
+      setVerificationSent(true);
+      setStatus({ type: 'success', message: 'Usa el código de validación que recibiste junto con este enlace.' });
+      return;
+    }
     if (!form.personal.email) {
       setStatus({ type: 'error', message: 'Debes diligenciar el correo antes de solicitar el código.' });
       return;
@@ -429,10 +495,17 @@ const PublicCreditForm = () => {
     }
     setVerifyingCode(true);
     try {
-      await axios.post('/api/public/credit-request/verify-code', {
-        email: form.personal.email,
-        code: form.consent.verificationCode,
-      });
+      if (accessToken) {
+        await axios.post(`/api/public/credit-request/access/${accessToken}/verify-code`, {
+          email: form.personal.email,
+          code: form.consent.verificationCode,
+        });
+      } else {
+        await axios.post('/api/public/credit-request/verify-code', {
+          email: form.personal.email,
+          code: form.consent.verificationCode,
+        });
+      }
       setVerificationVerified(true);
       setStatus({ type: 'success', message: 'Correo validado correctamente.' });
     } catch (error) {
@@ -492,6 +565,7 @@ const PublicCreditForm = () => {
         formData.append('document_back_capture_token', documentCaptures.documentBack.token);
       }
       if (signatureFile) formData.append('signature_file', signatureFile);
+      if (accessToken) formData.append('access_token', accessToken);
 
       const response = await axios.post('/api/public/credit-request/submit', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -646,7 +720,18 @@ const PublicCreditForm = () => {
               </div>
             )}
 
-            {!isEnabled ? (
+            {accessToken && (
+              <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-800">
+                <strong>Acceso enviado por asesor.</strong> Este formulario quedará enlazado al lead en gestión
+                {accessContext?.applicant_name ? ` de ${accessContext.applicant_name}` : ''}. Usa el código recibido por correo para validar y firmar.
+              </div>
+            )}
+
+            {loadingAccess ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-8 text-center text-slate-500">
+                Cargando acceso del formulario...
+              </div>
+            ) : !isEnabled ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-700">
                 El formulario público de crédito no está habilitado para esta empresa.
               </div>
@@ -728,13 +813,13 @@ const PublicCreditForm = () => {
                       <div className="space-y-3">
                         {renderFieldLabel('Cédula Ciudadanía Cara Frontal', true)}
                         <input type="file" accept="image/*,application/pdf" capture="environment" onChange={(e) => handleFileSelection('documentFront', e.target.files?.[0])} className="block w-full text-sm text-slate-600" />
-                        {renderPreviewBox('Documento frontal', documentFrontPreview, documentFront)}
+                        {renderPreviewBox('Documento frontal', documentFrontPreview || accessAttachments.document_front, documentFront)}
                         {renderDocumentCaptureBox('documentFront', 'Documento frontal')}
                       </div>
                       <div className="space-y-3">
                         {renderFieldLabel('Cédula Ciudadanía Cara Posterior', true)}
                         <input type="file" accept="image/*,application/pdf" capture="environment" onChange={(e) => handleFileSelection('documentBack', e.target.files?.[0])} className="block w-full text-sm text-slate-600" />
-                        {renderPreviewBox('Documento posterior', documentBackPreview, documentBack)}
+                        {renderPreviewBox('Documento posterior', documentBackPreview || accessAttachments.document_back, documentBack)}
                         {renderDocumentCaptureBox('documentBack', 'Documento posterior')}
                       </div>
                     </div>
@@ -869,14 +954,14 @@ const PublicCreditForm = () => {
                           <strong>Correo:</strong> {form.personal.email || 'Aún no registrado'}
                         </div>
                         <button type="button" onClick={sendVerificationCode} disabled={sendingCode} className="rounded-xl px-4 py-3 text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: theme.primary }}>
-                          {sendingCode ? 'Enviando...' : verificationSent ? 'Reenviar código' : 'Enviar código'}
+                          {sendingCode ? 'Enviando...' : accessToken ? 'Código enviado por asesor' : verificationSent ? 'Reenviar código' : 'Enviar código'}
                         </button>
                         <div>
                           <label className="mb-1 block text-sm font-semibold text-slate-700">Código de verificación</label>
                           <div className="flex gap-3">
                             <input className={inputClassName} value={form.consent.verificationCode} onChange={(e) => updateSection('consent', 'verificationCode', e.target.value)} />
                             <button type="button" onClick={verifyCode} disabled={!verificationSent || verifyingCode} className="rounded-xl px-4 py-3 text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: theme.secondary }}>
-                              {verifyingCode ? 'Confirmando...' : 'Confirmar codigo'}
+                              {verifyingCode ? 'Confirmando...' : 'Confirmar código'}
                             </button>
                           </div>
                         </div>
