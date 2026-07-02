@@ -101,6 +101,7 @@ ROLE_REQUIRED_MODULES = {
     "gestion_creditos": {"credits"},
     "aliado": {"ally_board"},
 }
+MODULE_ROLE_FALLBACK_NAME = "user"
 
 
 def normalize_company_enabled_modules(modules: Optional[List[str]]) -> List[str]:
@@ -138,13 +139,24 @@ def is_role_enabled_for_company(role: Optional[models.Role], company: Optional[m
     if not company:
         return True
 
-    role_name = getattr(role, "base_role_name", None) or getattr(role, "name", None) or ""
+    role_name = get_effective_role_key(role)
     required_modules = ROLE_REQUIRED_MODULES.get(role_name)
     if not required_modules:
         return True
 
     enabled_modules = set(get_company_enabled_modules(company))
     return bool(enabled_modules.intersection(required_modules))
+
+
+def get_role_disabled_required_modules(role: Optional[models.Role], company: Optional[models.Company]) -> List[str]:
+    if role is None or not company:
+        return []
+    role_name = get_effective_role_key(role)
+    required_modules = ROLE_REQUIRED_MODULES.get(role_name, set())
+    if not required_modules:
+        return []
+    enabled_modules = set(get_company_enabled_modules(company))
+    return sorted(required_modules - enabled_modules)
 
 
 def get_company_by_id(db: Session, company_id: Optional[int]) -> Optional[models.Company]:
@@ -2477,7 +2489,11 @@ def sanitize_assignable_role_ids(
             )
         )
 
-    allowed_ids = {role.id for role in allowed_roles.all()}
+    company = get_company_by_id(db, company_id)
+    allowed_ids = {
+        role.id for role in allowed_roles.all()
+        if is_role_enabled_for_company(role, company)
+    }
     return [role_id for role_id in normalized_ids if role_id in allowed_ids]
 
 
@@ -2537,6 +2553,57 @@ def normalize_role_text(value: Optional[str]) -> str:
     for source, target in replacements.items():
         normalized = normalized.replace(source, target)
     return " ".join(normalized.split())
+
+
+def get_effective_role_key(role: Optional[models.Role]) -> str:
+    if not role:
+        return ""
+
+    role_names = {
+        normalize_role_text(getattr(role, "base_role_name", None)),
+        normalize_role_text(getattr(role, "name", None)),
+        normalize_role_text(getattr(role, "label", None)),
+    }
+    role_names.discard("")
+
+    if any("super" in role_name and ("admin" in role_name or "administrador" in role_name) for role_name in role_names):
+        return "super_admin"
+    if any("admin" in role_name or "administrador" in role_name for role_name in role_names):
+        return "admin"
+    if "aliado" in role_names or "aliado estrategico" in role_names:
+        return "aliado"
+    if "asesor" in role_names or "vendedor" in role_names or "asesor vendedor" in role_names:
+        return "asesor"
+    if (
+        "gestion creditos" in role_names
+        or "gestion de creditos" in role_names
+        or "gestor de creditos" in role_names
+        or "gestor creditos" in role_names
+        or any("gestion" in role_name and "credit" in role_name for role_name in role_names)
+        or any("gestor" in role_name and "credit" in role_name for role_name in role_names)
+        or any("coordinador" in role_name and "credit" in role_name for role_name in role_names)
+    ):
+        return "gestion_creditos"
+    if "compras" in role_names:
+        return "compras"
+    if "inventario" in role_names:
+        return "inventario"
+
+    return getattr(role, "base_role_name", None) or getattr(role, "name", None) or ""
+
+
+def ensure_role_allowed_for_company(role: models.Role, company: Optional[models.Company]):
+    disabled_modules = get_role_disabled_required_modules(role, company)
+    if not disabled_modules:
+        return
+    role_label = getattr(role, "label", None) or getattr(role, "name", None) or "rol"
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            f"El rol '{role_label}' depende de módulos deshabilitados para esta empresa: "
+            f"{', '.join(disabled_modules)}."
+        )
+    )
 
 
 def is_credit_coordinator_role(role: Optional[models.Role]) -> bool:
@@ -3242,6 +3309,88 @@ def resolve_assignable_role(db: Session, target_role: models.Role, company_id: O
     return target_role
 
 
+def get_module_role_fallback(db: Session, company_id: Optional[int]) -> models.Role:
+    fallback_role = db.query(models.Role).filter(models.Role.name == MODULE_ROLE_FALLBACK_NAME).first()
+    if not fallback_role:
+        fallback_role = models.Role(
+            name=MODULE_ROLE_FALLBACK_NAME,
+            label="Usuario Basico",
+            is_system=True,
+            permissions_json=json.dumps(DEFAULT_ROLE_VIEW_ACCESS.get(MODULE_ROLE_FALLBACK_NAME, [])),
+            menu_order_json=json.dumps(DEFAULT_ROLE_MENU_ORDER.get(MODULE_ROLE_FALLBACK_NAME, [])),
+            auto_assign_leads=False,
+        )
+        db.add(fallback_role)
+        db.flush()
+    return resolve_assignable_role(db, fallback_role, company_id)
+
+
+def get_users_with_disabled_module_roles(db: Session, company: models.Company) -> List[models.User]:
+    if not company:
+        return []
+
+    users = (
+        db.query(models.User)
+        .options(joinedload(models.User.role))
+        .filter(models.User.company_id == company.id)
+        .all()
+    )
+    return [
+        user for user in users
+        if user.role and not is_role_enabled_for_company(user.role, company)
+    ]
+
+
+def remediate_users_with_disabled_module_roles(
+    db: Session,
+    company: models.Company,
+    *,
+    actor_user_id: Optional[int] = None,
+    source: str = "company_modules_update",
+) -> List[dict]:
+    affected_users = get_users_with_disabled_module_roles(db, company)
+    if not affected_users:
+        return []
+
+    fallback_role = get_module_role_fallback(db, company.id)
+    enabled_modules = get_company_enabled_modules(company)
+    remediated = []
+
+    for affected_user in affected_users:
+        old_role = affected_user.role
+        old_role_id = affected_user.role_id
+        old_role_name = get_effective_role_key(old_role)
+        disabled_modules = get_role_disabled_required_modules(old_role, company)
+
+        affected_user.role_id = fallback_role.id
+        affected_user.auto_assign_leads = False
+
+        details = {
+            "source": source,
+            "company_id": company.id,
+            "user_id": affected_user.id,
+            "email": affected_user.email,
+            "old_role_id": old_role_id,
+            "old_role_name": old_role_name,
+            "old_role_label": getattr(old_role, "label", None),
+            "new_role_id": fallback_role.id,
+            "new_role_name": get_effective_role_key(fallback_role),
+            "disabled_required_modules": disabled_modules,
+            "enabled_modules": enabled_modules,
+        }
+        db.add(models.SystemLog(
+            company_id=company.id,
+            user_id=actor_user_id,
+            action="MODULE_ROLE_FALLBACK",
+            entity_type="User",
+            entity_id=affected_user.id,
+            details=json.dumps(details, ensure_ascii=True),
+        ))
+        remediated.append(details)
+
+    return remediated
+
+
 def serialize_user(user: models.User, is_online: Optional[bool] = None) -> dict:
     payload = schemas.User.model_validate(user, from_attributes=True).model_dump()
     payload["role"] = serialize_role(user.role).model_dump() if user.role else None
@@ -3594,6 +3743,11 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
         # Prevent creating Super Admins
         if role_obj.name == "super_admin":
              raise HTTPException(status_code=403, detail="Company admins cannot create Super Users")
+
+    target_company = get_company_by_id(db, user.company_id)
+    if user.company_id and not target_company:
+        raise HTTPException(status_code=400, detail="Empresa inválida")
+    ensure_role_allowed_for_company(role_obj, target_company)
     
     # Check if user exists
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
@@ -3628,8 +3782,24 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
 
 # Keep this for backward compatibility or strict "me" endpoint
 @app.get("/users/me", response_model=schemas.User)
-async def read_users_me(current_user: models.User = Depends(get_current_user)):
+async def read_users_me(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     ensure_company_license_allows_login(getattr(current_user, "company", None))
+    if (
+        getattr(current_user, "company", None)
+        and getattr(current_user, "role", None)
+        and not is_role_enabled_for_company(current_user.role, current_user.company)
+    ):
+        remediate_users_with_disabled_module_roles(
+            db,
+            current_user.company,
+            actor_user_id=None,
+            source="users_me_fallback",
+        )
+        db.commit()
+        db.refresh(current_user)
     return serialize_user(current_user)
 
 @app.get("/users/{user_id}", response_model=schemas.User)
@@ -3677,6 +3847,11 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
             if target_active_state and user_update.company_id:
                 ensure_company_active_account_limit(db, user_update.company_id, excluding_user_id=db_user.id)
         db_user.company_id = user_update.company_id
+
+    target_company = get_company_by_id(db, db_user.company_id)
+    if db_user.company_id and not target_company:
+        raise HTTPException(status_code=400, detail="Empresa inválida")
+    ensure_role_allowed_for_company(resolved_role, target_company)
     
     # Update new fields
     if user_update.full_name is not None:
@@ -4056,6 +4231,12 @@ def update_company(company_id: int, company_update: schemas.CompanyCreate, db: S
     db_company.license_end_date = company_update.license_end_date
     db_company.enabled_modules_json = json.dumps(normalize_company_enabled_modules(company_update.enabled_modules))
     db_company.public_credit_requires_email_validation = bool(company_update.public_credit_requires_email_validation)
+    remediated_users = remediate_users_with_disabled_module_roles(
+        db,
+        db_company,
+        actor_user_id=current_user.id,
+        source="company_modules_update",
+    )
     
     try:
         db.commit()
@@ -4064,6 +4245,12 @@ def update_company(company_id: int, company_update: schemas.CompanyCreate, db: S
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
         
+    if remediated_users:
+        print(
+            f"Remediated {len(remediated_users)} users with disabled module roles for company {db_company.id}",
+            flush=True,
+        )
+
     return serialize_company(db_company)
 
 @app.get("/public/company-context", response_model=schemas.PublicCompanyContext)
