@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import List
+from typing import List, Optional
 import models, schemas
 from datetime import timedelta, datetime
+import random
 from zoneinfo import ZoneInfo
 from dependencies import get_current_user, get_db
 
@@ -57,8 +58,6 @@ def validate_rule_payload(rule: schemas.AutomationRuleCreate):
     if rule.reassign_after_alerts_enabled:
         if rule.reassign_after_alerts_count < 1:
             raise HTTPException(status_code=400, detail="Debes indicar después de cuántas alertas se reasigna")
-        if not rule.reassign_to_user_id:
-            raise HTTPException(status_code=400, detail="Debes seleccionar el usuario destino para la reasignación")
         if rule.reassign_after_alerts_count > 1 and not rule.is_repeating:
             raise HTTPException(status_code=400, detail="Para reasignar después de varias alertas debes activar la repetición")
 
@@ -85,7 +84,7 @@ def is_advisor_user(user: models.User) -> bool:
 
 
 def ensure_reassignment_user_scope(rule: schemas.AutomationRuleCreate, db: Session, current_user: models.User):
-    if not rule.reassign_after_alerts_enabled:
+    if not rule.reassign_after_alerts_enabled or not rule.reassign_to_user_id:
         return
 
     target_user = db.query(models.User).join(models.Role, isouter=True).filter(
@@ -101,6 +100,17 @@ def ensure_reassignment_user_scope(rule: schemas.AutomationRuleCreate, db: Sessi
         raise HTTPException(status_code=400, detail="Solo puedes reasignar leads a asesores o vendedores")
 
 
+def get_reassignment_candidates(db: Session, company_id: int, excluded_user_id: Optional[int] = None) -> List[models.User]:
+    users = db.query(models.User).join(models.Role, isouter=True).filter(
+        models.User.company_id == company_id,
+        models.User.is_active == True
+    ).all()
+    return [
+        user for user in users
+        if user.id != excluded_user_id and is_advisor_user(user)
+    ]
+
+
 def perform_rule_reassignment_if_needed(
     db: Session,
     rule: models.AutomationRule,
@@ -111,15 +121,20 @@ def perform_rule_reassignment_if_needed(
         return
     threshold = int(getattr(rule, "reassign_after_alerts_count", 0) or 0)
     target_user_id = getattr(rule, "reassign_to_user_id", None)
-    if threshold < 1 or not target_user_id or alert_count_after_current_log < threshold:
+    if threshold < 1 or alert_count_after_current_log < threshold:
         return
-    if getattr(lead, "assigned_to_id", None) == target_user_id:
+    current_assigned_to_id = getattr(lead, "assigned_to_id", None)
+    if target_user_id and current_assigned_to_id == target_user_id:
         return
 
-    target_user = db.query(models.User).join(models.Role, isouter=True).filter(
-        models.User.id == target_user_id,
-        models.User.company_id == rule.company_id
-    ).first()
+    if target_user_id:
+        target_user = db.query(models.User).join(models.Role, isouter=True).filter(
+            models.User.id == target_user_id,
+            models.User.company_id == rule.company_id
+        ).first()
+    else:
+        candidates = get_reassignment_candidates(db, rule.company_id, excluded_user_id=current_assigned_to_id)
+        target_user = random.choice(candidates) if candidates else None
     if not target_user or not getattr(target_user, "is_active", True) or not is_advisor_user(target_user):
         return
 

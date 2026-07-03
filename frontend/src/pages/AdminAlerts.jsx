@@ -49,7 +49,7 @@ const AdminAlerts = () => {
         repeat_interval: 60,
         reassign_after_alerts_enabled: false,
         reassign_after_alerts_count: 1,
-        reassign_to_user_id: ''
+        reassign_to_user_id: 'random'
     });
 
     const [editingId, setEditingId] = useState(null);
@@ -97,7 +97,7 @@ const AdminAlerts = () => {
                 specific_user_id: formData.specific_user_id ? parseInt(formData.specific_user_id) : null,
                 reassign_after_alerts_enabled: Boolean(formData.reassign_after_alerts_enabled),
                 reassign_after_alerts_count: formData.reassign_after_alerts_enabled ? parseInt(formData.reassign_after_alerts_count || 1, 10) : 0,
-                reassign_to_user_id: formData.reassign_after_alerts_enabled && formData.reassign_to_user_id ? parseInt(formData.reassign_to_user_id, 10) : null,
+                reassign_to_user_id: formData.reassign_after_alerts_enabled && formData.reassign_to_user_id && formData.reassign_to_user_id !== 'random' ? parseInt(formData.reassign_to_user_id, 10) : null,
                 is_active: 1
             };
 
@@ -158,7 +158,7 @@ const AdminAlerts = () => {
             repeat_interval: rule.repeat_interval || 60,
             reassign_after_alerts_enabled: Boolean(rule.reassign_after_alerts_enabled),
             reassign_after_alerts_count: rule.reassign_after_alerts_count || 1,
-            reassign_to_user_id: rule.reassign_to_user_id || ''
+            reassign_to_user_id: rule.reassign_to_user_id || 'random'
         });
         setEditingId(rule.id);
         setShowModal(true);
@@ -177,7 +177,7 @@ const AdminAlerts = () => {
             repeat_interval: 60,
             reassign_after_alerts_enabled: false,
             reassign_after_alerts_count: 1,
-            reassign_to_user_id: ''
+            reassign_to_user_id: 'random'
         });
         setEditingId(null);
     };
@@ -233,7 +233,7 @@ const AdminAlerts = () => {
                                 <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                                     <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4" /></svg>
                                     <span>
-                                        Reasignar tras <strong>{rule.reassign_after_alerts_count || 1}</strong> alerta(s) a <strong>{users.find(u => u.id === rule.reassign_to_user_id)?.email || 'usuario destino'}</strong>
+                                        Reasignar tras <strong>{rule.reassign_after_alerts_count || 1}</strong> alerta(s) a <strong>{rule.reassign_to_user_id ? (users.find(u => u.id === rule.reassign_to_user_id)?.email || 'usuario destino') : 'asesor aleatorio disponible'}</strong>
                                     </span>
                                 </div>
                             )}
@@ -356,7 +356,7 @@ const AdminAlerts = () => {
                                         onChange={e => setFormData({
                                             ...formData,
                                             reassign_after_alerts_enabled: e.target.checked,
-                                            reassign_to_user_id: e.target.checked ? formData.reassign_to_user_id : '',
+                                            reassign_to_user_id: e.target.checked ? (formData.reassign_to_user_id || 'random') : 'random',
                                             reassign_after_alerts_count: e.target.checked ? formData.reassign_after_alerts_count : 1
                                         })}
                                     />
@@ -394,11 +394,14 @@ const AdminAlerts = () => {
                                                 onChange={e => setFormData({ ...formData, reassign_to_user_id: e.target.value })}
                                                 required={formData.reassign_after_alerts_enabled}
                                             >
-                                                <option value="">Selecciona asesor...</option>
+                                                <option value="random">Aleatorio entre asesores/vendedores disponibles</option>
                                                 {advisorUsers.map(u => (
                                                     <option key={u.id} value={u.id}>{u.full_name || u.email} ({u.role?.label || u.role?.name || 'Asesor'})</option>
                                                 ))}
                                             </select>
+                                            <p className="mt-1 text-xs text-amber-800">
+                                                Aleatorio excluye al asesor que ya tiene asignado el lead.
+                                            </p>
                                         </div>
                                     </div>
                                 )}
