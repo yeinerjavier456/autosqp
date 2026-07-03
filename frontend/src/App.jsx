@@ -136,7 +136,7 @@ function App() {
                 <Route path="/admin/receipts/new" element={<SalesDashboard receiptEntryOnly />} />
               </Route>
               <Route element={<PrivateRoute requiredView="payment_receipts_search" />}>
-                <Route path="/admin/receipts/search" element={<SalesDashboard initialTab="accounting" />} />
+                <Route path="/admin/receipts/search" element={<SalesDashboard receiptSearchOnly />} />
               </Route>
               <Route element={<PrivateRoute requiredView="my_sales" />}>
                 <Route path="/admin/my-sales" element={<MySales />} />

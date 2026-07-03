@@ -46,7 +46,7 @@ const sortReceiptsByRecentFirst = (items = []) => {
     });
 };
 
-const SalesDashboard = ({ receiptEntryOnly = false, initialTab = 'sales' }) => {
+const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, initialTab = 'sales' }) => {
     const defaultRange = getLastMonthRange();
     const [stats, setStats] = useState({
         total_revenue: 0,
@@ -70,9 +70,9 @@ const SalesDashboard = ({ receiptEntryOnly = false, initialTab = 'sales' }) => {
     const [approvedSales, setApprovedSales] = useState([]);
     const [receipts, setReceipts] = useState([]);
     const [taxRows, setTaxRows] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(!receiptSearchOnly);
     const [filterStatus, setFilterStatus] = useState('pending');
-    const [activeTab, setActiveTab] = useState(receiptEntryOnly ? 'accounting' : initialTab);
+    const [activeTab, setActiveTab] = useState(receiptEntryOnly || receiptSearchOnly ? 'accounting' : initialTab);
     const [salesSearchInput, setSalesSearchInput] = useState('');
     const [salesSearch, setSalesSearch] = useState('');
     const [receiptSearchInput, setReceiptSearchInput] = useState('');
@@ -203,6 +203,14 @@ const SalesDashboard = ({ receiptEntryOnly = false, initialTab = 'sales' }) => {
     }, [receipts]);
 
     const fetchData = async ({ silent = false } = {}) => {
+        const activeReceiptSearch = receiptSearch.trim();
+        if (receiptSearchOnly && !activeReceiptSearch) {
+            setReceipts([]);
+            setSelectedReceiptGroup(null);
+            setLoading(false);
+            return;
+        }
+
         if (!silent) {
             setLoading(true);
         }
@@ -215,6 +223,18 @@ const SalesDashboard = ({ receiptEntryOnly = false, initialTab = 'sales' }) => {
                     start_date: startDate || undefined,
                     end_date: endDate || undefined
                 };
+
+            if (receiptSearchOnly) {
+                const receiptsRes = await axios.get('/api/finance/receipts', {
+                    headers,
+                    params: {
+                        q: activeReceiptSearch,
+                        limit: 300
+                    }
+                });
+                setReceipts(Array.isArray(receiptsRes.data?.items) ? receiptsRes.data.items : []);
+                return;
+            }
 
             const activeYear = startDate ? Number(startDate.slice(0, 4)) : new Date().getFullYear();
             const [statsRes, salesRes, approvedSalesRes, receiptsRes, taxRes] = await Promise.all([
@@ -1413,11 +1433,143 @@ const SalesDashboard = ({ receiptEntryOnly = false, initialTab = 'sales' }) => {
         }
     };
 
-    if (loading) {
+    if (loading && !receiptSearchOnly) {
         return <div className="p-10 text-center">Cargando finanzas...</div>;
     }
 
     const hasDateFilter = periodPreset !== 'all' && Boolean(startDate && endDate);
+    const hasReceiptSearch = receiptSearch.trim().length > 0;
+
+    if (receiptSearchOnly) {
+        return (
+            <div className="animate-fade-in space-y-6">
+                <header>
+                    <h1 className="text-3xl font-bold text-gray-800">Buscar recibos</h1>
+                    <p className="text-gray-500">Consulta soportes contables por placa, nombre, documento, concepto o número de recibo.</p>
+                </header>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+                        <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Buscar recibos</label>
+                            <input
+                                type="text"
+                                value={receiptSearchInput}
+                                onChange={(e) => setReceiptSearchInput(e.target.value)}
+                                placeholder="Buscar por placa, nombre, documento, concepto o número de recibo..."
+                                autoFocus
+                                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div className="flex items-end">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setReceiptSearchInput('');
+                                    setReceiptSearch('');
+                                }}
+                                disabled={!receiptSearchInput && !receiptSearch}
+                                className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto"
+                            >
+                                Limpiar búsqueda
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {!hasReceiptSearch ? (
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center text-slate-500">
+                        Escribe una búsqueda para consultar recibos.
+                    </div>
+                ) : (
+                    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+                        <div className="border-b border-gray-100 bg-gray-50 px-6 py-4">
+                            <h3 className="text-lg font-bold text-gray-800">Resultados</h3>
+                            <p className="text-sm text-gray-500">
+                                {loading ? 'Buscando recibos...' : `${receiptGroups.length} resultado(s) encontrado(s).`}
+                            </p>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full border-collapse text-left">
+                                <thead>
+                                    <tr className="bg-gray-50 text-xs uppercase tracking-wider text-gray-600">
+                                        <th className="border-b p-4">Fecha</th>
+                                        <th className="border-b p-4">Recibo</th>
+                                        <th className="border-b p-4">Referencia</th>
+                                        <th className="border-b p-4">Tipo</th>
+                                        <th className="border-b p-4">Valor</th>
+                                        <th className="border-b p-4">Soporte</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {loading ? (
+                                        <tr>
+                                            <td colSpan="6" className="p-8 text-center italic text-gray-400">
+                                                Buscando recibos...
+                                            </td>
+                                        </tr>
+                                    ) : receiptGroups.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="6" className="p-8 text-center italic text-gray-400">
+                                                No se encontraron recibos para esta búsqueda.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        receiptGroups.map((group) => {
+                                            const receipt = group.latestReceipt;
+                                            const supportDisplayId = group.receiptNumber || receipt.receipt_number || `REC-${receipt.id}`;
+                                            const supportDisplayName = getBestGroupDisplayName(group.receipts);
+                                            return (
+                                                <tr key={group.key} className="hover:bg-gray-50">
+                                                    <td className="p-4 text-sm text-gray-600">
+                                                        {receipt.payment_date ? new Date(receipt.payment_date).toLocaleDateString() : '-'}
+                                                    </td>
+                                                    <td className="p-4 text-sm text-gray-600">
+                                                        <div className="font-medium">{supportDisplayId}</div>
+                                                        <div className="line-clamp-2 text-xs text-gray-500">
+                                                            {group.receipts.map((item) => item.concept || item.notes || getCategoryLabel(item.category)).filter(Boolean).slice(0, 3).join(' · ')}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <div className="font-medium text-gray-800">
+                                                            {supportDisplayName || (group.sale?.id
+                                                                ? `#${group.sale.id} - ${group.sale?.vehicle?.make || ''} ${group.sale?.vehicle?.model || ''}`.trim()
+                                                                : `Soporte ${supportDisplayId}`)}
+                                                        </div>
+                                                        <div className="text-xs text-gray-500">
+                                                            {group.sale?.id
+                                                                ? `${group.sale?.vehicle?.plate || 'Sin placa'} · ${group.sale?.seller?.full_name || group.sale?.seller?.email || ''}`
+                                                                : `Soporte ${supportDisplayId}`}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4 text-sm">
+                                                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${group.incomeTotal > 0 && group.expenseTotal > 0 ? 'bg-blue-100 text-blue-700' : receipt.movement_type === 'expense' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                            {group.incomeTotal > 0 && group.expenseTotal > 0 ? 'Mixto' : receipt.movement_type === 'expense' ? 'Egreso' : 'Ingreso'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-4 text-sm">
+                                                        <div className="space-y-1">
+                                                            <div className="font-semibold text-emerald-600">Ingresos: ${group.incomeTotal.toLocaleString()}</div>
+                                                            <div className="font-semibold text-rose-600">Egresos: ${group.expenseTotal.toLocaleString()}</div>
+                                                            <div className={`font-bold ${group.balanceTotal >= 0 ? 'text-blue-600' : 'text-red-600'}`}>Neto: ${group.balanceTotal.toLocaleString()}</div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4 text-sm text-gray-500">
+                                                        {group.receipts.filter((item) => item.file_path).length} adjuntos
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
     const receiptEntryForm = (
         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
             <h3 className="text-lg font-bold text-gray-800">Agregar recibo de compra / venta</h3>
