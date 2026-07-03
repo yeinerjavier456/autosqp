@@ -46,7 +46,7 @@ const sortReceiptsByRecentFirst = (items = []) => {
     });
 };
 
-const SalesDashboard = () => {
+const SalesDashboard = ({ receiptEntryOnly = false }) => {
     const defaultRange = getLastMonthRange();
     const [stats, setStats] = useState({
         total_revenue: 0,
@@ -72,7 +72,7 @@ const SalesDashboard = () => {
     const [taxRows, setTaxRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filterStatus, setFilterStatus] = useState('pending');
-    const [activeTab, setActiveTab] = useState('sales');
+    const [activeTab, setActiveTab] = useState(receiptEntryOnly ? 'accounting' : 'sales');
     const [salesSearch, setSalesSearch] = useState('');
     const [receiptSearch, setReceiptSearch] = useState('');
     const [receiptCategory, setReceiptCategory] = useState('');
@@ -1398,6 +1398,178 @@ const SalesDashboard = () => {
     }
 
     const hasDateFilter = periodPreset !== 'all' && Boolean(startDate && endDate);
+    const receiptEntryForm = (
+        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+            <h3 className="text-lg font-bold text-gray-800">Agregar recibo de compra / venta</h3>
+            <p className="mt-1 text-sm text-gray-500">Registra soportes contables y operativos de la empresa.</p>
+
+            <form onSubmit={handleCreateReceipt} className="mt-5 space-y-4">
+                <div>
+                    <label className="mb-1 block text-sm font-semibold text-gray-700">Concepto Contable</label>
+                    <select
+                        value={receiptForm.concept}
+                        onChange={(e) => {
+                            const concept = e.target.value;
+                            const defaults = getReceiptDefaultsForConcept(concept);
+
+                            setReceiptForm({
+                                ...receiptForm,
+                                concept,
+                                category: defaults.category,
+                                movement_type: defaults.movement_type
+                            });
+                        }}
+                        className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                    >
+                        <option value="">Seleccione un concepto...</option>
+                        {receiptConceptOptions.map((option) => (
+                            <option key={option} value={option}>{option}</option>
+                        ))}
+                    </select>
+                    {receiptForm.concept === 'Otros' && (
+                        <input
+                            type="text"
+                            className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Especifique el concepto..."
+                            value={receiptForm.concept_detail}
+                            onChange={(e) => setReceiptForm({ ...receiptForm, concept_detail: e.target.value })}
+                        />
+                    )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                        <label className="mb-1 block text-sm font-semibold text-gray-700">Tipo de movimiento</label>
+                        <select
+                            value={receiptForm.movement_type}
+                            onChange={(e) => setReceiptForm({ ...receiptForm, movement_type: e.target.value })}
+                            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="income">Ingreso</option>
+                            <option value="expense">Egreso</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="mb-1 block text-sm font-semibold text-gray-700">
+                            {receiptForm.movement_type === 'expense' ? 'Valor del egreso' : 'Valor del ingreso'}
+                        </label>
+                        <input
+                            type="text"
+                            inputMode="numeric"
+                            value={receiptForm.amount}
+                            onChange={(e) => setReceiptForm({ ...receiptForm, amount: formatCurrencyInput(e.target.value) })}
+                            className="w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="mb-1 block text-sm font-semibold text-gray-700">Fecha de pago</label>
+                        <input
+                            type="date"
+                            value={receiptForm.payment_date}
+                            onChange={(e) => setReceiptForm({ ...receiptForm, payment_date: e.target.value })}
+                            className="w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="mb-1 block text-sm font-semibold text-gray-700">Sale o entra por</label>
+                        <select
+                            value={receiptForm.payment_method}
+                            onChange={(e) => setReceiptForm({ ...receiptForm, payment_method: e.target.value })}
+                            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="">Seleccione...</option>
+                            {paymentMethodOptions.map(([value, label]) => (
+                                <option key={value} value={value}>{label}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="mb-1 block text-sm font-semibold text-gray-700">Banco / cuenta</label>
+                        <select
+                            value={receiptForm.bank}
+                            onChange={(e) => setReceiptForm({ ...receiptForm, bank: e.target.value })}
+                            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="">Seleccione banco...</option>
+                            {bankOptions.map((bank) => (
+                                <option key={bank} value={bank}>{bank}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="mb-1 block text-sm font-semibold text-gray-700">Nombre</label>
+                        <input
+                            type="text"
+                            value={receiptForm.display_name}
+                            onChange={(e) => setReceiptForm({ ...receiptForm, display_name: e.target.value })}
+                            className="w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Ej: Chevrolet Spark FLX485"
+                        />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                        <label className="mb-1 block text-sm font-semibold text-gray-700">Categoria</label>
+                        <select
+                            value={receiptForm.category}
+                            onChange={(e) => setReceiptForm({ ...receiptForm, category: e.target.value })}
+                            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            {receiptCategoryOptions.map(([value, label]) => (
+                                <option key={value} value={value}>{label}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label className="mb-1 block text-sm font-semibold text-gray-700">Nota contable</label>
+                    <textarea
+                        rows="4"
+                        value={receiptForm.notes}
+                        onChange={(e) => setReceiptForm({ ...receiptForm, notes: e.target.value })}
+                        className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Detalle del pago, referencia, observaciones..."
+                    />
+                </div>
+
+                <div>
+                    <label className="mb-1 block text-sm font-semibold text-gray-700">Adjunto del recibo</label>
+                    <input
+                        type="file"
+                        onChange={(e) => setReceiptForm({ ...receiptForm, file: e.target.files?.[0] || null })}
+                        className="block w-full text-sm text-gray-600 file:mr-4 file:rounded-xl file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
+                    />
+                </div>
+
+                <button
+                    type="submit"
+                    disabled={creatingReceipt}
+                    className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 font-semibold text-white shadow-sm transition hover:shadow-lg disabled:opacity-60"
+                >
+                    {creatingReceipt ? 'Guardando recibo...' : 'Guardar recibo'}
+                </button>
+            </form>
+        </div>
+    );
+
+    if (receiptEntryOnly) {
+        return (
+            <div className="animate-fade-in space-y-6">
+                <header>
+                    <h1 className="text-3xl font-bold text-gray-800">Agregar recibo de compra / venta</h1>
+                    <p className="text-gray-500">Acceso directo para registrar recibos contables de compras y ventas.</p>
+                </header>
+                <div className="max-w-5xl">
+                    {receiptEntryForm}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <>

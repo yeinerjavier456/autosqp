@@ -12,6 +12,7 @@ SYSTEM_VIEWS = [
     {"id": "ally_board", "label": "Tablero de aliados", "path": "/aliado/dashboard", "scope": "company"},
     {"id": "alerts", "label": "Alertas automaticas", "path": "/admin/alerts", "scope": "company"},
     {"id": "sales", "label": "Finanzas y ventas", "path": "/admin/sales", "scope": "company"},
+    {"id": "payment_receipts", "label": "Agregar recibo de compra / venta", "path": "/admin/receipts/new", "scope": "company"},
     {"id": "my_sales", "label": "Mis ventas", "path": "/admin/my-sales", "scope": "company"},
     {"id": "credits", "label": "Tablero de solicitudes de credito", "path": "/admin/credits", "scope": "company"},
     {"id": "public_credit_submissions", "label": "Solicitudes publicas de credito", "path": "/admin/public-credit-submissions", "scope": "company"},
@@ -34,7 +35,7 @@ DEFAULT_ROLE_VIEW_ACCESS = {
     "super_admin": [view["id"] for view in SYSTEM_VIEWS],
     "admin": [
         "dashboard", "users", "roles", "integrations", "logs", "inventory",
-        "leads_board", "appointments_calendar", "deleted_leads", "ally_board", "alerts", "sales", "credits", "public_credit_submissions", "gmail_credit_audit", "purchase_board",
+        "leads_board", "appointments_calendar", "deleted_leads", "ally_board", "alerts", "sales", "payment_receipts", "credits", "public_credit_submissions", "gmail_credit_audit", "purchase_board",
         "facebook_leads", "tiktok_leads", "whatsapp_leads", "instagram_leads",
         "internal_chat", "whatsapp_dashboard"
     ],
