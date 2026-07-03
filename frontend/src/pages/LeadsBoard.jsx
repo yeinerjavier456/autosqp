@@ -1692,26 +1692,21 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         }
         if (!replyMessage.trim()) return;
 
-        // Ensure we have a conversation ID (from existing messages)
         const conversationId = messages.length > 0 ? messages[0].conversation_id : null;
-        if (!conversationId && lead.source !== 'whatsapp') {
-            Swal.fire('Atención', 'Este cliente aún no ha iniciado una conversación en Meta.', 'info');
+        const source = lead.source?.toLowerCase();
+        const canReplyViaMeta = (source === 'facebook' || source === 'instagram') && Boolean(conversationId);
+        const canContactViaWhatsapp = Boolean(lead.phone);
+
+        if (!canReplyViaMeta && !canContactViaWhatsapp) {
+            Swal.fire('Atención', 'Este lead no tiene teléfono para contactar por WhatsApp.', 'info');
             return;
         }
 
         setSendingReply(true);
         try {
             const token = localStorage.getItem('token');
-            const source = lead.source?.toLowerCase();
 
-            if (source === 'whatsapp') {
-                await axios.post(`${API_BASE_URL}/whatsapp/leads/${lead.id}/send`, {
-                    content: replyMessage,
-                    message_type: 'text'
-                }, { headers: { Authorization: `Bearer ${token}` } });
-
-            } else if (source === 'facebook' || source === 'instagram') {
-                // Determine Meta Route
+            if (canReplyViaMeta) {
                 await axios.post(`${API_BASE_URL}/meta/conversations/${conversationId}/send`, {
                     conversation_id: conversationId,
                     sender_type: 'user',
@@ -1719,9 +1714,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                     message_type: 'text'
                 }, { headers: { Authorization: `Bearer ${token}` } });
             } else {
-                Swal.fire('Error', 'Este lead no proviene de una red social conectada.', 'error');
-                setSendingReply(false);
-                return;
+                await axios.post(`${API_BASE_URL}/whatsapp/leads/${lead.id}/send`, {
+                    content: replyMessage,
+                    message_type: 'text'
+                }, { headers: { Authorization: `Bearer ${token}` } });
             }
 
             setReplyMessage('');
@@ -3977,11 +3973,15 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                     </div>
                                 )}
                             </div>
-                            {(lead.source === 'facebook' || lead.source === 'instagram' || lead.source === 'whatsapp') && (
+                            {(lead.phone || lead.source === 'facebook' || lead.source === 'instagram' || lead.source === 'whatsapp') && (
                                 <form onSubmit={handleSendReply} className="bg-white border-t border-gray-200 p-3 flex gap-2">
                                     <input
                                         type="text"
-                                        placeholder={lead.source === 'whatsapp' ? 'Responder por WhatsApp Business...' : `Responder por ${lead.source}...`}
+                                        placeholder={
+                                            (lead.source === 'facebook' || lead.source === 'instagram') && messages.length > 0
+                                                ? `Responder por ${lead.source}...`
+                                                : 'Contactar por WhatsApp Business...'
+                                        }
                                         className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                                         value={replyMessage}
                                         onChange={(e) => setReplyMessage(e.target.value)}

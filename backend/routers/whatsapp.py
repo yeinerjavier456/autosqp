@@ -538,8 +538,8 @@ def send_lead_message(
         raise HTTPException(status_code=404, detail="Lead not found")
     if current_user.company_id and lead.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="No autorizado para este lead")
-    if (lead.source or "").lower() != "whatsapp":
-        raise HTTPException(status_code=400, detail="Este lead no proviene de WhatsApp")
+    if not lead.company_id:
+        raise HTTPException(status_code=400, detail="El lead no tiene compañía para usar WhatsApp")
     if not lead.phone:
         raise HTTPException(status_code=400, detail="El lead no tiene teléfono para WhatsApp")
 

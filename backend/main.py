@@ -8770,9 +8770,32 @@ def get_lead_messages(
         lead.has_unread_reply = 0
         db.commit()
         
-    # Get the conversation directly linked to this lead.
-    conversation = db.query(models.Conversation).filter(models.Conversation.lead_id == lead_id).first()
-    if not conversation and lead.source in {"facebook", "instagram", "whatsapp"} and lead.phone:
+    conversation_ids = {
+        row.id
+        for row in db.query(models.Conversation.id).filter(models.Conversation.lead_id == lead_id).all()
+    }
+
+    if lead.phone:
+        lookup_phones = phone_variants_for_lookup(lead.phone)
+        channel_query = db.query(models.ChannelChatSession).filter(
+            models.ChannelChatSession.company_id == lead.company_id,
+            models.ChannelChatSession.conversation_id.isnot(None),
+        )
+        channel_query = channel_query.filter(
+            or_(
+                models.ChannelChatSession.lead_id == lead.id,
+                models.ChannelChatSession.external_user_id.in_(lookup_phones or [lead.phone]),
+            )
+        )
+        for channel_session in channel_query.all():
+            if channel_session.conversation_id:
+                conversation_ids.add(channel_session.conversation_id)
+                if channel_session.lead_id != lead.id:
+                    channel_session.lead_id = lead.id
+                    db.commit()
+
+    # Backward-compatible linking for older channel conversations.
+    if not conversation_ids and lead.source in {"facebook", "instagram", "whatsapp"} and lead.phone:
         channel_session = db.query(models.ChannelChatSession).filter(
             models.ChannelChatSession.company_id == lead.company_id,
             models.ChannelChatSession.source == lead.source,
@@ -8788,12 +8811,12 @@ def get_lead_messages(
                 if channel_session.lead_id != lead.id:
                     channel_session.lead_id = lead.id
                 db.commit()
-    if not conversation:
+                conversation_ids.add(conversation.id)
+    if not conversation_ids:
         return [] # No messages yet
         
-    # Get messages associated with this conversation
     messages = db.query(models.Message).filter(
-        models.Message.conversation_id == conversation.id
+        models.Message.conversation_id.in_(conversation_ids)
     ).order_by(models.Message.created_at.desc()).all()
     
     return messages
