@@ -7069,6 +7069,21 @@ def read_advisor_stats(
     conversion_rate = (leads_sold / total_leads * 100) if total_leads else 0
     ally_conversion_rate = (ally_leads_sold / ally_total * 100) if ally_total else 0
     visible_lead_ids = [lead.id for lead in all_leads]
+    autos_visible_lead_ids = set()
+    ally_visible_lead_ids = set()
+    for lead in all_leads:
+        supervisor_ids = {supervisor.id for supervisor in (lead.supervisors or []) if supervisor and supervisor.id}
+        touches_ally_board = bool(
+            ally_user_ids and (
+                (lead.assigned_to_id in ally_user_ids) or
+                bool(supervisor_ids & ally_user_ids)
+            )
+        )
+        if touches_ally_board:
+            ally_visible_lead_ids.add(lead.id)
+        else:
+            autos_visible_lead_ids.add(lead.id)
+
     history_entries = []
     if visible_lead_ids:
         history_entries = db.query(models.LeadHistory).options(
@@ -7084,11 +7099,19 @@ def read_advisor_stats(
     ]
     ally_status_change_entries = [
         entry for entry in status_change_entries
-        if entry.lead_id in ally_lead_ids
+        if entry.lead_id in ally_visible_lead_ids
     ]
     autos_status_change_entries = [
         entry for entry in status_change_entries
-        if entry.lead_id in autos_lead_ids
+        if entry.lead_id in autos_visible_lead_ids
+    ]
+    autos_history_entries = [
+        entry for entry in history_entries
+        if entry.lead_id in autos_visible_lead_ids
+    ]
+    ally_history_entries = [
+        entry for entry in history_entries
+        if entry.lead_id in ally_visible_lead_ids
     ]
     status_changes_in_range = len(autos_status_change_entries)
     ally_status_changes_in_range = len(ally_status_change_entries)
@@ -7099,7 +7122,7 @@ def read_advisor_stats(
     manager_activity_map: Dict[int, Dict[str, Any]] = {}
     status_mover_map: Dict[int, Dict[str, Any]] = {}
     ally_manager_activity_map: Dict[int, Dict[str, Any]] = {}
-    for entry in history_entries:
+    for entry in autos_history_entries:
         if not entry.user_id:
             continue
         current_item = manager_activity_map.setdefault(
@@ -7145,7 +7168,7 @@ def read_advisor_stats(
             current_item["role_name"] = get_user_role_name(getattr(entry, "user", None))
         if not current_item.get("role_label"):
             current_item["role_label"] = getattr(getattr(getattr(entry, "user", None), "role", None), "label", None)
-    for entry in ally_status_change_entries:
+    for entry in ally_history_entries:
         if not entry.user_id:
             continue
         current_item = ally_manager_activity_map.setdefault(
