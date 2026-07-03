@@ -7093,8 +7093,25 @@ def read_advisor_stats(
             models.LeadHistory.created_at >= period_start,
             models.LeadHistory.created_at < period_end
         ).all()
-    status_change_entries = [
+
+    def is_automatic_alert_history(entry: models.LeadHistory) -> bool:
+        comment = normalize_role_text(getattr(entry, "comment", None))
+        if not comment:
+            return False
+        return (
+            "[auto_alert]" in comment
+            or "apariciones de alerta" in comment
+            or "por regla" in comment and "alerta" in comment
+            or "lead reasignado automaticamente" in comment
+            or "lead reasignado automáticamente" in comment
+        )
+
+    human_history_entries = [
         entry for entry in history_entries
+        if not is_automatic_alert_history(entry)
+    ]
+    status_change_entries = [
+        entry for entry in human_history_entries
         if (entry.previous_status or "") != (entry.new_status or "")
     ]
     ally_status_change_entries = [
@@ -7106,11 +7123,11 @@ def read_advisor_stats(
         if entry.lead_id in autos_visible_lead_ids
     ]
     autos_history_entries = [
-        entry for entry in history_entries
+        entry for entry in human_history_entries
         if entry.lead_id in autos_visible_lead_ids
     ]
     ally_history_entries = [
-        entry for entry in history_entries
+        entry for entry in human_history_entries
         if entry.lead_id in ally_visible_lead_ids
     ]
     status_changes_in_range = len(autos_status_change_entries)

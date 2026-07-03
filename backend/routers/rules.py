@@ -184,7 +184,7 @@ def perform_rule_reassignment_if_needed(
         previous_status=lead.status,
         new_status=lead.status,
         comment=(
-            f"Lead reasignado automaticamente a {target_user.full_name or target_user.email} "
+            f"[AUTO_ALERT] Lead reasignado automaticamente a {target_user.full_name or target_user.email} "
             f"por regla '{rule.name}' tras {alert_count_after_current_log} apariciones de alerta."
         )
     ))
