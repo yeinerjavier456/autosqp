@@ -184,6 +184,8 @@ class Role(Base):
     base_role_name = Column(String(50), nullable=True, index=True)
     auto_assign_leads = Column(Boolean, default=False)
     assignable_role_ids_json = Column(Text, nullable=True)
+    advisor_tracking_enabled = Column(Boolean, default=False)
+    tracked_advisor_ids_json = Column(Text, nullable=True)
 
 class CarBrand(Base):
     __tablename__ = "car_brands"

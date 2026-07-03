@@ -1156,19 +1156,24 @@ def apply_lead_access_filters(
         )
 
     if not can_view_all_company_leads:
-        query = query.filter(
-            or_(
-                models.Lead.assigned_to_id == current_user.id,
-                models.Lead.supervisors.any(models.User.id == current_user.id),
-                and_(
-                    invalid_assignment_filter,
-                    or_(
-                        models.Lead.created_by_id == current_user.id,
-                        models.Lead.history.any(models.LeadHistory.user_id == current_user.id)
-                    )
+        tracked_advisor_ids = get_role_tracked_advisor_ids(getattr(current_user, "role", None))
+        access_conditions = [
+            models.Lead.assigned_to_id == current_user.id,
+            models.Lead.supervisors.any(models.User.id == current_user.id),
+            and_(
+                invalid_assignment_filter,
+                or_(
+                    models.Lead.created_by_id == current_user.id,
+                    models.Lead.history.any(models.LeadHistory.user_id == current_user.id)
                 )
             )
-        )
+        ]
+        if tracked_advisor_ids:
+            access_conditions.extend([
+                models.Lead.assigned_to_id.in_(tracked_advisor_ids),
+                models.Lead.supervisors.any(models.User.id.in_(tracked_advisor_ids))
+            ])
+        query = query.filter(or_(*access_conditions))
 
     if source:
         query = query.filter(models.Lead.source == source)
@@ -1414,6 +1419,8 @@ def ensure_role_configuration_columns():
             "base_role_name": "ALTER TABLE roles ADD COLUMN base_role_name VARCHAR(50) NULL",
             "auto_assign_leads": "ALTER TABLE roles ADD COLUMN auto_assign_leads BOOLEAN NOT NULL DEFAULT 0",
             "assignable_role_ids_json": "ALTER TABLE roles ADD COLUMN assignable_role_ids_json TEXT NULL",
+            "advisor_tracking_enabled": "ALTER TABLE roles ADD COLUMN advisor_tracking_enabled BOOLEAN NOT NULL DEFAULT 0",
+            "tracked_advisor_ids_json": "ALTER TABLE roles ADD COLUMN tracked_advisor_ids_json TEXT NULL",
         }
 
         for column_name, ddl in role_columns.items():
@@ -2413,7 +2420,10 @@ def is_advisor_role(role: Optional[models.Role]) -> bool:
     }
     role_names.discard("")
 
-    return bool(role_names & {"asesor", "vendedor", "asesor_vendedor"})
+    return bool(
+        role_names & {"asesor", "vendedor", "asesor vendedor", "asesor_vendedor"}
+        or any("asesor" in role_name or "vendedor" in role_name for role_name in role_names)
+    )
 
 
 def is_ally_role(role: Optional[models.Role]) -> bool:
@@ -2501,6 +2511,44 @@ def get_role_assignable_role_ids(role: Optional[models.Role]) -> List[int]:
     if not role:
         return []
     return parse_json_int_list(getattr(role, "assignable_role_ids_json", None), [])
+
+
+def get_role_tracked_advisor_ids(role: Optional[models.Role]) -> List[int]:
+    if not role or not bool(getattr(role, "advisor_tracking_enabled", False)):
+        return []
+    return parse_json_int_list(getattr(role, "tracked_advisor_ids_json", None), [])
+
+
+def sanitize_tracked_advisor_ids(
+    db: Session,
+    advisor_ids: Optional[List[int]],
+    company_id: Optional[int]
+) -> List[int]:
+    if not advisor_ids or not company_id:
+        return []
+
+    normalized_ids = []
+    for advisor_id in advisor_ids:
+        try:
+            parsed_id = int(advisor_id)
+        except (TypeError, ValueError):
+            continue
+        if parsed_id not in normalized_ids:
+            normalized_ids.append(parsed_id)
+
+    if not normalized_ids:
+        return []
+
+    users = db.query(models.User).join(models.Role, isouter=True).filter(
+        models.User.id.in_(normalized_ids),
+        models.User.company_id == company_id,
+        or_(models.User.is_active == True, models.User.is_active.is_(None))
+    ).all()
+    allowed_ids = {
+        user.id for user in users
+        if is_advisor_role(getattr(user, "role", None))
+    }
+    return [advisor_id for advisor_id in normalized_ids if advisor_id in allowed_ids]
 
 
 def can_assign_lead_to_user(
@@ -3271,6 +3319,8 @@ def serialize_role(role: models.Role) -> schemas.Role:
         menu_order=menu_order,
         auto_assign_leads=bool(getattr(role, "auto_assign_leads", False) or effective_role_name == "asesor"),
         assignable_role_ids=get_role_assignable_role_ids(role),
+        advisor_tracking_enabled=bool(getattr(role, "advisor_tracking_enabled", False)),
+        tracked_advisor_ids=get_role_tracked_advisor_ids(role),
         company_id=getattr(role, "company_id", None),
         is_system=bool(getattr(role, "is_system", False)),
         base_role_name=getattr(role, "base_role_name", None)
@@ -5818,6 +5868,12 @@ def create_role(
     sanitized_permissions = sanitize_view_ids(role.permissions, current_user.company_id)
     sanitized_menu_order = sanitize_view_ids(role.menu_order, current_user.company_id)
     sanitized_assignable_role_ids = sanitize_assignable_role_ids(db, role.assignable_role_ids, current_user.company_id)
+    advisor_tracking_enabled = bool(role.advisor_tracking_enabled)
+    sanitized_tracked_advisor_ids = sanitize_tracked_advisor_ids(
+        db,
+        role.tracked_advisor_ids if advisor_tracking_enabled else [],
+        current_user.company_id
+    )
     for view_id in sanitized_permissions:
         if view_id not in sanitized_menu_order:
             sanitized_menu_order.append(view_id)
@@ -5833,6 +5889,8 @@ def create_role(
         menu_order_json=json.dumps(sanitized_menu_order),
         auto_assign_leads=bool(role.auto_assign_leads),
         assignable_role_ids_json=json.dumps(sanitized_assignable_role_ids),
+        advisor_tracking_enabled=advisor_tracking_enabled,
+        tracked_advisor_ids_json=json.dumps(sanitized_tracked_advisor_ids),
         is_system=False,
         base_role_name=None
     )
@@ -5865,6 +5923,17 @@ def update_role(
             role_update.assignable_role_ids if role_update.assignable_role_ids is not None else current_assignable_role_ids,
             current_user.company_id
         )
+        current_tracked_advisor_ids = get_role_tracked_advisor_ids(db_role)
+        advisor_tracking_enabled = bool(
+            role_update.advisor_tracking_enabled
+            if role_update.advisor_tracking_enabled is not None
+            else getattr(db_role, "advisor_tracking_enabled", False)
+        )
+        sanitized_tracked_advisor_ids = sanitize_tracked_advisor_ids(
+            db,
+            role_update.tracked_advisor_ids if role_update.tracked_advisor_ids is not None else current_tracked_advisor_ids,
+            current_user.company_id
+        ) if advisor_tracking_enabled else []
         for view_id in sanitized_permissions:
             if view_id not in sanitized_menu_order:
                 sanitized_menu_order.append(view_id)
@@ -5879,6 +5948,8 @@ def update_role(
                 menu_order_json=json.dumps(sanitize_view_ids(sanitized_menu_order, current_user.company_id)),
                 auto_assign_leads=bool(role_update.auto_assign_leads if role_update.auto_assign_leads is not None else getattr(db_role, "auto_assign_leads", False)),
                 assignable_role_ids_json=json.dumps(sanitized_assignable_role_ids),
+                advisor_tracking_enabled=advisor_tracking_enabled,
+                tracked_advisor_ids_json=json.dumps(sanitized_tracked_advisor_ids),
                 is_system=False,
                 base_role_name=db_role.name
             )
@@ -5894,6 +5965,10 @@ def update_role(
                 override_role.auto_assign_leads = bool(role_update.auto_assign_leads)
             if role_update.assignable_role_ids is not None:
                 override_role.assignable_role_ids_json = json.dumps(sanitized_assignable_role_ids)
+            if role_update.advisor_tracking_enabled is not None:
+                override_role.advisor_tracking_enabled = advisor_tracking_enabled
+            if role_update.tracked_advisor_ids is not None or role_update.advisor_tracking_enabled is not None:
+                override_role.tracked_advisor_ids_json = json.dumps(sanitized_tracked_advisor_ids)
             db.commit()
             db.refresh(override_role)
 
@@ -5917,6 +5992,23 @@ def update_role(
             sanitize_assignable_role_ids(
                 db,
                 role_update.assignable_role_ids,
+                current_user.company_id or db_role.company_id
+            )
+        )
+    if role_update.advisor_tracking_enabled is not None:
+        db_role.advisor_tracking_enabled = bool(role_update.advisor_tracking_enabled)
+        if not db_role.advisor_tracking_enabled:
+            db_role.tracked_advisor_ids_json = json.dumps([])
+    if role_update.tracked_advisor_ids is not None:
+        tracking_enabled = bool(
+            role_update.advisor_tracking_enabled
+            if role_update.advisor_tracking_enabled is not None
+            else getattr(db_role, "advisor_tracking_enabled", False)
+        )
+        db_role.tracked_advisor_ids_json = json.dumps(
+            sanitize_tracked_advisor_ids(
+                db,
+                role_update.tracked_advisor_ids if tracking_enabled else [],
                 current_user.company_id or db_role.company_id
             )
         )

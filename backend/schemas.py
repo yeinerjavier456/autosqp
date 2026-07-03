@@ -56,6 +56,8 @@ class RoleBase(BaseModel):
     menu_order: List[str] = []
     auto_assign_leads: Optional[bool] = False
     assignable_role_ids: List[int] = []
+    advisor_tracking_enabled: Optional[bool] = False
+    tracked_advisor_ids: List[int] = []
     company_id: Optional[int] = None
     is_system: Optional[bool] = False
     base_role_name: Optional[str] = None
@@ -66,6 +68,8 @@ class RoleCreate(BaseModel):
     menu_order: List[str] = []
     auto_assign_leads: Optional[bool] = False
     assignable_role_ids: List[int] = []
+    advisor_tracking_enabled: Optional[bool] = False
+    tracked_advisor_ids: List[int] = []
 
 class RoleUpdate(BaseModel):
     label: Optional[str] = None
@@ -73,6 +77,8 @@ class RoleUpdate(BaseModel):
     menu_order: Optional[List[str]] = None
     auto_assign_leads: Optional[bool] = None
     assignable_role_ids: Optional[List[int]] = None
+    advisor_tracking_enabled: Optional[bool] = None
+    tracked_advisor_ids: Optional[List[int]] = None
 
 class Role(RoleBase):
     id: int

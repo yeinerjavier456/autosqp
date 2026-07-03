@@ -12,9 +12,29 @@ const SECTION_META = {
     global: { title: 'Global', description: 'Opciones exclusivas del administrador global.' }
 };
 
+const normalizeRoleName = (role) => {
+    const value = typeof role === 'string'
+        ? role
+        : [role?.base_role_name, role?.name, role?.label].filter(Boolean).join(' ');
+    return String(value || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[_-]+/g, ' ');
+};
+
+const isCommercialUser = (person) => {
+    const roleName = normalizeRoleName(person?.role);
+    return roleName.includes('asesor') || roleName.includes('vendedor');
+};
+
+const isActiveUser = (person) => person?.is_active !== false && person?.is_active !== 0;
+
 const RolesConfig = () => {
     const { user } = useAuth();
     const [roles, setRoles] = useState([]);
+    const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [selectedRoleId, setSelectedRoleId] = useState(null);
@@ -22,7 +42,9 @@ const RolesConfig = () => {
         label: '',
         permissions: [],
         menu_order: [],
-        assignable_role_ids: []
+        assignable_role_ids: [],
+        advisor_tracking_enabled: false,
+        tracked_advisor_ids: []
     });
 
     const selectedRole = useMemo(
@@ -95,20 +117,44 @@ const RolesConfig = () => {
         }
     };
 
+    const fetchUsers = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.get('/api/users/', {
+                headers: { Authorization: `Bearer ${token}` },
+                params: { limit: 1000 }
+            });
+            setUsers(Array.isArray(response.data?.items) ? response.data.items : []);
+        } catch (error) {
+            console.error('Error fetching users', error);
+            setUsers([]);
+        }
+    };
+
     useEffect(() => {
         fetchRoles();
+        fetchUsers();
     }, []);
 
     useEffect(() => {
         if (!selectedRole) {
-            setForm({ label: '', permissions: [], menu_order: [], assignable_role_ids: [] });
+            setForm({
+                label: '',
+                permissions: [],
+                menu_order: [],
+                assignable_role_ids: [],
+                advisor_tracking_enabled: false,
+                tracked_advisor_ids: []
+            });
             return;
         }
         setForm({
             label: selectedRole.label || '',
             permissions: Array.isArray(selectedRole.permissions) ? selectedRole.permissions : [],
             menu_order: Array.isArray(selectedRole.menu_order) ? selectedRole.menu_order : [],
-            assignable_role_ids: Array.isArray(selectedRole.assignable_role_ids) ? selectedRole.assignable_role_ids.map((id) => Number(id)).filter((id) => Number.isInteger(id)) : []
+            assignable_role_ids: Array.isArray(selectedRole.assignable_role_ids) ? selectedRole.assignable_role_ids.map((id) => Number(id)).filter((id) => Number.isInteger(id)) : [],
+            advisor_tracking_enabled: Boolean(selectedRole.advisor_tracking_enabled),
+            tracked_advisor_ids: Array.isArray(selectedRole.tracked_advisor_ids) ? selectedRole.tracked_advisor_ids.map((id) => Number(id)).filter((id) => Number.isInteger(id)) : []
         });
     }, [selectedRole]);
 
@@ -123,6 +169,12 @@ const RolesConfig = () => {
     const roleOptionsForAssignment = useMemo(
         () => visibleRoles.filter((role) => role.id !== selectedRoleId),
         [visibleRoles, selectedRoleId]
+    );
+    const advisorOptions = useMemo(
+        () => users
+            .filter((person) => isActiveUser(person) && isCommercialUser(person))
+            .sort((a, b) => String(a.full_name || a.email || '').localeCompare(String(b.full_name || b.email || ''))),
+        [users]
     );
 
     const syncMenuOrder = (permissions, currentOrder) => {
@@ -160,7 +212,14 @@ const RolesConfig = () => {
 
     const handleNewRole = () => {
         setSelectedRoleId(null);
-        setForm({ label: '', permissions: [], menu_order: [], assignable_role_ids: [] });
+        setForm({
+            label: '',
+            permissions: [],
+            menu_order: [],
+            assignable_role_ids: [],
+            advisor_tracking_enabled: false,
+            tracked_advisor_ids: []
+        });
     };
 
     const handleSave = async (e) => {
@@ -177,7 +236,9 @@ const RolesConfig = () => {
                 label: form.label.trim(),
                 permissions: form.permissions,
                 menu_order: syncMenuOrder(form.permissions, form.menu_order),
-                assignable_role_ids: form.assignable_role_ids
+                assignable_role_ids: form.assignable_role_ids,
+                advisor_tracking_enabled: Boolean(form.advisor_tracking_enabled),
+                tracked_advisor_ids: form.advisor_tracking_enabled ? form.tracked_advisor_ids : []
             };
 
             if (selectedRoleId) {
@@ -323,6 +384,71 @@ const RolesConfig = () => {
                                 <p className="text-xs text-slate-500">
                                     Lo que selecciones aqui sera lo que aparezca en la lista de usuarios al reasignar un lead para las personas que tengan este rol.
                                 </p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500 mb-3">Seguimiento de asesor</h3>
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-4">
+                                <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={Boolean(form.advisor_tracking_enabled)}
+                                        onChange={(e) => setForm((prev) => ({
+                                            ...prev,
+                                            advisor_tracking_enabled: e.target.checked,
+                                            tracked_advisor_ids: e.target.checked ? prev.tracked_advisor_ids : []
+                                        }))}
+                                        className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <div>
+                                        <p className="font-semibold text-slate-800">Permitir seguimiento de asesores o vendedores</p>
+                                        <p className="text-xs text-slate-500 mt-1">
+                                            Los usuarios con este rol podran ver en el tablero los leads asignados o supervisados por los asesores seleccionados.
+                                        </p>
+                                    </div>
+                                </label>
+
+                                {form.advisor_tracking_enabled && (
+                                    <div>
+                                        <label className="block text-sm font-semibold text-slate-800 mb-2">Asesores o vendedores visibles para este rol</label>
+                                        {advisorOptions.length > 0 ? (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                {advisorOptions.map((person) => {
+                                                    const personId = Number(person.id);
+                                                    const checked = form.tracked_advisor_ids.includes(personId);
+                                                    return (
+                                                        <label
+                                                            key={person.id}
+                                                            className={`flex items-start gap-3 rounded-xl border bg-white p-4 cursor-pointer transition ${checked ? 'border-blue-400 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={checked}
+                                                                onChange={() => setForm((prev) => {
+                                                                    const currentIds = Array.isArray(prev.tracked_advisor_ids) ? prev.tracked_advisor_ids : [];
+                                                                    const nextIds = currentIds.includes(personId)
+                                                                        ? currentIds.filter((id) => id !== personId)
+                                                                        : [...currentIds, personId];
+                                                                    return { ...prev, tracked_advisor_ids: nextIds };
+                                                                })}
+                                                                className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                                            />
+                                                            <div>
+                                                                <p className="font-semibold text-slate-800">{person.full_name || person.email}</p>
+                                                                <p className="text-xs text-slate-500 mt-1">{person.email}{person.role?.label ? ` - ${person.role.label}` : ''}</p>
+                                                            </div>
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                                                No hay asesores o vendedores activos disponibles para seleccionar.
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
