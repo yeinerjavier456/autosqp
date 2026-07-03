@@ -1444,6 +1444,8 @@ def ensure_payment_receipts_columns():
 
         receipt_columns = {
             "display_name": "ALTER TABLE payment_receipts ADD COLUMN display_name VARCHAR(180) NULL",
+            "customer_name": "ALTER TABLE payment_receipts ADD COLUMN customer_name VARCHAR(180) NULL",
+            "customer_document": "ALTER TABLE payment_receipts ADD COLUMN customer_document VARCHAR(80) NULL",
             "concept": "ALTER TABLE payment_receipts ADD COLUMN concept VARCHAR(200) NULL",
             "movement_type": "ALTER TABLE payment_receipts ADD COLUMN movement_type VARCHAR(20) NOT NULL DEFAULT 'income'",
             "payment_method": "ALTER TABLE payment_receipts ADD COLUMN payment_method VARCHAR(30) NULL",
@@ -7880,6 +7882,8 @@ def apply_receipt_group_search_filter(
     ).filter(
         or_(
             models.PaymentReceipt.display_name.ilike(search),
+            models.PaymentReceipt.customer_name.ilike(search),
+            models.PaymentReceipt.customer_document.ilike(search),
             models.PaymentReceipt.concept.ilike(search),
             models.PaymentReceipt.receipt_number.ilike(search),
             models.PaymentReceipt.notes.ilike(search),
@@ -10598,6 +10602,8 @@ def update_payment_receipt(
     receipt.sale_id = sale.id if sale else None
     receipt.company_id = company_id
     receipt.display_name = (receipt_update.display_name or "").strip() or None
+    receipt.customer_name = (receipt_update.customer_name or "").strip() or None
+    receipt.customer_document = (receipt_update.customer_document or "").strip() or None
     receipt.concept = concept_value
     receipt.movement_type = movement_type_value
     receipt.receipt_number = (receipt_update.receipt_number or "").strip() or None
@@ -10664,6 +10670,8 @@ async def create_payment_receipt(
     sale_id: Optional[int] = Form(None),
     concept: Optional[str] = Form(None),
     display_name: Optional[str] = Form(None),
+    customer_name: Optional[str] = Form(None),
+    customer_document: Optional[str] = Form(None),
     amount: int = Form(...),
     movement_type: Optional[str] = Form("income"),
     payment_date: Optional[str] = Form(None),
@@ -10734,6 +10742,8 @@ async def create_payment_receipt(
         sale_id=sale.id if sale else None,
         user_id=current_user.id,
         display_name=(display_name or "").strip() or None,
+        customer_name=(customer_name or "").strip() or None,
+        customer_document=(customer_document or "").strip() or None,
         concept=concept_value,
         movement_type=movement_type_value,
         receipt_number=receipt_number_value,

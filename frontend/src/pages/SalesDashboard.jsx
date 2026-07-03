@@ -81,6 +81,8 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
     const [receiptMovementType, setReceiptMovementType] = useState('');
     const [selectedReceiptGroup, setSelectedReceiptGroup] = useState(null);
     const [editingGroupName, setEditingGroupName] = useState('');
+    const [editingGroupCustomerName, setEditingGroupCustomerName] = useState(null);
+    const [editingGroupCustomerDocument, setEditingGroupCustomerDocument] = useState(null);
     const [saleAttachments, setSaleAttachments] = useState([]);
     const [editingReceipt, setEditingReceipt] = useState(null);
     const [editReceiptForm, setEditReceiptForm] = useState({});
@@ -467,6 +469,38 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         });
     };
 
+    const getBestGroupFieldValue = (receiptsGroup, fieldName) => {
+        return (Array.isArray(receiptsGroup) ? receiptsGroup : [])
+            .map((item) => String(item?.[fieldName] || '').trim())
+            .find(Boolean) || '';
+    };
+
+    const getReceiptUpdatePayload = (receipt, overrides = {}) => ({
+        sale_id: receipt.sale?.id || receipt.sale_id || null,
+        receipt_number: receipt.receipt_number || null,
+        display_name: receipt.display_name || null,
+        customer_name: receipt.customer_name || null,
+        customer_document: receipt.customer_document || null,
+        concept: receipt.concept || 'Otros',
+        movement_type: receipt.movement_type || 'income',
+        amount: Number(receipt.amount || 0),
+        payment_date: receipt.payment_date
+            ? new Date(receipt.payment_date).toISOString().slice(0, 10)
+            : new Date().toISOString().slice(0, 10),
+        category: receipt.category || 'sale_payment',
+        notes: receipt.notes || null,
+        payment_method: receipt.payment_method || null,
+        bank: receipt.bank || null,
+        ...overrides
+    });
+
+    const closeReceiptGroupModal = () => {
+        setSelectedReceiptGroup(null);
+        setEditingGroupName('');
+        setEditingGroupCustomerName(null);
+        setEditingGroupCustomerDocument(null);
+    };
+
     const loadReceiptGroupDetails = async (group) => {
         if (!group) return null;
 
@@ -514,19 +548,11 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         const generatedReceiptNumber = `CONT-LEGACY-${fallbackReceiptId}`;
         const receiptsWithoutSupport = (group?.receipts || []).filter((receipt) => !(receipt?.receipt_number || '').trim());
 
-        await Promise.all(receiptsWithoutSupport.map((receipt) => axios.put(`/api/finance/receipts/${receipt.id}`, {
-            sale_id: receipt.sale?.id || receipt.sale_id || null,
+        await Promise.all(receiptsWithoutSupport.map((receipt) => axios.put(`/api/finance/receipts/${receipt.id}`, getReceiptUpdatePayload(receipt, {
             concept: receipt.concept || null,
-            display_name: receipt.display_name || null,
-            movement_type: receipt.movement_type || 'income',
             receipt_number: generatedReceiptNumber,
-            payment_date: receipt.payment_date || receipt.created_at || null,
-            amount: Number(receipt.amount || 0),
-            category: receipt.category || 'sale_payment',
-            notes: receipt.notes || null,
-            payment_method: receipt.payment_method || null,
-            bank: receipt.bank || null
-        }, {
+            payment_date: receipt.payment_date || receipt.created_at || null
+        }), {
             headers: { Authorization: `Bearer ${token}` }
         })));
 
@@ -540,6 +566,36 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         }) : current);
 
         return generatedReceiptNumber;
+    };
+
+    const handleSaveReceiptGroupMetadata = async (group, metadata = {}) => {
+        if (!group?.receipts?.length) return;
+
+        const token = localStorage.getItem('token');
+        const currentDisplayName = getBestGroupDisplayName(group.receipts) || '';
+        const currentCustomerName = getBestGroupFieldValue(group.receipts, 'customer_name');
+        const currentCustomerDocument = getBestGroupFieldValue(group.receipts, 'customer_document');
+        const nextDisplayName = Object.prototype.hasOwnProperty.call(metadata, 'display_name')
+            ? (metadata.display_name || '').trim()
+            : currentDisplayName;
+        const nextCustomerName = Object.prototype.hasOwnProperty.call(metadata, 'customer_name')
+            ? (metadata.customer_name || '').trim()
+            : currentCustomerName;
+        const nextCustomerDocument = Object.prototype.hasOwnProperty.call(metadata, 'customer_document')
+            ? (metadata.customer_document || '').trim()
+            : currentCustomerDocument;
+
+        await Promise.all(
+            group.receipts.map((receipt) => axios.put(
+                `/api/finance/receipts/${receipt.id}`,
+                getReceiptUpdatePayload(receipt, {
+                    display_name: nextDisplayName || null,
+                    customer_name: nextCustomerName || null,
+                    customer_document: nextCustomerDocument || null
+                }),
+                { headers: { Authorization: `Bearer ${token}` } }
+            ))
+        );
     };
 
     const receiptGroups = buildReceiptGroups(receipts);
@@ -1208,6 +1264,8 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                 formData.append('receipt_number', supportNumber);
             }
             formData.append('display_name', value.display_name || '');
+            formData.append('customer_name', getBestGroupFieldValue(group.receipts, 'customer_name'));
+            formData.append('customer_document', getBestGroupFieldValue(group.receipts, 'customer_document'));
             formData.append('concept', value.concept);
             formData.append('movement_type', value.movement_type);
             formData.append('amount', String(value.amount));
@@ -1273,6 +1331,8 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         setEditReceiptForm({
             sale_id: receipt.sale?.id ? String(receipt.sale.id) : '',
             display_name: receipt.display_name || '',
+            customer_name: receipt.customer_name || '',
+            customer_document: receipt.customer_document || '',
             receipt_number: receipt.receipt_number || '',
             concept: isKnownConcept ? receipt.concept : 'Otros',
             concept_detail: isKnownConcept ? '' : (receipt.concept || ''),
@@ -1303,6 +1363,8 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             const payload = {
                 sale_id: editReceiptForm.sale_id ? Number(editReceiptForm.sale_id) : null,
                 display_name: editReceiptForm.display_name.trim() || null,
+                customer_name: (editReceiptForm.customer_name || '').trim() || null,
+                customer_document: (editReceiptForm.customer_document || '').trim() || null,
                 receipt_number: (editReceiptForm.receipt_number || '').trim() || null,
                 concept,
                 movement_type: editReceiptForm.movement_type,
@@ -1370,21 +1432,9 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                 group.receipts.map((receipt) =>
                     axios.put(
                         `/api/finance/receipts/${receipt.id}`,
-                        {
-                            sale_id: receipt.sale?.id || null,
-                            receipt_number: receipt.receipt_number || null,
+                        getReceiptUpdatePayload(receipt, {
                             display_name: normalizedName,
-                            concept: receipt.concept || 'Otros',
-                            movement_type: receipt.movement_type || 'income',
-                            amount: Number(receipt.amount || 0),
-                            payment_date: receipt.payment_date
-                                ? new Date(receipt.payment_date).toISOString().slice(0, 10)
-                                : new Date().toISOString().slice(0, 10),
-                            category: receipt.category || 'sale_payment',
-                            notes: receipt.notes || null,
-                            payment_method: receipt.payment_method || null,
-                            bank: receipt.bank || null
-                        },
+                        }),
                         {
                             headers: { Authorization: `Bearer ${token}` }
                         }
@@ -1393,7 +1443,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             );
 
             await fetchData();
-            setSelectedReceiptGroup(null);
+            closeReceiptGroupModal();
             Swal.fire('Exito', 'El nombre del soporte fue actualizado.', 'success');
         } catch (error) {
             console.error('Error renaming receipt group', error);
@@ -1519,6 +1569,8 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                             const receipt = group.latestReceipt;
                                             const supportDisplayId = group.receiptNumber || receipt.receipt_number || `REC-${receipt.id}`;
                                             const supportDisplayName = getBestGroupDisplayName(group.receipts);
+                                            const customerName = getBestGroupFieldValue(group.receipts, 'customer_name');
+                                            const customerDocument = getBestGroupFieldValue(group.receipts, 'customer_document');
                                             return (
                                                 <tr
                                                     key={group.key}
@@ -1546,6 +1598,11 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                                                 ? `${group.sale?.vehicle?.plate || 'Sin placa'} · ${group.sale?.seller?.full_name || group.sale?.seller?.email || ''}`
                                                                 : `Soporte ${supportDisplayId}`}
                                                         </div>
+                                                        {(customerName || customerDocument) && (
+                                                            <div className="mt-1 text-xs font-medium text-slate-500">
+                                                                {[customerName, customerDocument].filter(Boolean).join(' · ')}
+                                                            </div>
+                                                        )}
                                                     </td>
                                                     <td className="p-4 text-sm">
                                                         <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${group.incomeTotal > 0 && group.expenseTotal > 0 ? 'bg-blue-100 text-blue-700' : receipt.movement_type === 'expense' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -1577,6 +1634,8 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                             {(() => {
                                 const isSaleGroup = Boolean(selectedReceiptGroup.sale?.id);
                                 const supportDisplayName = getBestGroupDisplayName(selectedReceiptGroup.receipts) || '';
+                                const customerName = getBestGroupFieldValue(selectedReceiptGroup.receipts, 'customer_name');
+                                const customerDocument = getBestGroupFieldValue(selectedReceiptGroup.receipts, 'customer_document');
                                 const groupTitle = isSaleGroup
                                     ? `#${selectedReceiptGroup.sale?.id} - ${selectedReceiptGroup.sale?.vehicle?.make || ''} ${selectedReceiptGroup.sale?.vehicle?.model || ''} · ${selectedReceiptGroup.sale?.vehicle?.plate || 'Sin placa'}`
                                     : `Soporte ${selectedReceiptGroup.receiptNumber || selectedReceiptGroup.latestReceipt?.receipt_number || ''}`;
@@ -1589,10 +1648,49 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                                     {supportDisplayName || groupTitle}
                                                 </h3>
                                                 <p className="mt-1 text-sm text-slate-500">{groupTitle}</p>
+                                                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[1fr_220px_auto]">
+                                                    <input
+                                                        type="text"
+                                                        value={editingGroupCustomerName !== null ? editingGroupCustomerName : customerName}
+                                                        onChange={(event) => setEditingGroupCustomerName(event.target.value)}
+                                                        onFocus={() => { if (editingGroupCustomerName === null) setEditingGroupCustomerName(customerName); }}
+                                                        placeholder="Nombre del usuario..."
+                                                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        value={editingGroupCustomerDocument !== null ? editingGroupCustomerDocument : customerDocument}
+                                                        onChange={(event) => setEditingGroupCustomerDocument(event.target.value)}
+                                                        onFocus={() => { if (editingGroupCustomerDocument === null) setEditingGroupCustomerDocument(customerDocument); }}
+                                                        placeholder="Documento..."
+                                                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={async () => {
+                                                            try {
+                                                                await handleSaveReceiptGroupMetadata(selectedReceiptGroup, {
+                                                                    customer_name: editingGroupCustomerName !== null ? editingGroupCustomerName : customerName,
+                                                                    customer_document: editingGroupCustomerDocument !== null ? editingGroupCustomerDocument : customerDocument
+                                                                });
+                                                                setEditingGroupCustomerName(null);
+                                                                setEditingGroupCustomerDocument(null);
+                                                                await fetchData({ silent: true });
+                                                                Swal.fire('Guardado', 'Datos del usuario actualizados.', 'success');
+                                                            } catch (error) {
+                                                                console.error('Error updating receipt customer metadata', error);
+                                                                Swal.fire('Error', error.response?.data?.detail || 'No se pudieron guardar los datos.', 'error');
+                                                            }
+                                                        }}
+                                                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                                                    >
+                                                        Guardar
+                                                    </button>
+                                                </div>
                                             </div>
                                             <button
                                                 type="button"
-                                                onClick={() => { setSelectedReceiptGroup(null); setEditingGroupName(''); }}
+                                                onClick={closeReceiptGroupModal}
                                                 className="rounded-full bg-slate-100 px-3 py-1 text-lg font-bold text-slate-600 hover:bg-slate-200"
                                             >
                                                 ×
@@ -2623,6 +2721,8 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                         {(() => {
                             const isSaleGroup = Boolean(selectedReceiptGroup.sale?.id);
                             const supportDisplayName = getBestGroupDisplayName(selectedReceiptGroup.receipts) || '';
+                            const customerName = getBestGroupFieldValue(selectedReceiptGroup.receipts, 'customer_name');
+                            const customerDocument = getBestGroupFieldValue(selectedReceiptGroup.receipts, 'customer_document');
                             const groupTitle = isSaleGroup
                                 ? `#${selectedReceiptGroup.sale?.id} - ${selectedReceiptGroup.sale?.vehicle?.make} ${selectedReceiptGroup.sale?.vehicle?.model} · ${selectedReceiptGroup.sale?.vehicle?.plate || 'Sin placa'}`
                                 : `Soporte ${selectedReceiptGroup.receiptNumber || selectedReceiptGroup.latestReceipt?.receipt_number || ''}`;
@@ -2636,46 +2736,48 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                     {supportDisplayName || modalTitle}
                                 </h3>
                                 <p className="mt-1 text-sm text-slate-500">{groupTitle}</p>
-                                <div className="mt-2 flex items-center gap-2">
+                                <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[1fr_240px_180px_auto]">
                                     <input
                                         type="text"
                                         value={editingGroupName !== '' ? editingGroupName : supportDisplayName}
                                         onChange={(e) => setEditingGroupName(e.target.value)}
                                         onFocus={() => { if (editingGroupName === '') setEditingGroupName(supportDisplayName); }}
                                         placeholder="Nombre visible de la venta o soporte..."
-                                        className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                        className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={editingGroupCustomerName !== null ? editingGroupCustomerName : customerName}
+                                        onChange={(e) => setEditingGroupCustomerName(e.target.value)}
+                                        onFocus={() => { if (editingGroupCustomerName === null) setEditingGroupCustomerName(customerName); }}
+                                        placeholder="Nombre usuario..."
+                                        className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={editingGroupCustomerDocument !== null ? editingGroupCustomerDocument : customerDocument}
+                                        onChange={(e) => setEditingGroupCustomerDocument(e.target.value)}
+                                        onFocus={() => { if (editingGroupCustomerDocument === null) setEditingGroupCustomerDocument(customerDocument); }}
+                                        placeholder="Documento..."
+                                        className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                                     />
                                     <button
                                         type="button"
                                         onClick={async () => {
                                             const nameToSave = (editingGroupName || supportDisplayName).trim();
-                                            if (!nameToSave) return;
                                             try {
-                                                const token = localStorage.getItem('token');
-                                                await Promise.all(
-                                                    selectedReceiptGroup.receipts.map((receipt) =>
-                                                        axios.put(`/api/finance/receipts/${receipt.id}`, {
-                                                            sale_id: receipt.sale?.id || receipt.sale_id || null,
-                                                            receipt_number: receipt.receipt_number || null,
-                                                            display_name: nameToSave,
-                                                            concept: receipt.concept || 'Otros',
-                                                            movement_type: receipt.movement_type || 'income',
-                                                            amount: Number(receipt.amount || 0),
-                                                            payment_date: receipt.payment_date
-                                                                ? new Date(receipt.payment_date).toISOString().slice(0, 10)
-                                                                : new Date().toISOString().slice(0, 10),
-                                                            category: receipt.category || 'otros',
-                                                            notes: receipt.notes || null,
-                                                            payment_method: receipt.payment_method || null,
-                                                            bank: receipt.bank || null
-                                                        }, { headers: { Authorization: `Bearer ${token}` } })
-                                                    )
-                                                );
+                                                await handleSaveReceiptGroupMetadata(selectedReceiptGroup, {
+                                                    display_name: nameToSave,
+                                                    customer_name: editingGroupCustomerName !== null ? editingGroupCustomerName : customerName,
+                                                    customer_document: editingGroupCustomerDocument !== null ? editingGroupCustomerDocument : customerDocument
+                                                });
                                                 setEditingGroupName('');
+                                                setEditingGroupCustomerName(null);
+                                                setEditingGroupCustomerDocument(null);
                                                 await fetchData();
-                                                Swal.fire('Guardado', 'Nombre actualizado correctamente.', 'success');
+                                                Swal.fire('Guardado', 'Datos del soporte actualizados correctamente.', 'success');
                                             } catch (err) {
-                                                Swal.fire('Error', 'No se pudo guardar el nombre.', 'error');
+                                                Swal.fire('Error', 'No se pudieron guardar los datos.', 'error');
                                             }
                                         }}
                                         className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
@@ -2713,7 +2815,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                 )}
                                 <button
                                     type="button"
-                                    onClick={() => { setSelectedReceiptGroup(null); setEditingGroupName(''); }}
+                                    onClick={closeReceiptGroupModal}
                                     className="rounded-full bg-slate-100 px-3 py-1 text-lg font-bold text-slate-600 hover:bg-slate-200"
                                 >
                                     ×
@@ -2834,7 +2936,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                                     <button
                                                         type="button"
                                                         onClick={() => {
-                                                            setSelectedReceiptGroup(null);
+                                                            closeReceiptGroupModal();
                                                             handleEditReceipt(receipt);
                                                         }}
                                                         className="rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100"
@@ -2852,7 +2954,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                                     <button
                                                         type="button"
                                                         onClick={() => {
-                                                            setSelectedReceiptGroup(null);
+                                                            closeReceiptGroupModal();
                                                             handleDeleteReceipt(receipt.id);
                                                         }}
                                                         className="rounded-lg bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
@@ -2925,6 +3027,30 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                 placeholder="Ej: Chevrolet Spark FLX485"
                                 className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                             />
+                        </div>
+
+                        {/* Datos de busqueda */}
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                            <div>
+                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nombre usuario</label>
+                                <input
+                                    type="text"
+                                    value={editReceiptForm.customer_name || ''}
+                                    onChange={(e) => setEditReceiptForm({ ...editReceiptForm, customer_name: e.target.value })}
+                                    placeholder="Nombre para buscar..."
+                                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                />
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Documento</label>
+                                <input
+                                    type="text"
+                                    value={editReceiptForm.customer_document || ''}
+                                    onChange={(e) => setEditReceiptForm({ ...editReceiptForm, customer_document: e.target.value })}
+                                    placeholder="Documento para buscar..."
+                                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                />
+                            </div>
                         </div>
 
                         {/* Nro. de Soporte / Recibo */}
