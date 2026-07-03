@@ -423,6 +423,12 @@ class IntegrationSettingsBase(BaseModel):
     tiktok_pixel_id: Optional[str] = None
     whatsapp_api_key: Optional[str] = None
     whatsapp_phone_number_id: Optional[str] = None
+    whatsapp_documents_enabled: Optional[bool] = True
+    whatsapp_calling_enabled: Optional[bool] = False
+    whatsapp_calling_mode: Optional[str] = "whatsapp_link"
+    whatsapp_calling_provider_url: Optional[str] = None
+    whatsapp_calling_provider_token: Optional[str] = None
+    whatsapp_calling_provider_token_configured: Optional[bool] = False
     openai_api_key: Optional[str] = None
     gw_model: Optional[str] = "gpt-4o"
     chatbot_bot_name: Optional[str] = "Jennifer Quimbayo"

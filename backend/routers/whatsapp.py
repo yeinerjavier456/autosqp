@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session, joinedload
 from database import get_db
@@ -8,6 +8,8 @@ from typing import List, Optional
 import os
 import json
 import datetime
+import shutil
+import uuid
 import requests
 from bot_integration import (
     process_channel_bot_message,
@@ -131,6 +133,26 @@ def send_whatsapp_payload(token: str, phone_number_id: str, payload: dict) -> st
     return resp_data.get("messages", [{}])[0].get("id")
 
 
+def build_api_public_url(request: Request, relative_path: str) -> str:
+    origin = request.headers.get("origin")
+    if not origin:
+        forwarded_proto = request.headers.get("x-forwarded-proto")
+        forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+        if forwarded_proto and forwarded_host:
+            origin = f"{forwarded_proto}://{forwarded_host}"
+        else:
+            origin = f"{request.url.scheme}://{request.headers.get('host')}"
+
+    referer = request.headers.get("referer", "")
+    api_prefix = "/crm/api" if "/crm/" in referer or "/crm/api/" in str(request.url) else "/api"
+    clean_path = relative_path if relative_path.startswith("/") else f"/{relative_path}"
+    if clean_path.startswith("/api/"):
+        clean_path = clean_path[4:]
+    if clean_path.startswith("/crm/api/"):
+        clean_path = clean_path[8:]
+    return f"{origin}{api_prefix}{clean_path}"
+
+
 def normalize_media_url(raw_url: Optional[str], request: Request) -> Optional[str]:
     if not raw_url:
         return None
@@ -170,6 +192,31 @@ def normalize_media_url(raw_url: Optional[str], request: Request) -> Optional[st
         return f"{origin}/api/static/{raw}"
 
     return f"{origin}{raw if raw.startswith('/') else f'/{raw}'}"
+
+
+def get_lead_for_whatsapp_action(db: Session, lead_id: int, current_user: models.User) -> models.Lead:
+    lead = db.query(models.Lead).filter(models.Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if current_user.company_id and lead.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="No autorizado para este lead")
+    if not lead.company_id:
+        raise HTTPException(status_code=400, detail="El lead no tiene compañía para usar WhatsApp")
+    if not lead.phone:
+        raise HTTPException(status_code=400, detail="El lead no tiene teléfono para WhatsApp")
+    return lead
+
+
+def get_whatsapp_settings(db: Session, company_id: int) -> models.IntegrationSettings:
+    settings = db.query(models.IntegrationSettings).filter(
+        models.IntegrationSettings.company_id == company_id
+    ).first()
+    if not settings:
+        settings = models.IntegrationSettings(company_id=company_id)
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return settings
 
 
 def build_public_vehicle_url(vehicle_id: int, request: Request) -> str:
@@ -588,6 +635,167 @@ def send_lead_message(
     db.commit()
     db.refresh(new_msg)
     return new_msg
+
+
+@router.post("/leads/{lead_id}/documents", response_model=schemas_whatsapp.Message)
+async def send_lead_document(
+    lead_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    caption: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    lead = get_lead_for_whatsapp_action(db, lead_id, current_user)
+    settings = get_whatsapp_settings(db, lead.company_id)
+    if getattr(settings, "whatsapp_documents_enabled", True) is False:
+        raise HTTPException(status_code=403, detail="El envío de documentos por WhatsApp no está habilitado para esta empresa")
+
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="Debes seleccionar un documento")
+
+    token, phone_number_id = get_whatsapp_credentials(db, lead.company_id)
+    _, conversation = find_or_create_outbound_session(
+        db=db,
+        company_id=lead.company_id,
+        to_number=lead.phone,
+        phone_number_id=phone_number_id,
+    )
+    if conversation.lead_id != lead.id:
+        conversation.lead_id = lead.id
+    chat_session = db.query(models.ChannelChatSession).filter(
+        models.ChannelChatSession.source == "whatsapp",
+        models.ChannelChatSession.conversation_id == conversation.id
+    ).first()
+    if chat_session and chat_session.lead_id != lead.id:
+        chat_session.lead_id = lead.id
+
+    os.makedirs("static/whatsapp-documents", exist_ok=True)
+    safe_name = os.path.basename(file.filename)
+    extension = safe_name.rsplit(".", 1)[-1] if "." in safe_name else "bin"
+    stored_name = f"{uuid.uuid4()}.{extension}"
+    stored_path = f"static/whatsapp-documents/{stored_name}"
+    with open(stored_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    relative_path = f"/static/whatsapp-documents/{stored_name}"
+    public_url = build_api_public_url(request, relative_path)
+    normalized_number = normalize_phone(lead.phone)
+    outbound_number = (normalized_number or lead.phone).replace("+", "")
+    caption_value = (caption or "").strip()
+    document_payload = {
+        "messaging_product": "whatsapp",
+        "to": outbound_number,
+        "type": "document",
+        "document": {
+            "link": public_url,
+            "filename": safe_name,
+        }
+    }
+    if caption_value:
+        document_payload["document"]["caption"] = caption_value
+
+    whatsapp_message_id = send_whatsapp_payload(token, phone_number_id, document_payload)
+    message_content = caption_value or f"Documento enviado: {safe_name}"
+    new_msg = models.Message(
+        conversation_id=conversation.id,
+        sender_type="user",
+        content=message_content,
+        media_url=public_url,
+        message_type="document",
+        status="sent",
+        whatsapp_message_id=whatsapp_message_id,
+    )
+    db.add(new_msg)
+    conversation.last_message_at = datetime.datetime.utcnow()
+    db.commit()
+    db.refresh(new_msg)
+    return new_msg
+
+
+@router.post("/leads/{lead_id}/call", response_model=schemas_whatsapp.LeadCallResponse)
+def start_lead_whatsapp_call(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    lead = get_lead_for_whatsapp_action(db, lead_id, current_user)
+    settings = get_whatsapp_settings(db, lead.company_id)
+    if not getattr(settings, "whatsapp_calling_enabled", False):
+        raise HTTPException(status_code=403, detail="Las llamadas por WhatsApp no están habilitadas para esta empresa")
+
+    normalized_number = normalize_phone(lead.phone)
+    if not normalized_number:
+        raise HTTPException(status_code=400, detail="El teléfono del lead no es válido para WhatsApp")
+
+    mode = (getattr(settings, "whatsapp_calling_mode", None) or "whatsapp_link").strip().lower()
+    phone_number_id = (
+        (getattr(settings, "whatsapp_phone_number_id", None) or "").strip()
+        or os.getenv("WHATSAPP_PHONE_ID")
+        or "manual_call"
+    )
+    _, conversation = find_or_create_outbound_session(
+        db=db,
+        company_id=lead.company_id,
+        to_number=normalized_number,
+        phone_number_id=phone_number_id,
+    )
+    if conversation.lead_id != lead.id:
+        conversation.lead_id = lead.id
+
+    provider_status = None
+    action_url = None
+    response_message = "Abre WhatsApp y usa el botón de llamada del chat."
+
+    if mode == "provider_webhook":
+        provider_url = (getattr(settings, "whatsapp_calling_provider_url", None) or "").strip()
+        if not provider_url:
+            raise HTTPException(status_code=400, detail="Falta la URL del proveedor de llamadas de WhatsApp")
+        headers = {"Content-Type": "application/json"}
+        provider_token = (getattr(settings, "whatsapp_calling_provider_token", None) or "").strip()
+        if provider_token:
+            headers["Authorization"] = f"Bearer {provider_token}"
+        provider_response = requests.post(
+            provider_url,
+            headers=headers,
+            json={
+                "lead_id": lead.id,
+                "lead_name": lead.name,
+                "to_number": normalized_number,
+                "company_id": lead.company_id,
+                "requested_by_user_id": current_user.id,
+                "whatsapp_phone_number_id": phone_number_id,
+            },
+            timeout=45
+        )
+        provider_status = provider_response.status_code
+        if provider_response.status_code >= 400:
+            raise HTTPException(status_code=400, detail="El proveedor de llamadas rechazó la solicitud")
+        response_message = "Solicitud de llamada enviada al proveedor configurado."
+    elif mode == "phone_link":
+        action_url = f"tel:{normalized_number}"
+        response_message = "Se abrirá el marcador del dispositivo."
+    else:
+        action_url = f"https://wa.me/{normalized_number.replace('+', '')}"
+
+    new_msg = models.Message(
+        conversation_id=conversation.id,
+        sender_type="user",
+        content=response_message,
+        message_type="call",
+        status="sent",
+    )
+    db.add(new_msg)
+    conversation.last_message_at = datetime.datetime.utcnow()
+    db.commit()
+
+    return schemas_whatsapp.LeadCallResponse(
+        mode=mode,
+        to_number=normalized_number,
+        url=action_url,
+        message=response_message,
+        provider_status=provider_status,
+    )
 
 
 @router.post("/send-vehicle", response_model=schemas_whatsapp.VehicleShareResponse)

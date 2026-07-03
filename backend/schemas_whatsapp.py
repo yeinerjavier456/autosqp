@@ -69,3 +69,11 @@ class VehicleShareResponse(BaseModel):
     sent_messages: int
     text_message_id: Optional[str] = None
     image_message_ids: List[str] = []
+
+
+class LeadCallResponse(BaseModel):
+    mode: str
+    to_number: str
+    url: Optional[str] = None
+    message: str
+    provider_status: Optional[int] = None

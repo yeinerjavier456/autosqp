@@ -46,6 +46,12 @@ const AdminCompanySettings = () => {
         tiktok_pixel_id: '',
         whatsapp_api_key: '',
         whatsapp_phone_number_id: '',
+        whatsapp_documents_enabled: true,
+        whatsapp_calling_enabled: false,
+        whatsapp_calling_mode: 'whatsapp_link',
+        whatsapp_calling_provider_url: '',
+        whatsapp_calling_provider_token: '',
+        whatsapp_calling_provider_token_configured: false,
         openai_api_key: '',
         gw_model: 'gpt-4o',
         chatbot_bot_name: 'Jennifer Quimbayo',
@@ -117,6 +123,12 @@ const AdminCompanySettings = () => {
                         tiktok_pixel_id: integrationSettings.tiktok_pixel_id || '',
                         whatsapp_api_key: integrationSettings.whatsapp_api_key || '',
                         whatsapp_phone_number_id: integrationSettings.whatsapp_phone_number_id || '',
+                        whatsapp_documents_enabled: integrationSettings.whatsapp_documents_enabled ?? true,
+                        whatsapp_calling_enabled: Boolean(integrationSettings.whatsapp_calling_enabled),
+                        whatsapp_calling_mode: integrationSettings.whatsapp_calling_mode || 'whatsapp_link',
+                        whatsapp_calling_provider_url: integrationSettings.whatsapp_calling_provider_url || '',
+                        whatsapp_calling_provider_token: '',
+                        whatsapp_calling_provider_token_configured: Boolean(integrationSettings.whatsapp_calling_provider_token_configured),
                         openai_api_key: integrationSettings.openai_api_key || '',
                         gw_model: integrationSettings.gw_model || 'gpt-4o',
                         chatbot_bot_name: integrationSettings.chatbot_bot_name || 'Jennifer Quimbayo',
@@ -267,6 +279,12 @@ const AdminCompanySettings = () => {
                 tiktok_pixel_id,
                 whatsapp_api_key,
                 whatsapp_phone_number_id,
+                whatsapp_documents_enabled,
+                whatsapp_calling_enabled,
+                whatsapp_calling_mode,
+                whatsapp_calling_provider_url,
+                whatsapp_calling_provider_token,
+                whatsapp_calling_provider_token_configured,
                 openai_api_key,
                 gw_model,
                 chatbot_bot_name,
@@ -312,6 +330,11 @@ const AdminCompanySettings = () => {
                 tiktok_pixel_id: tiktok_pixel_id || '',
                 whatsapp_api_key: whatsapp_api_key || '',
                 whatsapp_phone_number_id: whatsapp_phone_number_id || '',
+                whatsapp_documents_enabled: Boolean(whatsapp_documents_enabled),
+                whatsapp_calling_enabled: Boolean(whatsapp_calling_enabled),
+                whatsapp_calling_mode: whatsapp_calling_mode || 'whatsapp_link',
+                whatsapp_calling_provider_url: whatsapp_calling_provider_url || '',
+                whatsapp_calling_provider_token: whatsapp_calling_provider_token ? whatsapp_calling_provider_token : null,
                 openai_api_key: openai_api_key || '',
                 gw_model: gw_model || 'gpt-4o',
                 chatbot_bot_name: chatbot_bot_name || 'Jennifer Quimbayo',
@@ -343,6 +366,8 @@ const AdminCompanySettings = () => {
                     ...prev,
                     smtp_password: '',
                     smtp_password_configured: Boolean(prev.smtp_password_configured || smtp_password),
+                    whatsapp_calling_provider_token: '',
+                    whatsapp_calling_provider_token_configured: Boolean(prev.whatsapp_calling_provider_token_configured || whatsapp_calling_provider_token),
                 }));
                 setStatus({ type: 'success', message: `Empresa "${company.name}" actualizada exitosamente!` });
             } else {
@@ -352,6 +377,8 @@ const AdminCompanySettings = () => {
                     ...prev,
                     smtp_password: '',
                     smtp_password_configured: Boolean(smtp_password),
+                    whatsapp_calling_provider_token: '',
+                    whatsapp_calling_provider_token_configured: Boolean(whatsapp_calling_provider_token),
                 }));
                 setStatus({ type: 'success', message: `Empresa "${response.data.name}" creada exitosamente!` });
             }
@@ -727,6 +754,79 @@ const AdminCompanySettings = () => {
                                                 placeholder="Token de WhatsApp Cloud API"
                                                 className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
                                             />
+                                        </div>
+                                        <div className="md:col-span-2 rounded-lg border border-emerald-100 bg-white p-3">
+                                            <label className="flex items-start gap-3">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={Boolean(company.whatsapp_documents_enabled)}
+                                                    onChange={(e) => setCompany((prev) => ({ ...prev, whatsapp_documents_enabled: e.target.checked }))}
+                                                    className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                                />
+                                                <span>
+                                                    <span className="block text-sm font-semibold text-slate-700">Permitir envío de documentos desde leads</span>
+                                                    <span className="block text-xs text-slate-500">Habilita adjuntar PDF, imágenes u otros soportes en el tab Conversación del lead.</span>
+                                                </span>
+                                            </label>
+                                        </div>
+                                        <div className="md:col-span-2 rounded-lg border border-blue-100 bg-white p-3">
+                                            <label className="flex items-start gap-3">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={Boolean(company.whatsapp_calling_enabled)}
+                                                    onChange={(e) => setCompany((prev) => ({ ...prev, whatsapp_calling_enabled: e.target.checked }))}
+                                                    className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                                />
+                                                <span>
+                                                    <span className="block text-sm font-semibold text-slate-700">Permitir llamadas desde la conversación del lead</span>
+                                                    <span className="block text-xs text-slate-500">El CRM puede abrir WhatsApp, abrir el marcador o llamar a un proveedor externo configurado.</span>
+                                                </span>
+                                            </label>
+                                            {company.whatsapp_calling_enabled && (
+                                                <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-slate-600 mb-1">Modo de llamada</label>
+                                                        <select
+                                                            name="whatsapp_calling_mode"
+                                                            value={company.whatsapp_calling_mode || 'whatsapp_link'}
+                                                            onChange={handleChange}
+                                                            className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                                        >
+                                                            <option value="whatsapp_link">Abrir chat de WhatsApp</option>
+                                                            <option value="phone_link">Abrir marcador del dispositivo</option>
+                                                            <option value="provider_webhook">Proveedor externo / BSP</option>
+                                                        </select>
+                                                    </div>
+                                                    {company.whatsapp_calling_mode === 'provider_webhook' && (
+                                                        <>
+                                                            <div>
+                                                                <label className="block text-sm font-medium text-slate-600 mb-1">URL del proveedor</label>
+                                                                <input
+                                                                    type="url"
+                                                                    name="whatsapp_calling_provider_url"
+                                                                    value={company.whatsapp_calling_provider_url || ''}
+                                                                    onChange={handleChange}
+                                                                    placeholder="https://proveedor.com/calls"
+                                                                    className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                                                />
+                                                            </div>
+                                                            <div className="md:col-span-2">
+                                                                <label className="block text-sm font-medium text-slate-600 mb-1">
+                                                                    Token del proveedor {company.whatsapp_calling_provider_token_configured ? '(ya configurado)' : ''}
+                                                                </label>
+                                                                <input
+                                                                    type="password"
+                                                                    name="whatsapp_calling_provider_token"
+                                                                    value={company.whatsapp_calling_provider_token || ''}
+                                                                    onChange={handleChange}
+                                                                    placeholder={company.whatsapp_calling_provider_token_configured ? 'Dejar vacío para conservar el token actual' : 'Bearer token opcional'}
+                                                                    className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                                                />
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

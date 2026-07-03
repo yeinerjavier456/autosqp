@@ -1576,6 +1576,14 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     // Reply State
     const [replyMessage, setReplyMessage] = useState('');
     const [sendingReply, setSendingReply] = useState(false);
+    const [sendingWhatsappDocument, setSendingWhatsappDocument] = useState(false);
+    const [startingWhatsappCall, setStartingWhatsappCall] = useState(false);
+    const [whatsappSettings, setWhatsappSettings] = useState({
+        documents_enabled: true,
+        calling_enabled: false,
+        calling_mode: 'whatsapp_link',
+    });
+    const whatsappDocumentInputRef = useRef(null);
     const [activeDetailTab, setActiveDetailTab] = useState('resumen');
 
     // Reminder State
@@ -1637,6 +1645,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             setLeadNotes(lead.notes || []);
             setLeadFiles(lead.files || []);
             setPurchaseOptions(Array.isArray(lead.purchase_options) ? lead.purchase_options : []);
+            fetchWhatsappSettings();
             fetchLeadAppointments();
             fetchCreditDetail();
             fetchPurchaseDetail();
@@ -1693,6 +1702,35 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             console.error("Error fetching lead messages", error);
         } finally {
             setLoadingMessages(false);
+        }
+    };
+
+    const fetchWhatsappSettings = async () => {
+        if (!lead?.company_id) {
+            setWhatsappSettings({
+                documents_enabled: true,
+                calling_enabled: false,
+                calling_mode: 'whatsapp_link',
+            });
+            return;
+        }
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.get(`${API_BASE_URL}/companies/${lead.company_id}/integrations`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setWhatsappSettings({
+                documents_enabled: response.data?.whatsapp_documents_enabled ?? true,
+                calling_enabled: Boolean(response.data?.whatsapp_calling_enabled),
+                calling_mode: response.data?.whatsapp_calling_mode || 'whatsapp_link',
+            });
+        } catch (error) {
+            console.error('Error fetching WhatsApp settings', error);
+            setWhatsappSettings({
+                documents_enabled: true,
+                calling_enabled: false,
+                calling_mode: 'whatsapp_link',
+            });
         }
     };
 
@@ -1804,6 +1842,71 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             Swal.fire('Error', error?.response?.data?.detail || 'No se pudo enviar el mensaje', 'error');
         } finally {
             setSendingReply(false);
+        }
+    };
+
+    const handleStartWhatsappCall = async () => {
+        if (!canModifyLead) {
+            showReadOnlyWarning();
+            return;
+        }
+        if (!lead.phone) {
+            Swal.fire('Atención', 'Este lead no tiene teléfono para llamar por WhatsApp.', 'info');
+            return;
+        }
+
+        setStartingWhatsappCall(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post(`${API_BASE_URL}/whatsapp/leads/${lead.id}/call`, {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (response.data?.url) {
+                window.open(response.data.url, '_blank', 'noopener,noreferrer');
+            }
+            fetchMessages();
+        } catch (error) {
+            console.error('Error starting WhatsApp call', error);
+            Swal.fire('Error', error?.response?.data?.detail || 'No se pudo iniciar la llamada.', 'error');
+        } finally {
+            setStartingWhatsappCall(false);
+        }
+    };
+
+    const handleSendWhatsappDocument = async (event) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+        if (!canModifyLead) {
+            showReadOnlyWarning();
+            return;
+        }
+        if (!lead.phone) {
+            Swal.fire('Atención', 'Este lead no tiene teléfono para enviar documentos por WhatsApp.', 'info');
+            return;
+        }
+
+        setSendingWhatsappDocument(true);
+        try {
+            const token = localStorage.getItem('token');
+            const formData = new FormData();
+            formData.append('file', file);
+            if (replyMessage.trim()) {
+                formData.append('caption', replyMessage.trim());
+            }
+            await axios.post(`${API_BASE_URL}/whatsapp/leads/${lead.id}/documents`, formData, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+            setReplyMessage('');
+            fetchMessages();
+        } catch (error) {
+            console.error('Error sending WhatsApp document', error);
+            Swal.fire('Error', error?.response?.data?.detail || 'No se pudo enviar el documento.', 'error');
+        } finally {
+            setSendingWhatsappDocument(false);
         }
     };
 
@@ -4037,6 +4140,16 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                                 ? 'bg-blue-600 text-white rounded-br-sm shadow-sm'
                                                 : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm'
                                                 }`}>
+                                                {msg.media_url && msg.message_type === 'document' && (
+                                                    <a
+                                                        href={resolveLeadFileUrl(msg.media_url)}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className={`mb-1 block rounded-lg px-3 py-2 text-sm font-semibold ${msg.sender_type === 'user' ? 'bg-white/15 text-white hover:bg-white/20' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+                                                    >
+                                                        Ver documento adjunto
+                                                    </a>
+                                                )}
                                                 <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                                             </div>
                                             <span className="text-[9px] text-gray-400 mt-1">
@@ -4052,6 +4165,34 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                             </div>
                             {(lead.phone || lead.source === 'facebook' || lead.source === 'instagram' || lead.source === 'whatsapp') && (
                                 <form onSubmit={handleSendReply} className="bg-white border-t border-gray-200 p-3 flex gap-2">
+                                    <input
+                                        ref={whatsappDocumentInputRef}
+                                        type="file"
+                                        className="hidden"
+                                        onChange={handleSendWhatsappDocument}
+                                    />
+                                    {lead.phone && whatsappSettings.calling_enabled && (
+                                        <button
+                                            type="button"
+                                            onClick={handleStartWhatsappCall}
+                                            disabled={startingWhatsappCall || !canModifyLead}
+                                            title="Llamar desde WhatsApp"
+                                            className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
+                                        >
+                                            {startingWhatsappCall ? '...' : 'Llamar'}
+                                        </button>
+                                    )}
+                                    {lead.phone && whatsappSettings.documents_enabled && (
+                                        <button
+                                            type="button"
+                                            onClick={() => whatsappDocumentInputRef.current?.click()}
+                                            disabled={sendingWhatsappDocument || !canModifyLead}
+                                            title="Enviar documento por WhatsApp"
+                                            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50"
+                                        >
+                                            {sendingWhatsappDocument ? '...' : 'Adjuntar'}
+                                        </button>
+                                    )}
                                     <input
                                         type="text"
                                         placeholder={

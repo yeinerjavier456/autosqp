@@ -1804,6 +1804,26 @@ def ensure_company_smtp_settings_columns():
 
 ensure_company_smtp_settings_columns()
 
+def ensure_whatsapp_settings_columns():
+    try:
+        with engine.begin() as connection:
+            whatsapp_columns = {
+                "whatsapp_documents_enabled": "ADD COLUMN whatsapp_documents_enabled BOOLEAN NULL DEFAULT 1",
+                "whatsapp_calling_enabled": "ADD COLUMN whatsapp_calling_enabled BOOLEAN NULL DEFAULT 0",
+                "whatsapp_calling_mode": "ADD COLUMN whatsapp_calling_mode VARCHAR(40) NULL DEFAULT 'whatsapp_link'",
+                "whatsapp_calling_provider_url": "ADD COLUMN whatsapp_calling_provider_url VARCHAR(500) NULL",
+                "whatsapp_calling_provider_token": "ADD COLUMN whatsapp_calling_provider_token TEXT NULL",
+            }
+            for _, ddl in whatsapp_columns.items():
+                try:
+                    connection.execute(text(f"ALTER TABLE integration_settings {ddl}"))
+                except Exception:
+                    pass
+    except Exception as exc:
+        print(f"Warning: could not ensure whatsapp settings columns: {exc}", flush=True)
+
+ensure_whatsapp_settings_columns()
+
 def ensure_chatbot_settings_columns():
     """
     Backward-compatible bootstrap for legacy DBs where integration_settings
@@ -5861,8 +5881,10 @@ def create_public_credit_request(
 def serialize_integration_settings(settings: models.IntegrationSettings) -> Dict[str, Any]:
     data = schemas.IntegrationSettings.model_validate(settings).model_dump()
     data["smtp_password_configured"] = bool((getattr(settings, "smtp_password", None) or "").strip())
+    data["whatsapp_calling_provider_token_configured"] = bool((getattr(settings, "whatsapp_calling_provider_token", None) or "").strip())
     # Never return stored SMTP secrets to the browser. A blank value means "keep current password".
     data["smtp_password"] = ""
+    data["whatsapp_calling_provider_token"] = ""
     return data
 
 
@@ -6108,9 +6130,9 @@ def update_integration_settings(company_id: int, settings_update: schemas.Integr
     
     # Update fields. Empty SMTP password must preserve the current saved secret.
     for field, value in settings_update.dict(exclude_unset=True).items():
-        if field == "smtp_password" and (value is None or str(value).strip() == ""):
+        if field in {"smtp_password", "whatsapp_calling_provider_token"} and (value is None or str(value).strip() == ""):
             continue
-        if field == "smtp_password_configured":
+        if field in {"smtp_password_configured", "whatsapp_calling_provider_token_configured"}:
             continue
         setattr(settings, field, value)
         
