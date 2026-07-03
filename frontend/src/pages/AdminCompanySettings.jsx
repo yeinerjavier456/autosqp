@@ -39,6 +39,27 @@ const AdminCompanySettings = () => {
         license_end_date: '',
         enabled_modules: COMPANY_VIEWS.map((view) => view.id),
         public_credit_requires_email_validation: true,
+        facebook_access_token: '',
+        facebook_pixel_id: '',
+        instagram_access_token: '',
+        tiktok_access_token: '',
+        tiktok_pixel_id: '',
+        whatsapp_api_key: '',
+        whatsapp_phone_number_id: '',
+        openai_api_key: '',
+        gw_model: 'gpt-4o',
+        chatbot_bot_name: 'Jennifer Quimbayo',
+        chatbot_typing_min_ms: 7000,
+        chatbot_typing_max_ms: 18000,
+        gmail_enabled: false,
+        gmail_client_id: '',
+        gmail_client_secret: '',
+        gmail_redirect_uri: '',
+        gmail_refresh_token: '',
+        gmail_monitored_sender: '',
+        gmail_label: '',
+        gmail_sync_days: 7,
+        gmail_sync_max_results: 20,
         smtp_enabled: false,
         smtp_host: '',
         smtp_port: 587,
@@ -89,6 +110,27 @@ const AdminCompanySettings = () => {
                             ? companyResponse.data.enabled_modules
                             : COMPANY_VIEWS.map((view) => view.id),
                         public_credit_requires_email_validation: companyResponse.data.public_credit_requires_email_validation ?? true,
+                        facebook_access_token: integrationSettings.facebook_access_token || '',
+                        facebook_pixel_id: integrationSettings.facebook_pixel_id || '',
+                        instagram_access_token: integrationSettings.instagram_access_token || '',
+                        tiktok_access_token: integrationSettings.tiktok_access_token || '',
+                        tiktok_pixel_id: integrationSettings.tiktok_pixel_id || '',
+                        whatsapp_api_key: integrationSettings.whatsapp_api_key || '',
+                        whatsapp_phone_number_id: integrationSettings.whatsapp_phone_number_id || '',
+                        openai_api_key: integrationSettings.openai_api_key || '',
+                        gw_model: integrationSettings.gw_model || 'gpt-4o',
+                        chatbot_bot_name: integrationSettings.chatbot_bot_name || 'Jennifer Quimbayo',
+                        chatbot_typing_min_ms: integrationSettings.chatbot_typing_min_ms ?? 7000,
+                        chatbot_typing_max_ms: integrationSettings.chatbot_typing_max_ms ?? 18000,
+                        gmail_enabled: Boolean(integrationSettings.gmail_enabled),
+                        gmail_client_id: integrationSettings.gmail_client_id || '',
+                        gmail_client_secret: integrationSettings.gmail_client_secret || '',
+                        gmail_redirect_uri: integrationSettings.gmail_redirect_uri || '',
+                        gmail_refresh_token: integrationSettings.gmail_refresh_token || '',
+                        gmail_monitored_sender: integrationSettings.gmail_monitored_sender || '',
+                        gmail_label: integrationSettings.gmail_label || '',
+                        gmail_sync_days: integrationSettings.gmail_sync_days ?? 7,
+                        gmail_sync_max_results: integrationSettings.gmail_sync_max_results ?? 20,
                         smtp_enabled: Boolean(integrationSettings.smtp_enabled),
                         smtp_host: integrationSettings.smtp_host || '',
                         smtp_port: integrationSettings.smtp_port ?? 587,
@@ -218,6 +260,27 @@ const AdminCompanySettings = () => {
             const token = localStorage.getItem('token');
             const headers = { Authorization: `Bearer ${token}` };
             const {
+                facebook_access_token,
+                facebook_pixel_id,
+                instagram_access_token,
+                tiktok_access_token,
+                tiktok_pixel_id,
+                whatsapp_api_key,
+                whatsapp_phone_number_id,
+                openai_api_key,
+                gw_model,
+                chatbot_bot_name,
+                chatbot_typing_min_ms,
+                chatbot_typing_max_ms,
+                gmail_enabled,
+                gmail_client_id,
+                gmail_client_secret,
+                gmail_redirect_uri,
+                gmail_refresh_token,
+                gmail_monitored_sender,
+                gmail_label,
+                gmail_sync_days,
+                gmail_sync_max_results,
                 smtp_enabled,
                 smtp_host,
                 smtp_port,
@@ -242,6 +305,27 @@ const AdminCompanySettings = () => {
                 public_credit_requires_email_validation: Boolean(companyOnlyFields.public_credit_requires_email_validation),
             };
             const integrationPayload = {
+                facebook_access_token: facebook_access_token || '',
+                facebook_pixel_id: facebook_pixel_id || '',
+                instagram_access_token: instagram_access_token || '',
+                tiktok_access_token: tiktok_access_token || '',
+                tiktok_pixel_id: tiktok_pixel_id || '',
+                whatsapp_api_key: whatsapp_api_key || '',
+                whatsapp_phone_number_id: whatsapp_phone_number_id || '',
+                openai_api_key: openai_api_key || '',
+                gw_model: gw_model || 'gpt-4o',
+                chatbot_bot_name: chatbot_bot_name || 'Jennifer Quimbayo',
+                chatbot_typing_min_ms: chatbot_typing_min_ms === '' ? 7000 : parseInt(chatbot_typing_min_ms, 10),
+                chatbot_typing_max_ms: chatbot_typing_max_ms === '' ? 18000 : parseInt(chatbot_typing_max_ms, 10),
+                gmail_enabled: Boolean(gmail_enabled),
+                gmail_client_id: gmail_client_id || '',
+                gmail_client_secret: gmail_client_secret || '',
+                gmail_redirect_uri: gmail_redirect_uri || '',
+                gmail_refresh_token: gmail_refresh_token || '',
+                gmail_monitored_sender: gmail_monitored_sender || '',
+                gmail_label: gmail_label || '',
+                gmail_sync_days: gmail_sync_days === '' ? 7 : parseInt(gmail_sync_days, 10),
+                gmail_sync_max_results: gmail_sync_max_results === '' ? 20 : parseInt(gmail_sync_max_results, 10),
                 smtp_enabled: Boolean(smtp_enabled),
                 smtp_host: smtp_host || '',
                 smtp_port: smtp_port === '' ? 587 : parseInt(smtp_port, 10),
@@ -554,6 +638,265 @@ const AdminCompanySettings = () => {
                                         onChange={handleChange}
                                         className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
                                     />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-100">
+                            <h3 className="text-lg font-bold mb-4 text-slate-700">Integraciones por empresa</h3>
+                            <div className="space-y-5">
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">Meta, Facebook e Instagram</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-medium text-slate-600 mb-1">Page Access Token / Meta Access Token</label>
+                                            <textarea
+                                                rows={3}
+                                                name="facebook_access_token"
+                                                value={company.facebook_access_token || ''}
+                                                onChange={handleChange}
+                                                placeholder="EAAB..."
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-600 mb-1">Page ID / Recipient ID de Facebook</label>
+                                            <input
+                                                type="text"
+                                                name="facebook_pixel_id"
+                                                value={company.facebook_pixel_id || ''}
+                                                onChange={handleChange}
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-600 mb-1">Instagram Access Token</label>
+                                            <input
+                                                type="text"
+                                                name="instagram_access_token"
+                                                value={company.instagram_access_token || ''}
+                                                onChange={handleChange}
+                                                placeholder="Opcional"
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">TikTok y WhatsApp</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-600 mb-1">TikTok Access Token</label>
+                                            <input
+                                                type="text"
+                                                name="tiktok_access_token"
+                                                value={company.tiktok_access_token || ''}
+                                                onChange={handleChange}
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-600 mb-1">TikTok Pixel ID</label>
+                                            <input
+                                                type="text"
+                                                name="tiktok_pixel_id"
+                                                value={company.tiktok_pixel_id || ''}
+                                                onChange={handleChange}
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-600 mb-1">WhatsApp Phone Number ID</label>
+                                            <input
+                                                type="text"
+                                                name="whatsapp_phone_number_id"
+                                                value={company.whatsapp_phone_number_id || ''}
+                                                onChange={handleChange}
+                                                placeholder="ID del número en Meta"
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-600 mb-1">WhatsApp API Token</label>
+                                            <input
+                                                type="password"
+                                                name="whatsapp_api_key"
+                                                value={company.whatsapp_api_key || ''}
+                                                onChange={handleChange}
+                                                placeholder="Token de WhatsApp Cloud API"
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">IA y chatbot web</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-600 mb-1">OpenAI API Key</label>
+                                            <input
+                                                type="password"
+                                                name="openai_api_key"
+                                                value={company.openai_api_key || ''}
+                                                onChange={handleChange}
+                                                placeholder="sk-..."
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-600 mb-1">Modelo</label>
+                                            <input
+                                                type="text"
+                                                name="gw_model"
+                                                value={company.gw_model || ''}
+                                                onChange={handleChange}
+                                                placeholder="gpt-4o"
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-600 mb-1">Nombre del bot</label>
+                                            <input
+                                                type="text"
+                                                name="chatbot_bot_name"
+                                                value={company.chatbot_bot_name || ''}
+                                                onChange={handleChange}
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-600 mb-1">Typing mín. ms</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    name="chatbot_typing_min_ms"
+                                                    value={company.chatbot_typing_min_ms ?? 7000}
+                                                    onChange={handleChange}
+                                                    className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-600 mb-1">Typing máx. ms</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    name="chatbot_typing_max_ms"
+                                                    value={company.chatbot_typing_max_ms ?? 18000}
+                                                    onChange={handleChange}
+                                                    className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <div className="mb-3 flex items-start gap-3">
+                                        <input
+                                            type="checkbox"
+                                            name="gmail_enabled"
+                                            checked={Boolean(company.gmail_enabled)}
+                                            onChange={(e) => setCompany((prev) => ({ ...prev, gmail_enabled: e.target.checked }))}
+                                            className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <div>
+                                            <h4 className="text-sm font-bold uppercase tracking-wide text-slate-500">Gmail</h4>
+                                            <p className="text-xs text-slate-500">Activa lectura y análisis de correo para esta empresa.</p>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-600 mb-1">Google OAuth Client ID</label>
+                                            <input
+                                                type="text"
+                                                name="gmail_client_id"
+                                                value={company.gmail_client_id || ''}
+                                                onChange={handleChange}
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-600 mb-1">Google OAuth Client Secret</label>
+                                            <input
+                                                type="password"
+                                                name="gmail_client_secret"
+                                                value={company.gmail_client_secret || ''}
+                                                onChange={handleChange}
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                            />
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-medium text-slate-600 mb-1">Redirect URI</label>
+                                            <input
+                                                type="text"
+                                                name="gmail_redirect_uri"
+                                                value={company.gmail_redirect_uri || ''}
+                                                onChange={handleChange}
+                                                placeholder="/api/gmail/oauth/callback"
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                            />
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-medium text-slate-600 mb-1">Refresh Token</label>
+                                            <textarea
+                                                rows={3}
+                                                name="gmail_refresh_token"
+                                                value={company.gmail_refresh_token || ''}
+                                                onChange={handleChange}
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-600 mb-1">Remitentes a monitorear</label>
+                                            <textarea
+                                                rows={3}
+                                                name="gmail_monitored_sender"
+                                                value={company.gmail_monitored_sender || ''}
+                                                onChange={handleChange}
+                                                placeholder="correo@banco.com"
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-600 mb-1">Label de Gmail</label>
+                                            <input
+                                                type="text"
+                                                name="gmail_label"
+                                                value={company.gmail_label || ''}
+                                                onChange={handleChange}
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                            />
+                                            <div className="mt-3 grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-slate-600 mb-1">Días</label>
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        max="90"
+                                                        name="gmail_sync_days"
+                                                        value={company.gmail_sync_days ?? 7}
+                                                        onChange={handleChange}
+                                                        className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-slate-600 mb-1">Máx.</label>
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        max="100"
+                                                        name="gmail_sync_max_results"
+                                                        value={company.gmail_sync_max_results ?? 20}
+                                                        onChange={handleChange}
+                                                        className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
