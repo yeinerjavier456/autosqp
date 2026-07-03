@@ -5573,18 +5573,17 @@ def _build_company_public_credit_form_url(company: Optional[models.Company], req
     return f"{scheme}://{host}/crm/credito"
 
 
-@app.post("/leads/{lead_id}/credit-form/send-access")
-def send_lead_credit_form_access(
+def _create_lead_credit_form_access(
     lead_id: int,
     request: Request,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
-):
+) -> Dict[str, Any]:
     lead = _get_accessible_lead_for_credit_form(db, current_user, lead_id)
     ensure_can_modify_lead(current_user, lead)
     target_email = str(lead.email or "").strip().lower()
     if not target_email:
-        raise HTTPException(status_code=400, detail="El lead no tiene correo para enviar el acceso.")
+        raise HTTPException(status_code=400, detail="El lead no tiene correo para generar el acceso.")
 
     company = db.query(models.Company).filter(models.Company.id == lead.company_id).first()
     requires_email_validation = company_requires_public_credit_email_validation(company)
@@ -5602,6 +5601,60 @@ def send_lead_credit_form_access(
     db.flush()
 
     form_url = f"{_build_company_public_credit_form_url(company, request)}?access={access.token}"
+    return {
+        "lead": lead,
+        "company": company,
+        "access": access,
+        "form_url": form_url,
+        "requires_email_validation": requires_email_validation,
+        "verification_code": verification_code,
+    }
+
+
+@app.post("/leads/{lead_id}/credit-form/create-access")
+def create_lead_credit_form_access(
+    lead_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    access_context = _create_lead_credit_form_access(lead_id, request, db, current_user)
+    lead = access_context["lead"]
+    db.add(models.LeadHistory(
+        lead_id=lead.id,
+        user_id=current_user.id,
+        previous_status=lead.status,
+        new_status=lead.status,
+        comment="Enlace de formulario de crédito generado para compartir con el cliente",
+    ))
+    db.commit()
+    return {
+        "status": "ok",
+        "form_url": access_context["form_url"],
+        "requires_email_validation": access_context["requires_email_validation"],
+        "verification_code": (
+            access_context["verification_code"]
+            if access_context["requires_email_validation"]
+            else None
+        ),
+        "expires_at": access_context["access"].expires_at,
+        "email": access_context["access"].email,
+    }
+
+
+@app.post("/leads/{lead_id}/credit-form/send-access")
+def send_lead_credit_form_access(
+    lead_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    access_context = _create_lead_credit_form_access(lead_id, request, db, current_user)
+    lead = access_context["lead"]
+    company = access_context["company"]
+    form_url = access_context["form_url"]
+    requires_email_validation = access_context["requires_email_validation"]
+    verification_code = access_context["verification_code"]
     smtp_settings = _get_public_credit_smtp_settings(db, company)
     company_name = getattr(company, "name", None) or "AutosQP"
     code_text_lines = []

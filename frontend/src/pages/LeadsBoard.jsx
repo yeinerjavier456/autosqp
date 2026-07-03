@@ -147,6 +147,8 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [sendingAccess, setSendingAccess] = useState(false);
+    const [copyingAccess, setCopyingAccess] = useState(false);
+    const [accessLink, setAccessLink] = useState(null);
     const [origin, setOrigin] = useState('internal');
     const [exists, setExists] = useState(false);
     const [submission, setSubmission] = useState(null);
@@ -372,6 +374,36 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
         }
     };
 
+    const copyAccessLink = async () => {
+        setCopyingAccess(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post(
+                `${API_BASE_URL}/leads/${lead.id}/credit-form/create-access`,
+                {},
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const data = response.data || {};
+            setAccessLink(data);
+            const lines = [
+                `Hola ${lead?.name || ''}`.trim(),
+                '',
+                'Te comparto el enlace para diligenciar el formulario de crédito:',
+                data.form_url,
+            ];
+            if (data.requires_email_validation && data.verification_code) {
+                lines.push('', `Código de validación: ${data.verification_code}`);
+            }
+            lines.push('', 'Este acceso queda relacionado con tu lead.');
+            await navigator.clipboard.writeText(lines.join('\n'));
+            Swal.fire('Link copiado', 'El enlace del formulario quedó copiado para enviarlo al cliente.', 'success');
+        } catch (error) {
+            Swal.fire('Error', error?.response?.data?.detail || 'No se pudo generar o copiar el enlace.', 'error');
+        } finally {
+            setCopyingAccess(false);
+        }
+    };
+
     const saveForm = async () => {
         setSaving(true);
         try {
@@ -483,16 +515,51 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
                 </span>
             </div>
             {canModify && (
-                <div className="flex flex-wrap gap-2 rounded-2xl border border-blue-100 bg-blue-50 p-3">
-                    <button
-                        type="button"
-                        onClick={sendAccess}
-                        disabled={sendingAccess || !lead?.email}
-                        className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
-                    >
-                        {sendingAccess ? 'Enviando acceso...' : 'Enviar código y enlace de firma'}
-                    </button>
-                    {!lead?.email && <span className="self-center text-xs font-semibold text-amber-700">Agrega correo al lead para enviar el acceso.</span>}
+                <div className="grid gap-3 lg:grid-cols-3">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">1. Información</p>
+                        <p className="mt-2 text-sm font-semibold text-slate-800">
+                            {exists ? 'Formulario disponible' : 'Sin formulario diligenciado'}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                            {origin === 'public'
+                                ? 'El cliente ya lo llenó desde el enlace público.'
+                                : exists
+                                    ? 'La información fue registrada desde el modal.'
+                                    : 'Cuando exista información se mostrará en los campos de abajo.'}
+                        </p>
+                    </div>
+                    <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                        <p className="text-xs font-bold uppercase tracking-wide text-blue-700">2. Enlace para cliente</p>
+                        <p className="mt-2 text-xs text-blue-700">Copia el link para enviarlo por WhatsApp u otro canal.</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                onClick={copyAccessLink}
+                                disabled={copyingAccess || !lead?.email}
+                                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+                            >
+                                {copyingAccess ? 'Copiando...' : 'Copiar link'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={sendAccess}
+                                disabled={sendingAccess || !lead?.email}
+                                className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-700 disabled:opacity-60"
+                            >
+                                {sendingAccess ? 'Enviando...' : 'Enviar por correo'}
+                            </button>
+                        </div>
+                        {!lead?.email && <p className="mt-2 text-xs font-semibold text-amber-700">Agrega correo al lead para generar el acceso.</p>}
+                        {accessLink?.form_url && (
+                            <p className="mt-2 break-all text-[11px] text-blue-700">{accessLink.form_url}</p>
+                        )}
+                    </div>
+                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                        <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">3. Llenar aquí</p>
+                        <p className="mt-2 text-sm font-semibold text-emerald-900">Formulario interno</p>
+                        <p className="mt-1 text-xs text-emerald-700">Diligencia o actualiza los datos directamente desde este modal y guarda al final.</p>
+                    </div>
                 </div>
             )}
 
