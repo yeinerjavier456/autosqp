@@ -73,7 +73,9 @@ const SalesDashboard = ({ receiptEntryOnly = false, initialTab = 'sales' }) => {
     const [loading, setLoading] = useState(true);
     const [filterStatus, setFilterStatus] = useState('pending');
     const [activeTab, setActiveTab] = useState(receiptEntryOnly ? 'accounting' : initialTab);
+    const [salesSearchInput, setSalesSearchInput] = useState('');
     const [salesSearch, setSalesSearch] = useState('');
+    const [receiptSearchInput, setReceiptSearchInput] = useState('');
     const [receiptSearch, setReceiptSearch] = useState('');
     const [receiptCategory, setReceiptCategory] = useState('');
     const [receiptMovementType, setReceiptMovementType] = useState('');
@@ -165,8 +167,22 @@ const SalesDashboard = ({ receiptEntryOnly = false, initialTab = 'sales' }) => {
     };
 
     useEffect(() => {
-        fetchData();
+        fetchData({ silent: sales.length > 0 || receipts.length > 0 });
     }, [filterStatus, salesSearch, receiptSearch, receiptCategory, receiptMovementType, startDate, endDate]);
+
+    useEffect(() => {
+        const timeoutId = window.setTimeout(() => {
+            setSalesSearch(salesSearchInput.trim());
+        }, 350);
+        return () => window.clearTimeout(timeoutId);
+    }, [salesSearchInput]);
+
+    useEffect(() => {
+        const timeoutId = window.setTimeout(() => {
+            setReceiptSearch(receiptSearchInput.trim());
+        }, 350);
+        return () => window.clearTimeout(timeoutId);
+    }, [receiptSearchInput]);
 
     useEffect(() => {
         if (selectedReceiptGroup?.sale?.id) {
@@ -186,8 +202,10 @@ const SalesDashboard = ({ receiptEntryOnly = false, initialTab = 'sales' }) => {
         }
     }, [receipts]);
 
-    const fetchData = async () => {
-        setLoading(true);
+    const fetchData = async ({ silent = false } = {}) => {
+        if (!silent) {
+            setLoading(true);
+        }
         try {
             const token = localStorage.getItem('token');
             const headers = { Authorization: `Bearer ${token}` };
@@ -238,7 +256,9 @@ const SalesDashboard = ({ receiptEntryOnly = false, initialTab = 'sales' }) => {
         } catch (error) {
             console.error('Error fetching sales data', error);
         } finally {
-            setLoading(false);
+            if (!silent) {
+                setLoading(false);
+            }
         }
     };
 
@@ -1585,8 +1605,8 @@ const SalesDashboard = ({ receiptEntryOnly = false, initialTab = 'sales' }) => {
                         <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Buscar recibos</label>
                         <input
                             type="text"
-                            value={receiptSearch}
-                            onChange={(e) => setReceiptSearch(e.target.value)}
+                            value={receiptSearchInput}
+                            onChange={(e) => setReceiptSearchInput(e.target.value)}
                             placeholder="Buscar por placa, nombre, documento, concepto o número de recibo..."
                             className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
                         />
@@ -1594,8 +1614,11 @@ const SalesDashboard = ({ receiptEntryOnly = false, initialTab = 'sales' }) => {
                     <div className="flex items-end">
                         <button
                             type="button"
-                            onClick={() => setReceiptSearch('')}
-                            disabled={!receiptSearch}
+                            onClick={() => {
+                                setReceiptSearchInput('');
+                                setReceiptSearch('');
+                            }}
+                            disabled={!receiptSearchInput && !receiptSearch}
                             className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto"
                         >
                             Limpiar búsqueda
@@ -1752,14 +1775,17 @@ const SalesDashboard = ({ receiptEntryOnly = false, initialTab = 'sales' }) => {
                                 <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
                                     <input
                                         type="text"
-                                        value={salesSearch}
-                                        onChange={(e) => setSalesSearch(e.target.value)}
+                                        value={salesSearchInput}
+                                        onChange={(e) => setSalesSearchInput(e.target.value)}
                                         placeholder="Buscar por placa, marca o modelo..."
                                         className="rounded-xl border border-gray-300 px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
                                     />
                                     <button
                                         type="button"
-                                        onClick={() => setSalesSearch('')}
+                                        onClick={() => {
+                                            setSalesSearchInput('');
+                                            setSalesSearch('');
+                                        }}
                                         className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                                     >
                                         Limpiar filtro
@@ -2093,8 +2119,8 @@ const SalesDashboard = ({ receiptEntryOnly = false, initialTab = 'sales' }) => {
                                 <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_200px_200px_auto]">
                                     <input
                                         type="text"
-                                        value={receiptSearch}
-                                        onChange={(e) => setReceiptSearch(e.target.value)}
+                                        value={receiptSearchInput}
+                                        onChange={(e) => setReceiptSearchInput(e.target.value)}
                                         placeholder="Buscar por concepto, recibo, placa..."
                                         className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
                                     />
@@ -2120,6 +2146,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, initialTab = 'sales' }) => {
                                     <button
                                         type="button"
                                         onClick={() => {
+                                            setReceiptSearchInput('');
                                             setReceiptSearch('');
                                             setReceiptCategory('');
                                             setReceiptMovementType('');
