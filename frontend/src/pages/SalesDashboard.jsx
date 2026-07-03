@@ -1520,7 +1520,12 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                             const supportDisplayId = group.receiptNumber || receipt.receipt_number || `REC-${receipt.id}`;
                                             const supportDisplayName = getBestGroupDisplayName(group.receipts);
                                             return (
-                                                <tr key={group.key} className="hover:bg-gray-50">
+                                                <tr
+                                                    key={group.key}
+                                                    onClick={() => loadReceiptGroupDetails(group)}
+                                                    className="cursor-pointer hover:bg-blue-50"
+                                                    title="Ver detalle del recibo"
+                                                >
                                                     <td className="p-4 text-sm text-gray-600">
                                                         {receipt.payment_date ? new Date(receipt.payment_date).toLocaleDateString() : '-'}
                                                     </td>
@@ -1563,6 +1568,109 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                     )}
                                 </tbody>
                             </table>
+                        </div>
+                    </div>
+                )}
+                {selectedReceiptGroup && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+                        <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+                            {(() => {
+                                const isSaleGroup = Boolean(selectedReceiptGroup.sale?.id);
+                                const supportDisplayName = getBestGroupDisplayName(selectedReceiptGroup.receipts) || '';
+                                const groupTitle = isSaleGroup
+                                    ? `#${selectedReceiptGroup.sale?.id} - ${selectedReceiptGroup.sale?.vehicle?.make || ''} ${selectedReceiptGroup.sale?.vehicle?.model || ''} · ${selectedReceiptGroup.sale?.vehicle?.plate || 'Sin placa'}`
+                                    : `Soporte ${selectedReceiptGroup.receiptNumber || selectedReceiptGroup.latestReceipt?.receipt_number || ''}`;
+
+                                return (
+                                    <>
+                                        <div className="flex items-start justify-between border-b border-slate-200 px-6 py-4">
+                                            <div className="min-w-0 flex-1 pr-4">
+                                                <h3 className="text-xl font-bold text-slate-900">
+                                                    {supportDisplayName || groupTitle}
+                                                </h3>
+                                                <p className="mt-1 text-sm text-slate-500">{groupTitle}</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => { setSelectedReceiptGroup(null); setEditingGroupName(''); }}
+                                                className="rounded-full bg-slate-100 px-3 py-1 text-lg font-bold text-slate-600 hover:bg-slate-200"
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+
+                                        <div className="max-h-[70vh] overflow-y-auto px-6 py-4">
+                                            <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                                                <div className="rounded-xl bg-emerald-50 p-4">
+                                                    <p className="text-xs font-semibold uppercase text-emerald-700">Ingresos</p>
+                                                    <p className="mt-1 text-xl font-bold text-emerald-700">${selectedReceiptGroupTotals.incomeTotal.toLocaleString()}</p>
+                                                </div>
+                                                <div className="rounded-xl bg-rose-50 p-4">
+                                                    <p className="text-xs font-semibold uppercase text-rose-700">Egresos</p>
+                                                    <p className="mt-1 text-xl font-bold text-rose-700">${selectedReceiptGroupTotals.expenseTotal.toLocaleString()}</p>
+                                                </div>
+                                                <div className="rounded-xl bg-blue-50 p-4">
+                                                    <p className="text-xs font-semibold uppercase text-blue-700">Neto</p>
+                                                    <p className={`mt-1 text-xl font-bold ${selectedReceiptGroupTotals.balanceTotal >= 0 ? 'text-blue-700' : 'text-red-700'}`}>${selectedReceiptGroupTotals.balanceTotal.toLocaleString()}</p>
+                                                </div>
+                                            </div>
+
+                                            <table className="w-full border-collapse text-left">
+                                                <thead>
+                                                    <tr className="bg-slate-50 text-xs uppercase tracking-wider text-slate-600">
+                                                        <th className="border-b p-3">Fecha</th>
+                                                        <th className="border-b p-3">Concepto</th>
+                                                        <th className="border-b p-3">Cuenta</th>
+                                                        <th className="border-b p-3">Tipo</th>
+                                                        <th className="border-b p-3">Valor</th>
+                                                        <th className="border-b p-3">Soporte</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {selectedReceiptGroup.receipts.map((receipt) => (
+                                                        <tr key={receipt.id}>
+                                                            <td className="p-3 text-sm text-slate-600">{receipt.payment_date ? new Date(receipt.payment_date).toLocaleDateString() : '-'}</td>
+                                                            <td className="p-3">
+                                                                <div className="font-medium text-slate-800">{receipt.concept || 'Movimiento contable'}</div>
+                                                                <div className="text-xs text-slate-500">{receipt.notes || receipt.receipt_number || 'Sin nota'}</div>
+                                                                {(receipt.payment_method || receipt.bank) && (
+                                                                    <div className="mt-1 text-xs font-medium text-slate-500">
+                                                                        {[receipt.payment_method === 'efectivo' ? 'Efectivo' : receipt.payment_method === 'transferencia' ? 'Transferencia' : receipt.payment_method, receipt.bank].filter(Boolean).join(' · ')}
+                                                                    </div>
+                                                                )}
+                                                            </td>
+                                                            <td className="p-3 text-sm text-slate-600">{getCategoryLabel(receipt.category)}</td>
+                                                            <td className="p-3 text-sm">
+                                                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${receipt.movement_type === 'expense' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                                    {receipt.movement_type === 'expense' ? 'Egreso' : 'Ingreso'}
+                                                                </span>
+                                                            </td>
+                                                            <td className={`p-3 font-semibold ${receipt.movement_type === 'expense' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                                                ${Number(receipt.amount || 0).toLocaleString()}
+                                                            </td>
+                                                            <td className="p-3 text-sm">
+                                                                {receipt.file_path ? (
+                                                                    <a
+                                                                        href={`/api${receipt.file_path}?token=${localStorage.getItem('token')}`}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        onClick={(event) => event.stopPropagation()}
+                                                                        className="font-medium text-blue-700 hover:underline"
+                                                                    >
+                                                                        Ver adjunto
+                                                                    </a>
+                                                                ) : (
+                                                                    <span className="text-slate-400">Sin archivo</span>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </>
+                                );
+                            })()}
                         </div>
                     </div>
                 )}
