@@ -17,6 +17,16 @@ const SECTION_LABELS = {
     channels: 'Canales',
 };
 
+const SETTINGS_TABS = [
+    { id: 'general', label: 'General', description: 'Identidad, logo, dominio y colores.' },
+    { id: 'contact', label: 'Contacto', description: 'Dirección, teléfono y redes sociales.' },
+    { id: 'license', label: 'Licencia', description: 'Límites de uso y vigencia.' },
+    { id: 'integrations', label: 'Integraciones', description: 'Meta, WhatsApp, IA y Gmail.' },
+    { id: 'email', label: 'Correo', description: 'Validación, SMTP y destinatarios.' },
+    { id: 'modules', label: 'Módulos', description: 'Vistas habilitadas para la empresa.' },
+    { id: 'preview', label: 'Vista previa', description: 'Previsualización pública de marca.' },
+];
+
 const AdminCompanySettings = () => {
     const { id } = useParams();
     const [company, setCompany] = useState({
@@ -86,7 +96,9 @@ const AdminCompanySettings = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [uploadingLogo, setUploadingLogo] = useState(false);
     const [status, setStatus] = useState({ type: '', message: '' });
+    const [activeTab, setActiveTab] = useState('general');
     const groupedViews = useMemo(() => COMPANY_VIEW_GROUPS, []);
+    const activeTabMeta = SETTINGS_TABS.find((tab) => tab.id === activeTab) || SETTINGS_TABS[0];
 
     useEffect(() => {
         if (id) {
@@ -430,12 +442,37 @@ const AdminCompanySettings = () => {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+                <div className="flex gap-2 overflow-x-auto">
+                    {SETTINGS_TABS.map((tab) => {
+                        const isActive = activeTab === tab.id;
+                        return (
+                            <button
+                                key={tab.id}
+                                type="button"
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`shrink-0 rounded-xl px-4 py-3 text-left transition ${isActive ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+                            >
+                                <span className="block text-sm font-bold">{tab.label}</span>
+                                <span className={`mt-0.5 block text-[11px] ${isActive ? 'text-slate-300' : 'text-slate-400'}`}>{tab.description}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6">
                 {/* Form Section */}
+                {activeTab !== 'preview' && (
                 <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
-                    <h2 className="text-xl font-bold mb-6 text-slate-700">Configuración General</h2>
+                    <div className="mb-6">
+                        <h2 className="text-xl font-bold text-slate-800">{activeTabMeta.label}</h2>
+                        <p className="mt-1 text-sm text-slate-500">{activeTabMeta.description}</p>
+                    </div>
 
                     <div className="space-y-6">
+                        {activeTab === 'general' && (
+                        <>
                         <div>
                             <label className="block text-sm font-medium text-slate-600 mb-1">Nombre de la Empresa</label>
                             <input
@@ -567,7 +604,10 @@ const AdminCompanySettings = () => {
                                 </div>
                             </div>
                         </div>
+                        </>
+                        )}
 
+                        {activeTab === 'contact' && (
                         <div className="pt-2 border-t border-slate-100">
                             <h3 className="text-lg font-bold mb-4 text-slate-700">Datos de contacto y redes</h3>
                             <div className="space-y-4">
@@ -630,7 +670,9 @@ const AdminCompanySettings = () => {
                                 </div>
                             </div>
                         </div>
+                        )}
 
+                        {activeTab === 'license' && (
                         <div className="pt-2 border-t border-slate-100">
                             <h3 className="text-lg font-bold mb-4 text-slate-700">Licencia y Limites</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -692,7 +734,9 @@ const AdminCompanySettings = () => {
                                 </div>
                             </div>
                         </div>
+                        )}
 
+                        {activeTab === 'integrations' && (
                         <div className="pt-2 border-t border-slate-100">
                             <h3 className="text-lg font-bold mb-4 text-slate-700">Integraciones por empresa</h3>
                             <div className="space-y-5">
@@ -1093,7 +1137,9 @@ const AdminCompanySettings = () => {
                                 </div>
                             </div>
                         </div>
+                        )}
 
+                        {activeTab === 'email' && (
                         <div className="pt-2 border-t border-slate-100">
                             <h3 className="text-lg font-bold mb-4 text-slate-700">Correo SMTP de la empresa</h3>
                             <label className="mb-4 flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
@@ -1220,7 +1266,9 @@ const AdminCompanySettings = () => {
                                 </div>
                             </div>
                         </div>
+                        )}
 
+                        {activeTab === 'modules' && (
                         <div className="pt-2 border-t border-slate-100">
                             <h3 className="text-lg font-bold mb-4 text-slate-700">Modulos habilitados</h3>
                             <div className="space-y-4">
@@ -1244,6 +1292,7 @@ const AdminCompanySettings = () => {
                                 ))}
                             </div>
                         </div>
+                        )}
 
                         <div className="pt-4">
                             <button
@@ -1257,9 +1306,11 @@ const AdminCompanySettings = () => {
                         </div>
                     </div>
                 </div>
+                )}
 
                 {/* Live Preview Section */}
-                <div>
+                {activeTab === 'preview' && (
+                <div className="rounded-2xl border border-gray-100 bg-white p-8 shadow-xl">
                     <h2 className="text-xl font-bold mb-6 text-slate-700">Previsualización en Vivo</h2>
                     <div className="border-4 border-slate-900 rounded-[2rem] overflow-hidden shadow-2xl relative bg-white" style={{ height: '600px' }}>
                         {/* Mock Mobile App UI */}
@@ -1317,6 +1368,7 @@ const AdminCompanySettings = () => {
                         </div>
                     </div>
                 </div>
+                )}
             </div>
         </div>
     );
