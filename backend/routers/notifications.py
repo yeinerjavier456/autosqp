@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import models, schemas, database
-from dependencies import get_current_user, get_db, ensure_can_modify_lead
+from dependencies import get_current_user, get_db, ensure_can_modify_lead, get_effective_role_name
 import datetime
 import os
 from zoneinfo import ZoneInfo
@@ -59,9 +59,17 @@ def get_notifications(
     except Exception as exc:
         print(f"Notification appointment check failed: {exc}")
 
-    notifications = db.query(models.Notification).filter(
+    notifications_query = db.query(models.Notification).filter(
         models.Notification.user_id == current_user.id
-    ).order_by(models.Notification.created_at.desc()).offset(skip).limit(limit).all()
+    )
+
+    if get_effective_role_name(current_user) in {"admin", "super_admin"}:
+        notifications_query = notifications_query.filter(
+            ~models.Notification.title.like("Alerta:%"),
+            models.Notification.title != "Lead reasignado por alerta"
+        )
+
+    notifications = notifications_query.order_by(models.Notification.created_at.desc()).offset(skip).limit(limit).all()
     
     return notifications
 

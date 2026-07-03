@@ -35,6 +35,25 @@ def get_effective_role_name(user: models.User) -> str:
     return (getattr(role, "base_role_name", None) or getattr(role, "name", None) or "").strip()
 
 
+def is_admin_user(user: Optional[models.User]) -> bool:
+    if not user:
+        return False
+    role = getattr(user, "role", None)
+    role_values = [
+        getattr(role, "base_role_name", None),
+        getattr(role, "name", None),
+        getattr(role, "label", None),
+    ]
+    normalized = " ".join(str(value or "").strip().lower() for value in role_values)
+    return (
+        "super_admin" in normalized
+        or "super admin" in normalized
+        or "super administrador" in normalized
+        or "admin" in normalized
+        or "administrador" in normalized
+    )
+
+
 def ensure_rules_admin(current_user: models.User):
     if get_effective_role_name(current_user) not in {"admin", "super_admin"}:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -158,6 +177,11 @@ def perform_rule_reassignment_if_needed(
         link=f"/admin/leads?leadId={lead.id}"
     ))
     if previous_assigned_to_id and previous_assigned_to_id != target_user.id:
+        previous_user = db.query(models.User).join(models.Role, isouter=True).filter(
+            models.User.id == previous_assigned_to_id
+        ).first()
+        if is_admin_user(previous_user):
+            return
         db.add(models.Notification(
             user_id=previous_assigned_to_id,
             title="Lead reasignado por alerta",
@@ -305,13 +329,12 @@ def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
     last_sent_by_lead = {lead_id: last_sent_at for lead_id, last_sent_at, _ in latest_log_rows}
     sent_count_by_lead = {lead_id: int(sent_count or 0) for lead_id, _, sent_count in latest_log_rows}
 
-    admin_recipient_ids = []
-    if rule.recipient_type == 'all_admins':
-        admins = db.query(models.User).join(models.Role).filter(
-            models.User.company_id == rule.company_id,
-            models.Role.name.in_(['admin', 'super_admin'])
+    users_by_id = {
+        user.id: user
+        for user in db.query(models.User).join(models.Role, isouter=True).filter(
+            models.User.company_id == rule.company_id
         ).all()
-        admin_recipient_ids = [u.id for u in admins]
+    }
 
     for lead in leads:
         last_sent_at = last_sent_by_lead.get(lead.id)
@@ -334,9 +357,13 @@ def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
         # If 'all_admins', we might need to loop 
         recipients = []
         if rule.recipient_type == 'all_admins':
-            recipients = admin_recipient_ids
+            recipients = []
         elif recipient_id:
             recipients = [recipient_id]
+        recipients = [
+            uid for uid in recipients
+            if not is_admin_user(users_by_id.get(uid))
+        ]
             
         alert_count_after_current_log = sent_count_by_lead.get(lead.id, 0) + 1
         notification_message = (
