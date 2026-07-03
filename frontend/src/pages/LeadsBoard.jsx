@@ -870,7 +870,7 @@ const getPurchaseOptionDecisionMeta = (decisionStatus) => {
 };
 
 // Draggable Lead Card Component
-const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = false, boardMode = 'general', canDrag = true }) => {
+const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = false, boardMode = 'general', canDrag = true, boardAlert = null }) => {
     const getLeadAgePalette = (createdAt) => {
         if (!createdAt) {
             return {
@@ -1107,6 +1107,15 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
                     {isHighlighted && (
                         <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wide border border-blue-200">
                             Desde alerta
+                        </span>
+                    )}
+                    {boardAlert && (
+                        <span
+                            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-red-100 text-red-800 text-[10px] font-bold uppercase tracking-wide border border-red-200"
+                            title={boardAlert.message || 'Alerta por tiempo en estado'}
+                        >
+                            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                            Alerta estado
                         </span>
                     )}
                     {Number(lead.has_unread_reply || 0) > 0 && (
@@ -1483,6 +1492,7 @@ const KanbanColumn = ({
     boardMode = 'general',
     currentUserId = null,
     currentUserRole = '',
+    boardAlertsByLead = {},
     hasMore = false,
     onLoadMore = null,
 }) => {
@@ -1513,6 +1523,7 @@ const KanbanColumn = ({
                         isHighlighted={lead.id === highlightedLeadId}
                         boardMode={boardMode}
                         canDrag={!isSupervisorOnlyCreditViewer(lead, currentUserId, currentUserRole)}
+                        boardAlert={boardAlertsByLead[lead.id] || null}
                     />
                 ))}
                 {hasMore && typeof onLoadMore === 'function' && (
@@ -4159,6 +4170,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const [showMyLeadsOnly, setShowMyLeadsOnly] = useState(false);
     const [visibleLeadsByStatus, setVisibleLeadsByStatus] = useState({});
     const [boardTotalsByStatus, setBoardTotalsByStatus] = useState({});
+    const [boardAlertsByLead, setBoardAlertsByLead] = useState({});
 
     // Modal State - Sales
     const [showSaleModal, setShowSaleModal] = useState(false);
@@ -4229,6 +4241,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         setLeads([]);
         setVisibleLeadsByStatus({});
         setBoardTotalsByStatus({});
+        setBoardAlertsByLead({});
         setSelectedLeadForHistory(null);
         setShowHistoryModal(false);
         setHighlightedLeadId(null);
@@ -4434,10 +4447,41 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
             setBoardTotalsByStatus(totals);
             setLeads(items);
+            fetchBoardAlerts(items);
         } catch (error) {
             console.error("Error fetching leads", error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchBoardAlerts = async (leadItems = []) => {
+        const leadIds = (Array.isArray(leadItems) ? leadItems : [])
+            .map((lead) => parseUserId(lead?.id))
+            .filter((leadId) => leadId !== null);
+        if (leadIds.length === 0) {
+            setBoardAlertsByLead({});
+            return;
+        }
+
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post(`${API_BASE_URL}/rules/board-alerts`, {
+                lead_ids: leadIds
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const alertsByLead = {};
+            (Array.isArray(response.data) ? response.data : []).forEach((alert) => {
+                const leadId = parseUserId(alert?.lead_id);
+                if (leadId !== null && !alertsByLead[leadId]) {
+                    alertsByLead[leadId] = alert;
+                }
+            });
+            setBoardAlertsByLead(alertsByLead);
+        } catch (error) {
+            console.error("Error fetching board alerts", error);
+            setBoardAlertsByLead({});
         }
     };
 
@@ -5383,6 +5427,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                         boardMode={boardMode}
                         currentUserId={currentUserId}
                         currentUserRole={currentRoleName}
+                        boardAlertsByLead={boardAlertsByLead}
                         hasMore={hasMoreLeadsForStatus(statusOption.value)}
                         onLoadMore={handleLoadMoreByStatus}
                     />
