@@ -9480,7 +9480,7 @@ def read_sales(
     )
     
     # Permission Logic
-    if current_user.role.name in ["admin", "super_admin"]:
+    if is_company_admin_user(current_user):
         # Admin sees all company sales
         if current_user.company_id:
             query = query.filter(models.Sale.company_id == current_user.company_id)
@@ -9917,7 +9917,7 @@ def approve_sale(
     current_user: models.User = Depends(get_current_user)
 ):
     # Only Admin or Super Admin
-    if current_user.role.name not in ["admin", "super_admin"]:
+    if not is_company_admin_user(current_user):
          raise HTTPException(status_code=403, detail="Only admins can approve sales")
          
     sale = db.query(models.Sale).filter(models.Sale.id == sale_id).first()
@@ -9968,7 +9968,7 @@ def reject_sale(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    if current_user.role.name not in ["admin", "super_admin"]:
+    if not is_company_admin_user(current_user):
         raise HTTPException(status_code=403, detail="Only admins can reject sales")
 
     sale = db.query(models.Sale).filter(models.Sale.id == sale_id).first()
