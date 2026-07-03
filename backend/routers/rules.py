@@ -338,12 +338,29 @@ def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
         elif recipient_id:
             recipients = [recipient_id]
             
+        alert_count_after_current_log = sent_count_by_lead.get(lead.id, 0) + 1
+        notification_message = (
+            f"El lead {lead.name} ha estado en '{lead.status}' "
+            f"por más de {rule.time_value} {rule.time_unit}."
+        )
+        if getattr(rule, "reassign_after_alerts_enabled", False):
+            threshold = int(getattr(rule, "reassign_after_alerts_count", 0) or 0)
+            remaining_alerts = max(threshold - alert_count_after_current_log, 0)
+            if remaining_alerts > 0:
+                remaining_minutes = remaining_alerts * int(getattr(rule, "repeat_interval", 0) or 0)
+                notification_message += (
+                    f" El lead será reasignado automáticamente si no es atendido "
+                    f"en los próximos {remaining_minutes} minutos."
+                )
+            else:
+                notification_message += " El lead será reasignado automáticamente en este momento si no fue atendido."
+
         # Send Notification
         for uid in recipients:
             notification = models.Notification(
                 user_id=uid,
                 title=f"Alerta: {rule.name}",
-                message=f"El lead {lead.name} ha estado en '{lead.status}' por más de {rule.time_value} {rule.time_unit}.",
+                message=notification_message,
                 type="warning",
                 link=f"/admin/leads?leadId={lead.id}"
             )
@@ -352,7 +369,6 @@ def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
         # Log it
         log = models.SentAlertLog(rule_id=rule.id, lead_id=lead.id)
         db.add(log)
-        alert_count_after_current_log = sent_count_by_lead.get(lead.id, 0) + 1
         perform_rule_reassignment_if_needed(db, rule, lead, alert_count_after_current_log)
         
     db.commit()
