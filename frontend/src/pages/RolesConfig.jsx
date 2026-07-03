@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { useAuth } from '../context/AuthContext';
-import { SYSTEM_VIEWS, getVisibleSystemViews, isRoleAvailableForCompany } from '../config/views';
+import { SYSTEM_VIEWS, getRoleName, getVisibleSystemViews, isRoleAvailableForCompany } from '../config/views';
 
 const SECTION_META = {
     general: { title: 'General', description: 'Pantallas principales del panel.' },
@@ -18,6 +18,7 @@ const RolesConfig = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [selectedRoleId, setSelectedRoleId] = useState(null);
+    const [draggedViewId, setDraggedViewId] = useState(null);
     const [form, setForm] = useState({
         label: '',
         permissions: [],
@@ -34,6 +35,8 @@ const RolesConfig = () => {
         () => roles.filter((role) => isRoleAvailableForCompany(role, user?.company || null)),
         [roles, user]
     );
+    const currentRoleName = getRoleName(user);
+    const canManageMenuOrder = currentRoleName === 'admin' || currentRoleName === 'super_admin';
     const availableViews = useMemo(() => getVisibleSystemViews(user), [user]);
     const groupedViews = useMemo(() => {
         const groups = {};
@@ -50,31 +53,12 @@ const RolesConfig = () => {
             views
         }));
     }, [availableViews]);
-    const groupedMenuOrder = useMemo(() => {
-        const groups = [];
-
-        form.menu_order.forEach((viewId, index) => {
-            const view = availableViews.find((item) => item.id === viewId);
-            if (!view) return;
-
-            const sectionId = view.section || 'general';
-            let sectionGroup = groups.find((group) => group.id === sectionId);
-
-            if (!sectionGroup) {
-                sectionGroup = {
-                    id: sectionId,
-                    title: SECTION_META[sectionId]?.title || sectionId,
-                    description: SECTION_META[sectionId]?.description || '',
-                    items: []
-                };
-                groups.push(sectionGroup);
-            }
-
-            sectionGroup.items.push({ view, index });
-        });
-
-        return groups;
-    }, [availableViews, form.menu_order]);
+    const orderedMenuViews = useMemo(
+        () => form.menu_order
+            .map((viewId) => availableViews.find((view) => view.id === viewId))
+            .filter(Boolean),
+        [availableViews, form.menu_order]
+    );
 
     const fetchRoles = async () => {
         setLoading(true);
@@ -155,6 +139,7 @@ const RolesConfig = () => {
     };
 
     const moveView = (viewId, direction) => {
+        if (!canManageMenuOrder) return;
         setForm((prev) => {
             const order = [...prev.menu_order];
             const index = order.indexOf(viewId);
@@ -175,6 +160,55 @@ const RolesConfig = () => {
             assignable_role_ids: [],
             advisor_tracking_enabled: false
         });
+    };
+
+    const moveViewToIndex = (sourceViewId, targetIndex) => {
+        if (!canManageMenuOrder) return;
+        setForm((prev) => {
+            const order = [...prev.menu_order];
+            const sourceIndex = order.indexOf(sourceViewId);
+            if (sourceIndex === -1 || targetIndex < 0 || targetIndex > order.length) {
+                return prev;
+            }
+            const [movedViewId] = order.splice(sourceIndex, 1);
+            const adjustedTargetIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+            if (sourceIndex === adjustedTargetIndex) return prev;
+            order.splice(Math.min(adjustedTargetIndex, order.length), 0, movedViewId);
+            return { ...prev, menu_order: order };
+        });
+    };
+
+    const handleMenuDragStart = (event, viewId) => {
+        if (!canManageMenuOrder) return;
+        setDraggedViewId(viewId);
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', viewId);
+    };
+
+    const handleMenuDragOver = (event) => {
+        if (!canManageMenuOrder) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+    };
+
+    const handleMenuDrop = (event, targetViewId) => {
+        if (!canManageMenuOrder) return;
+        event.preventDefault();
+        const sourceViewId = event.dataTransfer.getData('text/plain') || draggedViewId;
+        if (!sourceViewId || sourceViewId === targetViewId) {
+            setDraggedViewId(null);
+            return;
+        }
+        const targetIndex = form.menu_order.indexOf(targetViewId);
+        const targetRect = event.currentTarget.getBoundingClientRect();
+        const shouldDropAfter = event.clientY > targetRect.top + (targetRect.height / 2);
+        const insertionIndex = targetIndex + (shouldDropAfter ? 1 : 0);
+        moveViewToIndex(sourceViewId, insertionIndex);
+        setDraggedViewId(null);
+    };
+
+    const handleMenuDragEnd = () => {
+        setDraggedViewId(null);
     };
 
     const handleSave = async (e) => {
@@ -401,34 +435,74 @@ const RolesConfig = () => {
 
                         <div>
                             <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500 mb-3">Orden del menu</h3>
-                            <div className="space-y-4">
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                                <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                                    <div>
+                                        <h4 className="text-sm font-bold uppercase tracking-wide text-slate-700">Accesos visibles</h4>
+                                        <p className="text-xs text-slate-500 mt-1">
+                                            Arrastra cada fila para acomodar el menu. Tambien puedes usar Subir y Bajar.
+                                        </p>
+                                    </div>
+                                    {!canManageMenuOrder && (
+                                        <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">
+                                            Solo administradores
+                                        </span>
+                                    )}
+                                </div>
                                 {form.menu_order.length === 0 && (
                                     <p className="text-sm text-slate-400">Selecciona vistas para ordenar el menu.</p>
                                 )}
-                                {groupedMenuOrder.map((group) => (
-                                    <div key={group.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                                        <div className="mb-3">
-                                            <h4 className="text-sm font-bold uppercase tracking-wide text-slate-700">{group.title}</h4>
-                                            {group.description && (
-                                                <p className="text-xs text-slate-500 mt-1">{group.description}</p>
-                                            )}
-                                        </div>
-                                        <div className="space-y-2">
-                                            {group.items.map(({ view, index }) => (
-                                                <div key={view.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
-                                                    <div className="pl-3 border-l border-slate-200">
-                                                        <p className="font-semibold text-slate-800">{index + 1}. {view.menuLabel}</p>
-                                                        <p className="text-xs text-slate-500">{view.path}</p>
+                                <div className="space-y-2">
+                                    {orderedMenuViews.map((view, index) => {
+                                        const sectionTitle = SECTION_META[view.section || 'general']?.title || view.section || 'General';
+                                        const isDragging = draggedViewId === view.id;
+                                        return (
+                                            <div
+                                                key={view.id}
+                                                draggable={canManageMenuOrder}
+                                                onDragStart={(event) => handleMenuDragStart(event, view.id)}
+                                                onDragOver={handleMenuDragOver}
+                                                onDrop={(event) => handleMenuDrop(event, view.id)}
+                                                onDragEnd={handleMenuDragEnd}
+                                                className={`flex flex-col gap-3 rounded-xl border bg-white px-4 py-3 transition md:flex-row md:items-center md:justify-between ${canManageMenuOrder ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} ${isDragging ? 'border-blue-400 bg-blue-50 opacity-70 shadow-md' : 'border-slate-200 hover:border-blue-200'}`}
+                                            >
+                                                <div className="flex min-w-0 items-center gap-3">
+                                                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-400">
+                                                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01" />
+                                                        </svg>
                                                     </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <button type="button" onClick={() => moveView(view.id, 'up')} className="px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">Subir</button>
-                                                        <button type="button" onClick={() => moveView(view.id, 'down')} className="px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">Bajar</button>
+                                                    <div className="min-w-0">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700">#{index + 1}</span>
+                                                            <p className="font-semibold text-slate-800">{view.menuLabel || view.label}</p>
+                                                            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">{sectionTitle}</span>
+                                                        </div>
+                                                        <p className="mt-1 truncate text-xs text-slate-500">{view.path}</p>
                                                     </div>
                                                 </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ))}
+                                                <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => moveView(view.id, 'up')}
+                                                        disabled={!canManageMenuOrder || index === 0}
+                                                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                                    >
+                                                        Subir
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => moveView(view.id, 'down')}
+                                                        disabled={!canManageMenuOrder || index === orderedMenuViews.length - 1}
+                                                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                                    >
+                                                        Bajar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
 

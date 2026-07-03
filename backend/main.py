@@ -3366,7 +3366,7 @@ def serialize_role(role: models.Role) -> schemas.Role:
 
 
 def ensure_role_management_permissions(current_user: models.User):
-    role_name = current_user.role.name if current_user.role else ""
+    role_name = get_user_role_name(current_user) or ""
     if role_name not in {"admin", "super_admin"}:
         raise HTTPException(status_code=403, detail="Not authorized")
 
