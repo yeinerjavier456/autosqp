@@ -394,7 +394,6 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
             if (data.requires_email_validation && data.verification_code) {
                 lines.push('', `Código de validación: ${data.verification_code}`);
             }
-            lines.push('', 'Este acceso queda relacionado con tu lead.');
             await navigator.clipboard.writeText(lines.join('\n'));
             Swal.fire('Link copiado', 'El enlace del formulario quedó copiado para enviarlo al cliente.', 'success');
         } catch (error) {
