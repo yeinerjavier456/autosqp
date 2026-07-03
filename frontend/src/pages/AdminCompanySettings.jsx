@@ -24,7 +24,14 @@ const SETTINGS_TABS = [
     { id: 'integrations', label: 'Integraciones', description: 'Meta, WhatsApp, IA y Gmail.' },
     { id: 'email', label: 'Correo', description: 'Validación, SMTP y destinatarios.' },
     { id: 'modules', label: 'Módulos', description: 'Vistas habilitadas para la empresa.' },
-    { id: 'preview', label: 'Vista previa', description: 'Previsualización pública de marca.' },
+];
+
+const INTEGRATION_TABS = [
+    { id: 'meta', label: 'Meta / Facebook' },
+    { id: 'tiktok', label: 'TikTok' },
+    { id: 'whatsapp', label: 'WhatsApp' },
+    { id: 'ai', label: 'IA' },
+    { id: 'gmail', label: 'Gmail' },
 ];
 
 const AdminCompanySettings = () => {
@@ -97,6 +104,7 @@ const AdminCompanySettings = () => {
     const [uploadingLogo, setUploadingLogo] = useState(false);
     const [status, setStatus] = useState({ type: '', message: '' });
     const [activeTab, setActiveTab] = useState('general');
+    const [activeIntegrationTab, setActiveIntegrationTab] = useState('meta');
     const groupedViews = useMemo(() => COMPANY_VIEW_GROUPS, []);
     const activeTabMeta = SETTINGS_TABS.find((tab) => tab.id === activeTab) || SETTINGS_TABS[0];
 
@@ -463,7 +471,6 @@ const AdminCompanySettings = () => {
 
             <div className="grid grid-cols-1 gap-6">
                 {/* Form Section */}
-                {activeTab !== 'preview' && (
                 <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
                     <div className="mb-6">
                         <h2 className="text-xl font-bold text-slate-800">{activeTabMeta.label}</h2>
@@ -739,7 +746,23 @@ const AdminCompanySettings = () => {
                         {activeTab === 'integrations' && (
                         <div className="pt-2 border-t border-slate-100">
                             <h3 className="text-lg font-bold mb-4 text-slate-700">Integraciones por empresa</h3>
+                            <div className="mb-5 flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
+                                {INTEGRATION_TABS.map((tab) => {
+                                    const isActive = activeIntegrationTab === tab.id;
+                                    return (
+                                        <button
+                                            key={tab.id}
+                                            type="button"
+                                            onClick={() => setActiveIntegrationTab(tab.id)}
+                                            className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${isActive ? 'bg-white text-blue-700 shadow-sm ring-1 ring-blue-200' : 'text-slate-600 hover:bg-white'}`}
+                                        >
+                                            {tab.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                             <div className="space-y-5">
+                                {activeIntegrationTab === 'meta' && (
                                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                                     <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">Meta, Facebook e Instagram</h4>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -777,10 +800,16 @@ const AdminCompanySettings = () => {
                                         </div>
                                     </div>
                                 </div>
+                                )}
 
+                                {['tiktok', 'whatsapp'].includes(activeIntegrationTab) && (
                                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                    <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">TikTok y WhatsApp</h4>
+                                    <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">
+                                        {activeIntegrationTab === 'tiktok' ? 'TikTok' : 'WhatsApp'}
+                                    </h4>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {activeIntegrationTab === 'tiktok' && (
+                                        <>
                                         <div>
                                             <label className="block text-sm font-medium text-slate-600 mb-1">TikTok Access Token</label>
                                             <input
@@ -801,6 +830,10 @@ const AdminCompanySettings = () => {
                                                 className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
                                             />
                                         </div>
+                                        </>
+                                        )}
+                                        {activeIntegrationTab === 'whatsapp' && (
+                                        <>
                                         <div>
                                             <label className="block text-sm font-medium text-slate-600 mb-1">WhatsApp Phone Number ID</label>
                                             <input
@@ -965,9 +998,13 @@ const AdminCompanySettings = () => {
                                                 </div>
                                             )}
                                         </div>
+                                        </>
+                                        )}
                                     </div>
                                 </div>
+                                )}
 
+                                {activeIntegrationTab === 'ai' && (
                                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                                     <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">IA y chatbot web</h4>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1029,7 +1066,9 @@ const AdminCompanySettings = () => {
                                         </div>
                                     </div>
                                 </div>
+                                )}
 
+                                {activeIntegrationTab === 'gmail' && (
                                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                                     <div className="mb-3 flex items-start gap-3">
                                         <input
@@ -1135,6 +1174,7 @@ const AdminCompanySettings = () => {
                                         </div>
                                     </div>
                                 </div>
+                                )}
                             </div>
                         </div>
                         )}
@@ -1306,69 +1346,6 @@ const AdminCompanySettings = () => {
                         </div>
                     </div>
                 </div>
-                )}
-
-                {/* Live Preview Section */}
-                {activeTab === 'preview' && (
-                <div className="rounded-2xl border border-gray-100 bg-white p-8 shadow-xl">
-                    <h2 className="text-xl font-bold mb-6 text-slate-700">Previsualización en Vivo</h2>
-                    <div className="border-4 border-slate-900 rounded-[2rem] overflow-hidden shadow-2xl relative bg-white" style={{ height: '600px' }}>
-                        {/* Mock Mobile App UI */}
-                        <div className="bg-slate-900 h-8 w-full absolute top-0 left-0 z-10 flex justify-center items-center">
-                            <div className="w-20 h-4 bg-black rounded-full"></div>
-                        </div>
-
-                        <div className="mt-8 h-full flex flex-col">
-                            {/* App Header */}
-                            <div className="p-4 flex justify-between items-center text-white transition-colors duration-300" style={{ backgroundColor: company.primary_color }}>
-                                <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                                    <div className="w-4 h-0.5 bg-white"></div>
-                                </div>
-                                <span className="font-semibold tracking-wide truncate max-w-[150px]">{company.name}</span>
-                                <div className="w-8 h-8 rounded-full overflow-hidden bg-white border-2 border-white/50">
-                                    {company.logo_url ? (
-                                        <img src={normalizeMediaUrl(company.logo_url)} alt="Logo" className="w-full h-full object-cover" />
-                                    ) : null}
-                                </div>
-                            </div>
-
-                            {/* App Content */}
-                            <div className="flex-1 bg-gray-100 p-4 space-y-4 overflow-hidden">
-                                <div className="bg-white p-4 rounded-xl shadow-sm">
-                                    <h3 className="font-bold text-gray-800 mb-2">Vehículos Disponibles</h3>
-                                    <div className="h-32 bg-gray-200 rounded-lg mb-2"></div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-lg font-bold" style={{ color: company.secondary_color }}>$25,000</span>
-                                        <button
-                                            className="px-4 py-1.5 rounded-full text-white text-sm font-medium"
-                                            style={{ backgroundColor: company.primary_color }}
-                                        >
-                                            Ver Detalles
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="bg-white p-4 rounded-xl shadow-sm">
-                                    <div className="flex gap-4">
-                                        <div className="w-16 h-16 bg-gray-200 rounded-lg"></div>
-                                        <div className="flex-1">
-                                            <div className="h-4 bg-gray-200 w-3/4 rounded mb-2"></div>
-                                            <div className="h-3 bg-gray-100 w-1/2 rounded"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Mock Bottom Nav */}
-                            <div className="bg-white border-t border-gray-200 p-4 flex justify-around">
-                                <div className="w-6 h-6 rounded-full" style={{ backgroundColor: company.primary_color }}></div>
-                                <div className="w-6 h-6 rounded-full bg-gray-300"></div>
-                                <div className="w-6 h-6 rounded-full bg-gray-300"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                )}
             </div>
         </div>
     );
