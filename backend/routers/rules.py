@@ -54,6 +54,13 @@ def validate_rule_payload(rule: schemas.AutomationRuleCreate):
         raise HTTPException(status_code=400, detail="Debes seleccionar un usuario")
     if rule.is_repeating and rule.repeat_interval < 1:
         raise HTTPException(status_code=400, detail="El intervalo de repetición debe ser mayor a cero")
+    if rule.reassign_after_alerts_enabled:
+        if rule.reassign_after_alerts_count < 1:
+            raise HTTPException(status_code=400, detail="Debes indicar después de cuántas alertas se reasigna")
+        if not rule.reassign_to_user_id:
+            raise HTTPException(status_code=400, detail="Debes seleccionar el usuario destino para la reasignación")
+        if rule.reassign_after_alerts_count > 1 and not rule.is_repeating:
+            raise HTTPException(status_code=400, detail="Para reasignar después de varias alertas debes activar la repetición")
 
 
 def ensure_specific_user_scope(rule: schemas.AutomationRuleCreate, db: Session, current_user: models.User):
@@ -65,6 +72,84 @@ def ensure_specific_user_scope(rule: schemas.AutomationRuleCreate, db: Session, 
         raise HTTPException(status_code=400, detail="El usuario seleccionado no existe")
     if get_effective_role_name(current_user) != "super_admin" and recipient.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="No puedes asignar alertas a usuarios de otra empresa")
+
+
+def is_advisor_user(user: models.User) -> bool:
+    role = getattr(user, "role", None)
+    role_text = " ".join([
+        str(getattr(role, "base_role_name", "") or ""),
+        str(getattr(role, "name", "") or ""),
+        str(getattr(role, "label", "") or ""),
+    ]).lower()
+    return "asesor" in role_text or "vendedor" in role_text
+
+
+def ensure_reassignment_user_scope(rule: schemas.AutomationRuleCreate, db: Session, current_user: models.User):
+    if not rule.reassign_after_alerts_enabled:
+        return
+
+    target_user = db.query(models.User).join(models.Role, isouter=True).filter(
+        models.User.id == rule.reassign_to_user_id
+    ).first()
+    if not target_user:
+        raise HTTPException(status_code=400, detail="El usuario destino de reasignación no existe")
+    if get_effective_role_name(current_user) != "super_admin" and target_user.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="No puedes reasignar leads a usuarios de otra empresa")
+    if not getattr(target_user, "is_active", True):
+        raise HTTPException(status_code=400, detail="El usuario destino de reasignación está inactivo")
+    if not is_advisor_user(target_user):
+        raise HTTPException(status_code=400, detail="Solo puedes reasignar leads a asesores o vendedores")
+
+
+def perform_rule_reassignment_if_needed(
+    db: Session,
+    rule: models.AutomationRule,
+    lead: models.Lead,
+    alert_count_after_current_log: int
+):
+    if not getattr(rule, "reassign_after_alerts_enabled", False):
+        return
+    threshold = int(getattr(rule, "reassign_after_alerts_count", 0) or 0)
+    target_user_id = getattr(rule, "reassign_to_user_id", None)
+    if threshold < 1 or not target_user_id or alert_count_after_current_log < threshold:
+        return
+    if getattr(lead, "assigned_to_id", None) == target_user_id:
+        return
+
+    target_user = db.query(models.User).join(models.Role, isouter=True).filter(
+        models.User.id == target_user_id,
+        models.User.company_id == rule.company_id
+    ).first()
+    if not target_user or not getattr(target_user, "is_active", True) or not is_advisor_user(target_user):
+        return
+
+    previous_assigned_to_id = lead.assigned_to_id
+    lead.assigned_to_id = target_user.id
+    db.add(models.LeadHistory(
+        lead_id=lead.id,
+        user_id=target_user.id,
+        previous_status=lead.status,
+        new_status=lead.status,
+        comment=(
+            f"Lead reasignado automaticamente a {target_user.full_name or target_user.email} "
+            f"por regla '{rule.name}' tras {alert_count_after_current_log} apariciones de alerta."
+        )
+    ))
+    db.add(models.Notification(
+        user_id=target_user.id,
+        title="Lead reasignado automáticamente",
+        message=f"Se te reasignó el lead {lead.name} por falta de atención en estado {lead.status}.",
+        type="warning",
+        link=f"/admin/leads?leadId={lead.id}"
+    ))
+    if previous_assigned_to_id and previous_assigned_to_id != target_user.id:
+        db.add(models.Notification(
+            user_id=previous_assigned_to_id,
+            title="Lead reasignado por alerta",
+            message=f"El lead {lead.name} fue reasignado automáticamente por la regla {rule.name}.",
+            type="info",
+            link=f"/admin/leads?leadId={lead.id}"
+        ))
 
 def now_utc_naive_from_bogota() -> datetime:
     # Business timezone is always Bogota; DB stores naive UTC timestamps.
@@ -81,6 +166,7 @@ def create_rule(
     ensure_rules_admin(current_user)
     validate_rule_payload(rule)
     ensure_specific_user_scope(rule, db, current_user)
+    ensure_reassignment_user_scope(rule, db, current_user)
     
     # Force company_id from current user
     rule_data = rule.model_dump()
@@ -114,6 +200,7 @@ def update_rule(
     ensure_rules_admin(current_user)
     validate_rule_payload(rule_update)
     ensure_specific_user_scope(rule_update, db, current_user)
+    ensure_reassignment_user_scope(rule_update, db, current_user)
     
     db_rule = db.query(models.AutomationRule).filter(models.AutomationRule.id == rule_id).first()
     if not db_rule:
@@ -194,12 +281,14 @@ def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
     lead_ids = [lead.id for lead in leads]
     latest_log_rows = db.query(
         models.SentAlertLog.lead_id,
-        func.max(models.SentAlertLog.sent_at).label("last_sent_at")
+        func.max(models.SentAlertLog.sent_at).label("last_sent_at"),
+        func.count(models.SentAlertLog.id).label("sent_count")
     ).filter(
         models.SentAlertLog.rule_id == rule.id,
         models.SentAlertLog.lead_id.in_(lead_ids)
     ).group_by(models.SentAlertLog.lead_id).all()
-    last_sent_by_lead = {lead_id: last_sent_at for lead_id, last_sent_at in latest_log_rows}
+    last_sent_by_lead = {lead_id: last_sent_at for lead_id, last_sent_at, _ in latest_log_rows}
+    sent_count_by_lead = {lead_id: int(sent_count or 0) for lead_id, _, sent_count in latest_log_rows}
 
     admin_recipient_ids = []
     if rule.recipient_type == 'all_admins':
@@ -248,6 +337,8 @@ def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
         # Log it
         log = models.SentAlertLog(rule_id=rule.id, lead_id=lead.id)
         db.add(log)
+        alert_count_after_current_log = sent_count_by_lead.get(lead.id, 0) + 1
+        perform_rule_reassignment_if_needed(db, rule, lead, alert_count_after_current_log)
         
     db.commit()
 

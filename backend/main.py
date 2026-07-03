@@ -2073,6 +2073,37 @@ def ensure_lead_process_detail_reservation_columns():
 
 ensure_lead_process_detail_reservation_columns()
 
+def ensure_automation_rule_reassignment_columns():
+    try:
+        with engine.connect() as conn:
+            existing_cols_result = conn.execute(text(
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'automation_rules'"
+            ))
+            existing_cols = {row[0] for row in existing_cols_result.fetchall()}
+
+            if "reassign_after_alerts_enabled" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE automation_rules "
+                    "ADD COLUMN reassign_after_alerts_enabled BOOLEAN NOT NULL DEFAULT 0"
+                ))
+            if "reassign_after_alerts_count" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE automation_rules "
+                    "ADD COLUMN reassign_after_alerts_count INTEGER NOT NULL DEFAULT 0"
+                ))
+            if "reassign_to_user_id" not in existing_cols:
+                conn.execute(text(
+                    "ALTER TABLE automation_rules "
+                    "ADD COLUMN reassign_to_user_id INTEGER NULL"
+                ))
+            conn.commit()
+    except Exception as exc:
+        print(f"Warning: could not ensure automation rule reassignment columns: {exc}", flush=True)
+
+
+ensure_automation_rule_reassignment_columns()
+
 def ensure_sent_alert_logs_indexes():
     try:
         with engine.connect() as conn:

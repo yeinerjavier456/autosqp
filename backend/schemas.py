@@ -401,6 +401,9 @@ class AutomationRuleBase(BaseModel):
     specific_user_id: Optional[int] = None
     is_repeating: bool = False
     repeat_interval: int = 0
+    reassign_after_alerts_enabled: bool = False
+    reassign_after_alerts_count: int = 0
+    reassign_to_user_id: Optional[int] = None
     is_active: int = 1
 
 class AutomationRuleCreate(AutomationRuleBase):

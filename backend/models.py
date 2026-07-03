@@ -601,6 +601,9 @@ class AutomationRule(Base):
     
     is_repeating = Column(Boolean, default=False)
     repeat_interval = Column(Integer, default=0) # in minutes
+    reassign_after_alerts_enabled = Column(Boolean, default=False)
+    reassign_after_alerts_count = Column(Integer, default=0)
+    reassign_to_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     
     is_active = Column(Integer, default=1) # 1: active, 0: inactive
     created_at = Column(DateTime, default=datetime.datetime.utcnow)

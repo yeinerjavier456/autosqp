@@ -21,6 +21,15 @@ const TIME_UNIT_LABELS = {
     days: 'dias',
 };
 
+const isAdvisorUser = (person) => {
+    const roleText = [
+        person?.role?.base_role_name,
+        person?.role?.name,
+        person?.role?.label,
+    ].filter(Boolean).join(' ').toLowerCase();
+    return roleText.includes('asesor') || roleText.includes('vendedor');
+};
+
 const AdminAlerts = () => {
     const { user } = useAuth();
     const [rules, setRules] = useState([]);
@@ -37,12 +46,16 @@ const AdminAlerts = () => {
         recipient_type: 'assigned_advisor',
         specific_user_id: '',
         is_repeating: false,
-        repeat_interval: 60
+        repeat_interval: 60,
+        reassign_after_alerts_enabled: false,
+        reassign_after_alerts_count: 1,
+        reassign_to_user_id: ''
     });
 
     const [editingId, setEditingId] = useState(null);
 
     const getStatusLabel = (status) => LEAD_STATUS_OPTIONS.find((item) => item.value === status)?.label || status;
+    const advisorUsers = users.filter((person) => person?.is_active !== false && person?.is_active !== 0 && isAdvisorUser(person));
 
     useEffect(() => {
         fetchRules();
@@ -82,6 +95,9 @@ const AdminAlerts = () => {
             const payload = {
                 ...formData,
                 specific_user_id: formData.specific_user_id ? parseInt(formData.specific_user_id) : null,
+                reassign_after_alerts_enabled: Boolean(formData.reassign_after_alerts_enabled),
+                reassign_after_alerts_count: formData.reassign_after_alerts_enabled ? parseInt(formData.reassign_after_alerts_count || 1, 10) : 0,
+                reassign_to_user_id: formData.reassign_after_alerts_enabled && formData.reassign_to_user_id ? parseInt(formData.reassign_to_user_id, 10) : null,
                 is_active: 1
             };
 
@@ -139,7 +155,10 @@ const AdminAlerts = () => {
             recipient_type: rule.recipient_type,
             specific_user_id: rule.specific_user_id || '',
             is_repeating: rule.is_repeating || false,
-            repeat_interval: rule.repeat_interval || 60
+            repeat_interval: rule.repeat_interval || 60,
+            reassign_after_alerts_enabled: Boolean(rule.reassign_after_alerts_enabled),
+            reassign_after_alerts_count: rule.reassign_after_alerts_count || 1,
+            reassign_to_user_id: rule.reassign_to_user_id || ''
         });
         setEditingId(rule.id);
         setShowModal(true);
@@ -155,7 +174,10 @@ const AdminAlerts = () => {
             recipient_type: 'assigned_advisor',
             specific_user_id: '',
             is_repeating: false,
-            repeat_interval: 60
+            repeat_interval: 60,
+            reassign_after_alerts_enabled: false,
+            reassign_after_alerts_count: 1,
+            reassign_to_user_id: ''
         });
         setEditingId(null);
     };
@@ -207,6 +229,14 @@ const AdminAlerts = () => {
                                     }</strong>
                                 </span>
                             </div>
+                            {rule.reassign_after_alerts_enabled && (
+                                <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                                    <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4" /></svg>
+                                    <span>
+                                        Reasignar tras <strong>{rule.reassign_after_alerts_count || 1}</strong> alerta(s) a <strong>{users.find(u => u.id === rule.reassign_to_user_id)?.email || 'usuario destino'}</strong>
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 ))}
@@ -312,6 +342,64 @@ const AdminAlerts = () => {
                                             required={formData.is_repeating}
                                         />
                                         <p className="text-xs text-slate-400 mt-1">Se enviará una nueva notificación cada X minutos mientras el lead siga en ese estado.</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
+                                <div className="flex items-start gap-2">
+                                    <input
+                                        type="checkbox"
+                                        id="reassign_after_alerts_enabled"
+                                        className="mt-1 w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
+                                        checked={formData.reassign_after_alerts_enabled}
+                                        onChange={e => setFormData({
+                                            ...formData,
+                                            reassign_after_alerts_enabled: e.target.checked,
+                                            reassign_to_user_id: e.target.checked ? formData.reassign_to_user_id : '',
+                                            reassign_after_alerts_count: e.target.checked ? formData.reassign_after_alerts_count : 1
+                                        })}
+                                    />
+                                    <div>
+                                        <label htmlFor="reassign_after_alerts_enabled" className="text-sm font-bold text-amber-900 select-none cursor-pointer">
+                                            Reasignar el lead automáticamente
+                                        </label>
+                                        <p className="text-xs text-amber-800 mt-1">
+                                            Si el lead sigue sin atenderse y esta alerta aparece varias veces, se reasigna al asesor seleccionado.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {formData.reassign_after_alerts_enabled && (
+                                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                                        <div>
+                                            <label className="block text-xs font-bold text-amber-900 uppercase mb-1">Después de alertas</label>
+                                            <input
+                                                type="number"
+                                                className="w-full border border-amber-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                                                value={formData.reassign_after_alerts_count}
+                                                onChange={e => setFormData({ ...formData, reassign_after_alerts_count: parseInt(e.target.value || '1', 10) })}
+                                                min="1"
+                                                required={formData.reassign_after_alerts_enabled}
+                                            />
+                                            {Number(formData.reassign_after_alerts_count || 0) > 1 && !formData.is_repeating && (
+                                                <p className="mt-1 text-xs font-semibold text-red-600">Activa repetir alerta para usar más de 1 aparición.</p>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-amber-900 uppercase mb-1">Reasignar a</label>
+                                            <select
+                                                className="w-full border border-amber-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                                                value={formData.reassign_to_user_id}
+                                                onChange={e => setFormData({ ...formData, reassign_to_user_id: e.target.value })}
+                                                required={formData.reassign_after_alerts_enabled}
+                                            >
+                                                <option value="">Selecciona asesor...</option>
+                                                {advisorUsers.map(u => (
+                                                    <option key={u.id} value={u.id}>{u.full_name || u.email} ({u.role?.label || u.role?.name || 'Asesor'})</option>
+                                                ))}
+                                            </select>
+                                        </div>
                                     </div>
                                 )}
                             </div>
