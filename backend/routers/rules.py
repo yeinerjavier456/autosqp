@@ -32,6 +32,18 @@ def get_effective_role_name(user: models.User) -> str:
     role = getattr(user, "role", None)
     if not role:
         return ""
+    role_values = {
+        str(getattr(role, "base_role_name", None) or "").strip().lower(),
+        str(getattr(role, "name", None) or "").strip().lower(),
+        str(getattr(role, "label", None) or "").strip().lower(),
+    }
+    role_values.discard("")
+
+    if any("super" in value and ("admin" in value or "administrador" in value) for value in role_values):
+        return "super_admin"
+    if any("admin" in value or "administrador" in value for value in role_values):
+        return "admin"
+
     return (getattr(role, "base_role_name", None) or getattr(role, "name", None) or "").strip()
 
 
@@ -90,6 +102,8 @@ def ensure_specific_user_scope(rule: schemas.AutomationRuleCreate, db: Session, 
         raise HTTPException(status_code=400, detail="El usuario seleccionado no existe")
     if get_effective_role_name(current_user) != "super_admin" and recipient.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="No puedes asignar alertas a usuarios de otra empresa")
+    if is_admin_user(recipient):
+        raise HTTPException(status_code=400, detail="No se pueden enviar alertas automáticas a administradores")
 
 
 def is_advisor_user(user: models.User) -> bool:
@@ -257,6 +271,8 @@ def get_board_alerts(
 ):
     company_id = current_user.company_id
     if not company_id:
+        return []
+    if is_admin_user(current_user):
         return []
 
     raw_lead_ids = payload.get("lead_ids") if isinstance(payload, dict) else []

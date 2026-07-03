@@ -3794,8 +3794,9 @@ def read_users(
 
     query = db.query(models.User)
     
-    # If user belongs to a company, limit scope to that company specific users
-    if current_user.company_id and effective_role_name != "super_admin":
+    # If user belongs to a company, limit scope to that company specific users.
+    # Global super admins without company_id can still inspect all companies.
+    if current_user.company_id:
         query = query.filter(models.User.company_id == current_user.company_id)
 
     if not include_inactive:

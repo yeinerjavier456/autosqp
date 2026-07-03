@@ -30,6 +30,21 @@ const isAdvisorUser = (person) => {
     return roleText.includes('asesor') || roleText.includes('vendedor');
 };
 
+const isAdminUser = (person) => {
+    const roleText = [
+        person?.role?.base_role_name,
+        person?.role?.name,
+        person?.role?.label,
+    ].filter(Boolean).join(' ').toLowerCase();
+    return (
+        roleText.includes('super_admin') ||
+        roleText.includes('super admin') ||
+        roleText.includes('super administrador') ||
+        roleText.includes('admin') ||
+        roleText.includes('administrador')
+    );
+};
+
 const AdminAlerts = () => {
     const { user } = useAuth();
     const [rules, setRules] = useState([]);
@@ -55,7 +70,13 @@ const AdminAlerts = () => {
     const [editingId, setEditingId] = useState(null);
 
     const getStatusLabel = (status) => LEAD_STATUS_OPTIONS.find((item) => item.value === status)?.label || status;
-    const advisorUsers = users.filter((person) => person?.is_active !== false && person?.is_active !== 0 && isAdvisorUser(person));
+    const companyUsers = users.filter((person) => {
+        if (person?.is_active === false || person?.is_active === 0) return false;
+        if (user?.company_id && String(person?.company_id || '') !== String(user.company_id)) return false;
+        return true;
+    });
+    const notificationUsers = companyUsers.filter((person) => !isAdminUser(person));
+    const advisorUsers = companyUsers.filter((person) => isAdvisorUser(person));
 
     useEffect(() => {
         fetchRules();
@@ -225,7 +246,7 @@ const AdminAlerts = () => {
                                     Enviar a: <strong>{
                                         rule.recipient_type === 'assigned_advisor' ? 'Asesor Asignado' :
                                             rule.recipient_type === 'all_admins' ? 'Todos los Admins' :
-                                                users.find(u => u.id === rule.specific_user_id)?.email || 'Usuario Específico'
+                                                notificationUsers.find(u => u.id === rule.specific_user_id)?.email || 'Usuario Específico'
                                     }</strong>
                                 </span>
                             </div>
@@ -310,7 +331,6 @@ const AdminAlerts = () => {
                                     onChange={e => setFormData({ ...formData, recipient_type: e.target.value })}
                                 >
                                     <option value="assigned_advisor">Asesor Asignado</option>
-                                    <option value="all_admins">Todos los Administradores</option>
                                     <option value="specific_user">Usuario Específico</option>
                                 </select>
                             </div>
@@ -417,7 +437,7 @@ const AdminAlerts = () => {
                                         required
                                     >
                                         <option value="">Selecciona un usuario...</option>
-                                        {users.map(u => (
+                                        {notificationUsers.map(u => (
                                             <option key={u.id} value={u.id}>{u.email} ({u.role?.label || u.role?.name || 'Sin rol'})</option>
                                         ))}
                                     </select>

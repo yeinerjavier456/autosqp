@@ -66,7 +66,8 @@ def get_notifications(
     if get_effective_role_name(current_user) in {"admin", "super_admin"}:
         notifications_query = notifications_query.filter(
             ~models.Notification.title.like("Alerta:%"),
-            models.Notification.title != "Lead reasignado por alerta"
+            models.Notification.title != "Lead reasignado por alerta",
+            models.Notification.title != "Lead reasignado automáticamente"
         )
 
     notifications = notifications_query.order_by(models.Notification.created_at.desc()).offset(skip).limit(limit).all()
