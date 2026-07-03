@@ -382,6 +382,7 @@ class User(Base):
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
     is_active = Column(Integer, default=1)
     auto_assign_leads = Column(Boolean, default=False, nullable=False)
+    tracked_advisor_ids_json = Column(Text, nullable=True)
     commission_percentage = Column(Integer, default=0) # e.g. 5 for 5%
     
     # New fields

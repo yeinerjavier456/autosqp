@@ -42,6 +42,7 @@ class UserBase(BaseModel):
     role_id: int
     company_id: Optional[int] = None
     auto_assign_leads: Optional[bool] = False
+    tracked_advisor_ids: List[int] = []
     commission_percentage: Optional[float] = 0.0
     base_salary: Optional[int] = None
     payment_dates: Optional[str] = None
@@ -92,6 +93,7 @@ class UserUpdate(BaseModel):
     company_id: Optional[int] = None
     is_active: Optional[int] = None
     auto_assign_leads: Optional[bool] = None
+    tracked_advisor_ids: Optional[List[int]] = None
     commission_percentage: Optional[float] = None
     base_salary: Optional[int] = None
     payment_dates: Optional[str] = None

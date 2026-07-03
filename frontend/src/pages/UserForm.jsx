@@ -19,6 +19,7 @@ const UserForm = () => {
         role_id: '',
         company_id: '',
         auto_assign_leads: false,
+        tracked_advisor_ids: [],
     });
     const [companies, setCompanies] = useState([]);
     const [roles, setRoles] = useState([]);
@@ -40,6 +41,7 @@ const UserForm = () => {
     const selectedRole = roles.find(r => String(r.id) === String(user.role_id));
     const isInventarioRoleSelected = (selectedRole?.base_role_name || selectedRole?.name) === 'inventario';
     const isAdvisorRoleSelected = (selectedRole?.base_role_name || selectedRole?.name) === 'asesor';
+    const canTrackAdvisors = Boolean(selectedRole?.advisor_tracking_enabled);
     const currentRoleName = currentUser?.role?.base_role_name || currentUser?.role?.name;
     const isSuperAdmin = currentRoleName === 'super_admin';
     const selectedCompany = isSuperAdmin
@@ -49,6 +51,18 @@ const UserForm = () => {
         if (currentUser?.company_id && role.name === 'super_admin') return false;
         return isRoleAvailableForCompany(role, selectedCompany);
     });
+    const advisorTrackingOptions = React.useMemo(() => {
+        const targetCompanyId = user.company_id || currentUser?.company_id || null;
+        return availableUsers
+            .filter((candidate) => {
+                if (String(candidate.id) === String(id)) return false;
+                if (candidate?.is_active === false || candidate?.is_active === 0) return false;
+                if (!isAdvisorCandidate(candidate)) return false;
+                if (targetCompanyId && String(candidate.company_id || '') !== String(targetCompanyId)) return false;
+                return true;
+            })
+            .sort((a, b) => String(a.full_name || a.email || '').localeCompare(String(b.full_name || b.email || '')));
+    }, [availableUsers, currentUser?.company_id, id, user.company_id]);
 
     const generateTemporaryPassword = () => {
         const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
@@ -60,7 +74,7 @@ const UserForm = () => {
         setShowPassword(true);
     };
 
-    const isAdvisorCandidate = (candidate) => {
+    function isAdvisorCandidate(candidate) {
         const roleName = (
             candidate?.role?.base_role_name ||
             candidate?.role?.name ||
@@ -69,7 +83,7 @@ const UserForm = () => {
         ).toString().trim().toLowerCase();
 
         return roleName.includes('asesor') || roleName.includes('vendedor');
-    };
+    }
 
     useEffect(() => {
         const fetchDependencies = async () => {
@@ -81,10 +95,8 @@ const UserForm = () => {
                 const rolesRes = await axios.get(`${API_BASE_URL}/roles/`, { headers });
                 setRoles(rolesRes.data);
 
-                if (id) {
-                    const usersRes = await axios.get(`${API_BASE_URL}/users/?limit=500`, { headers });
-                    setAvailableUsers(Array.isArray(usersRes.data?.items) ? usersRes.data.items : []);
-                }
+                const usersRes = await axios.get(`${API_BASE_URL}/users/?limit=1000`, { headers });
+                setAvailableUsers(Array.isArray(usersRes.data?.items) ? usersRes.data.items : []);
 
                 // Fetch Companies if Super Admin
                 if (isSuperAdmin) {
@@ -121,6 +133,9 @@ const UserForm = () => {
                         ...userData,
                         role_id: loadedRoleId || '',
                         auto_assign_leads: Boolean(userData.auto_assign_leads),
+                        tracked_advisor_ids: Array.isArray(userData.tracked_advisor_ids)
+                            ? userData.tracked_advisor_ids.map((item) => Number(item)).filter((item) => Number.isInteger(item))
+                            : [],
                         password: ''
                     });
                 } catch (error) {
@@ -139,10 +154,12 @@ const UserForm = () => {
         if (name === 'role_id') {
             const nextRole = availableRoles.find((role) => String(role.id) === String(nextValue));
             const nextIsAdvisorRole = (nextRole?.base_role_name || nextRole?.name) === 'asesor';
+            const nextCanTrackAdvisors = Boolean(nextRole?.advisor_tracking_enabled);
             setUser({
                 ...user,
                 role_id: nextValue,
                 auto_assign_leads: nextIsAdvisorRole ? Boolean(user.auto_assign_leads) : false,
+                tracked_advisor_ids: nextCanTrackAdvisors ? user.tracked_advisor_ids : [],
             });
             return;
         }
@@ -160,9 +177,21 @@ const UserForm = () => {
                 ...current,
                 role_id: '',
                 auto_assign_leads: false,
+                tracked_advisor_ids: [],
             }));
         }
     }, [availableRoles, user.role_id]);
+
+    useEffect(() => {
+        if (!canTrackAdvisors) return;
+        const availableIds = new Set(advisorTrackingOptions.map((candidate) => Number(candidate.id)));
+        setUser((current) => {
+            const currentIds = Array.isArray(current.tracked_advisor_ids) ? current.tracked_advisor_ids : [];
+            const nextIds = currentIds.filter((advisorId) => availableIds.has(Number(advisorId)));
+            if (nextIds.length === currentIds.length) return current;
+            return { ...current, tracked_advisor_ids: nextIds };
+        });
+    }, [advisorTrackingOptions, canTrackAdvisors]);
 
     const handleSave = async (e) => {
         e.preventDefault();
@@ -189,6 +218,11 @@ const UserForm = () => {
 
             // Inventory role must not persist payroll/commission fields
             const selectedRoleForSave = roles.find(r => r.id === payload.role_id);
+            payload.tracked_advisor_ids = selectedRoleForSave?.advisor_tracking_enabled
+                ? (Array.isArray(payload.tracked_advisor_ids) ? payload.tracked_advisor_ids : [])
+                    .map((item) => Number(item))
+                    .filter((item) => Number.isInteger(item))
+                : [];
             if ((selectedRoleForSave?.base_role_name || selectedRoleForSave?.name) === 'inventario') {
                 payload.commission_percentage = 0;
                 payload.base_salary = null;
@@ -422,6 +456,56 @@ const UserForm = () => {
                                                 </span>
                                             </div>
                                         </label>
+                                    </div>
+                                )}
+
+                                {canTrackAdvisors && (
+                                    <div className="md:col-span-2">
+                                        <div className="rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3">
+                                            <div className="mb-3">
+                                                <p className="text-sm font-semibold text-slate-700">Seguimiento de asesores</p>
+                                                <p className="text-xs text-slate-500 mt-1">
+                                                    Selecciona los asesores o vendedores cuyos leads podra ver este usuario en el tablero.
+                                                </p>
+                                            </div>
+                                            {advisorTrackingOptions.length > 0 ? (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                    {advisorTrackingOptions.map((candidate) => {
+                                                        const candidateId = Number(candidate.id);
+                                                        const checked = Array.isArray(user.tracked_advisor_ids) && user.tracked_advisor_ids.includes(candidateId);
+                                                        return (
+                                                            <label
+                                                                key={candidate.id}
+                                                                className={`flex items-start gap-3 rounded-lg border bg-white px-3 py-3 cursor-pointer transition ${checked ? 'border-blue-400 bg-blue-50' : 'border-blue-100 hover:border-blue-300'}`}
+                                                            >
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={checked}
+                                                                    onChange={() => setUser((current) => {
+                                                                        const currentIds = Array.isArray(current.tracked_advisor_ids) ? current.tracked_advisor_ids : [];
+                                                                        const nextIds = currentIds.includes(candidateId)
+                                                                            ? currentIds.filter((advisorId) => advisorId !== candidateId)
+                                                                            : [...currentIds, candidateId];
+                                                                        return { ...current, tracked_advisor_ids: nextIds };
+                                                                    })}
+                                                                    className="mt-1 h-4 w-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                                                                />
+                                                                <div>
+                                                                    <span className="block text-sm font-semibold text-slate-700">{candidate.full_name || candidate.email}</span>
+                                                                    <span className="block text-xs text-slate-500 mt-1">
+                                                                        {candidate.email}{candidate.role?.label ? ` - ${candidate.role.label}` : ''}
+                                                                    </span>
+                                                                </div>
+                                                            </label>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <p className="rounded-lg border border-blue-100 bg-white px-3 py-3 text-sm text-slate-500">
+                                                    No hay asesores o vendedores activos disponibles para esta empresa.
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
 
