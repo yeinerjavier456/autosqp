@@ -526,6 +526,70 @@ def send_message(
     return new_msg
 
 
+@router.post("/leads/{lead_id}/send", response_model=schemas_whatsapp.Message)
+def send_lead_message(
+    lead_id: int,
+    message: schemas_whatsapp.LeadMessageCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    lead = db.query(models.Lead).filter(models.Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if current_user.company_id and lead.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="No autorizado para este lead")
+    if (lead.source or "").lower() != "whatsapp":
+        raise HTTPException(status_code=400, detail="Este lead no proviene de WhatsApp")
+    if not lead.phone:
+        raise HTTPException(status_code=400, detail="El lead no tiene teléfono para WhatsApp")
+
+    content = (message.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="El mensaje no puede estar vacío")
+
+    token, phone_number_id = get_whatsapp_credentials(db, lead.company_id)
+    _, conversation = find_or_create_outbound_session(
+        db=db,
+        company_id=lead.company_id,
+        to_number=lead.phone,
+        phone_number_id=phone_number_id,
+    )
+    if conversation.lead_id != lead.id:
+        conversation.lead_id = lead.id
+    chat_session = db.query(models.ChannelChatSession).filter(
+        models.ChannelChatSession.source == "whatsapp",
+        models.ChannelChatSession.conversation_id == conversation.id
+    ).first()
+    if chat_session and chat_session.lead_id != lead.id:
+        chat_session.lead_id = lead.id
+
+    normalized_number = normalize_phone(lead.phone)
+    outbound_number = (normalized_number or lead.phone).replace("+", "")
+    whatsapp_message_id = send_whatsapp_payload(
+        token,
+        phone_number_id,
+        {
+            "messaging_product": "whatsapp",
+            "to": outbound_number,
+            "type": "text",
+            "text": {"body": content},
+        }
+    )
+    new_msg = models.Message(
+        conversation_id=conversation.id,
+        sender_type="user",
+        content=content,
+        message_type=message.message_type or "text",
+        status="sent",
+        whatsapp_message_id=whatsapp_message_id,
+    )
+    db.add(new_msg)
+    conversation.last_message_at = datetime.datetime.utcnow()
+    db.commit()
+    db.refresh(new_msg)
+    return new_msg
+
+
 @router.post("/send-vehicle", response_model=schemas_whatsapp.VehicleShareResponse)
 def send_vehicle_to_whatsapp(
     payload: schemas_whatsapp.VehicleShareRequest,

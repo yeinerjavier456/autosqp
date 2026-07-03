@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const API_BASE_URL = import.meta.env.DEV ? '/crm/api' : '/api';
 
@@ -107,6 +108,12 @@ const MONEY_FIELDS = new Set([
 ]);
 const DATE_FIELDS = new Set(['requestDate', 'birthDate', 'startDate']);
 
+const getEffectiveRoleName = (role) => {
+    if (!role) return '';
+    if (typeof role === 'string') return role.trim().toLowerCase();
+    return String(role.base_role_name || role.name || role.label || '').trim().toLowerCase();
+};
+
 const fieldLabel = (key) => FIELD_LABELS[key] || String(key).replace(/([a-z])([A-Z])/g, '$1 $2');
 
 const formatMoney = (value) => {
@@ -196,6 +203,7 @@ const flattenPayloadSections = (payload) => {
 
 const PublicCreditSubmissions = () => {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -204,8 +212,11 @@ const PublicCreditSubmissions = () => {
     const [selectedStatus, setSelectedStatus] = useState('submitted');
     const [savingStatus, setSavingStatus] = useState(false);
     const [downloadingPdf, setDownloadingPdf] = useState(false);
+    const [deletingSubmission, setDeletingSubmission] = useState(false);
 
     const token = useMemo(() => localStorage.getItem('token'), []);
+    const currentRoleName = getEffectiveRoleName(user?.role);
+    const canDeleteSubmissions = currentRoleName === 'admin' || currentRoleName === 'super_admin';
 
     const fetchItems = async () => {
         setLoading(true);
@@ -288,6 +299,35 @@ const PublicCreditSubmissions = () => {
             Swal.fire('Error', error?.response?.data?.detail || 'No se pudo descargar el formulario.', 'error');
         } finally {
             setDownloadingPdf(false);
+        }
+    };
+
+    const deleteSelectedSubmission = async () => {
+        if (!selectedItem?.id || !canDeleteSubmissions) return;
+        const result = await Swal.fire({
+            title: 'Eliminar solicitud',
+            text: `Se eliminará la solicitud pública de crédito de ${selectedItem.applicant_name || 'este solicitante'}. El lead relacionado no se eliminará.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#dc2626',
+        });
+        if (!result.isConfirmed) return;
+
+        setDeletingSubmission(true);
+        try {
+            await axios.delete(`${API_BASE_URL}/public-credit-submissions/${selectedItem.id}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            Swal.fire('Eliminada', 'La solicitud pública de crédito fue eliminada.', 'success');
+            setSelectedItem(null);
+            await fetchItems();
+        } catch (error) {
+            console.error(error);
+            Swal.fire('Error', error?.response?.data?.detail || 'No se pudo eliminar la solicitud.', 'error');
+        } finally {
+            setDeletingSubmission(false);
         }
     };
 
@@ -420,6 +460,16 @@ const PublicCreditSubmissions = () => {
                                     >
                                         {downloadingPdf ? 'Generando PDF...' : 'Descargar PDF'}
                                     </button>
+                                    {canDeleteSubmissions && (
+                                        <button
+                                            type="button"
+                                            onClick={deleteSelectedSubmission}
+                                            disabled={deletingSubmission}
+                                            className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
+                                        >
+                                            {deletingSubmission ? 'Eliminando...' : 'Eliminar'}
+                                        </button>
+                                    )}
                                     <span className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wide ${statusBadgeClass(selectedItem.status)}`}>
                                         {statusLabel(selectedItem.status)}
                                     </span>

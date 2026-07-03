@@ -13,6 +13,10 @@ class MessageBase(BaseModel):
 class MessageCreate(MessageBase):
     pass
 
+class LeadMessageCreate(BaseModel):
+    content: str
+    message_type: str = "text"
+
 class Message(MessageBase):
     id: int
     whatsapp_message_id: Optional[str] = None

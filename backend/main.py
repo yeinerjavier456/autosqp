@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Query, Query, Body, UploadFile, File, Form
+from fastapi import FastAPI, Depends, HTTPException, status, Query, Query, Body, UploadFile, File, Form, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session, joinedload, selectinload, noload
@@ -3289,6 +3289,12 @@ def ensure_public_credit_review_permissions(current_user: models.User):
         raise HTTPException(status_code=403, detail="No autorizado para revisar solicitudes públicas de crédito")
 
 
+def ensure_public_credit_delete_permissions(current_user: models.User):
+    role_name = get_user_role_name(current_user) or ""
+    if role_name not in {"admin", "super_admin"}:
+        raise HTTPException(status_code=403, detail="Solo un administrador puede eliminar solicitudes públicas de crédito")
+
+
 ensure_role_view_defaults_synced()
 
 
@@ -5164,6 +5170,29 @@ def update_public_credit_submission(
     db.refresh(submission)
 
     return schemas.PublicCreditSubmissionDetail(**serialize_public_credit_submission(submission))
+
+
+@app.delete("/public-credit-submissions/{submission_id}", status_code=204)
+def delete_public_credit_submission(
+    submission_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    ensure_public_credit_delete_permissions(current_user)
+
+    query = db.query(models.PublicCreditSubmission).filter(
+        models.PublicCreditSubmission.id == submission_id
+    )
+    if current_user.company_id:
+        query = query.filter(models.PublicCreditSubmission.company_id == current_user.company_id)
+
+    submission = query.first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Solicitud pública no encontrada")
+
+    db.delete(submission)
+    db.commit()
+    return Response(status_code=204)
 
 
 def _get_accessible_lead_for_credit_form(

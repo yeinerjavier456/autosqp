@@ -1705,10 +1705,9 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             const source = lead.source?.toLowerCase();
 
             if (source === 'whatsapp') {
-                // Determine Whatsapp Route
-                await axios.post(`${API_BASE_URL}/whatsapp/send_message`, {
-                    phone_number: lead.phone,
-                    message_text: replyMessage
+                await axios.post(`${API_BASE_URL}/whatsapp/leads/${lead.id}/send`, {
+                    content: replyMessage,
+                    message_type: 'text'
                 }, { headers: { Authorization: `Bearer ${token}` } });
 
             } else if (source === 'facebook' || source === 'instagram') {
@@ -1729,7 +1728,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             fetchMessages(); // Refresh chat
         } catch (error) {
             console.error("Error sending reply", error);
-            Swal.fire('Error', 'No se pudo enviar el mensaje', 'error');
+            Swal.fire('Error', error?.response?.data?.detail || 'No se pudo enviar el mensaje', 'error');
         } finally {
             setSendingReply(false);
         }
@@ -3982,7 +3981,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                 <form onSubmit={handleSendReply} className="bg-white border-t border-gray-200 p-3 flex gap-2">
                                     <input
                                         type="text"
-                                        placeholder={`Responder por ${lead.source}...`}
+                                        placeholder={lead.source === 'whatsapp' ? 'Responder por WhatsApp Business...' : `Responder por ${lead.source}...`}
                                         className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                                         value={replyMessage}
                                         onChange={(e) => setReplyMessage(e.target.value)}
