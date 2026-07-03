@@ -1578,6 +1578,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     const [sendingReply, setSendingReply] = useState(false);
     const [sendingWhatsappDocument, setSendingWhatsappDocument] = useState(false);
     const [startingWhatsappCall, setStartingWhatsappCall] = useState(false);
+    const [embeddedWhatsappCall, setEmbeddedWhatsappCall] = useState(null);
     const [whatsappSettings, setWhatsappSettings] = useState({
         documents_enabled: true,
         calling_enabled: false,
@@ -1637,6 +1638,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         setDeliveryCreditDisbursement(Boolean(lead?.process_detail?.delivery_credit_disbursement));
         setDeliveryScheduledAt(lead?.process_detail?.delivery_scheduled_at || '');
         setDeliveryScheduledNote(lead?.process_detail?.delivery_scheduled_note || '');
+        setEmbeddedWhatsappCall(null);
     }, [lead?.id, lead?.assigned_to?.id, lead?.assigned_to_id, supervisorSyncKey]);
 
     useEffect(() => {
@@ -1861,7 +1863,13 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             const response = await axios.post(`${API_BASE_URL}/whatsapp/leads/${lead.id}/call`, {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            if (response.data?.url) {
+            if (response.data?.mode === 'crm_embed' && response.data?.url) {
+                setEmbeddedWhatsappCall({
+                    url: response.data.url,
+                    toNumber: response.data.to_number,
+                    message: response.data.message || 'Llamada abierta dentro del CRM.',
+                });
+            } else if (response.data?.url) {
                 window.open(response.data.url, '_blank', 'noopener,noreferrer');
             }
             fetchMessages();
@@ -4126,6 +4134,29 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                 </h3>
                             </div>
                             <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 custom-scrollbar min-h-0">
+                                {embeddedWhatsappCall && (
+                                    <div className="overflow-hidden rounded-xl border border-emerald-200 bg-white shadow-sm">
+                                        <div className="flex items-center justify-between border-b border-emerald-100 bg-emerald-50 px-4 py-3">
+                                            <div>
+                                                <p className="text-sm font-bold text-emerald-800">Llamada en curso</p>
+                                                <p className="text-xs text-emerald-700">{embeddedWhatsappCall.toNumber || lead.phone}</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setEmbeddedWhatsappCall(null)}
+                                                className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100"
+                                            >
+                                                Cerrar
+                                            </button>
+                                        </div>
+                                        <iframe
+                                            src={embeddedWhatsappCall.url}
+                                            title="Llamada del lead"
+                                            allow="microphone; camera; autoplay; clipboard-read; clipboard-write"
+                                            className="h-[420px] w-full bg-white"
+                                        />
+                                    </div>
+                                )}
                                 {loadingMessages ? (
                                     <div className="text-center text-sm text-gray-400 py-4">Cargando mensajes...</div>
                                 ) : messages.length > 0 ? (

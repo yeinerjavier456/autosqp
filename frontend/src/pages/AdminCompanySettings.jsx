@@ -947,11 +947,11 @@ const AdminCompanySettings = () => {
                                                     onChange={(e) => setCompany((prev) => ({ ...prev, whatsapp_calling_enabled: e.target.checked }))}
                                                     className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                                                 />
-                                                <span>
-                                                    <span className="block text-sm font-semibold text-slate-700">Permitir llamadas desde la conversación del lead</span>
-                                                    <span className="block text-xs text-slate-500">El CRM puede abrir WhatsApp, abrir el marcador o llamar a un proveedor externo configurado.</span>
-                                                </span>
-                                            </label>
+                                                    <span>
+                                                        <span className="block text-sm font-semibold text-slate-700">Permitir llamadas desde la conversación del lead</span>
+                                                        <span className="block text-xs text-slate-500">El CRM puede abrir WhatsApp, abrir el marcador, llamar a un proveedor externo o mostrar una llamada embebida.</span>
+                                                    </span>
+                                                </label>
                                             {company.whatsapp_calling_enabled && (
                                                 <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                                                     <div>
@@ -965,9 +965,10 @@ const AdminCompanySettings = () => {
                                                             <option value="whatsapp_link">Abrir chat de WhatsApp</option>
                                                             <option value="phone_link">Abrir marcador del dispositivo</option>
                                                             <option value="provider_webhook">Proveedor externo / BSP</option>
+                                                            <option value="crm_embed">Dentro del CRM</option>
                                                         </select>
                                                     </div>
-                                                    {company.whatsapp_calling_mode === 'provider_webhook' && (
+                                                    {['provider_webhook', 'crm_embed'].includes(company.whatsapp_calling_mode) && (
                                                         <>
                                                             <div>
                                                                 <label className="block text-sm font-medium text-slate-600 mb-1">URL del proveedor</label>
@@ -976,9 +977,14 @@ const AdminCompanySettings = () => {
                                                                     name="whatsapp_calling_provider_url"
                                                                     value={company.whatsapp_calling_provider_url || ''}
                                                                     onChange={handleChange}
-                                                                    placeholder="https://proveedor.com/calls"
+                                                                    placeholder={company.whatsapp_calling_mode === 'crm_embed' ? 'https://proveedor.com/calls/session' : 'https://proveedor.com/calls'}
                                                                     className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
                                                                 />
+                                                                {company.whatsapp_calling_mode === 'crm_embed' && (
+                                                                    <p className="mt-1 text-xs text-slate-500">
+                                                                        Debe crear una sesión WebRTC y responder con embed_url, call_url o url para mostrarla dentro del CRM.
+                                                                    </p>
+                                                                )}
                                                             </div>
                                                             <div className="md:col-span-2">
                                                                 <label className="block text-sm font-medium text-slate-600 mb-1">

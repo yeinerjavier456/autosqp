@@ -760,7 +760,7 @@ def start_lead_whatsapp_call(
     action_url = None
     response_message = "Abre WhatsApp y usa el botón de llamada del chat."
 
-    if mode == "provider_webhook":
+    if mode in {"provider_webhook", "crm_embed"}:
         provider_url = (getattr(settings, "whatsapp_calling_provider_url", None) or "").strip()
         if not provider_url:
             raise HTTPException(status_code=400, detail="Falta la URL del proveedor de llamadas de WhatsApp")
@@ -778,13 +778,29 @@ def start_lead_whatsapp_call(
                 "company_id": lead.company_id,
                 "requested_by_user_id": current_user.id,
                 "whatsapp_phone_number_id": phone_number_id,
+                "mode": mode,
+                "embed": mode == "crm_embed",
             },
             timeout=45
         )
         provider_status = provider_response.status_code
         if provider_response.status_code >= 400:
             raise HTTPException(status_code=400, detail="El proveedor de llamadas rechazó la solicitud")
-        response_message = "Solicitud de llamada enviada al proveedor configurado."
+        if mode == "crm_embed":
+            try:
+                provider_payload = provider_response.json()
+            except ValueError:
+                provider_payload = {}
+            action_url = (
+                provider_payload.get("embed_url")
+                or provider_payload.get("call_url")
+                or provider_payload.get("url")
+            )
+            if not action_url:
+                raise HTTPException(status_code=400, detail="El proveedor no devolvió una URL para abrir la llamada dentro del CRM")
+            response_message = "Llamada abierta dentro del CRM."
+        else:
+            response_message = "Solicitud de llamada enviada al proveedor configurado."
     elif mode == "phone_link":
         action_url = f"tel:{normalized_number}"
         response_message = "Se abrirá el marcador del dispositivo."
