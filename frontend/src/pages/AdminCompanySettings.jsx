@@ -46,12 +46,18 @@ const AdminCompanySettings = () => {
         tiktok_pixel_id: '',
         whatsapp_api_key: '',
         whatsapp_phone_number_id: '',
+        whatsapp_sales_phone_number_id: '',
+        whatsapp_purchases_phone_number_id: '',
         whatsapp_documents_enabled: true,
         whatsapp_calling_enabled: false,
         whatsapp_calling_mode: 'whatsapp_link',
         whatsapp_calling_provider_url: '',
         whatsapp_calling_provider_token: '',
         whatsapp_calling_provider_token_configured: false,
+        whatsapp_sales_agent_name: '',
+        whatsapp_sales_agent_prompt: '',
+        whatsapp_purchases_agent_name: '',
+        whatsapp_purchases_agent_prompt: '',
         openai_api_key: '',
         gw_model: 'gpt-4o',
         chatbot_bot_name: 'Jennifer Quimbayo',
@@ -123,12 +129,18 @@ const AdminCompanySettings = () => {
                         tiktok_pixel_id: integrationSettings.tiktok_pixel_id || '',
                         whatsapp_api_key: integrationSettings.whatsapp_api_key || '',
                         whatsapp_phone_number_id: integrationSettings.whatsapp_phone_number_id || '',
+                        whatsapp_sales_phone_number_id: integrationSettings.whatsapp_sales_phone_number_id || '',
+                        whatsapp_purchases_phone_number_id: integrationSettings.whatsapp_purchases_phone_number_id || '',
                         whatsapp_documents_enabled: integrationSettings.whatsapp_documents_enabled ?? true,
                         whatsapp_calling_enabled: Boolean(integrationSettings.whatsapp_calling_enabled),
                         whatsapp_calling_mode: integrationSettings.whatsapp_calling_mode || 'whatsapp_link',
                         whatsapp_calling_provider_url: integrationSettings.whatsapp_calling_provider_url || '',
                         whatsapp_calling_provider_token: '',
                         whatsapp_calling_provider_token_configured: Boolean(integrationSettings.whatsapp_calling_provider_token_configured),
+                        whatsapp_sales_agent_name: integrationSettings.whatsapp_sales_agent_name || '',
+                        whatsapp_sales_agent_prompt: integrationSettings.whatsapp_sales_agent_prompt || '',
+                        whatsapp_purchases_agent_name: integrationSettings.whatsapp_purchases_agent_name || '',
+                        whatsapp_purchases_agent_prompt: integrationSettings.whatsapp_purchases_agent_prompt || '',
                         openai_api_key: integrationSettings.openai_api_key || '',
                         gw_model: integrationSettings.gw_model || 'gpt-4o',
                         chatbot_bot_name: integrationSettings.chatbot_bot_name || 'Jennifer Quimbayo',
@@ -279,12 +291,18 @@ const AdminCompanySettings = () => {
                 tiktok_pixel_id,
                 whatsapp_api_key,
                 whatsapp_phone_number_id,
+                whatsapp_sales_phone_number_id,
+                whatsapp_purchases_phone_number_id,
                 whatsapp_documents_enabled,
                 whatsapp_calling_enabled,
                 whatsapp_calling_mode,
                 whatsapp_calling_provider_url,
                 whatsapp_calling_provider_token,
                 whatsapp_calling_provider_token_configured,
+                whatsapp_sales_agent_name,
+                whatsapp_sales_agent_prompt,
+                whatsapp_purchases_agent_name,
+                whatsapp_purchases_agent_prompt,
                 openai_api_key,
                 gw_model,
                 chatbot_bot_name,
@@ -330,11 +348,17 @@ const AdminCompanySettings = () => {
                 tiktok_pixel_id: tiktok_pixel_id || '',
                 whatsapp_api_key: whatsapp_api_key || '',
                 whatsapp_phone_number_id: whatsapp_phone_number_id || '',
+                whatsapp_sales_phone_number_id: whatsapp_sales_phone_number_id || '',
+                whatsapp_purchases_phone_number_id: whatsapp_purchases_phone_number_id || '',
                 whatsapp_documents_enabled: Boolean(whatsapp_documents_enabled),
                 whatsapp_calling_enabled: Boolean(whatsapp_calling_enabled),
                 whatsapp_calling_mode: whatsapp_calling_mode || 'whatsapp_link',
                 whatsapp_calling_provider_url: whatsapp_calling_provider_url || '',
                 whatsapp_calling_provider_token: whatsapp_calling_provider_token ? whatsapp_calling_provider_token : null,
+                whatsapp_sales_agent_name: whatsapp_sales_agent_name || '',
+                whatsapp_sales_agent_prompt: whatsapp_sales_agent_prompt || '',
+                whatsapp_purchases_agent_name: whatsapp_purchases_agent_name || '',
+                whatsapp_purchases_agent_prompt: whatsapp_purchases_agent_prompt || '',
                 openai_api_key: openai_api_key || '',
                 gw_model: gw_model || 'gpt-4o',
                 chatbot_bot_name: chatbot_bot_name || 'Jennifer Quimbayo',
@@ -743,6 +767,29 @@ const AdminCompanySettings = () => {
                                                 placeholder="ID del número en Meta"
                                                 className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
                                             />
+                                            <p className="mt-1 text-xs text-slate-500">Fallback para compatibilidad si no separas ventas/compras.</p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-600 mb-1">WhatsApp Phone Number ID Ventas</label>
+                                            <input
+                                                type="text"
+                                                name="whatsapp_sales_phone_number_id"
+                                                value={company.whatsapp_sales_phone_number_id || ''}
+                                                onChange={handleChange}
+                                                placeholder="ID del número de ventas"
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-600 mb-1">WhatsApp Phone Number ID Compras</label>
+                                            <input
+                                                type="text"
+                                                name="whatsapp_purchases_phone_number_id"
+                                                value={company.whatsapp_purchases_phone_number_id || ''}
+                                                onChange={handleChange}
+                                                placeholder="ID del número de compras"
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                            />
                                         </div>
                                         <div>
                                             <label className="block text-sm font-medium text-slate-600 mb-1">WhatsApp API Token</label>
@@ -754,6 +801,52 @@ const AdminCompanySettings = () => {
                                                 placeholder="Token de WhatsApp Cloud API"
                                                 className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
                                             />
+                                        </div>
+                                        <div className="md:col-span-2 grid grid-cols-1 gap-4 rounded-lg border border-slate-200 bg-white p-3 md:grid-cols-2">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-600 mb-1">Agente IA Ventas</label>
+                                                <input
+                                                    type="text"
+                                                    name="whatsapp_sales_agent_name"
+                                                    value={company.whatsapp_sales_agent_name || ''}
+                                                    onChange={handleChange}
+                                                    placeholder="Ej: Jennifer Ventas"
+                                                    className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-600 mb-1">Agente IA Compras</label>
+                                                <input
+                                                    type="text"
+                                                    name="whatsapp_purchases_agent_name"
+                                                    value={company.whatsapp_purchases_agent_name || ''}
+                                                    onChange={handleChange}
+                                                    placeholder="Ej: Jennifer Compras"
+                                                    className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-600 mb-1">Prompt personalizado Ventas</label>
+                                                <textarea
+                                                    rows={4}
+                                                    name="whatsapp_sales_agent_prompt"
+                                                    value={company.whatsapp_sales_agent_prompt || ''}
+                                                    onChange={handleChange}
+                                                    placeholder="Dejar vacío para usar el flujo comercial actual."
+                                                    className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-600 mb-1">Prompt personalizado Compras</label>
+                                                <textarea
+                                                    rows={4}
+                                                    name="whatsapp_purchases_agent_prompt"
+                                                    value={company.whatsapp_purchases_agent_prompt || ''}
+                                                    onChange={handleChange}
+                                                    placeholder="Dejar vacío para usar el flujo de compra de vehículos."
+                                                    className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                                />
+                                            </div>
                                         </div>
                                         <div className="md:col-span-2 rounded-lg border border-emerald-100 bg-white p-3">
                                             <label className="flex items-start gap-3">

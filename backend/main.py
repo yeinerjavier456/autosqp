@@ -1808,11 +1808,17 @@ def ensure_whatsapp_settings_columns():
     try:
         with engine.begin() as connection:
             whatsapp_columns = {
+                "whatsapp_sales_phone_number_id": "ADD COLUMN whatsapp_sales_phone_number_id VARCHAR(100) NULL",
+                "whatsapp_purchases_phone_number_id": "ADD COLUMN whatsapp_purchases_phone_number_id VARCHAR(100) NULL",
                 "whatsapp_documents_enabled": "ADD COLUMN whatsapp_documents_enabled BOOLEAN NULL DEFAULT 1",
                 "whatsapp_calling_enabled": "ADD COLUMN whatsapp_calling_enabled BOOLEAN NULL DEFAULT 0",
                 "whatsapp_calling_mode": "ADD COLUMN whatsapp_calling_mode VARCHAR(40) NULL DEFAULT 'whatsapp_link'",
                 "whatsapp_calling_provider_url": "ADD COLUMN whatsapp_calling_provider_url VARCHAR(500) NULL",
                 "whatsapp_calling_provider_token": "ADD COLUMN whatsapp_calling_provider_token TEXT NULL",
+                "whatsapp_sales_agent_name": "ADD COLUMN whatsapp_sales_agent_name VARCHAR(120) NULL",
+                "whatsapp_sales_agent_prompt": "ADD COLUMN whatsapp_sales_agent_prompt TEXT NULL",
+                "whatsapp_purchases_agent_name": "ADD COLUMN whatsapp_purchases_agent_name VARCHAR(120) NULL",
+                "whatsapp_purchases_agent_prompt": "ADD COLUMN whatsapp_purchases_agent_prompt TEXT NULL",
             }
             for _, ddl in whatsapp_columns.items():
                 try:

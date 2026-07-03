@@ -640,11 +640,17 @@ class IntegrationSettings(Base):
     # WhatsApp
     whatsapp_api_key = Column(Text, nullable=True)
     whatsapp_phone_number_id = Column(String(100), nullable=True)
+    whatsapp_sales_phone_number_id = Column(String(100), nullable=True)
+    whatsapp_purchases_phone_number_id = Column(String(100), nullable=True)
     whatsapp_documents_enabled = Column(Boolean, default=True)
     whatsapp_calling_enabled = Column(Boolean, default=False)
     whatsapp_calling_mode = Column(String(40), default="whatsapp_link")
     whatsapp_calling_provider_url = Column(String(500), nullable=True)
     whatsapp_calling_provider_token = Column(Text, nullable=True)
+    whatsapp_sales_agent_name = Column(String(120), nullable=True)
+    whatsapp_sales_agent_prompt = Column(Text, nullable=True)
+    whatsapp_purchases_agent_name = Column(String(120), nullable=True)
+    whatsapp_purchases_agent_prompt = Column(Text, nullable=True)
     
     # ChatGPT
     openai_api_key = Column(Text, nullable=True)

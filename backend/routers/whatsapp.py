@@ -46,7 +46,9 @@ def resolve_company_id(db: Session, phone_number_id: Optional[str], from_number:
 
     if phone_number_id:
         settings = db.query(models.IntegrationSettings).filter(
-            models.IntegrationSettings.whatsapp_phone_number_id == phone_number_id
+            (models.IntegrationSettings.whatsapp_phone_number_id == phone_number_id)
+            | (models.IntegrationSettings.whatsapp_sales_phone_number_id == phone_number_id)
+            | (models.IntegrationSettings.whatsapp_purchases_phone_number_id == phone_number_id)
         ).first()
         if settings and settings.company_id:
             return settings.company_id
@@ -67,14 +69,20 @@ def send_whatsapp_text_reply(
     db: Session,
     company_id: int,
     to_number: str,
-    content: str
+    content: str,
+    phone_number_id_override: Optional[str] = None,
 ) -> tuple[Optional[str], str]:
     settings = db.query(models.IntegrationSettings).filter(
         models.IntegrationSettings.company_id == company_id
     ).first()
 
     token = settings.whatsapp_api_key if settings and settings.whatsapp_api_key else os.getenv("WHATSAPP")
-    phone_number_id = settings.whatsapp_phone_number_id if settings and settings.whatsapp_phone_number_id else os.getenv("WHATSAPP_PHONE_ID")
+    phone_number_id = (
+        phone_number_id_override
+        or (settings.whatsapp_phone_number_id if settings and settings.whatsapp_phone_number_id else None)
+        or (settings.whatsapp_sales_phone_number_id if settings and settings.whatsapp_sales_phone_number_id else None)
+        or os.getenv("WHATSAPP_PHONE_ID")
+    )
 
     if not token or not phone_number_id:
         raise HTTPException(status_code=400, detail="WhatsApp no está configurado completamente")
@@ -106,7 +114,11 @@ def get_whatsapp_credentials(db: Session, company_id: int) -> tuple[str, str]:
     ).first()
 
     token = settings.whatsapp_api_key if settings and settings.whatsapp_api_key else os.getenv("WHATSAPP")
-    phone_number_id = settings.whatsapp_phone_number_id if settings and settings.whatsapp_phone_number_id else os.getenv("WHATSAPP_PHONE_ID")
+    phone_number_id = (
+        (settings.whatsapp_phone_number_id if settings and settings.whatsapp_phone_number_id else None)
+        or (settings.whatsapp_sales_phone_number_id if settings and settings.whatsapp_sales_phone_number_id else None)
+        or os.getenv("WHATSAPP_PHONE_ID")
+    )
 
     if not token or not phone_number_id:
         raise HTTPException(status_code=400, detail="WhatsApp no está configurado completamente")
@@ -414,6 +426,7 @@ async def receive_whatsapp_message(request: Request, db: Session = Depends(get_d
                             company_id=company_id,
                             to_number=from_number,
                             content=result["assistant_reply"],
+                            phone_number_id_override=phone_number_id,
                         )
                     except Exception as send_exc:
                         print(f"Error sending WhatsApp bot reply: {send_exc}")
