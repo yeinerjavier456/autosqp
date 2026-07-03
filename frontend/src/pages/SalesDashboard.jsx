@@ -46,7 +46,7 @@ const sortReceiptsByRecentFirst = (items = []) => {
     });
 };
 
-const SalesDashboard = ({ receiptEntryOnly = false }) => {
+const SalesDashboard = ({ receiptEntryOnly = false, initialTab = 'sales' }) => {
     const defaultRange = getLastMonthRange();
     const [stats, setStats] = useState({
         total_revenue: 0,
@@ -72,7 +72,7 @@ const SalesDashboard = ({ receiptEntryOnly = false }) => {
     const [taxRows, setTaxRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filterStatus, setFilterStatus] = useState('pending');
-    const [activeTab, setActiveTab] = useState(receiptEntryOnly ? 'accounting' : 'sales');
+    const [activeTab, setActiveTab] = useState(receiptEntryOnly ? 'accounting' : initialTab);
     const [salesSearch, setSalesSearch] = useState('');
     const [receiptSearch, setReceiptSearch] = useState('');
     const [receiptCategory, setReceiptCategory] = useState('');
@@ -1578,6 +1578,31 @@ const SalesDashboard = ({ receiptEntryOnly = false }) => {
                 <h1 className="text-3xl font-bold text-gray-800">Finanzas y Comisiones</h1>
                 <p className="text-gray-500">Gestion de ventas, aprobaciones, contabilidad y control de ingresos.</p>
             </header>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+                    <div>
+                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Buscar recibos</label>
+                        <input
+                            type="text"
+                            value={receiptSearch}
+                            onChange={(e) => setReceiptSearch(e.target.value)}
+                            placeholder="Buscar por placa, nombre, documento, concepto o número de recibo..."
+                            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                    <div className="flex items-end">
+                        <button
+                            type="button"
+                            onClick={() => setReceiptSearch('')}
+                            disabled={!receiptSearch}
+                            className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto"
+                        >
+                            Limpiar búsqueda
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)_auto]">

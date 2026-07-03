@@ -7870,6 +7870,12 @@ def apply_receipt_group_search_filter(
         models.Sale, models.PaymentReceipt.sale_id == models.Sale.id, isouter=True
     ).join(
         models.Vehicle, models.Sale.vehicle_id == models.Vehicle.id, isouter=True
+    ).join(
+        models.Lead, models.Sale.lead_id == models.Lead.id, isouter=True
+    ).join(
+        models.CreditApplication, models.CreditApplication.lead_id == models.Lead.id, isouter=True
+    ).join(
+        models.PublicCreditSubmission, models.PublicCreditSubmission.lead_id == models.Lead.id, isouter=True
     ).filter(
         or_(
             models.PaymentReceipt.display_name.ilike(search),
@@ -7880,7 +7886,22 @@ def apply_receipt_group_search_filter(
             models.PaymentReceipt.bank.ilike(search),
             models.Vehicle.make.ilike(search),
             models.Vehicle.model.ilike(search),
-            models.Vehicle.plate.ilike(search)
+            models.Vehicle.plate.ilike(search),
+            models.Sale.external_seller_name.ilike(search),
+            models.Sale.tax_seller_name.ilike(search),
+            models.Sale.tax_seller_document.ilike(search),
+            models.Sale.tax_buyer_name.ilike(search),
+            models.Sale.tax_buyer_document.ilike(search),
+            models.Lead.name.ilike(search),
+            models.Lead.email.ilike(search),
+            models.Lead.phone.ilike(search),
+            models.CreditApplication.client_name.ilike(search),
+            models.CreditApplication.email.ilike(search),
+            models.CreditApplication.phone.ilike(search),
+            models.PublicCreditSubmission.applicant_name.ilike(search),
+            models.PublicCreditSubmission.document_number.ilike(search),
+            models.PublicCreditSubmission.email.ilike(search),
+            models.PublicCreditSubmission.phone.ilike(search)
         )
     )
 

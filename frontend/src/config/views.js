@@ -12,6 +12,7 @@ export const SYSTEM_VIEWS = [
     { id: 'ally_board', label: 'Tablero de aliados', path: '/aliado/dashboard', menuLabel: 'Tablero Aliados', section: 'crm', scope: 'company' },
     { id: 'alerts', label: 'Alertas automaticas', path: '/admin/alerts', menuLabel: 'Alertas Auto', section: 'crm', scope: 'company' },
     { id: 'sales', label: 'Finanzas y ventas', path: '/admin/sales', menuLabel: 'Finanzas y Ventas', section: 'crm', scope: 'company' },
+    { id: 'payment_receipts_search', label: 'Buscar recibos', path: '/admin/receipts/search', menuLabel: 'Buscar Recibos', section: 'crm', scope: 'company' },
     { id: 'payment_receipts', label: 'Agregar recibo de compra / venta', path: '/admin/receipts/new', menuLabel: 'Agregar Recibo', section: 'crm', scope: 'company' },
     { id: 'my_sales', label: 'Mis ventas', path: '/admin/my-sales', menuLabel: 'Mis Ventas', section: 'crm', scope: 'company' },
     { id: 'credits', label: 'Tablero de solicitudes de credito', path: '/admin/credits', menuLabel: 'Solicitudes de Credito', section: 'crm', scope: 'company' },
@@ -63,7 +64,7 @@ export const DEFAULT_ROLE_VIEW_ACCESS = {
     super_admin: SYSTEM_VIEWS.map((view) => view.id),
     admin: [
         'dashboard', 'users', 'roles', 'integrations', 'logs', 'inventory',
-        'leads_board', 'appointments_calendar', 'deleted_leads', 'ally_board', 'alerts', 'sales', 'payment_receipts', 'credits', 'public_credit_submissions', 'purchase_board',
+        'leads_board', 'appointments_calendar', 'deleted_leads', 'ally_board', 'alerts', 'sales', 'payment_receipts_search', 'payment_receipts', 'credits', 'public_credit_submissions', 'purchase_board',
         'gmail_credit_audit',
         'facebook_leads', 'tiktok_leads', 'whatsapp_leads', 'instagram_leads',
         'internal_chat', 'whatsapp_dashboard'
