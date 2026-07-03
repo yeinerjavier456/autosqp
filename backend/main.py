@@ -6871,17 +6871,22 @@ def read_advisor_stats(
     permissions = set(get_role_permissions(current_user.role))
     company_scope = role_name in {"admin", "super_admin"}
     ally_user_ids = set(get_company_ally_user_ids(db, current_user.company_id))
+    tracked_advisor_ids = get_user_tracked_advisor_ids(current_user)
 
     visible_leads_query = db.query(models.Lead).filter(
         models.Lead.company_id == current_user.company_id
     )
     if not company_scope:
-        visible_leads_query = visible_leads_query.filter(
-            or_(
-                models.Lead.assigned_to_id == current_user.id,
-                models.Lead.supervisors.any(models.User.id == current_user.id)
-            )
-        )
+        visibility_conditions = [
+            models.Lead.assigned_to_id == current_user.id,
+            models.Lead.supervisors.any(models.User.id == current_user.id)
+        ]
+        if tracked_advisor_ids:
+            visibility_conditions.extend([
+                models.Lead.assigned_to_id.in_(tracked_advisor_ids),
+                models.Lead.supervisors.any(models.User.id.in_(tracked_advisor_ids))
+            ])
+        visible_leads_query = visible_leads_query.filter(or_(*visibility_conditions))
 
     oldest_visible_lead = visible_leads_query.order_by(models.Lead.created_at.asc()).first()
     normalized_period, period_start, period_end, trend_labels, get_trend_bucket = get_dashboard_period_bounds(
@@ -6917,6 +6922,32 @@ def read_advisor_stats(
     purchase_option_decision_distribution = {"pending": 0, "accepted": 0, "rejected": 0}
     recent_leads_by_day = {label: 0 for label in trend_labels}
     ally_recent_leads_by_day = {label: 0 for label in trend_labels}
+    tracked_advisor_users = []
+    if tracked_advisor_ids:
+        tracked_advisor_users = db.query(models.User).options(
+            joinedload(models.User.role)
+        ).filter(
+            models.User.id.in_(tracked_advisor_ids),
+            models.User.company_id == current_user.company_id
+        ).all()
+    supervised_advisor_map: Dict[int, Dict[str, Any]] = {
+        advisor.id: {
+            "user_id": advisor.id,
+            "full_name": advisor.full_name,
+            "email": advisor.email,
+            "role_label": getattr(getattr(advisor, "role", None), "label", None),
+            "total_leads": 0,
+            "leads_new": 0,
+            "leads_sold": 0,
+            "active_pipeline_count": 0,
+            "unread_replies_count": 0,
+            "new_leads_in_range": 0,
+            "status_changes_in_range": 0,
+            "status_distribution": {},
+        }
+        for advisor in tracked_advisor_users
+    }
+    supervised_advisor_ids_by_lead: Dict[int, List[int]] = {}
 
     relevant_lead_ids = []
     ally_lead_ids = []
@@ -6932,6 +6963,27 @@ def read_advisor_stats(
         lead_reference_date = lead_activity_at(lead)
 
         supervisor_ids = {supervisor.id for supervisor in (lead.supervisors or []) if supervisor and supervisor.id}
+        touched_tracked_advisor_ids = [
+            advisor_id for advisor_id in tracked_advisor_ids
+            if advisor_id in supervised_advisor_map
+            and (lead.assigned_to_id == advisor_id or advisor_id in supervisor_ids)
+        ]
+        if touched_tracked_advisor_ids:
+            supervised_advisor_ids_by_lead[lead.id] = touched_tracked_advisor_ids
+            for advisor_id in touched_tracked_advisor_ids:
+                current_supervised = supervised_advisor_map[advisor_id]
+                current_supervised["total_leads"] += 1
+                current_supervised["status_distribution"][status_key] = current_supervised["status_distribution"].get(status_key, 0) + 1
+                if status_key == "new":
+                    current_supervised["leads_new"] += 1
+                if status_key == "sold":
+                    current_supervised["leads_sold"] += 1
+                if status_key not in {"sold", "lost"}:
+                    current_supervised["active_pipeline_count"] += 1
+                if lead.has_unread_reply:
+                    current_supervised["unread_replies_count"] += 1
+                if is_within_dashboard_range(getattr(lead, "created_at", None)):
+                    current_supervised["new_leads_in_range"] += 1
         touches_ally_board = bool(
             ally_user_ids and (
                 (lead.assigned_to_id in ally_user_ids) or
@@ -7009,6 +7061,10 @@ def read_advisor_stats(
     ]
     status_changes_in_range = len(autos_status_change_entries)
     ally_status_changes_in_range = len(ally_status_change_entries)
+    for entry in status_change_entries:
+        for advisor_id in supervised_advisor_ids_by_lead.get(entry.lead_id, []):
+            if advisor_id in supervised_advisor_map:
+                supervised_advisor_map[advisor_id]["status_changes_in_range"] += 1
     manager_activity_map: Dict[int, Dict[str, Any]] = {}
     status_mover_map: Dict[int, Dict[str, Any]] = {}
     ally_manager_activity_map: Dict[int, Dict[str, Any]] = {}
@@ -7220,6 +7276,13 @@ def read_advisor_stats(
         appointments_by_user_map.values(),
         key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
     )
+    supervised_advisors = sorted(
+        supervised_advisor_map.values(),
+        key=lambda item: (
+            -item["total_leads"],
+            item.get("full_name") or item.get("email") or ""
+        )
+    )
 
     return {
         "total_leads": total_leads,
@@ -7263,6 +7326,7 @@ def read_advisor_stats(
         "top_status_movers": top_status_movers,
         "ally_top_managers": ally_top_managers,
         "appointments_by_user": appointments_by_user,
+        "supervised_advisors": supervised_advisors,
     }
 
 @app.post("/seed/brands")

@@ -1018,6 +1018,7 @@ class RoleDashboardStats(BaseModel):
     top_status_movers: List[Dict[str, Any]] = []
     ally_top_managers: List[Dict[str, Any]] = []
     appointments_by_user: List[Dict[str, Any]] = []
+    supervised_advisors: List[Dict[str, Any]] = []
 
 class ReportsStats(BaseModel):
     total_leads: int

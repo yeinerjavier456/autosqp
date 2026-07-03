@@ -32,8 +32,13 @@ ChartJS.register(
 const LEAD_STATUS_LABELS = {
     new: 'Nuevos',
     contacted: 'Contactados',
+    in_process: 'En proceso',
+    credit_study: 'Estudio de credito',
+    approvals: 'Aprobaciones',
+    reserved: 'Reservados',
+    preparation: 'Alistamientos',
     interested: 'En proceso',
-    credit_application: 'Solicitud de credito',
+    credit_application: 'Estudio de credito',
     sold: 'Vendidos',
     lost: 'Perdidos',
     ally_managed: 'Aliados'
@@ -270,6 +275,7 @@ const AdvisorDashboard = () => {
     const topStatusMovers = Array.isArray(stats.top_status_movers) ? stats.top_status_movers : [];
     const allyTopManagers = Array.isArray(stats.ally_top_managers) ? stats.ally_top_managers : [];
     const appointmentsByUser = Array.isArray(stats.appointments_by_user) ? stats.appointments_by_user : [];
+    const supervisedAdvisors = Array.isArray(stats.supervised_advisors) ? stats.supervised_advisors : [];
     const advisorManagers = topManagers.filter((manager) => manager?.role_name === 'asesor');
 
     const rangeLabel = rangePreset === 'all'
@@ -518,6 +524,78 @@ const AdvisorDashboard = () => {
                     />
                 )}
             </div>
+            )}
+
+            {!isAllyDashboard && supervisedAdvisors.length > 0 && (
+                <div className="rounded-2xl border border-indigo-200 bg-white p-6 shadow-sm">
+                    <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-800">Seguimiento de asesores</h3>
+                            <p className="text-sm text-slate-500">
+                                Resumen de los asesores o vendedores configurados en tu perfil para supervisión dentro del rango seleccionado.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => navigate(leadBoardPath)}
+                            className="rounded-xl border border-indigo-200 px-4 py-2 text-sm font-bold text-indigo-700 transition hover:bg-indigo-50"
+                        >
+                            Ver tablero
+                        </button>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                        {supervisedAdvisors.map((advisor) => {
+                            const statusEntries = Object.entries(advisor.status_distribution || {})
+                                .map(([key, value]) => [formatLabel(key, LEAD_STATUS_LABELS), value])
+                                .sort((a, b) => b[1] - a[1])
+                                .slice(0, 4);
+                            return (
+                                <div key={advisor.user_id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-900">{advisor.full_name || advisor.email || `Usuario ${advisor.user_id}`}</p>
+                                            <p className="text-xs text-slate-500">{advisor.role_label || 'Asesor / Vendedor'}{advisor.email ? ` - ${advisor.email}` : ''}</p>
+                                        </div>
+                                        <span className="w-fit rounded-full bg-indigo-100 px-3 py-1 text-sm font-bold text-indigo-700">
+                                            {advisor.total_leads || 0} leads
+                                        </span>
+                                    </div>
+                                    <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+                                        <div>
+                                            <p className="text-[11px] font-bold uppercase text-slate-500">Pipeline</p>
+                                            <p className="mt-1 text-xl font-bold text-amber-700">{advisor.active_pipeline_count || 0}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[11px] font-bold uppercase text-slate-500">Nuevos</p>
+                                            <p className="mt-1 text-xl font-bold text-blue-700">{advisor.leads_new || 0}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[11px] font-bold uppercase text-slate-500">Cierres</p>
+                                            <p className="mt-1 text-xl font-bold text-emerald-700">{advisor.leads_sold || 0}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[11px] font-bold uppercase text-slate-500">Chats</p>
+                                            <p className="mt-1 text-xl font-bold text-orange-700">{advisor.unread_replies_count || 0}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[11px] font-bold uppercase text-slate-500">Cambios</p>
+                                            <p className="mt-1 text-xl font-bold text-fuchsia-700">{advisor.status_changes_in_range || 0}</p>
+                                        </div>
+                                    </div>
+                                    {statusEntries.length > 0 && (
+                                        <div className="mt-4 flex flex-wrap gap-2">
+                                            {statusEntries.map(([label, value]) => (
+                                                <span key={label} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
+                                                    {label}: {value}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
             )}
 
             {(isAllyDashboard ? hasAllySection : hasLeadsSection) && (
