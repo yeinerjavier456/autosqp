@@ -3,6 +3,24 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import Swal from 'sweetalert2';
 
+const LEAD_STATUS_OPTIONS = [
+    { value: 'new', label: 'Nuevo' },
+    { value: 'contacted', label: 'Contactado' },
+    { value: 'in_process', label: 'En proceso' },
+    { value: 'credit_study', label: 'Estudio de credito' },
+    { value: 'approvals', label: 'Aprobaciones' },
+    { value: 'reserved', label: 'Reservado' },
+    { value: 'preparation', label: 'Alistamientos' },
+    { value: 'lost', label: 'Perdido' },
+    { value: 'sold', label: 'Vendido' },
+];
+
+const TIME_UNIT_LABELS = {
+    minutes: 'minutos',
+    hours: 'horas',
+    days: 'dias',
+};
+
 const AdminAlerts = () => {
     const { user } = useAuth();
     const [rules, setRules] = useState([]);
@@ -23,6 +41,8 @@ const AdminAlerts = () => {
     });
 
     const [editingId, setEditingId] = useState(null);
+
+    const getStatusLabel = (status) => LEAD_STATUS_OPTIONS.find((item) => item.value === status)?.label || status;
 
     useEffect(() => {
         fetchRules();
@@ -80,7 +100,7 @@ const AdminAlerts = () => {
             resetForm();
             Swal.fire('Guardado', 'Regla guardada correctamente', 'success');
         } catch (error) {
-            Swal.fire('Error', 'No se pudo guardar la regla', 'error');
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo guardar la regla', 'error');
         }
     };
 
@@ -104,7 +124,7 @@ const AdminAlerts = () => {
                 fetchRules();
                 Swal.fire('Eliminado', 'La regla ha sido eliminada', 'success');
             } catch (error) {
-                Swal.fire('Error', 'No se pudo eliminar', 'error');
+                Swal.fire('Error', error.response?.data?.detail || 'No se pudo eliminar', 'error');
             }
         }
     };
@@ -173,7 +193,7 @@ const AdminAlerts = () => {
                             <div className="flex items-center gap-2 text-sm text-slate-600">
                                 <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                 <span>
-                                    Si el estado es <strong className="uppercase text-slate-800">{rule.condition_value}</strong> por mas de <strong>{rule.time_value} {rule.time_unit}</strong>
+                                    Si el estado es <strong className="text-slate-800">{getStatusLabel(rule.condition_value)}</strong> por mas de <strong>{rule.time_value} {TIME_UNIT_LABELS[rule.time_unit] || rule.time_unit}</strong>
                                 </span>
                             </div>
 
@@ -223,12 +243,9 @@ const AdminAlerts = () => {
                                         value={formData.condition_value}
                                         onChange={e => setFormData({ ...formData, condition_value: e.target.value })}
                                     >
-                                        <option value="new">Nuevo</option>
-                                        <option value="contacted">Contactado</option>
-                                        <option value="interested">Interesado</option>
-                                        <option value="scheduled">Agendado</option>
-                                        <option value="lost">Perdido</option>
-                                        <option value="sold">Vendido</option>
+                                        {LEAD_STATUS_OPTIONS.map((status) => (
+                                            <option key={status.value} value={status.value}>{status.label}</option>
+                                        ))}
                                     </select>
                                 </div>
                                 <div>
@@ -299,37 +316,6 @@ const AdminAlerts = () => {
                                 )}
                             </div>
 
-                            {/* Repetition Settings */}
-                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <input
-                                        type="checkbox"
-                                        id="is_repeating"
-                                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                                        checked={formData.is_repeating}
-                                        onChange={e => setFormData({ ...formData, is_repeating: e.target.checked })}
-                                    />
-                                    <label htmlFor="is_repeating" className="text-sm font-bold text-slate-700 select-none cursor-pointer">
-                                        ¿Repetir alerta si la condición persiste?
-                                    </label>
-                                </div>
-
-                                {formData.is_repeating && (
-                                    <div className="ml-6">
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Repetir cada (minutos)</label>
-                                        <input
-                                            type="number"
-                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                                            value={formData.repeat_interval}
-                                            onChange={e => setFormData({ ...formData, repeat_interval: parseInt(e.target.value) })}
-                                            min="1"
-                                            required={formData.is_repeating}
-                                        />
-                                        <p className="text-xs text-slate-400 mt-1">Se enviará una nueva notificación cada X minutos mientras el lead siga en ese estado.</p>
-                                    </div>
-                                )}
-                            </div>
-
                             {formData.recipient_type === 'specific_user' && (
                                 <div>
                                     <label className="block text-sm font-bold text-slate-700 mb-1">Seleccionar Usuario</label>
@@ -341,7 +327,7 @@ const AdminAlerts = () => {
                                     >
                                         <option value="">Selecciona un usuario...</option>
                                         {users.map(u => (
-                                            <option key={u.id} value={u.id}>{u.email} ({u.role.name})</option>
+                                            <option key={u.id} value={u.id}>{u.email} ({u.role?.label || u.role?.name || 'Sin rol'})</option>
                                         ))}
                                     </select>
                                 </div>

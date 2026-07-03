@@ -14,6 +14,58 @@ router = APIRouter(
 
 BOGOTA_TZ = ZoneInfo("America/Bogota")
 
+VALID_LEAD_STATUSES = {
+    "new",
+    "contacted",
+    "in_process",
+    "credit_study",
+    "approvals",
+    "reserved",
+    "preparation",
+    "lost",
+    "sold",
+}
+
+
+def get_effective_role_name(user: models.User) -> str:
+    role = getattr(user, "role", None)
+    if not role:
+        return ""
+    return (getattr(role, "base_role_name", None) or getattr(role, "name", None) or "").strip()
+
+
+def ensure_rules_admin(current_user: models.User):
+    if get_effective_role_name(current_user) not in {"admin", "super_admin"}:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+
+def validate_rule_payload(rule: schemas.AutomationRuleCreate):
+    if rule.event_type != "time_in_status":
+        raise HTTPException(status_code=400, detail="Tipo de evento inválido")
+    if rule.condition_value not in VALID_LEAD_STATUSES:
+        raise HTTPException(status_code=400, detail="Estado de lead inválido")
+    if rule.time_unit not in {"minutes", "hours", "days"}:
+        raise HTTPException(status_code=400, detail="Unidad de tiempo inválida")
+    if rule.time_value < 1:
+        raise HTTPException(status_code=400, detail="El tiempo debe ser mayor a cero")
+    if rule.recipient_type not in {"assigned_advisor", "all_admins", "specific_user"}:
+        raise HTTPException(status_code=400, detail="Destinatario inválido")
+    if rule.recipient_type == "specific_user" and not rule.specific_user_id:
+        raise HTTPException(status_code=400, detail="Debes seleccionar un usuario")
+    if rule.is_repeating and rule.repeat_interval < 1:
+        raise HTTPException(status_code=400, detail="El intervalo de repetición debe ser mayor a cero")
+
+
+def ensure_specific_user_scope(rule: schemas.AutomationRuleCreate, db: Session, current_user: models.User):
+    if rule.recipient_type != "specific_user":
+        return
+
+    recipient = db.query(models.User).filter(models.User.id == rule.specific_user_id).first()
+    if not recipient:
+        raise HTTPException(status_code=400, detail="El usuario seleccionado no existe")
+    if get_effective_role_name(current_user) != "super_admin" and recipient.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="No puedes asignar alertas a usuarios de otra empresa")
+
 def now_utc_naive_from_bogota() -> datetime:
     # Business timezone is always Bogota; DB stores naive UTC timestamps.
     return datetime.now(BOGOTA_TZ).astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
@@ -26,8 +78,9 @@ def create_rule(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    if current_user.role.name not in ['admin', 'super_admin']:
-        raise HTTPException(status_code=403, detail="Not authorized")
+    ensure_rules_admin(current_user)
+    validate_rule_payload(rule)
+    ensure_specific_user_scope(rule, db, current_user)
     
     # Force company_id from current user
     rule_data = rule.model_dump()
@@ -43,11 +96,10 @@ def get_rules(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    if current_user.role.name not in ['admin', 'super_admin']:
-        raise HTTPException(status_code=403, detail="Not authorized")
+    ensure_rules_admin(current_user)
     
     # Filter by company
-    if current_user.role.name == 'super_admin':
+    if get_effective_role_name(current_user) == 'super_admin':
         return db.query(models.AutomationRule).all()
     else:
         return db.query(models.AutomationRule).filter(models.AutomationRule.company_id == current_user.company_id).all()
@@ -59,12 +111,15 @@ def update_rule(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    if current_user.role.name not in ['admin', 'super_admin']:
-        raise HTTPException(status_code=403, detail="Not authorized")
+    ensure_rules_admin(current_user)
+    validate_rule_payload(rule_update)
+    ensure_specific_user_scope(rule_update, db, current_user)
     
     db_rule = db.query(models.AutomationRule).filter(models.AutomationRule.id == rule_id).first()
     if not db_rule:
         raise HTTPException(status_code=404, detail="Rule not found")
+    if get_effective_role_name(current_user) != "super_admin" and db_rule.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     
     for key, value in rule_update.model_dump().items():
         setattr(db_rule, key, value)
@@ -79,12 +134,13 @@ def delete_rule(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    if current_user.role.name not in ['admin', 'super_admin']:
-        raise HTTPException(status_code=403, detail="Not authorized")
+    ensure_rules_admin(current_user)
     
     db_rule = db.query(models.AutomationRule).filter(models.AutomationRule.id == rule_id).first()
     if not db_rule:
         raise HTTPException(status_code=404, detail="Rule not found")
+    if get_effective_role_name(current_user) != "super_admin" and db_rule.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     
     db.query(models.SentAlertLog).filter(models.SentAlertLog.rule_id == rule_id).delete(synchronize_session=False)
 

@@ -18,6 +18,75 @@ export const NotificationsProvider = ({ children }) => {
     const [loading, setLoading] = useState(false);
     const isInitialFetch = React.useRef(true);
     const maxNotifId = React.useRef(0);
+    const toastShownIds = React.useRef(new Set());
+
+    const getToastIcon = (type) => {
+        if (type === 'warning') return 'warning';
+        if (type === 'success') return 'success';
+        if (type === 'error') return 'error';
+        return 'info';
+    };
+
+    const markAsRead = async (id) => {
+        try {
+            await axios.post(`${API_BASE_URL}/notifications/read/${id}`, {}, {
+                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+            });
+            setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: 1 } : n));
+            setUnreadCount(prev => Math.max(0, prev - 1));
+        } catch (error) {
+            console.error("Error marking notification as read:", error);
+        }
+    };
+
+    const showNotificationToast = (notification) => {
+        if (!notification?.id || toastShownIds.current.has(notification.id)) return;
+        toastShownIds.current.add(notification.id);
+
+        Swal.fire({
+            title: notification.title || 'Nueva Notificación',
+            text: notification.message,
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            showCloseButton: true,
+            closeButtonHtml: '&times;',
+            timer: 12000,
+            timerProgressBar: true,
+            icon: getToastIcon(notification.type),
+            customClass: {
+                popup: 'swal2-notification-toast',
+                closeButton: 'swal2-visible-close-button'
+            },
+            didOpen: (toast) => {
+                const closeButton = toast.querySelector('.swal2-close');
+                if (closeButton) {
+                    closeButton.style.display = 'flex';
+                    closeButton.style.alignItems = 'center';
+                    closeButton.style.justifyContent = 'center';
+                    closeButton.style.width = '28px';
+                    closeButton.style.height = '28px';
+                    closeButton.style.fontSize = '22px';
+                    closeButton.style.fontWeight = '700';
+                    closeButton.style.color = '#64748b';
+                    closeButton.style.margin = '6px 6px 0 0';
+                }
+                toast.addEventListener('mouseenter', Swal.stopTimer);
+                toast.addEventListener('mouseleave', Swal.resumeTimer);
+            },
+            didClose: () => {
+                markAsRead(notification.id);
+            }
+        });
+    };
+
+    useEffect(() => {
+        isInitialFetch.current = true;
+        maxNotifId.current = 0;
+        toastShownIds.current = new Set();
+        setNotifications([]);
+        setUnreadCount(0);
+    }, [user?.id]);
 
     // Fetch Notifications
     const fetchNotifications = async ({ silentToast = false } = {}) => {
@@ -33,41 +102,12 @@ export const NotificationsProvider = ({ children }) => {
             if (data.length > 0) {
                 let currentMaxId = Math.max(...data.map(n => n.id));
 
-                if (!isInitialFetch.current && !silentToast) {
-                    const newNotifs = data.filter(n => n.id > maxNotifId.current && n.is_read === 0);
-                    if (newNotifs.length > 0) {
-                        const latest = newNotifs[0]; // Mostrar la más reciente
-                        Swal.fire({
-                            title: latest.title || 'Nueva Notificación',
-                            text: latest.message,
-                            toast: true,
-                            position: 'top-end',
-                            showConfirmButton: false,
-                            showCloseButton: true,
-                            closeButtonHtml: '&times;',
-                            timer: 8000,
-                            timerProgressBar: true,
-                            icon: latest.type === 'warning' ? 'warning' : 'info',
-                            customClass: {
-                                closeButton: 'swal2-visible-close-button'
-                            },
-                            didOpen: (toast) => {
-                                const closeButton = toast.querySelector('.swal2-close');
-                                if (closeButton) {
-                                    closeButton.style.display = 'flex';
-                                    closeButton.style.alignItems = 'center';
-                                    closeButton.style.justifyContent = 'center';
-                                    closeButton.style.width = '28px';
-                                    closeButton.style.height = '28px';
-                                    closeButton.style.fontSize = '22px';
-                                    closeButton.style.fontWeight = '700';
-                                    closeButton.style.color = '#64748b';
-                                    closeButton.style.margin = '6px 6px 0 0';
-                                }
-                                toast.addEventListener('mouseenter', Swal.stopTimer)
-                                toast.addEventListener('mouseleave', Swal.resumeTimer)
-                            }
-                        });
+                if (!silentToast) {
+                    const toastCandidates = isInitialFetch.current
+                        ? data.filter(n => n.is_read === 0)
+                        : data.filter(n => n.id > maxNotifId.current && n.is_read === 0);
+                    if (toastCandidates.length > 0) {
+                        showNotificationToast(toastCandidates[0]);
                     }
                 }
                 maxNotifId.current = Math.max(maxNotifId.current, currentMaxId);
@@ -78,20 +118,6 @@ export const NotificationsProvider = ({ children }) => {
             }
         } catch (error) {
             console.error("Error fetching notifications:", error);
-        }
-    };
-
-    // Mark as Read
-    const markAsRead = async (id) => {
-        try {
-            await axios.post(`${API_BASE_URL}/notifications/read/${id}`, {}, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
-            // Optimistic update
-            setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: 1 } : n));
-            setUnreadCount(prev => Math.max(0, prev - 1));
-        } catch (error) {
-            console.error("Error marking notification as read:", error);
         }
     };
 
@@ -159,7 +185,10 @@ export const NotificationsProvider = ({ children }) => {
     useEffect(() => {
         if (!user) return undefined;
         fetchNotifications();
-        return undefined;
+        const intervalId = window.setInterval(() => {
+            fetchNotifications();
+        }, 60000);
+        return () => window.clearInterval(intervalId);
     }, [user]);
 
     const value = {
