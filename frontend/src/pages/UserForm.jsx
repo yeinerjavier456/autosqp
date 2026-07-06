@@ -664,7 +664,7 @@ const UserForm = () => {
                                 <label className="block text-sm font-medium text-slate-600 mb-1">URL pública</label>
                                 <div className="flex gap-2">
                                     <span className="flex items-center rounded-lg border border-blue-100 bg-white px-3 text-sm text-slate-500">
-                                        /nuestroequipo/
+                                        /crm/nuestroequipo/
                                     </span>
                                     <input
                                         type="text"

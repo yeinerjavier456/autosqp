@@ -12,5 +12,6 @@ export const getEcardPublicUrl = (company, slug) => {
   if (!normalizedSlug) return '';
   const companyDomain = String(company?.public_domain || '').trim();
   const origin = companyDomain ? `${window.location.protocol}//${companyDomain}` : window.location.origin;
-  return `${origin}/nuestroequipo/${normalizedSlug}`;
+  const appBasePath = import.meta.env.BASE_URL === '/' ? '' : import.meta.env.BASE_URL.replace(/\/$/, '');
+  return `${origin}${appBasePath}/nuestroequipo/${normalizedSlug}`;
 };
