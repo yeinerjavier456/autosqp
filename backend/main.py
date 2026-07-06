@@ -1039,13 +1039,15 @@ def _build_public_credit_submission_pdf_reference_style(
     try:
         from reportlab.lib.colors import HexColor
         from reportlab.lib.pagesizes import letter
+        from reportlab.lib.utils import ImageReader
         from reportlab.pdfgen import canvas
     except ImportError as exc:
         raise HTTPException(status_code=500, detail="La libreria reportlab no esta instalada en el servidor") from exc
 
     payload = getattr(submission, "form_payload", None) or getattr(submission, "form_data", None) or {}
     attachments = getattr(submission, "attachments", None) or getattr(submission, "files", None) or {}
-    company_name = getattr(company, "name", None) or "AUTOS QP S.A.S"
+    raw_company_name = getattr(company, "name", None) or "AUTOS QP S.A.S"
+    company_name = re.sub(r"\s+admin$", "", str(raw_company_name).strip(), flags=re.IGNORECASE) or str(raw_company_name).strip()
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=letter)
     pdf.setTitle(f"Formulario de credito - {submission.applicant_name}")
@@ -1079,14 +1081,47 @@ def _build_public_credit_submission_pdf_reference_style(
     def field(section_value: Dict[str, Any], field_name: str) -> str:
         return _public_credit_display_value(field_name, section_value.get(field_name))
 
+    def attachment_entry(key: str) -> Any:
+        return attachments.get(key) if isinstance(attachments, dict) else None
+
     def attachment_filename(key: str) -> str:
-        attachment_value = attachments.get(key) if isinstance(attachments, dict) else None
-        if isinstance(attachment_value, dict):
-            attachment_value = attachment_value.get("original_filename") or attachment_value.get("filename") or attachment_value.get("path")
-        value = str(attachment_value or "").strip()
+        entry = attachment_entry(key)
+        if isinstance(entry, dict):
+            entry = entry.get("original_filename") or entry.get("filename") or entry.get("file_name") or entry.get("path") or entry.get("file_path") or entry.get("url")
+        value = str(entry or "").strip()
         if not value:
             return "Sin dato"
         return os.path.basename(value.split("?", 1)[0]) or value
+
+    def attachment_local_path(key: str) -> Optional[str]:
+        entry = attachment_entry(key)
+        if isinstance(entry, dict):
+            entry = entry.get("path") or entry.get("file_path") or entry.get("url") or entry.get("original_filename") or entry.get("filename")
+        value = str(entry or "").strip()
+        if not value:
+            return None
+        clean_value = value.split("?", 1)[0].replace("\\", "/")
+        candidates = []
+        if os.path.isabs(clean_value):
+            candidates.append(clean_value)
+        for prefix in ("/api/static/", "/static/", "api/static/", "static/"):
+            normalized_prefix = prefix.lstrip("/")
+            if clean_value.startswith(prefix) or clean_value.startswith(normalized_prefix):
+                relative = clean_value[len(prefix):] if clean_value.startswith(prefix) else clean_value[len(normalized_prefix):]
+                candidates.append(os.path.join("static", *relative.split("/")))
+        candidates.append(clean_value.lstrip("/"))
+        for candidate in candidates:
+            if candidate and os.path.exists(candidate):
+                return candidate
+        return None
+
+    def policy_text() -> str:
+        value = submission.consent_text or PUBLIC_CREDIT_POLICY_TEXT
+        display_name = safe_text(company_name).upper()
+        value = re.sub(r"\bAUTOS\s+QP\s+S\.?A\.?S\.?\b", display_name, value, flags=re.IGNORECASE)
+        value = re.sub(r"\bAUTOSQP\s+ADMIN\b", display_name, value, flags=re.IGNORECASE)
+        value = re.sub(r"\bAUTOSQP\b", display_name, value, flags=re.IGNORECASE)
+        return value
 
     def clipped_text(text: str, max_width: float, font_name: str = "Helvetica", font_size: float = 8.5) -> str:
         value = safe_text(text)
@@ -1170,6 +1205,59 @@ def _build_public_credit_submission_pdf_reference_style(
         pdf.setFont("Helvetica", 9)
         pdf.drawString(x + 7, y - height + 3, clipped_text(value, width - 14, "Helvetica", 9))
 
+    def draw_image_in_box(path: Optional[str], x: float, y: float, width: float, height: float, label: str) -> None:
+        pdf.setFillColor(text_color)
+        pdf.setFont("Helvetica-Bold", 8.5)
+        pdf.drawString(x, y + height + 8, clipped_text(label.upper(), width, "Helvetica-Bold", 8.5))
+        pdf.setStrokeColor(border)
+        pdf.setLineWidth(0.8)
+        pdf.rect(x, y, width, height, stroke=1, fill=0)
+        if not path:
+            pdf.setFillColor(muted)
+            pdf.setFont("Helvetica", 8)
+            pdf.drawCentredString(x + width / 2, y + height / 2 - 3, "Sin imagen adjunta")
+            return
+        try:
+            image = ImageReader(path)
+            image_width, image_height = image.getSize()
+            ratio = min((width - 10) / image_width, (height - 10) / image_height)
+            draw_width = image_width * ratio
+            draw_height = image_height * ratio
+            pdf.drawImage(
+                image,
+                x + (width - draw_width) / 2,
+                y + (height - draw_height) / 2,
+                width=draw_width,
+                height=draw_height,
+                preserveAspectRatio=True,
+                mask="auto",
+            )
+        except Exception:
+            pdf.setFillColor(muted)
+            pdf.setFont("Helvetica", 8)
+            pdf.drawCentredString(x + width / 2, y + height / 2 - 3, clipped_text(os.path.basename(path), width - 14, "Helvetica", 8))
+
+    def draw_signature_image(path: Optional[str], x: float, y: float, width: float, height: float) -> None:
+        if not path:
+            return
+        try:
+            image = ImageReader(path)
+            image_width, image_height = image.getSize()
+            ratio = min(width / image_width, height / image_height)
+            draw_width = image_width * ratio
+            draw_height = image_height * ratio
+            pdf.drawImage(
+                image,
+                x,
+                y + (height - draw_height) / 2,
+                width=draw_width,
+                height=draw_height,
+                preserveAspectRatio=True,
+                mask="auto",
+            )
+        except Exception:
+            return
+
     def row_fields(y: float, fields: List[tuple[str, str, int]]) -> float:
         x = left
         for label, value, span in fields:
@@ -1178,12 +1266,12 @@ def _build_public_credit_submission_pdf_reference_style(
             x += width + gap
         return y - 45
 
-    def draw_policy(lines: List[str], y: float, max_lines: int) -> tuple[float, List[str]]:
+    def draw_policy(lines: List[str], y: float, max_lines: int, min_y: float = 88) -> tuple[float, List[str]]:
         pdf.setFillColor(text_color)
         pdf.setFont("Helvetica", 6.2)
         line_height = 7.1
         drawn = 0
-        while lines and drawn < max_lines and y > 88:
+        while lines and drawn < max_lines and y > min_y:
             pdf.drawString(left, y, lines.pop(0))
             y -= line_height
             drawn += 1
@@ -1275,16 +1363,25 @@ def _build_public_credit_submission_pdf_reference_style(
     y += 5
     draw_field("Consentimiento", "Estoy de acuerdo con la politica de privacidad." if consent_payload.get("accepted") else "Sin aceptar", left, y, usable_width)
     y -= 43
-    policy_lines = wrap_text((submission.consent_text or PUBLIC_CREDIT_POLICY_TEXT).upper(), usable_width, "Helvetica", 6.2)
+    policy_lines = wrap_text(policy_text().upper(), usable_width, "Helvetica", 6.2)
     y, policy_lines = draw_policy(policy_lines, y, 21)
     finish_page()
 
     start_page(3)
     y = page_height - 164
-    y, policy_lines = draw_policy(policy_lines, y, 78)
+    document_y = 310
+    document_height = 132
+    y, policy_lines = draw_policy(policy_lines, y, 78, document_y + document_height + 44)
     if policy_lines:
         pdf.drawString(left, y, clipped_text(" ".join(policy_lines), usable_width, "Helvetica", 6.2))
+    document_width = (usable_width - gap) / 2
+    draw_image_in_box(attachment_local_path("document_front"), left, document_y, document_width, document_height, "Cedula ciudadania cara frontal")
+    draw_image_in_box(attachment_local_path("document_back"), left + document_width + gap, document_y, document_width, document_height, "Cedula ciudadania cara posterior")
     signer_name = safe_text(consent_payload.get("signatureName") or submission.applicant_name)
+    signature_file = attachment_filename("signature_upload")
+    signature_drawn = attachment_filename("signature_drawn")
+    signature_path = attachment_local_path("signature_upload") or attachment_local_path("signature_drawn")
+    draw_signature_image(signature_path, left, 146, 240, 72)
     pdf.setStrokeColor(border)
     pdf.line(left, 138, left + 240, 138)
     pdf.setFillColor(text_color)
@@ -1292,8 +1389,6 @@ def _build_public_credit_submission_pdf_reference_style(
     pdf.drawString(left, 122, f"Firmado por: {signer_name}")
     pdf.setFont("Helvetica", 7.2)
     pdf.drawString(left, 108, f"Modalidad: {_public_credit_display_value('signatureMode', consent_payload.get('signatureMode'))}")
-    signature_file = attachment_filename("signature_upload")
-    signature_drawn = attachment_filename("signature_drawn")
     if signature_file != "Sin dato" or signature_drawn != "Sin dato":
         pdf.drawString(left, 94, f"Soporte de firma: {signature_file if signature_file != 'Sin dato' else signature_drawn}")
     finish_page()
