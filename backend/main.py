@@ -5141,7 +5141,7 @@ def _get_public_credit_capture_session(
     if session.expires_at < datetime.datetime.now():
         raise HTTPException(status_code=410, detail="La sesión de captura expiró. Genera un nuevo QR.")
     if require_upload and not session.file_path:
-        raise HTTPException(status_code=400, detail="Aún no se ha cargado la foto del documento.")
+        raise HTTPException(status_code=400, detail="Aún no se ha cargado el archivo solicitado.")
 
     return session
 
@@ -5159,8 +5159,8 @@ def create_public_credit_capture_session(
         raise HTTPException(status_code=403, detail="El formulario de crédito no está habilitado para esta empresa")
 
     side = str(payload.side or "").strip().lower()
-    if side not in {"front", "back"}:
-        raise HTTPException(status_code=400, detail="El lado del documento no es válido.")
+    if side not in {"front", "back", "signature"}:
+        raise HTTPException(status_code=400, detail="El tipo de captura no es válido.")
 
     session = models.PublicCreditCaptureSession(
         company_id=company.id,
@@ -5191,9 +5191,14 @@ async def upload_public_credit_capture_session_file(
 ):
     session = _get_public_credit_capture_session(db, token)
     if not file:
-        raise HTTPException(status_code=400, detail="Debes adjuntar una foto del documento.")
+        raise HTTPException(status_code=400, detail="Debes adjuntar una imagen.")
 
-    file_url = _save_public_credit_upload(file, "documents", f"document_{session.side}")
+    is_signature = session.side == "signature"
+    file_url = _save_public_credit_upload(
+        file,
+        "signatures" if is_signature else "documents",
+        "signature_upload" if is_signature else f"document_{session.side}",
+    )
     session.file_path = file_url
     session.file_type = getattr(file, "content_type", None)
     session.original_file_name = getattr(file, "filename", None)
@@ -5213,6 +5218,7 @@ async def submit_public_credit_request(
     signature_file: Optional[UploadFile] = File(None),
     document_front_capture_token: Optional[str] = Form(None),
     document_back_capture_token: Optional[str] = Form(None),
+    signature_capture_token: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     company = resolve_public_company(db, request)
@@ -5283,6 +5289,7 @@ async def submit_public_credit_request(
 
     front_capture = None
     back_capture = None
+    signature_capture = None
     if document_front_capture_token:
         front_capture = _get_public_credit_capture_session(
             db,
@@ -5301,10 +5308,19 @@ async def submit_public_credit_request(
         )
         if back_capture.side != "back":
             raise HTTPException(status_code=400, detail="La captura posterior no corresponde a la cara posterior.")
+    if signature_capture_token:
+        signature_capture = _get_public_credit_capture_session(
+            db,
+            str(signature_capture_token).strip(),
+            company_id=company.id,
+            require_upload=True,
+        )
+        if signature_capture.side != "signature":
+            raise HTTPException(status_code=400, detail="La captura de firma no corresponde a una firma.")
 
     document_front_url = _save_public_credit_upload(document_front, "documents", "document_front") if document_front else (front_capture.file_path if front_capture else None)
     document_back_url = _save_public_credit_upload(document_back, "documents", "document_back") if document_back else (back_capture.file_path if back_capture else None)
-    signature_upload_url = _save_public_credit_upload(signature_file, "signatures", "signature_upload")
+    signature_upload_url = _save_public_credit_upload(signature_file, "signatures", "signature_upload") if signature_file else (signature_capture.file_path if signature_capture else None)
     signature_drawn_url = _save_public_credit_data_url(consent.get("signatureDrawnDataUrl"), "signatures", "signature_drawn")
 
     attachments = {
@@ -5405,7 +5421,7 @@ async def submit_public_credit_request(
                 user_id=None,
                 file_name="firma_cliente",
                 file_path=signature_upload_url or signature_drawn_url,
-                file_type=getattr(signature_file, "content_type", None) or "image/png",
+                file_type=getattr(signature_file, "content_type", None) or getattr(signature_capture, "file_type", None) or "image/png",
             ))
 
         submission = db.query(models.PublicCreditSubmission).filter(
@@ -5590,7 +5606,7 @@ async def submit_public_credit_request(
             user_id=None,
             file_name="firma_cliente",
             file_path=signature_upload_url or signature_drawn_url,
-            file_type=getattr(signature_file, "content_type", None) or "image/png",
+            file_type=getattr(signature_file, "content_type", None) or getattr(signature_capture, "file_type", None) or "image/png",
         ))
 
     submission = models.PublicCreditSubmission(
@@ -5982,8 +5998,8 @@ def create_lead_credit_capture_session(
     ensure_can_modify_lead(current_user, lead)
 
     side = str(payload.side or "").strip().lower()
-    if side not in {"front", "back"}:
-        raise HTTPException(status_code=400, detail="El lado del documento no es válido.")
+    if side not in {"front", "back", "signature"}:
+        raise HTTPException(status_code=400, detail="El tipo de captura no es válido.")
 
     session = models.PublicCreditCaptureSession(
         company_id=lead.company_id,
@@ -6073,6 +6089,7 @@ async def save_lead_credit_form_with_files(
     signature_file: Optional[UploadFile] = File(None),
     document_front_capture_token: Optional[str] = Form(None),
     document_back_capture_token: Optional[str] = Form(None),
+    signature_capture_token: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -6094,6 +6111,7 @@ async def save_lead_credit_form_with_files(
 
     front_capture = None
     back_capture = None
+    signature_capture = None
     if document_front_capture_token:
         front_capture = _get_public_credit_capture_session(
             db,
@@ -6112,11 +6130,20 @@ async def save_lead_credit_form_with_files(
         )
         if back_capture.side != "back":
             raise HTTPException(status_code=400, detail="La captura posterior no corresponde a la cara posterior.")
+    if signature_capture_token:
+        signature_capture = _get_public_credit_capture_session(
+            db,
+            str(signature_capture_token).strip(),
+            company_id=lead.company_id,
+            require_upload=True,
+        )
+        if signature_capture.side != "signature":
+            raise HTTPException(status_code=400, detail="La captura de firma no corresponde a una firma.")
 
     consent = form_payload.get("consent", {}) or {}
     document_front_url = _save_public_credit_upload(document_front, "documents", "document_front") if document_front else (front_capture.file_path if front_capture else None)
     document_back_url = _save_public_credit_upload(document_back, "documents", "document_back") if document_back else (back_capture.file_path if back_capture else None)
-    signature_upload_url = _save_public_credit_upload(signature_file, "signatures", "signature_upload")
+    signature_upload_url = _save_public_credit_upload(signature_file, "signatures", "signature_upload") if signature_file else (signature_capture.file_path if signature_capture else None)
     signature_drawn_url = _save_public_credit_data_url(consent.get("signatureDrawnDataUrl"), "signatures", "signature_drawn")
 
     attachments = {
@@ -6149,7 +6176,7 @@ async def save_lead_credit_form_with_files(
             user_id=current_user.id,
             file_name="firma_cliente",
             file_path=signature_upload_url or signature_drawn_url,
-            file_type=getattr(signature_file, "content_type", None) or "image/png",
+            file_type=getattr(signature_file, "content_type", None) or getattr(signature_capture, "file_type", None) or "image/png",
         ))
 
     db.commit()

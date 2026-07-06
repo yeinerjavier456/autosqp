@@ -159,6 +159,7 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
     const [documentBackPreview, setDocumentBackPreview] = useState('');
     const [signaturePreview, setSignaturePreview] = useState('');
     const [documentCaptures, setDocumentCaptures] = useState({ documentFront: null, documentBack: null });
+    const [signatureCapture, setSignatureCapture] = useState(null);
     const [creatingCapture, setCreatingCapture] = useState('');
 
     useEffect(() => {
@@ -204,7 +205,10 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
     }, [documentFrontPreview, documentBackPreview, signaturePreview]);
 
     useEffect(() => {
-        const pendingCaptures = Object.entries(documentCaptures).filter(([, capture]) => capture?.token && !capture?.uploaded);
+        const pendingCaptures = [
+            ...Object.entries(documentCaptures),
+            ['signature', signatureCapture],
+        ].filter(([, capture]) => capture?.token && !capture?.uploaded);
         if (!pendingCaptures.length) return undefined;
 
         const intervalId = window.setInterval(async () => {
@@ -212,29 +216,45 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
                 try {
                     const response = await axios.get(`${API_BASE_URL}/public/credit-request/capture-session/${capture.token}`);
                     if (response?.data?.uploaded) {
+                        if (key === 'signature') {
+                            setSignatureCapture((prev) => ({
+                                ...prev,
+                                ...response.data,
+                                previewUrl: response.data.file_url,
+                            }));
+                            updateConsent('signatureMode', 'upload');
+                        } else {
+                            setDocumentCaptures((prev) => ({
+                                ...prev,
+                                [key]: {
+                                    ...prev[key],
+                                    ...response.data,
+                                    previewUrl: response.data.file_url,
+                                },
+                            }));
+                        }
+                    }
+                } catch (error) {
+                    if (key === 'signature') {
+                        setSignatureCapture((prev) => ({
+                            ...prev,
+                            error: error?.response?.data?.detail || 'No se pudo consultar la captura.',
+                        }));
+                    } else {
                         setDocumentCaptures((prev) => ({
                             ...prev,
                             [key]: {
                                 ...prev[key],
-                                ...response.data,
-                                previewUrl: response.data.file_url,
+                                error: error?.response?.data?.detail || 'No se pudo consultar la captura.',
                             },
                         }));
                     }
-                } catch (error) {
-                    setDocumentCaptures((prev) => ({
-                        ...prev,
-                        [key]: {
-                            ...prev[key],
-                            error: error?.response?.data?.detail || 'No se pudo consultar la captura.',
-                        },
-                    }));
                 }
             }));
         }, 3000);
 
         return () => window.clearInterval(intervalId);
-    }, [documentCaptures]);
+    }, [documentCaptures, signatureCapture]);
 
     const updateField = (section, field, value) => {
         setForm((current) => {
@@ -327,12 +347,13 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
             if (signaturePreview?.startsWith('blob:')) URL.revokeObjectURL(signaturePreview);
             setSignatureFile(file);
             setSignaturePreview(previewUrl);
+            setSignatureCapture(null);
             updateConsent('signatureMode', 'upload');
         }
     };
 
-    const createDocumentCaptureSession = async (type) => {
-        const side = type === 'documentFront' ? 'front' : 'back';
+    const createCaptureSession = async (type) => {
+        const side = type === 'documentFront' ? 'front' : type === 'documentBack' ? 'back' : 'signature';
         setCreatingCapture(type);
         try {
             const token = localStorage.getItem('token');
@@ -341,15 +362,24 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
                 { side },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-            setDocumentCaptures((prev) => ({
-                ...prev,
-                [type]: {
+            const captureData = {
                     ...response.data,
                     captureUrl: buildCreditCapturePageUrl(response.data.token),
                     previewUrl: response.data.file_url || '',
                     error: '',
-                },
-            }));
+            };
+            if (type === 'signature') {
+                setSignatureCapture(captureData);
+                setSignatureFile(null);
+                if (signaturePreview?.startsWith('blob:')) URL.revokeObjectURL(signaturePreview);
+                setSignaturePreview('');
+                updateConsent('signatureMode', 'upload');
+            } else {
+                setDocumentCaptures((prev) => ({
+                    ...prev,
+                    [type]: captureData,
+                }));
+            }
         } catch (error) {
             Swal.fire('Error', error?.response?.data?.detail || 'No se pudo generar el QR de captura.', 'error');
         } finally {
@@ -418,6 +448,9 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
             if (documentCaptures.documentBack?.uploaded) {
                 formData.append('document_back_capture_token', documentCaptures.documentBack.token);
             }
+            if (!signatureFile && signatureCapture?.uploaded) {
+                formData.append('signature_capture_token', signatureCapture.token);
+            }
             const response = await axios.put(
                 `${API_BASE_URL}/leads/${lead.id}/credit-form/files`,
                 formData,
@@ -466,18 +499,19 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
         );
     };
 
-    const renderDocumentCaptureBox = (type, label) => {
-        const capture = documentCaptures[type];
+    const renderCaptureBox = (type, label) => {
+        const capture = type === 'signature' ? signatureCapture : documentCaptures[type];
+        const isSignature = type === 'signature';
         return (
             <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                        <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Tomar foto con celular</p>
-                        <p className="text-xs text-blue-600">Genera un QR para abrir la cámara desde el teléfono.</p>
+                        <p className="text-xs font-bold uppercase tracking-wide text-blue-700">{isSignature ? 'Firmar con celular' : 'Tomar foto con celular'}</p>
+                        <p className="text-xs text-blue-600">Genera un QR para {isSignature ? 'capturar la firma desde el teléfono.' : 'abrir la cámara desde el teléfono.'}</p>
                     </div>
                     <button
                         type="button"
-                        onClick={() => createDocumentCaptureSession(type)}
+                        onClick={() => createCaptureSession(type)}
                         disabled={!canModify || creatingCapture === type}
                         className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
                     >
@@ -490,7 +524,7 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
                         <div className="text-xs text-blue-700">
                             <p className="font-bold">Escanea este QR para cargar {label.toLowerCase()}.</p>
                             <a href={capture.captureUrl} target="_blank" rel="noreferrer" className="mt-2 block break-all font-semibold underline">{capture.captureUrl}</a>
-                            {capture.uploaded && <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 font-bold text-emerald-700">Foto recibida correctamente.</p>}
+                            {capture.uploaded && <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 font-bold text-emerald-700">{isSignature ? 'Firma recibida correctamente.' : 'Foto recibida correctamente.'}</p>}
                             {capture.error && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-bold text-red-700">{capture.error}</p>}
                         </div>
                     </div>
@@ -623,7 +657,7 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
                             />
                         </label>
                         {renderPreviewBox('Cédula frontal', documentFrontPreview || attachmentPreview('document_front'), documentFront)}
-                        {canModify && renderDocumentCaptureBox('documentFront', 'Documento frontal')}
+                        {canModify && renderCaptureBox('documentFront', 'Documento frontal')}
                     </div>
                     <div className="space-y-3">
                         <label className="block text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -638,7 +672,7 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
                             />
                         </label>
                         {renderPreviewBox('Cédula posterior', documentBackPreview || attachmentPreview('document_back'), documentBack)}
-                        {canModify && renderDocumentCaptureBox('documentBack', 'Documento posterior')}
+                        {canModify && renderCaptureBox('documentBack', 'Documento posterior')}
                     </div>
                 </div>
             </section>
@@ -683,7 +717,7 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
                                 disabled={!canModify}
                                 className={`rounded-lg px-3 py-2 text-xs font-bold ${form?.consent?.signatureMode === 'upload' ? 'bg-blue-600 text-white' : 'bg-white text-slate-700 border border-slate-200'}`}
                             >
-                                Subir imagen
+                                Subir imagen / QR
                             </button>
                             <button type="button" onClick={clearCanvas} disabled={!canModify} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 disabled:opacity-60">
                                 Limpiar firma
@@ -699,7 +733,8 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
                                     disabled={!canModify}
                                     className="block w-full text-sm text-slate-600"
                                 />
-                                {renderPreviewBox('Firma adjunta', signaturePreview || attachmentPreview('signature_upload'), signatureFile)}
+                                {renderPreviewBox('Firma adjunta', signaturePreview || signatureCapture?.previewUrl || attachmentPreview('signature_upload'), signatureFile)}
+                                {canModify && renderCaptureBox('signature', 'Firma')}
                             </div>
                         ) : (
                             <div className="overflow-hidden rounded-xl border border-dashed border-slate-300 bg-white">

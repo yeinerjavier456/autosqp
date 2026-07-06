@@ -45,7 +45,7 @@ const PublicCreditCapture = () => {
         if (!ignore) {
           setSession(response.data);
           if (response.data?.uploaded) {
-            setStatus({ type: 'success', message: 'Esta foto ya fue cargada correctamente.' });
+            setStatus({ type: 'success', message: response.data?.side === 'signature' ? 'Esta firma ya fue cargada correctamente.' : 'Esta foto ya fue cargada correctamente.' });
           }
         }
       } catch (error) {
@@ -78,7 +78,7 @@ const PublicCreditCapture = () => {
 
   const uploadPhoto = async () => {
     if (!file) {
-      setStatus({ type: 'error', message: 'Primero toma o selecciona la foto del documento.' });
+      setStatus({ type: 'error', message: session?.side === 'signature' ? 'Primero toma o selecciona la imagen de la firma.' : 'Primero toma o selecciona la foto del documento.' });
       return;
     }
 
@@ -90,17 +90,18 @@ const PublicCreditCapture = () => {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setSession(response.data);
-      setStatus({ type: 'success', message: 'Foto enviada correctamente. Puedes volver al formulario en el computador.' });
+      setStatus({ type: 'success', message: session?.side === 'signature' ? 'Firma enviada correctamente. Puedes volver al formulario en el computador.' : 'Foto enviada correctamente. Puedes volver al formulario en el computador.' });
     } catch (error) {
       setStatus({
         type: 'error',
-        message: error?.response?.data?.detail || 'No se pudo enviar la foto.',
+        message: error?.response?.data?.detail || (session?.side === 'signature' ? 'No se pudo enviar la firma.' : 'No se pudo enviar la foto.'),
       });
     } finally {
       setUploading(false);
     }
   };
 
+  const isSignature = session?.side === 'signature';
   const sideLabel = session?.side === 'back' ? 'cara posterior' : 'cara frontal';
   const brandName = company?.name || 'AutosQP';
 
@@ -117,9 +118,11 @@ const PublicCreditCapture = () => {
         <div className="space-y-5">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide" style={{ color: theme.primary }}>Formulario de crédito</p>
-            <h1 className="text-2xl font-black text-slate-900">Capturar cédula</h1>
+            <h1 className="text-2xl font-black text-slate-900">{isSignature ? 'Capturar firma' : 'Capturar cédula'}</h1>
             <p className="mt-2 text-sm text-slate-500">
-              Toma la foto de la {sideLabel} y envíala. El formulario del computador se actualizará automáticamente.
+              {isSignature
+                ? 'Toma o selecciona la imagen de la firma y envíala. El formulario del computador se actualizará automáticamente.'
+                : `Toma la foto de la ${sideLabel} y envíala. El formulario del computador se actualizará automáticamente.`}
             </p>
           </div>
 
@@ -140,8 +143,8 @@ const PublicCreditCapture = () => {
               {session && !session.uploaded && (
                 <div className="space-y-4">
                   <label className="block rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 p-5 text-center">
-                    <span className="block text-base font-bold text-slate-900">Tomar foto o seleccionar imagen</span>
-                    <span className="mt-1 block text-sm text-slate-500">Usa la cámara trasera del celular.</span>
+                    <span className="block text-base font-bold text-slate-900">{isSignature ? 'Tomar o seleccionar firma' : 'Tomar foto o seleccionar imagen'}</span>
+                    <span className="mt-1 block text-sm text-slate-500">{isSignature ? 'Puedes fotografiar la firma en papel o seleccionar una imagen guardada.' : 'Usa la cámara trasera del celular.'}</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -152,7 +155,7 @@ const PublicCreditCapture = () => {
                   </label>
 
                   {previewUrl && (
-                    <img src={previewUrl} alt="Vista previa del documento" className="h-72 w-full rounded-2xl object-cover" />
+                    <img src={previewUrl} alt={isSignature ? 'Vista previa de la firma' : 'Vista previa del documento'} className="h-72 w-full rounded-2xl object-contain bg-slate-50" />
                   )}
 
                   <button
@@ -162,14 +165,14 @@ const PublicCreditCapture = () => {
                     className="w-full rounded-2xl px-5 py-4 text-base font-black text-white disabled:opacity-60"
                     style={{ backgroundColor: theme.primary }}
                   >
-                    {uploading ? 'Enviando...' : 'Enviar foto'}
+                    {uploading ? 'Enviando...' : isSignature ? 'Enviar firma' : 'Enviar foto'}
                   </button>
                 </div>
               )}
 
               {session?.uploaded && (
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-center text-emerald-800">
-                  <p className="text-lg font-black">Foto recibida</p>
+                  <p className="text-lg font-black">{isSignature ? 'Firma recibida' : 'Foto recibida'}</p>
                   <p className="mt-2 text-sm">Ya puedes continuar el formulario en el computador.</p>
                 </div>
               )}

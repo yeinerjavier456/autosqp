@@ -157,6 +157,7 @@ const PublicCreditForm = () => {
   const [documentFront, setDocumentFront] = useState(null);
   const [documentBack, setDocumentBack] = useState(null);
   const [documentCaptures, setDocumentCaptures] = useState({ documentFront: null, documentBack: null });
+  const [signatureCapture, setSignatureCapture] = useState(null);
   const [signatureFile, setSignatureFile] = useState(null);
   const [documentFrontPreview, setDocumentFrontPreview] = useState('');
   const [documentBackPreview, setDocumentBackPreview] = useState('');
@@ -236,7 +237,10 @@ const PublicCreditForm = () => {
   }, [documentFrontPreview, documentBackPreview, signaturePreview]);
 
   useEffect(() => {
-    const pendingCaptures = Object.entries(documentCaptures).filter(([, capture]) => capture?.token && !capture?.uploaded);
+    const pendingCaptures = [
+      ...Object.entries(documentCaptures),
+      ['signature', signatureCapture],
+    ].filter(([, capture]) => capture?.token && !capture?.uploaded);
     if (!pendingCaptures.length) return undefined;
 
     const intervalId = window.setInterval(async () => {
@@ -244,29 +248,45 @@ const PublicCreditForm = () => {
         try {
           const response = await axios.get(`/api/public/credit-request/capture-session/${capture.token}`);
           if (response?.data?.uploaded) {
+            if (key === 'signature') {
+              setSignatureCapture((prev) => ({
+                ...prev,
+                ...response.data,
+                previewUrl: response.data.file_url,
+              }));
+              updateSection('consent', 'signatureMode', 'upload');
+            } else {
+              setDocumentCaptures((prev) => ({
+                ...prev,
+                [key]: {
+                  ...prev[key],
+                  ...response.data,
+                  previewUrl: response.data.file_url,
+                },
+              }));
+            }
+          }
+        } catch {
+          if (key === 'signature') {
+            setSignatureCapture((prev) => ({
+              ...prev,
+              error: 'No se pudo consultar la captura. Genera un nuevo QR.',
+            }));
+          } else {
             setDocumentCaptures((prev) => ({
               ...prev,
               [key]: {
                 ...prev[key],
-                ...response.data,
-                previewUrl: response.data.file_url,
+                error: 'No se pudo consultar la captura. Genera un nuevo QR.',
               },
             }));
           }
-        } catch {
-          setDocumentCaptures((prev) => ({
-            ...prev,
-            [key]: {
-              ...prev[key],
-              error: 'No se pudo consultar la captura. Genera un nuevo QR.',
-            },
-          }));
         }
       }));
     }, 3000);
 
     return () => window.clearInterval(intervalId);
-  }, [documentCaptures]);
+  }, [documentCaptures, signatureCapture]);
 
   useEffect(() => {
     setForm((prev) => {
@@ -350,12 +370,13 @@ const PublicCreditForm = () => {
     if (stepIndex === 5) {
       const hasDrawnSignature = Boolean(form.consent.signatureDrawnDataUrl);
       const hasUploadedSignature = Boolean(signatureFile);
+      const hasQrSignature = Boolean(signatureCapture?.uploaded || accessAttachments.signature_upload);
       return Boolean(
         form.consent.accepted &&
         form.consent.signatureName &&
         (!requiresEmailValidation || verificationVerified) &&
         ((form.consent.signatureMode === 'draw' && hasDrawnSignature) ||
-          (form.consent.signatureMode === 'upload' && hasUploadedSignature))
+          (form.consent.signatureMode === 'upload' && (hasUploadedSignature || hasQrSignature)))
       );
     }
     return true;
@@ -435,24 +456,34 @@ const PublicCreditForm = () => {
       if (signaturePreview) URL.revokeObjectURL(signaturePreview);
       setSignatureFile(file);
       setSignaturePreview(filePreviewUrl(file));
+      setSignatureCapture(null);
+      updateSection('consent', 'signatureMode', 'upload');
     }
   };
 
-  const createDocumentCaptureSession = async (type) => {
+  const createCaptureSession = async (type) => {
     resetStatus();
-    const side = type === 'documentFront' ? 'front' : 'back';
+    const side = type === 'documentFront' ? 'front' : type === 'documentBack' ? 'back' : 'signature';
     setCreatingCapture(type);
     try {
       const response = await axios.post('/api/public/credit-request/capture-session', { side });
-      setDocumentCaptures((prev) => ({
-        ...prev,
-        [type]: {
+      const captureData = {
           ...response.data,
           captureUrl: buildCapturePageUrl(response.data.token),
           previewUrl: response.data.file_url || '',
           error: '',
-        },
-      }));
+      };
+      if (type === 'signature') {
+        setSignatureCapture(captureData);
+        setSignatureFile(null);
+        setSignaturePreview('');
+        updateSection('consent', 'signatureMode', 'upload');
+      } else {
+        setDocumentCaptures((prev) => ({
+          ...prev,
+          [type]: captureData,
+        }));
+      }
     } catch (error) {
       setStatus({
         type: 'error',
@@ -585,6 +616,9 @@ const PublicCreditForm = () => {
         formData.append('document_back_capture_token', documentCaptures.documentBack.token);
       }
       if (signatureFile) formData.append('signature_file', signatureFile);
+      if (!signatureFile && signatureCapture?.uploaded) {
+        formData.append('signature_capture_token', signatureCapture.token);
+      }
       if (accessToken) formData.append('access_token', accessToken);
 
       const response = await axios.post('/api/public/credit-request/submit', formData, {
@@ -599,6 +633,7 @@ const PublicCreditForm = () => {
       setDocumentFront(null);
       setDocumentBack(null);
       setDocumentCaptures({ documentFront: null, documentBack: null });
+      setSignatureCapture(null);
       setSignatureFile(null);
       setVerificationSent(false);
       setVerificationVerified(false);
@@ -637,21 +672,22 @@ const PublicCreditForm = () => {
     </div>
   );
 
-  const renderDocumentCaptureBox = (type, label) => {
-    const capture = documentCaptures[type];
+  const renderCaptureBox = (type, label) => {
+    const capture = type === 'signature' ? signatureCapture : documentCaptures[type];
     const captureUrl = capture?.captureUrl || buildCapturePageUrl(capture?.token);
     const isUploaded = Boolean(capture?.uploaded && capture?.file_url);
+    const isSignature = type === 'signature';
 
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-bold text-slate-900">Capturar desde celular</p>
-            <p className="text-xs text-slate-500">Genera un QR para abrir la cámara del teléfono y subir {label.toLowerCase()}.</p>
+            <p className="text-sm font-bold text-slate-900">{isSignature ? 'Firmar desde celular' : 'Capturar desde celular'}</p>
+            <p className="text-xs text-slate-500">Genera un QR para {isSignature ? 'firmar desde el teléfono' : `abrir la cámara del teléfono y subir ${label.toLowerCase()}`}.</p>
           </div>
           <button
             type="button"
-            onClick={() => createDocumentCaptureSession(type)}
+            onClick={() => createCaptureSession(type)}
             disabled={creatingCapture === type}
             className="rounded-xl px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
             style={{ backgroundColor: theme.secondary }}
@@ -668,17 +704,17 @@ const PublicCreditForm = () => {
               className="h-44 w-44 rounded-2xl border border-slate-200 bg-white p-2"
             />
             <div className="space-y-3 text-sm text-slate-600">
-              <p>Escanea este QR con el celular y toma la foto. Esta pantalla detecta la carga automáticamente.</p>
+              <p>{isSignature ? 'Escanea este QR con el celular, toma o selecciona la imagen de la firma. Esta pantalla detecta la carga automáticamente.' : 'Escanea este QR con el celular y toma la foto. Esta pantalla detecta la carga automáticamente.'}</p>
               <a href={captureUrl} target="_blank" rel="noreferrer" className="inline-flex rounded-xl border border-slate-300 px-4 py-2 font-semibold text-slate-700">
                 Abrir enlace de captura
               </a>
               {isUploaded ? (
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 font-semibold text-emerald-700">
-                  Foto recibida correctamente.
+                  {isSignature ? 'Firma recibida correctamente.' : 'Foto recibida correctamente.'}
                 </div>
               ) : (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 font-semibold text-amber-700">
-                  Esperando foto desde el celular...
+                  {isSignature ? 'Esperando firma desde el celular...' : 'Esperando foto desde el celular...'}
                 </div>
               )}
               {capture?.error && <p className="text-sm font-semibold text-red-600">{capture.error}</p>}
@@ -686,7 +722,7 @@ const PublicCreditForm = () => {
           </div>
         )}
 
-        {isUploaded && renderPreviewBox(`${label} recibida por QR`, capture.file_url, { name: capture.original_file_name || 'foto_cedula.jpg' })}
+        {isUploaded && renderPreviewBox(`${label} recibida por QR`, capture.file_url, { name: capture.original_file_name || (isSignature ? 'firma_cliente.jpg' : 'foto_cedula.jpg') })}
       </div>
     );
   };
@@ -834,13 +870,13 @@ const PublicCreditForm = () => {
                         {renderFieldLabel('Cédula Ciudadanía Cara Frontal', true)}
                         <input type="file" accept="image/*,application/pdf" capture="environment" onChange={(e) => handleFileSelection('documentFront', e.target.files?.[0])} className="block w-full text-sm text-slate-600" />
                         {renderPreviewBox('Documento frontal', documentFrontPreview || accessAttachments.document_front, documentFront)}
-                        {renderDocumentCaptureBox('documentFront', 'Documento frontal')}
+                        {renderCaptureBox('documentFront', 'Documento frontal')}
                       </div>
                       <div className="space-y-3">
                         {renderFieldLabel('Cédula Ciudadanía Cara Posterior', true)}
                         <input type="file" accept="image/*,application/pdf" capture="environment" onChange={(e) => handleFileSelection('documentBack', e.target.files?.[0])} className="block w-full text-sm text-slate-600" />
                         {renderPreviewBox('Documento posterior', documentBackPreview || accessAttachments.document_back, documentBack)}
-                        {renderDocumentCaptureBox('documentBack', 'Documento posterior')}
+                        {renderCaptureBox('documentBack', 'Documento posterior')}
                       </div>
                     </div>
                   </section>
@@ -930,7 +966,7 @@ const PublicCreditForm = () => {
                         <h3 className="text-lg font-bold text-slate-900">Firma</h3>
                         <div className="flex gap-3">
                           <button type="button" onClick={() => updateSection('consent', 'signatureMode', 'draw')} className={`rounded-xl px-4 py-2 text-sm font-semibold ${form.consent.signatureMode === 'draw' ? 'text-white' : 'bg-slate-100 text-slate-700'}`} style={form.consent.signatureMode === 'draw' ? { backgroundColor: theme.primary } : undefined}>Firmar aquí</button>
-                          <button type="button" onClick={() => updateSection('consent', 'signatureMode', 'upload')} className={`rounded-xl px-4 py-2 text-sm font-semibold ${form.consent.signatureMode === 'upload' ? 'text-white' : 'bg-slate-100 text-slate-700'}`} style={form.consent.signatureMode === 'upload' ? { backgroundColor: theme.primary } : undefined}>Subir imagen</button>
+                          <button type="button" onClick={() => updateSection('consent', 'signatureMode', 'upload')} className={`rounded-xl px-4 py-2 text-sm font-semibold ${form.consent.signatureMode === 'upload' ? 'text-white' : 'bg-slate-100 text-slate-700'}`} style={form.consent.signatureMode === 'upload' ? { backgroundColor: theme.primary } : undefined}>Subir imagen / QR</button>
                         </div>
 
                         {form.consent.signatureMode === 'draw' ? (
@@ -957,7 +993,8 @@ const PublicCreditForm = () => {
                         ) : (
                           <div className="space-y-3">
                             <input type="file" accept="image/*" capture="environment" onChange={(e) => handleFileSelection('signatureFile', e.target.files?.[0])} className="block w-full text-sm text-slate-600" />
-                            {renderPreviewBox('Firma cargada', signaturePreview, signatureFile)}
+                            {renderPreviewBox('Firma cargada', signaturePreview || signatureCapture?.file_url || accessAttachments.signature_upload, signatureFile)}
+                            {renderCaptureBox('signature', 'Firma')}
                           </div>
                         )}
 
