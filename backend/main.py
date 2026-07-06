@@ -6637,6 +6637,82 @@ def update_integration_settings(company_id: int, settings_update: schemas.Integr
         
     return serialize_integration_settings(settings)
 
+
+@app.post("/companies/{company_id}/integrations/test-smtp")
+def test_company_smtp_settings(
+    company_id: int,
+    payload: schemas.IntegrationSettingsSmtpTest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    role_name = get_user_role_name(current_user)
+    if role_name not in ["super_admin", "admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if role_name != "super_admin" and current_user.company_id and current_user.company_id != company_id:
+        raise HTTPException(status_code=403, detail="Not authorized to test these settings")
+
+    company = db.query(models.Company).filter(models.Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Empresa no encontrada")
+
+    settings = db.query(models.IntegrationSettings).filter(models.IntegrationSettings.company_id == company_id).first()
+    saved_password = (getattr(settings, "smtp_password", None) or "").strip() if settings else ""
+    password = (payload.smtp_password or "").strip() or saved_password
+    host = (payload.smtp_host or "").strip()
+    sender = (payload.smtp_from or payload.smtp_username or "").strip()
+    username = (payload.smtp_username or "").strip()
+    port = int(payload.smtp_port or 587)
+
+    if not payload.smtp_enabled:
+        raise HTTPException(status_code=400, detail="Activa SMTP propio para probar esta configuración.")
+    if not host or not sender:
+        raise HTTPException(status_code=400, detail="Configura servidor SMTP y correo remitente antes de probar.")
+    if username and not password:
+        raise HTTPException(status_code=400, detail="Falta la contraseña SMTP o una contraseña guardada para este usuario.")
+
+    smtp_settings = {
+        "host": host,
+        "port": port,
+        "username": username,
+        "password": password,
+        "sender": sender,
+        "use_tls": bool(payload.smtp_use_tls),
+    }
+
+    message = EmailMessage()
+    message["Subject"] = f"Correo de prueba SMTP - {company.name}"
+    message["From"] = sender
+    message["To"] = str(payload.test_email)
+    message.set_content(
+        (
+            f"Hola.\n\n"
+            f"Este es un correo de prueba enviado desde la configuración SMTP de {company.name}.\n"
+            f"Si recibiste este mensaje, la configuración de correo está funcionando correctamente.\n"
+        ),
+        charset="utf-8",
+    )
+    message.add_alternative(
+        f"""
+        <html>
+          <body style="margin:0;padding:24px;background:#f8fafc;font-family:Arial,sans-serif;color:#0f172a;">
+            <div style="max-width:620px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:18px;padding:24px;">
+              <h1 style="margin:0 0 12px;font-size:22px;">Correo de prueba SMTP</h1>
+              <p style="font-size:15px;line-height:1.6;">Este mensaje fue enviado desde la configuración SMTP de <strong>{escape(company.name)}</strong>.</p>
+              <p style="font-size:14px;line-height:1.6;color:#475569;">Si recibiste este correo, la configuración está funcionando correctamente.</p>
+            </div>
+          </body>
+        </html>
+        """.strip(),
+        subtype="html",
+    )
+
+    try:
+        _deliver_smtp_message(message, smtp_settings)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"No se pudo enviar el correo de prueba: {exc}") from exc
+
+    return {"status": "sent", "message": f"Correo de prueba enviado a {payload.test_email}."}
+
 # --- LEADS ENDPOINTS ---
 
 @app.get("/leads", response_model=schemas.LeadList)

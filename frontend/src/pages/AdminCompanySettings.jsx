@@ -105,6 +105,8 @@ const AdminCompanySettings = () => {
     const [status, setStatus] = useState({ type: '', message: '' });
     const [activeTab, setActiveTab] = useState('general');
     const [activeIntegrationTab, setActiveIntegrationTab] = useState('meta');
+    const [smtpTestEmail, setSmtpTestEmail] = useState('');
+    const [testingSmtp, setTestingSmtp] = useState(false);
     const groupedViews = useMemo(() => COMPANY_VIEW_GROUPS, []);
     const activeTabMeta = SETTINGS_TABS.find((tab) => tab.id === activeTab) || SETTINGS_TABS[0];
 
@@ -430,6 +432,41 @@ const AdminCompanySettings = () => {
             console.error(error);
             const errorMsg = error.response?.data?.detail || 'Error al conectar con el servidor';
             setStatus({ type: 'error', message: `Error: ${errorMsg}` });
+        }
+    };
+
+    const handleSmtpTest = async () => {
+        if (!isEditing || !id) {
+            setStatus({ type: 'error', message: 'Guarda la empresa antes de probar el correo SMTP.' });
+            return;
+        }
+        if (!smtpTestEmail.trim()) {
+            setStatus({ type: 'error', message: 'Ingresa un correo destinatario para la prueba.' });
+            return;
+        }
+        setTestingSmtp(true);
+        setStatus({ type: 'loading', message: 'Enviando correo de prueba...' });
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post(`/api/companies/${id}/integrations/test-smtp`, {
+                smtp_enabled: Boolean(company.smtp_enabled),
+                smtp_host: company.smtp_host || '',
+                smtp_port: company.smtp_port === '' ? 587 : parseInt(company.smtp_port, 10),
+                smtp_username: company.smtp_username || '',
+                smtp_password: company.smtp_password ? company.smtp_password : null,
+                smtp_from: company.smtp_from || '',
+                smtp_use_tls: Boolean(company.smtp_use_tls),
+                smtp_always_recipients: company.smtp_always_recipients || '',
+                test_email: smtpTestEmail.trim(),
+            }, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            setStatus({ type: 'success', message: response.data?.message || 'Correo de prueba enviado correctamente.' });
+        } catch (error) {
+            const errorMsg = error.response?.data?.detail || 'No se pudo enviar el correo de prueba.';
+            setStatus({ type: 'error', message: `Error: ${errorMsg}` });
+        } finally {
+            setTestingSmtp(false);
         }
     };
 
@@ -1294,6 +1331,34 @@ const AdminCompanySettings = () => {
                                     />
                                     <span>Usar TLS / STARTTLS</span>
                                 </label>
+                                <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+                                    <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-600 mb-1">Enviar correo de prueba a</label>
+                                            <input
+                                                type="email"
+                                                value={smtpTestEmail}
+                                                onChange={(event) => setSmtpTestEmail(event.target.value)}
+                                                placeholder="correo@empresa.com"
+                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
+                                            />
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleSmtpTest}
+                                            disabled={testingSmtp || !company.smtp_enabled}
+                                            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                        >
+                                            {testingSmtp ? 'Enviando...' : 'Enviar prueba'}
+                                        </button>
+                                    </div>
+                                    {!company.smtp_enabled && (
+                                        <p className="mt-2 text-xs font-medium text-amber-700">Activa SMTP propio para habilitar la prueba.</p>
+                                    )}
+                                    <p className="mt-2 text-xs text-slate-500">
+                                        Usa la configuración escrita en pantalla. Si dejas la contraseña vacía, se usa la contraseña guardada.
+                                    </p>
+                                </div>
                                 <div>
                                     <label className="block text-sm font-medium text-slate-600 mb-1">
                                         Destinatarios permanentes del formulario de crédito

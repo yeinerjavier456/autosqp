@@ -462,6 +462,9 @@ class IntegrationSettingsBase(BaseModel):
 class IntegrationSettingsUpdate(IntegrationSettingsBase):
     pass
 
+class IntegrationSettingsSmtpTest(IntegrationSettingsBase):
+    test_email: EmailStr
+
 class IntegrationSettings(IntegrationSettingsBase):
     id: int
     company_id: int
