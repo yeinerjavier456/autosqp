@@ -151,6 +151,11 @@ const buildVehicleLabel = (vehicle) => {
   return [vehicle.make, vehicle.model, vehicle.vehicleType].filter(Boolean).join(' ').trim();
 };
 
+const getPublicBrandName = (companyName) => {
+  const normalized = String(companyName || 'AutosQP').trim();
+  return normalized.replace(/\s+(admin|administrador)$/i, '').trim() || normalized;
+};
+
 const stripSensitiveDraftFields = (formValue) => ({
   ...formValue,
   consent: {
@@ -769,7 +774,7 @@ const PublicCreditForm = () => {
     }
   };
 
-  const brandName = company?.name || 'AutosQP';
+  const brandName = getPublicBrandName(company?.name);
   const progress = ((step + 1) / STEP_TITLES.length) * 100;
   const selectedVehicleBrand = otherBrandMode
     ? VEHICLE_OTHER_OPTION
