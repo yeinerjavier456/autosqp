@@ -780,8 +780,8 @@ def _build_public_credit_submission_pdf_three_pages(
     except ImportError as exc:
         raise HTTPException(status_code=500, detail="La libreria reportlab no esta instalada en el servidor") from exc
 
-    payload = submission.form_payload or {}
-    attachments = submission.attachments or {}
+    payload = getattr(submission, "form_payload", None) or getattr(submission, "form_data", None) or {}
+    attachments = getattr(submission, "attachments", None) or getattr(submission, "files", None) or {}
     company_name = getattr(company, "name", None) or "AutosQP"
     primary_color = getattr(company, "primary_color", None) or "#2563eb"
     secondary_color = getattr(company, "secondary_color", None) or "#0f172a"
@@ -822,7 +822,10 @@ def _build_public_credit_submission_pdf_three_pages(
         return _public_credit_display_value(field_name, section_value.get(field_name))
 
     def attachment_filename(key: str) -> str:
-        value = str(attachments.get(key) or "").strip()
+        attachment_value = attachments.get(key) if isinstance(attachments, dict) else None
+        if isinstance(attachment_value, dict):
+            attachment_value = attachment_value.get("original_filename") or attachment_value.get("filename") or attachment_value.get("path")
+        value = str(attachment_value or "").strip()
         if not value:
             return "Sin dato"
         return os.path.basename(value.split("?", 1)[0]) or value
@@ -1029,11 +1032,281 @@ def _build_public_credit_submission_pdf_three_pages(
     return buffer.getvalue()
 
 
+def _build_public_credit_submission_pdf_reference_style(
+    company: Optional[models.Company],
+    submission: models.PublicCreditSubmission,
+) -> bytes:
+    try:
+        from reportlab.lib.colors import HexColor
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail="La libreria reportlab no esta instalada en el servidor") from exc
+
+    payload = getattr(submission, "form_payload", None) or getattr(submission, "form_data", None) or {}
+    attachments = getattr(submission, "attachments", None) or getattr(submission, "files", None) or {}
+    company_name = getattr(company, "name", None) or "AUTOS QP S.A.S"
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+    pdf.setTitle(f"Formulario de credito - {submission.applicant_name}")
+    pdf.setAuthor(company_name)
+
+    page_width, page_height = letter
+    left = 40
+    right = 40
+    usable_width = page_width - left - right
+    gap = 8
+    col_w = (usable_width - (gap * 3)) / 4
+    border = HexColor("#d1d5db")
+    text_color = HexColor("#111827")
+    muted = HexColor("#4b5563")
+
+    def safe_text(value: Any) -> str:
+        text_value = str(value if value is not None and value != "" else "Sin dato")
+        return " ".join(text_value.replace("\n", " ").replace("\r", " ").split())
+
+    def section(section_name: str) -> Dict[str, Any]:
+        value = payload.get(section_name)
+        return value if isinstance(value, dict) else {}
+
+    vehicle = section("vehicle")
+    personal = section("personal")
+    employment = section("employment")
+    income = section("income")
+    references = section("references")
+    consent_payload = section("consent")
+
+    def field(section_value: Dict[str, Any], field_name: str) -> str:
+        return _public_credit_display_value(field_name, section_value.get(field_name))
+
+    def attachment_filename(key: str) -> str:
+        attachment_value = attachments.get(key) if isinstance(attachments, dict) else None
+        if isinstance(attachment_value, dict):
+            attachment_value = attachment_value.get("original_filename") or attachment_value.get("filename") or attachment_value.get("path")
+        value = str(attachment_value or "").strip()
+        if not value:
+            return "Sin dato"
+        return os.path.basename(value.split("?", 1)[0]) or value
+
+    def clipped_text(text: str, max_width: float, font_name: str = "Helvetica", font_size: float = 8.5) -> str:
+        value = safe_text(text)
+        if pdf.stringWidth(value, font_name, font_size) <= max_width:
+            return value
+        ellipsis = "..."
+        while value and pdf.stringWidth(f"{value}{ellipsis}", font_name, font_size) > max_width:
+            value = value[:-1]
+        return f"{value}{ellipsis}" if value else ellipsis
+
+    def wrap_text(text: str, max_width: float, font_name: str = "Helvetica", font_size: float = 6.2) -> List[str]:
+        words = safe_text(text).split()
+        lines = []
+        current = ""
+        for word in words:
+            candidate = word if not current else f"{current} {word}"
+            if pdf.stringWidth(candidate, font_name, font_size) <= max_width:
+                current = candidate
+                continue
+            if current:
+                lines.append(current)
+            current = word
+        if current:
+            lines.append(current)
+        return lines or [""]
+
+    def draw_brand():
+        pdf.setFillColor(text_color)
+        pdf.setStrokeColor(text_color)
+        pdf.setLineWidth(1)
+        pdf.setFont("Helvetica", 22)
+        pdf.drawString(left + 86, page_height - 58, "Autos")
+        pdf.setFont("Helvetica-Bold", 33)
+        pdf.drawString(left + 88, page_height - 92, "QP")
+        pdf.line(left + 76, page_height - 100, left + 76, page_height - 38)
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawCentredString(left + 38, page_height - 54, "AUTO")
+        pdf.drawCentredString(left + 38, page_height - 74, "QP")
+        pdf.setFont("Helvetica", 8)
+        pdf.drawCentredString(left + 38, page_height - 90, "credito")
+
+    def draw_footer():
+        contact_address = safe_text(getattr(company, "contact_address", None) or "Centro Comercial Outlet Factory, Av. de las Americas #62-84 Local 128, Puente Aranda, Bogota")
+        contact_phone = safe_text(getattr(company, "contact_phone", None) or "3002523226 - 3218912903")
+        contact_email = safe_text(getattr(company, "contact_email", None) or "autosqpc@gmail.com")
+        website = safe_text(getattr(company, "website_url", None) or getattr(company, "public_domain", None) or "www.autosqp.com")
+        pdf.setFillColor(text_color)
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.drawCentredString(page_width / 2, 60, safe_text(company_name).upper())
+        pdf.setFont("Helvetica", 8.2)
+        pdf.drawCentredString(page_width / 2, 35, clipped_text(f"{contact_address}        Tel: {contact_phone}   {contact_email}   {website}", usable_width, "Helvetica", 8.2))
+
+    def start_page(page_number: int, with_brand: bool = True):
+        if with_brand:
+            draw_brand()
+
+    def finish_page():
+        draw_footer()
+        pdf.showPage()
+
+    def draw_title(title: str, y: float) -> float:
+        pdf.setFillColor(text_color)
+        pdf.setFont("Helvetica-Bold", 13)
+        pdf.drawString(left, y, title)
+        return y - 28
+
+    def draw_section(title: str, y: float) -> float:
+        pdf.setFillColor(text_color)
+        pdf.setFont("Helvetica-Bold", 14)
+        pdf.drawString(left, y, title)
+        return y - 25
+
+    def draw_field(label: str, value: str, x: float, y: float, width: float, height: float = 23) -> None:
+        pdf.setFillColor(text_color)
+        pdf.setFont("Helvetica-Bold", 8.5)
+        pdf.drawString(x, y, clipped_text(safe_text(label).upper(), width, "Helvetica-Bold", 8.5))
+        pdf.setStrokeColor(border)
+        pdf.setLineWidth(0.8)
+        pdf.rect(x, y - height - 4, width, height, stroke=1, fill=0)
+        pdf.setFillColor(text_color)
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(x + 7, y - height + 3, clipped_text(value, width - 14, "Helvetica", 9))
+
+    def row_fields(y: float, fields: List[tuple[str, str, int]]) -> float:
+        x = left
+        for label, value, span in fields:
+            width = col_w * span + gap * (span - 1)
+            draw_field(label, value, x, y, width)
+            x += width + gap
+        return y - 45
+
+    def draw_policy(lines: List[str], y: float, max_lines: int) -> tuple[float, List[str]]:
+        pdf.setFillColor(text_color)
+        pdf.setFont("Helvetica", 6.2)
+        line_height = 7.1
+        drawn = 0
+        while lines and drawn < max_lines and y > 88:
+            pdf.drawString(left, y, lines.pop(0))
+            y -= line_height
+            drawn += 1
+        return y, lines
+
+    def reference_values(data: Dict[str, Any]) -> List[tuple[str, str, int]]:
+        return [
+            ("Nombres", field(data, "names"), 1),
+            ("Apellidos", field(data, "lastNames"), 1),
+            ("Telefono", field(data, "phone"), 1),
+            ("Ciudad", field(data, "city"), 1),
+        ]
+
+    start_page(1)
+    y = page_height - 158
+    y = draw_title("Formulario de Credito", y)
+    y = draw_section("Datos del Vehiculo", y)
+    y = row_fields(y, [
+        ("Valor vehiculo $", field(vehicle, "vehicleValue"), 1),
+        ("Monto solicitado $", field(vehicle, "requestedAmount"), 1),
+        ("Asesor comercial", safe_text(vehicle.get("advisor") or vehicle.get("commercialAdvisor")), 1),
+        ("Fecha de solicitud", field(vehicle, "requestDate"), 1),
+    ])
+    y = row_fields(y, [
+        ("Marca", field(vehicle, "make"), 1),
+        ("Modelo", field(vehicle, "model"), 2),
+        ("Tipo", field(vehicle, "vehicleType"), 1),
+    ])
+    y += 4
+    y = draw_section("Datos Personales", y)
+    personal_rows = [
+        [("Nombres", field(personal, "firstName"), 1), ("Apellidos", field(personal, "lastName"), 1), ("Documento", field(personal, "documentType"), 1), ("N. Documento", field(personal, "documentNumber"), 1)],
+        [("Lugar expedicion", field(personal, "issuePlace"), 1), ("Fecha nacimiento", field(personal, "birthDate"), 1), ("Sexo", field(personal, "gender"), 1), ("Profesion", field(personal, "profession"), 1)],
+        [("Lugar nacimiento", field(personal, "birthPlace"), 1), ("Estado civil", field(personal, "maritalStatus"), 1), ("N. de hijos", field(personal, "childrenCount"), 1), ("Nivel de estudio", field(personal, "educationLevel"), 1)],
+        [("Con quien vive ?", field(personal, "livesWith"), 1), ("Tipo de vivienda ?", field(personal, "housingType"), 1), ("Telefono movil", field(personal, "mobilePhone"), 1), ("Ciudad", field(personal, "city"), 1)],
+        [("Direccion", field(personal, "address"), 2), ("Email", field(personal, "email"), 2)],
+        [("Cedula ciudadania cara frontal", attachment_filename("document_front"), 2), ("Cedula ciudadania cara posterior", attachment_filename("document_back"), 2)],
+    ]
+    for items in personal_rows:
+        y = row_fields(y, items)
+    y += 6
+    y = draw_section("Datos Laborales", y)
+    y = row_fields(y, [
+        ("Actividad economica", field(employment, "activity"), 1),
+        ("Nombre empresa", field(employment, "companyName"), 1),
+        ("Ciudad", field(employment, "companyCity"), 1),
+        ("Direccion", field(employment, "companyAddress"), 1),
+    ])
+    row_fields(y, [
+        ("Ocupacion o cargo", field(employment, "jobTitle"), 1),
+        ("Email de la empresa", field(employment, "companyEmail"), 2),
+        ("Fecha ingreso", field(employment, "startDate"), 1),
+    ])
+    finish_page()
+
+    start_page(2)
+    y = page_height - 164
+    y = row_fields(y, [
+        ("Salario", field(employment, "salary"), 1),
+        ("Tipo de contrato", field(employment, "contractType"), 1),
+    ])
+    y += 6
+    y = draw_section("Empresa Anterior", y)
+    y = row_fields(y, [
+        ("Nombre empresa", field(employment, "previousCompanyName"), 1),
+        ("Actividad empresa", field(employment, "previousCompanyActivity"), 1),
+        ("Cargo", field(employment, "previousCompanyRole"), 1),
+        ("Tiempo laborado", field(employment, "previousEmploymentTime"), 1),
+    ])
+    y += 6
+    y = draw_section("Ingresos", y)
+    y = row_fields(y, [
+        ("Sueldo $", field(income, "salaryIncome"), 1),
+        ("Comisiones $", field(income, "commissionsIncome"), 1),
+        ("Otros ingresos permanentes", field(income, "otherIncome"), 1),
+        ("Total ingresos", field(income, "totalIncome"), 1),
+    ])
+    personal1 = references.get("personal1") if isinstance(references.get("personal1"), dict) else {}
+    personal2 = references.get("personal2") if isinstance(references.get("personal2"), dict) else {}
+    commercial = references.get("commercial") if isinstance(references.get("commercial"), dict) else {}
+    for title, data in [("Referencias Personales", personal1), ("Referencias Personales", personal2)]:
+        y += 4
+        y = draw_section(title, y)
+        y = row_fields(y, reference_values(data))
+    if any(commercial.values()):
+        y += 4
+        y = draw_section("Referencia Comercial", y)
+        y = row_fields(y, reference_values(commercial))
+    y += 5
+    draw_field("Consentimiento", "Estoy de acuerdo con la politica de privacidad." if consent_payload.get("accepted") else "Sin aceptar", left, y, usable_width)
+    y -= 43
+    policy_lines = wrap_text((submission.consent_text or PUBLIC_CREDIT_POLICY_TEXT).upper(), usable_width, "Helvetica", 6.2)
+    y, policy_lines = draw_policy(policy_lines, y, 21)
+    finish_page()
+
+    start_page(3)
+    y = page_height - 164
+    y, policy_lines = draw_policy(policy_lines, y, 78)
+    if policy_lines:
+        pdf.drawString(left, y, clipped_text(" ".join(policy_lines), usable_width, "Helvetica", 6.2))
+    signer_name = safe_text(consent_payload.get("signatureName") or submission.applicant_name)
+    pdf.setStrokeColor(border)
+    pdf.line(left, 138, left + 240, 138)
+    pdf.setFillColor(text_color)
+    pdf.setFont("Helvetica-Bold", 8.5)
+    pdf.drawString(left, 122, f"Firmado por: {signer_name}")
+    pdf.setFont("Helvetica", 7.2)
+    pdf.drawString(left, 108, f"Modalidad: {_public_credit_display_value('signatureMode', consent_payload.get('signatureMode'))}")
+    signature_file = attachment_filename("signature_upload")
+    signature_drawn = attachment_filename("signature_drawn")
+    if signature_file != "Sin dato" or signature_drawn != "Sin dato":
+        pdf.drawString(left, 94, f"Soporte de firma: {signature_file if signature_file != 'Sin dato' else signature_drawn}")
+    finish_page()
+
+    pdf.save()
+    return buffer.getvalue()
+
+
 def _build_public_credit_submission_pdf(
     company: Optional[models.Company],
     submission: models.PublicCreditSubmission,
 ) -> bytes:
-    return _build_public_credit_submission_pdf_three_pages(company, submission)
+    return _build_public_credit_submission_pdf_reference_style(company, submission)
 
 
 def _parse_public_credit_recipients(raw_recipients: Optional[str], applicant_email: str) -> List[str]:
