@@ -8,6 +8,7 @@ import { formatBogotaDateTime } from '../utils/dateTime';
 import {
     COLOMBIA_CITY_OPTIONS,
     VEHICLE_BRANDS,
+    VEHICLE_OTHER_OPTION,
     formatMoneyInput,
     getVehicleModelOptions,
     sanitizeMoneyInput,
@@ -163,6 +164,8 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
     const canvasRef = useRef(null);
     const drawingRef = useRef(false);
     const [form, setForm] = useState(() => createInternalCreditForm(lead));
+    const [otherBrandMode, setOtherBrandMode] = useState(false);
+    const [otherModelMode, setOtherModelMode] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [sendingAccess, setSendingAccess] = useState(false);
@@ -512,6 +515,80 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
     const renderCreditFieldInput = (sectionId, field, type, readOnly) => {
         const isMoney = CREDIT_MONEY_FIELDS.has(field);
         const value = form?.[sectionId]?.[field] ?? '';
+        if (sectionId === 'vehicle' && field === 'make') {
+            const selectedBrand = otherBrandMode
+                ? VEHICLE_OTHER_OPTION
+                : VEHICLE_BRANDS.includes(value)
+                    ? value
+                    : value
+                        ? VEHICLE_OTHER_OPTION
+                        : '';
+            return (
+                <>
+                    <select
+                        value={selectedBrand}
+                        onChange={(event) => {
+                            const isOther = event.target.value === VEHICLE_OTHER_OPTION;
+                            setOtherBrandMode(isOther);
+                            setOtherModelMode(false);
+                            updateField(sectionId, 'make', isOther ? '' : event.target.value);
+                            updateField(sectionId, 'model', '');
+                        }}
+                        disabled={!canModify || readOnly}
+                        className={`${inputClass} mt-1 font-normal normal-case tracking-normal`}
+                    >
+                        <option value="">Selecciona una marca</option>
+                        {VEHICLE_BRANDS.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
+                    </select>
+                    {selectedBrand === VEHICLE_OTHER_OPTION && (
+                        <input
+                            type="text"
+                            value={value}
+                            onChange={(event) => updateField(sectionId, field, event.target.value)}
+                            disabled={!canModify || readOnly}
+                            placeholder="Escribe la marca"
+                            className={`${inputClass} mt-2 font-normal normal-case tracking-normal`}
+                        />
+                    )}
+                </>
+            );
+        }
+        if (sectionId === 'vehicle' && field === 'model') {
+            const selectedModel = otherModelMode
+                ? VEHICLE_OTHER_OPTION
+                : vehicleModelOptions.includes(value)
+                    ? value
+                    : value
+                        ? VEHICLE_OTHER_OPTION
+                        : '';
+            return (
+                <>
+                    <select
+                        value={selectedModel}
+                        onChange={(event) => {
+                            const isOther = event.target.value === VEHICLE_OTHER_OPTION;
+                            setOtherModelMode(isOther);
+                            updateField(sectionId, field, isOther ? '' : event.target.value);
+                        }}
+                        disabled={!canModify || readOnly}
+                        className={`${inputClass} mt-1 font-normal normal-case tracking-normal`}
+                    >
+                        <option value="">Selecciona un modelo</option>
+                        {vehicleModelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
+                    </select>
+                    {selectedModel === VEHICLE_OTHER_OPTION && (
+                        <input
+                            type="text"
+                            value={value}
+                            onChange={(event) => updateField(sectionId, field, event.target.value)}
+                            disabled={!canModify || readOnly}
+                            placeholder="Escribe el modelo"
+                            className={`${inputClass} mt-2 font-normal normal-case tracking-normal`}
+                        />
+                    )}
+                </>
+            );
+        }
         return (
             <input
                 type={type === 'date' || type === 'email' ? type : 'text'}

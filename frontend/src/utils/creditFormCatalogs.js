@@ -21,7 +21,9 @@ export const VEHICLE_CATALOG = {
   Mitsubishi: ['ASX', 'L200', 'Montero Sport', 'Outlander', 'Xpander'],
 };
 
-export const VEHICLE_BRANDS = Object.keys(VEHICLE_CATALOG);
+export const VEHICLE_OTHER_OPTION = 'Otro';
+
+export const VEHICLE_BRANDS = [...Object.keys(VEHICLE_CATALOG), VEHICLE_OTHER_OPTION];
 
 export const COLOMBIA_CITY_OPTIONS = [
   'Bogota D.C.', 'Medellin', 'Cali', 'Barranquilla', 'Cartagena', 'Cucuta', 'Bucaramanga', 'Pereira',
@@ -49,4 +51,4 @@ export const formatMoneyInput = (value) => {
   return Number(digits).toLocaleString('en-US');
 };
 
-export const getVehicleModelOptions = (brand) => VEHICLE_CATALOG[brand] || [];
+export const getVehicleModelOptions = (brand) => [...(VEHICLE_CATALOG[brand] || []), VEHICLE_OTHER_OPTION];

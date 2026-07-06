@@ -6,6 +6,7 @@ import { usePublicCompany } from '../utils/publicCompany';
 import {
   COLOMBIA_CITY_OPTIONS,
   VEHICLE_BRANDS,
+  VEHICLE_OTHER_OPTION,
   formatMoneyInput,
   getVehicleModelOptions,
   sanitizeMoneyInput,
@@ -205,6 +206,8 @@ const PublicCreditForm = () => {
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState(createEmptyForm);
+  const [otherBrandMode, setOtherBrandMode] = useState(false);
+  const [otherModelMode, setOtherModelMode] = useState(false);
   const [accessContext, setAccessContext] = useState(null);
   const [accessAttachments, setAccessAttachments] = useState({});
   const [loadingAccess, setLoadingAccess] = useState(false);
@@ -757,6 +760,20 @@ const PublicCreditForm = () => {
 
   const brandName = company?.name || 'AutosQP';
   const progress = ((step + 1) / STEP_TITLES.length) * 100;
+  const selectedVehicleBrand = otherBrandMode
+    ? VEHICLE_OTHER_OPTION
+    : VEHICLE_BRANDS.includes(form.vehicle.make)
+    ? form.vehicle.make
+    : form.vehicle.make
+      ? VEHICLE_OTHER_OPTION
+      : '';
+  const selectedVehicleModel = otherModelMode
+    ? VEHICLE_OTHER_OPTION
+    : vehicleModelOptions.includes(form.vehicle.model)
+    ? form.vehicle.model
+    : form.vehicle.model
+      ? VEHICLE_OTHER_OPTION
+      : '';
 
   const renderPreviewBox = (label, preview, file) => (
     <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-3">
@@ -923,11 +940,41 @@ const PublicCreditForm = () => {
                     <div className="grid gap-4 md:grid-cols-3">
                       <div>
                         {renderFieldLabel('Marca', true)}
-                        <input list="credit-vehicle-brands" className={requiredInputClassName} value={form.vehicle.make} onChange={(e) => updateSection('vehicle', 'make', e.target.value)} />
+                        <select
+                          className={requiredInputClassName}
+                          value={selectedVehicleBrand}
+                          onChange={(e) => {
+                            const isOther = e.target.value === VEHICLE_OTHER_OPTION;
+                            setOtherBrandMode(isOther);
+                            setOtherModelMode(false);
+                            updateSection('vehicle', 'make', e.target.value === VEHICLE_OTHER_OPTION ? '' : e.target.value);
+                            updateSection('vehicle', 'model', '');
+                          }}
+                        >
+                          <option value="">Selecciona una marca</option>
+                          {VEHICLE_BRANDS.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
+                        </select>
+                        {selectedVehicleBrand === VEHICLE_OTHER_OPTION && (
+                          <input className={`${requiredInputClassName} mt-2`} placeholder="Escribe la marca" value={form.vehicle.make} onChange={(e) => updateSection('vehicle', 'make', e.target.value)} />
+                        )}
                       </div>
                       <div>
                         {renderFieldLabel('Modelo', true)}
-                        <input list="credit-vehicle-models" className={requiredInputClassName} value={form.vehicle.model} onChange={(e) => updateSection('vehicle', 'model', e.target.value)} />
+                        <select
+                          className={requiredInputClassName}
+                          value={selectedVehicleModel}
+                          onChange={(e) => {
+                            const isOther = e.target.value === VEHICLE_OTHER_OPTION;
+                            setOtherModelMode(isOther);
+                            updateSection('vehicle', 'model', isOther ? '' : e.target.value);
+                          }}
+                        >
+                          <option value="">Selecciona un modelo</option>
+                          {vehicleModelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
+                        </select>
+                        {selectedVehicleModel === VEHICLE_OTHER_OPTION && (
+                          <input className={`${requiredInputClassName} mt-2`} placeholder="Escribe el modelo" value={form.vehicle.model} onChange={(e) => updateSection('vehicle', 'model', e.target.value)} />
+                        )}
                       </div>
                       <div>
                         {renderFieldLabel('Tipo')}
