@@ -7,6 +7,7 @@ from datetime import timedelta, datetime
 import random
 from zoneinfo import ZoneInfo
 from dependencies import get_current_user, get_db
+import lead_assignment
 
 router = APIRouter(
     prefix="/rules",
@@ -106,14 +107,8 @@ def ensure_specific_user_scope(rule: schemas.AutomationRuleCreate, db: Session, 
         raise HTTPException(status_code=400, detail="No se pueden enviar alertas automáticas a administradores")
 
 
-def is_advisor_user(user: models.User) -> bool:
-    role = getattr(user, "role", None)
-    role_text = " ".join([
-        str(getattr(role, "base_role_name", "") or ""),
-        str(getattr(role, "name", "") or ""),
-        str(getattr(role, "label", "") or ""),
-    ]).lower()
-    return "asesor" in role_text or "vendedor" in role_text
+def can_receive_alert_reassignment(user: Optional[models.User]) -> bool:
+    return lead_assignment.can_user_receive_auto_assigned_leads(user)
 
 
 def ensure_reassignment_user_scope(rule: schemas.AutomationRuleCreate, db: Session, current_user: models.User):
@@ -129,8 +124,11 @@ def ensure_reassignment_user_scope(rule: schemas.AutomationRuleCreate, db: Sessi
         raise HTTPException(status_code=403, detail="No puedes reasignar leads a usuarios de otra empresa")
     if not getattr(target_user, "is_active", True):
         raise HTTPException(status_code=400, detail="El usuario destino de reasignación está inactivo")
-    if not is_advisor_user(target_user):
-        raise HTTPException(status_code=400, detail="Solo puedes reasignar leads a asesores o vendedores")
+    if not can_receive_alert_reassignment(target_user):
+        raise HTTPException(
+            status_code=400,
+            detail="Solo puedes reasignar leads a asesores o vendedores con asignación automática habilitada"
+        )
 
 
 def get_reassignment_candidates(db: Session, company_id: int, excluded_user_id: Optional[int] = None) -> List[models.User]:
@@ -140,7 +138,7 @@ def get_reassignment_candidates(db: Session, company_id: int, excluded_user_id: 
     ).all()
     return [
         user for user in users
-        if user.id != excluded_user_id and is_advisor_user(user)
+        if user.id != excluded_user_id and can_receive_alert_reassignment(user)
     ]
 
 
@@ -187,7 +185,7 @@ def perform_rule_reassignment_if_needed(
     else:
         candidates = get_reassignment_candidates(db, rule.company_id, excluded_user_id=current_assigned_to_id)
         target_user = random.choice(candidates) if candidates else None
-    if not target_user or not getattr(target_user, "is_active", True) or not is_advisor_user(target_user):
+    if not can_receive_alert_reassignment(target_user):
         return
 
     previous_assigned_to_id = lead.assigned_to_id

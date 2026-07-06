@@ -30,6 +30,10 @@ const isAdvisorUser = (person) => {
     return roleText.includes('asesor') || roleText.includes('vendedor');
 };
 
+const canReceiveAlertReassignment = (person) => (
+    isAdvisorUser(person) && Boolean(person?.auto_assign_leads)
+);
+
 const isAdminUser = (person) => {
     const roleText = [
         person?.role?.base_role_name,
@@ -76,7 +80,7 @@ const AdminAlerts = () => {
         return true;
     });
     const notificationUsers = companyUsers.filter((person) => !isAdminUser(person));
-    const advisorUsers = companyUsers.filter((person) => isAdvisorUser(person));
+    const advisorUsers = companyUsers.filter((person) => canReceiveAlertReassignment(person));
 
     useEffect(() => {
         fetchRules();
@@ -254,7 +258,7 @@ const AdminAlerts = () => {
                                 <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                                     <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4" /></svg>
                                     <span>
-                                        Reasignar tras <strong>{rule.reassign_after_alerts_count || 1}</strong> alerta(s) a <strong>{rule.reassign_to_user_id ? (users.find(u => u.id === rule.reassign_to_user_id)?.email || 'usuario destino') : 'asesor aleatorio disponible'}</strong>
+                                        Reasignar tras <strong>{rule.reassign_after_alerts_count || 1}</strong> alerta(s) a <strong>{rule.reassign_to_user_id ? (users.find(u => u.id === rule.reassign_to_user_id)?.email || 'usuario destino') : 'asesor con asignación automática disponible'}</strong>
                                     </span>
                                 </div>
                             )}
@@ -385,7 +389,7 @@ const AdminAlerts = () => {
                                             Reasignar el lead automáticamente
                                         </label>
                                         <p className="text-xs text-amber-800 mt-1">
-                                            Si el lead sigue sin atenderse y esta alerta aparece varias veces, se reasigna al asesor seleccionado.
+                                            Si el lead sigue sin atenderse y esta alerta aparece varias veces, se reasigna a un asesor o vendedor con asignación automática habilitada.
                                         </p>
                                     </div>
                                 </div>
@@ -414,13 +418,13 @@ const AdminAlerts = () => {
                                                 onChange={e => setFormData({ ...formData, reassign_to_user_id: e.target.value })}
                                                 required={formData.reassign_after_alerts_enabled}
                                             >
-                                                <option value="random">Aleatorio entre asesores/vendedores disponibles</option>
+                                                <option value="random">Aleatorio entre asesores/vendedores con asignación automática</option>
                                                 {advisorUsers.map(u => (
                                                     <option key={u.id} value={u.id}>{u.full_name || u.email} ({u.role?.label || u.role?.name || 'Asesor'})</option>
                                                 ))}
                                             </select>
                                             <p className="mt-1 text-xs text-amber-800">
-                                                Aleatorio excluye al asesor que ya tiene asignado el lead.
+                                                Aleatorio excluye al asesor actual y solo usa usuarios con asignación automática activa.
                                             </p>
                                         </div>
                                     </div>

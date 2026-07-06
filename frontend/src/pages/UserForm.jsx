@@ -38,9 +38,23 @@ const UserForm = () => {
         compras: 'Gestor de Compras',
         user: 'Usuario Básico',
     };
+    const normalizeRoleText = (value) => String(value || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[_-]+/g, ' ');
+    const isAdvisorRole = (role) => {
+        const roleText = [
+            role?.base_role_name,
+            role?.name,
+            role?.label,
+        ].map(normalizeRoleText).join(' ');
+        return roleText.includes('asesor') || roleText.includes('vendedor');
+    };
     const selectedRole = roles.find(r => String(r.id) === String(user.role_id));
     const isInventarioRoleSelected = (selectedRole?.base_role_name || selectedRole?.name) === 'inventario';
-    const isAdvisorRoleSelected = (selectedRole?.base_role_name || selectedRole?.name) === 'asesor';
+    const isAdvisorRoleSelected = isAdvisorRole(selectedRole);
     const canTrackAdvisors = Boolean(selectedRole?.advisor_tracking_enabled);
     const currentRoleName = currentUser?.role?.base_role_name || currentUser?.role?.name;
     const isSuperAdmin = currentRoleName === 'super_admin';
@@ -153,7 +167,7 @@ const UserForm = () => {
         const nextValue = type === 'checkbox' ? checked : value;
         if (name === 'role_id') {
             const nextRole = availableRoles.find((role) => String(role.id) === String(nextValue));
-            const nextIsAdvisorRole = (nextRole?.base_role_name || nextRole?.name) === 'asesor';
+            const nextIsAdvisorRole = isAdvisorRole(nextRole);
             const nextCanTrackAdvisors = Boolean(nextRole?.advisor_tracking_enabled);
             setUser({
                 ...user,
@@ -228,7 +242,7 @@ const UserForm = () => {
                 payload.base_salary = null;
                 payload.payment_dates = null;
             }
-            if ((selectedRoleForSave?.base_role_name || selectedRoleForSave?.name) !== 'asesor') {
+            if (!isAdvisorRole(selectedRoleForSave)) {
                 payload.auto_assign_leads = false;
             }
 

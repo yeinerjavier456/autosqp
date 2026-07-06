@@ -32,7 +32,10 @@ def is_advisor_role(role: Optional[models.Role]) -> bool:
     }
     role_names.discard("")
 
-    return bool(role_names & {"asesor", "vendedor", "asesor_vendedor"})
+    return bool(
+        role_names & {"asesor", "vendedor", "asesor_vendedor"}
+        or any("asesor" in role_name or "vendedor" in role_name for role_name in role_names)
+    )
 
 
 def can_user_receive_auto_assigned_leads(user: Optional[models.User]) -> bool:
