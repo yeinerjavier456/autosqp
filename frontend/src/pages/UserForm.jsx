@@ -3,27 +3,12 @@ import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Swal from 'sweetalert2';
+import QRCode from 'qrcode';
 import { isRoleAvailableForCompany } from '../config/views';
 import { normalizeMediaUrl } from '../utils/media';
+import { getEcardPublicUrl, normalizeEcardSlug } from '../utils/ecards';
 
 const API_BASE_URL = import.meta.env.DEV ? '/crm/api' : '/api';
-
-const normalizeSlug = (value) => String(value || '')
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 90);
-
-const getEcardPublicUrl = (company, slug) => {
-    const normalizedSlug = normalizeSlug(slug);
-    if (!normalizedSlug) return '';
-    const companyDomain = String(company?.public_domain || '').trim();
-    const origin = companyDomain ? `${window.location.protocol}//${companyDomain}` : window.location.origin;
-    return `${origin}/nuestroequipo/${normalizedSlug}`;
-};
 
 const UserForm = () => {
     const { id } = useParams();
@@ -51,6 +36,7 @@ const UserForm = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [ecardPhotoFile, setEcardPhotoFile] = useState(null);
     const [ecardPhotoPreview, setEcardPhotoPreview] = useState('');
+    const [ecardQrDataUrl, setEcardQrDataUrl] = useState('');
 
     const ROLE_LABELS = {
         super_admin: 'Super Admin Global',
@@ -172,7 +158,7 @@ const UserForm = () => {
                         role_id: loadedRoleId || '',
                         auto_assign_leads: Boolean(userData.auto_assign_leads),
                         ecard_enabled: Boolean(userData.ecard_enabled),
-                        ecard_slug: userData.ecard_slug || normalizeSlug(userData.full_name || userData.email),
+                        ecard_slug: userData.ecard_slug || normalizeEcardSlug(userData.full_name || userData.email),
                         ecard_photo_url: userData.ecard_photo_url || '',
                         ecard_position: userData.ecard_position || '',
                         tracked_advisor_ids: Array.isArray(userData.tracked_advisor_ids)
@@ -192,7 +178,7 @@ const UserForm = () => {
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
-        const nextValue = type === 'checkbox' ? checked : name === 'ecard_slug' ? normalizeSlug(value) : value;
+        const nextValue = type === 'checkbox' ? checked : name === 'ecard_slug' ? normalizeEcardSlug(value) : value;
         if (name === 'role_id') {
             const nextRole = availableRoles.find((role) => String(role.id) === String(nextValue));
             const nextIsAdvisorRole = isAdvisorRole(nextRole);
@@ -208,7 +194,7 @@ const UserForm = () => {
         setUser({
             ...user,
             [name]: nextValue,
-            ...(name === 'full_name' && !user.ecard_slug ? { ecard_slug: normalizeSlug(value) } : {}),
+            ...(name === 'full_name' && !user.ecard_slug ? { ecard_slug: normalizeEcardSlug(value) } : {}),
         });
     };
 
@@ -316,6 +302,38 @@ const UserForm = () => {
     };
 
     const ecardPublicUrl = getEcardPublicUrl(selectedCompany, user.ecard_slug);
+
+    useEffect(() => {
+        let ignore = false;
+        if (!ecardPublicUrl) {
+            setEcardQrDataUrl('');
+            return undefined;
+        }
+        QRCode.toDataURL(ecardPublicUrl, {
+            width: 320,
+            margin: 2,
+            color: {
+                dark: '#0f172a',
+                light: '#ffffff',
+            },
+            errorCorrectionLevel: 'M',
+        }).then((dataUrl) => {
+            if (!ignore) setEcardQrDataUrl(dataUrl);
+        }).catch(() => {
+            if (!ignore) setEcardQrDataUrl('');
+        });
+        return () => {
+            ignore = true;
+        };
+    }, [ecardPublicUrl]);
+
+    const downloadEcardQr = () => {
+        if (!ecardQrDataUrl) return;
+        const link = document.createElement('a');
+        link.href = ecardQrDataUrl;
+        link.download = `qr-${user.ecard_slug || 'tarjeta'}.png`;
+        link.click();
+    };
 
     const handleDelete = async () => {
         const reassignmentOptions = availableUsers
@@ -699,29 +717,50 @@ const UserForm = () => {
                         </div>
 
                         {ecardPublicUrl && (
-                            <div className="mt-4 rounded-xl border border-blue-100 bg-white p-4">
-                                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Enlace para compartir</p>
-                                <div className="flex flex-col gap-2 md:flex-row">
-                                    <input
-                                        value={ecardPublicUrl}
-                                        readOnly
-                                        className="min-w-0 flex-1 rounded-lg border border-blue-100 bg-slate-50 px-3 py-2 text-sm text-slate-700"
-                                    />
+                            <div className="mt-4 grid gap-4 rounded-xl border border-blue-100 bg-white p-4 md:grid-cols-[160px_1fr]">
+                                <div className="flex flex-col items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                                    {ecardQrDataUrl ? (
+                                        <img src={ecardQrDataUrl} alt="QR de tarjeta virtual" className="h-32 w-32 rounded-lg bg-white p-1" />
+                                    ) : (
+                                        <div className="flex h-32 w-32 items-center justify-center rounded-lg bg-white text-xs font-semibold text-slate-400">
+                                            QR
+                                        </div>
+                                    )}
                                     <button
                                         type="button"
-                                        onClick={() => navigator.clipboard?.writeText(ecardPublicUrl)}
-                                        className="rounded-lg border border-blue-200 px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-50"
+                                        onClick={downloadEcardQr}
+                                        disabled={!ecardQrDataUrl}
+                                        className="w-full rounded-lg border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
-                                        Copiar
+                                        Descargar QR
                                     </button>
-                                    <a
-                                        href={ecardPublicUrl}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="rounded-lg bg-slate-900 px-4 py-2 text-center text-sm font-bold text-white transition hover:bg-slate-800"
-                                    >
-                                        Ver tarjeta
-                                    </a>
+                                </div>
+                                <div>
+                                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Acceso para compartir</p>
+                                    <div className="flex flex-col gap-2">
+                                        <input
+                                            value={ecardPublicUrl}
+                                            readOnly
+                                            className="min-w-0 rounded-lg border border-blue-100 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                                        />
+                                        <div className="flex flex-col gap-2 md:flex-row">
+                                            <button
+                                                type="button"
+                                                onClick={() => navigator.clipboard?.writeText(ecardPublicUrl)}
+                                                className="rounded-lg border border-blue-200 px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-50"
+                                            >
+                                                Copiar enlace
+                                            </button>
+                                            <a
+                                                href={ecardPublicUrl}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="rounded-lg bg-slate-900 px-4 py-2 text-center text-sm font-bold text-white transition hover:bg-slate-800"
+                                            >
+                                                Ver tarjeta
+                                            </a>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}

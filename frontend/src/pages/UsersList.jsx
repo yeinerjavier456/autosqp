@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import QRCode from 'qrcode';
 import { useAuth } from '../context/AuthContext';
+import { getEcardPublicUrl } from '../utils/ecards';
 
 const API_BASE_URL = import.meta.env.DEV ? '/crm/api' : '/api';
 
@@ -49,6 +51,49 @@ const UsersList = () => {
 
     const currentRoleName = currentUser?.role?.base_role_name || currentUser?.role?.name || '';
     const canRedistributeLeads = currentRoleName === 'admin' || currentRoleName === 'super_admin';
+
+    const handleShowEcardQr = async (targetUser) => {
+        const publicUrl = getEcardPublicUrl(targetUser.company || currentUser?.company, targetUser.ecard_slug);
+        if (!publicUrl) {
+            Swal.fire('Sin URL', 'Este usuario aún no tiene una URL de tarjeta configurada.', 'warning');
+            return;
+        }
+        try {
+            const qrDataUrl = await QRCode.toDataURL(publicUrl, {
+                width: 360,
+                margin: 2,
+                color: {
+                    dark: '#0f172a',
+                    light: '#ffffff',
+                },
+                errorCorrectionLevel: 'M',
+            });
+            const result = await Swal.fire({
+                title: targetUser.full_name || targetUser.email,
+                html: `
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
+                        <img src="${qrDataUrl}" alt="QR" style="width:220px;height:220px;border:1px solid #e2e8f0;border-radius:12px;padding:8px;background:white;" />
+                        <input value="${publicUrl}" readonly style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:8px;font-size:12px;color:#334155;" />
+                    </div>
+                `,
+                showDenyButton: true,
+                showCancelButton: true,
+                confirmButtonText: 'Copiar enlace',
+                denyButtonText: 'Descargar QR',
+                cancelButtonText: 'Cerrar',
+                preConfirm: () => navigator.clipboard?.writeText(publicUrl),
+            });
+            if (result.isDenied) {
+                const link = document.createElement('a');
+                link.href = qrDataUrl;
+                link.download = `qr-${targetUser.ecard_slug || targetUser.id}.png`;
+                link.click();
+            }
+        } catch (error) {
+            console.error('Error generating QR', error);
+            Swal.fire('Error', 'No se pudo generar el QR de la tarjeta.', 'error');
+        }
+    };
 
     const handleRedistributeLeads = async (targetUser) => {
         const result = await Swal.fire({
@@ -199,6 +244,15 @@ const UsersList = () => {
                                                             className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
                                                         >
                                                             {redistributingUserId === user.id ? 'Redistribuyendo...' : 'Redistribuir leads'}
+                                                        </button>
+                                                    )}
+                                                    {user.ecard_enabled && user.ecard_slug && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleShowEcardQr(user)}
+                                                            className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-slate-200"
+                                                        >
+                                                            QR tarjeta
                                                         </button>
                                                     )}
                                                     <Link to={`/admin/users/${user.id}`} className="text-blue-600 hover:text-blue-900 hover:underline">Editar</Link>
