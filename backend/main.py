@@ -24,6 +24,7 @@ import shutil
 import smtplib
 import ssl
 import uuid
+import unicodedata
 from html import escape
 from io import BytesIO
 from email.message import EmailMessage
@@ -3985,6 +3986,49 @@ def serialize_user(user: models.User, is_online: Optional[bool] = None) -> dict:
     return payload
 
 
+def normalize_ecard_slug(value: Optional[str]) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or "").strip().lower())
+    ascii_value = "".join(char for char in normalized if not unicodedata.combining(char))
+    ascii_value = re.sub(r"[^a-z0-9]+", "-", ascii_value).strip("-")
+    return ascii_value[:90] or "equipo"
+
+
+def ensure_unique_ecard_slug(
+    db: Session,
+    company_id: Optional[int],
+    requested_slug: Optional[str],
+    fallback_text: Optional[str],
+    user_id: Optional[int] = None,
+) -> str:
+    base_slug = normalize_ecard_slug(requested_slug or fallback_text)
+    slug = base_slug
+    suffix = 2
+    while True:
+        query = db.query(models.User).filter(models.User.ecard_slug == slug)
+        if company_id is not None:
+            query = query.filter(models.User.company_id == company_id)
+        else:
+            query = query.filter(models.User.company_id.is_(None))
+        if user_id is not None:
+            query = query.filter(models.User.id != user_id)
+        if not query.first():
+            return slug
+        slug = f"{base_slug[:84]}-{suffix}"
+        suffix += 1
+
+
+def build_ecard_fallback_text(user: models.User | schemas.UserBase) -> str:
+    return getattr(user, "full_name", None) or getattr(user, "email", None) or "equipo"
+
+
+def ensure_user_management_scope(current_user: models.User, target_user: models.User):
+    effective_role_name = get_user_role_name(current_user)
+    if effective_role_name not in {"super_admin", "admin"}:
+        raise HTTPException(status_code=403, detail="No tienes permisos para administrar usuarios")
+    if current_user.company_id and effective_role_name != "super_admin" and target_user.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="No tienes permisos para editar usuarios de otra empresa")
+
+
 def serialize_company(company: models.Company) -> dict:
     payload = schemas.Company.model_validate(company, from_attributes=True).model_dump()
     payload["enabled_modules"] = get_company_enabled_modules(company)
@@ -4345,6 +4389,7 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
         user.tracked_advisor_ids if bool(getattr(role_obj, "advisor_tracking_enabled", False)) else [],
         user.company_id
     )
+    ecard_slug = ensure_unique_ecard_slug(db, user.company_id, user.ecard_slug, build_ecard_fallback_text(user))
     new_user = models.User(
         email=user.email,
         full_name=user.full_name,
@@ -4353,6 +4398,10 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
         company_id=user.company_id,
         auto_assign_leads=auto_assign_leads,
         tracked_advisor_ids_json=json.dumps(tracked_advisor_ids),
+        ecard_enabled=bool(user.ecard_enabled),
+        ecard_slug=ecard_slug,
+        ecard_photo_url=user.ecard_photo_url,
+        ecard_position=(user.ecard_position or "").strip() or None,
         commission_percentage=user.commission_percentage or 0,
         base_salary=user.base_salary,
         payment_dates=user.payment_dates
@@ -4463,6 +4512,28 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
         )
     elif not bool(getattr(resolved_role, "advisor_tracking_enabled", False)):
         db_user.tracked_advisor_ids_json = json.dumps([])
+    if user_update.ecard_enabled is not None:
+        db_user.ecard_enabled = bool(user_update.ecard_enabled)
+    if user_update.ecard_position is not None:
+        db_user.ecard_position = (user_update.ecard_position or "").strip() or None
+    if user_update.ecard_photo_url is not None:
+        db_user.ecard_photo_url = (user_update.ecard_photo_url or "").strip() or None
+    if user_update.ecard_slug is not None:
+        db_user.ecard_slug = ensure_unique_ecard_slug(
+            db,
+            db_user.company_id,
+            user_update.ecard_slug,
+            build_ecard_fallback_text(db_user),
+            user_id=db_user.id,
+        )
+    elif not db_user.ecard_slug:
+        db_user.ecard_slug = ensure_unique_ecard_slug(
+            db,
+            db_user.company_id,
+            None,
+            build_ecard_fallback_text(db_user),
+            user_id=db_user.id,
+        )
     if user_update.is_active is not None:
         next_active = 1 if bool(user_update.is_active) else 0
         if next_active and not bool(db_user.is_active):
@@ -4479,6 +4550,48 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
     log_action_to_db(db, current_user.id, "UPDATE", "User", db_user.id, f"Usuario modificado: {db_user.email}")
         
     return serialize_user(db_user)
+
+
+@app.post("/users/{user_id}/ecard-photo", response_model=schemas.User)
+async def upload_user_ecard_photo(
+    user_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    ensure_user_management_scope(current_user, db_user)
+
+    allowed_extensions = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    original_name = str(file.filename or "").strip()
+    extension = os.path.splitext(original_name)[1].lower()
+    content_type = str(file.content_type or "").lower()
+    if extension not in allowed_extensions or not content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Solo se permiten imágenes JPG, PNG, WEBP o GIF")
+
+    os.makedirs("static/user-ecards", exist_ok=True)
+    safe_name = f"{uuid.uuid4().hex}{extension}"
+    target_path = os.path.join("static", "user-ecards", safe_name)
+    with open(target_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    db_user.ecard_photo_url = f"/api/static/user-ecards/{safe_name}"
+    if not db_user.ecard_slug:
+        db_user.ecard_slug = ensure_unique_ecard_slug(
+            db,
+            db_user.company_id,
+            None,
+            build_ecard_fallback_text(db_user),
+            user_id=db_user.id,
+        )
+    db.commit()
+    db.refresh(db_user)
+
+    log_action_to_db(db, current_user.id, "UPLOAD_ECARD_PHOTO", "User", db_user.id, f"Foto de tarjeta actualizada: {db_user.email}")
+    return serialize_user(db_user)
+
 
 @app.delete("/users/{user_id}")
 def delete_user(
@@ -4857,6 +4970,42 @@ def update_company(company_id: int, company_update: schemas.CompanyCreate, db: S
 def read_public_company_context(request: Request, db: Session = Depends(get_db)):
     company = resolve_public_company(db, request)
     return serialize_public_company(company)
+
+
+@app.get("/public/team-cards/{slug}", response_model=schemas.PublicTeamCard)
+def read_public_team_card(slug: str, request: Request, db: Session = Depends(get_db)):
+    company = resolve_public_company(db, request)
+    if not company:
+        raise HTTPException(status_code=404, detail="No se encontró una empresa asociada a este dominio")
+
+    normalized_slug = normalize_ecard_slug(slug)
+    team_user = db.query(models.User).options(
+        joinedload(models.User.role),
+        joinedload(models.User.company),
+    ).filter(
+        models.User.company_id == company.id,
+        models.User.ecard_slug == normalized_slug,
+        models.User.ecard_enabled == True,
+        or_(models.User.is_active == True, models.User.is_active == 1),
+    ).first()
+    if not team_user:
+        raise HTTPException(status_code=404, detail="La tarjeta no está disponible")
+
+    role_label = getattr(getattr(team_user, "role", None), "label", None)
+    return schemas.PublicTeamCard(
+        full_name=team_user.full_name or team_user.email,
+        email=team_user.email,
+        position=team_user.ecard_position or role_label,
+        photo_url=team_user.ecard_photo_url,
+        company=schemas.PublicTeamCardCompany(
+            name=company.name or DEFAULT_PUBLIC_COMPANY_CONTEXT["name"],
+            logo_url=company.logo_url,
+            contact_address=getattr(company, "contact_address", None),
+            contact_phone=getattr(company, "contact_phone", None),
+            primary_color=company.primary_color or DEFAULT_PUBLIC_COMPANY_CONTEXT["primary_color"],
+            secondary_color=company.secondary_color or DEFAULT_PUBLIC_COMPANY_CONTEXT["secondary_color"],
+        ),
+    )
 
 
 @app.post("/public/credit-request/send-code", response_model=schemas.PublicCreditVerificationResponse)

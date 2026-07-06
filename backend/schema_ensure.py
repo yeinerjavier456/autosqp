@@ -85,6 +85,35 @@ def ensure_mysql_schema(engine: Engine) -> None:
     if engine.url.get_backend_name() != "mysql":
         return
 
+    if _mysql_table_exists(engine, "users"):
+        _ensure_column(
+            engine,
+            "users",
+            "ecard_enabled",
+            "ALTER TABLE users ADD COLUMN ecard_enabled TINYINT(1) NOT NULL DEFAULT 0",
+        )
+        _ensure_column(
+            engine,
+            "users",
+            "ecard_slug",
+            "ALTER TABLE users ADD COLUMN ecard_slug VARCHAR(120) NULL",
+        )
+        _ensure_column(
+            engine,
+            "users",
+            "ecard_photo_url",
+            "ALTER TABLE users ADD COLUMN ecard_photo_url VARCHAR(500) NULL",
+        )
+        _ensure_column(
+            engine,
+            "users",
+            "ecard_position",
+            "ALTER TABLE users ADD COLUMN ecard_position VARCHAR(120) NULL",
+        )
+        if not _mysql_index_exists(engine, "users", "ix_users_ecard_slug"):
+            with engine.begin() as conn:
+                conn.execute(text("CREATE INDEX ix_users_ecard_slug ON users (ecard_slug)"))
+
     if _mysql_table_exists(engine, "system_logs"):
         _ensure_column(
             engine,

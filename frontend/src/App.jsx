@@ -8,6 +8,7 @@ import AdminAlerts from './pages/AdminAlerts'; // Import AdminAlerts
 import PublicInventory from './pages/PublicInventory';
 import PublicCreditForm from './pages/PublicCreditForm';
 import PublicCreditCapture from './pages/PublicCreditCapture';
+import PublicTeamCard from './pages/PublicTeamCard';
 import TikTokLanding from './pages/TikTokLanding';
 import VehicleDetail from './pages/VehicleDetail'; // Import VehicleDetail
 import LoginPage from './pages/LoginPage';
@@ -42,7 +43,10 @@ import SystemLogs from './pages/SystemLogs';
 import RolesConfig from './pages/RolesConfig';
 import { hasViewAccess, getOrderedMenuViews } from './config/views';
 
-const routerBaseName = import.meta.env.BASE_URL === '/' ? '/' : import.meta.env.BASE_URL.replace(/\/$/, '');
+const configuredBaseName = import.meta.env.BASE_URL === '/' ? '/' : import.meta.env.BASE_URL.replace(/\/$/, '');
+const routerBaseName = configuredBaseName !== '/' && window.location.pathname.startsWith(configuredBaseName)
+  ? configuredBaseName
+  : '/';
 
 const PrivateRoute = ({ requiredView }) => {
   const auth = useAuth();
@@ -80,6 +84,7 @@ function App() {
         <Routes>
           {/* Public Routes */}
           <Route path="/autos" element={<PublicInventory />} />
+          <Route path="/nuestroequipo/:slug" element={<PublicTeamCard />} />
           <Route path="/credito" element={<PublicCreditForm />} />
           <Route path="/credito/captura/:token" element={<PublicCreditCapture />} />
           <Route path="/renovar-licencia" element={<LicenseRenewalPage />} />

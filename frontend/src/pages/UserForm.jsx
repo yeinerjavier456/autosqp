@@ -4,8 +4,26 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Swal from 'sweetalert2';
 import { isRoleAvailableForCompany } from '../config/views';
+import { normalizeMediaUrl } from '../utils/media';
 
 const API_BASE_URL = import.meta.env.DEV ? '/crm/api' : '/api';
+
+const normalizeSlug = (value) => String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 90);
+
+const getEcardPublicUrl = (company, slug) => {
+    const normalizedSlug = normalizeSlug(slug);
+    if (!normalizedSlug) return '';
+    const companyDomain = String(company?.public_domain || '').trim();
+    const origin = companyDomain ? `${window.location.protocol}//${companyDomain}` : window.location.origin;
+    return `${origin}/nuestroequipo/${normalizedSlug}`;
+};
 
 const UserForm = () => {
     const { id } = useParams();
@@ -20,6 +38,10 @@ const UserForm = () => {
         company_id: '',
         auto_assign_leads: false,
         tracked_advisor_ids: [],
+        ecard_enabled: false,
+        ecard_slug: '',
+        ecard_photo_url: '',
+        ecard_position: '',
     });
     const [companies, setCompanies] = useState([]);
     const [roles, setRoles] = useState([]);
@@ -27,6 +49,8 @@ const UserForm = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [status, setStatus] = useState({ type: '', message: '' });
     const [showPassword, setShowPassword] = useState(false);
+    const [ecardPhotoFile, setEcardPhotoFile] = useState(null);
+    const [ecardPhotoPreview, setEcardPhotoPreview] = useState('');
 
     const ROLE_LABELS = {
         super_admin: 'Super Admin Global',
@@ -147,6 +171,10 @@ const UserForm = () => {
                         ...userData,
                         role_id: loadedRoleId || '',
                         auto_assign_leads: Boolean(userData.auto_assign_leads),
+                        ecard_enabled: Boolean(userData.ecard_enabled),
+                        ecard_slug: userData.ecard_slug || normalizeSlug(userData.full_name || userData.email),
+                        ecard_photo_url: userData.ecard_photo_url || '',
+                        ecard_position: userData.ecard_position || '',
                         tracked_advisor_ids: Array.isArray(userData.tracked_advisor_ids)
                             ? userData.tracked_advisor_ids.map((item) => Number(item)).filter((item) => Number.isInteger(item))
                             : [],
@@ -164,7 +192,7 @@ const UserForm = () => {
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
-        const nextValue = type === 'checkbox' ? checked : value;
+        const nextValue = type === 'checkbox' ? checked : name === 'ecard_slug' ? normalizeSlug(value) : value;
         if (name === 'role_id') {
             const nextRole = availableRoles.find((role) => String(role.id) === String(nextValue));
             const nextIsAdvisorRole = isAdvisorRole(nextRole);
@@ -180,6 +208,7 @@ const UserForm = () => {
         setUser({
             ...user,
             [name]: nextValue,
+            ...(name === 'full_name' && !user.ecard_slug ? { ecard_slug: normalizeSlug(value) } : {}),
         });
     };
 
@@ -206,6 +235,16 @@ const UserForm = () => {
             return { ...current, tracked_advisor_ids: nextIds };
         });
     }, [advisorTrackingOptions, canTrackAdvisors]);
+
+    useEffect(() => {
+        if (!ecardPhotoFile) {
+            setEcardPhotoPreview(normalizeMediaUrl(user.ecard_photo_url));
+            return undefined;
+        }
+        const objectUrl = URL.createObjectURL(ecardPhotoFile);
+        setEcardPhotoPreview(objectUrl);
+        return () => URL.revokeObjectURL(objectUrl);
+    }, [ecardPhotoFile, user.ecard_photo_url]);
 
     const handleSave = async (e) => {
         e.preventDefault();
@@ -246,12 +285,23 @@ const UserForm = () => {
                 payload.auto_assign_leads = false;
             }
 
+            let savedUser = null;
             if (isEditing) {
-                await axios.put(`${API_BASE_URL}/users/${id}`, payload, { headers });
+                const response = await axios.put(`${API_BASE_URL}/users/${id}`, payload, { headers });
+                savedUser = response.data;
                 setStatus({ type: 'success', message: 'Usuario actualizado exitosamente!' });
             } else {
-                await axios.post(`${API_BASE_URL}/users/`, payload, { headers });
+                const response = await axios.post(`${API_BASE_URL}/users/`, payload, { headers });
+                savedUser = response.data;
                 setStatus({ type: 'success', message: 'Usuario creado exitosamente!' });
+            }
+
+            if (ecardPhotoFile && savedUser?.id) {
+                const photoPayload = new FormData();
+                photoPayload.append('file', ecardPhotoFile);
+                await axios.post(`${API_BASE_URL}/users/${savedUser.id}/ecard-photo`, photoPayload, {
+                    headers: { ...headers, 'Content-Type': 'multipart/form-data' },
+                });
             }
 
             // Redirect after short delay to show success message
@@ -264,6 +314,8 @@ const UserForm = () => {
             setStatus({ type: 'error', message: `Error: ${errorMsg}` });
         }
     };
+
+    const ecardPublicUrl = getEcardPublicUrl(selectedCompany, user.ecard_slug);
 
     const handleDelete = async () => {
         const reassignmentOptions = availableUsers
@@ -566,6 +618,112 @@ const UserForm = () => {
                                     />
                                 </div>
                             </>
+                        )}
+                    </div>
+
+                    <div className="rounded-2xl border border-blue-100 bg-slate-50 p-5">
+                        <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                            <div>
+                                <h2 className="text-lg font-extrabold text-slate-800">Tarjeta virtual pública</h2>
+                                <p className="mt-1 text-sm text-slate-500">
+                                    Carnet digital del empleado para compartir con clientes.
+                                </p>
+                            </div>
+                            <label className="inline-flex cursor-pointer items-center gap-3 rounded-xl border border-blue-100 bg-white px-4 py-3 text-sm font-semibold text-slate-700">
+                                <input
+                                    type="checkbox"
+                                    name="ecard_enabled"
+                                    checked={Boolean(user.ecard_enabled)}
+                                    onChange={handleChange}
+                                    className="h-4 w-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                Habilitada
+                            </label>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-600 mb-1">URL pública</label>
+                                <div className="flex gap-2">
+                                    <span className="flex items-center rounded-lg border border-blue-100 bg-white px-3 text-sm text-slate-500">
+                                        /nuestroequipo/
+                                    </span>
+                                    <input
+                                        type="text"
+                                        name="ecard_slug"
+                                        value={user.ecard_slug || ''}
+                                        onChange={handleChange}
+                                        placeholder="juan-perez"
+                                        className="min-w-0 flex-1 px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-black bg-white"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-600 mb-1">Cargo visible</label>
+                                <input
+                                    type="text"
+                                    name="ecard_position"
+                                    value={user.ecard_position || ''}
+                                    onChange={handleChange}
+                                    placeholder="Ej: Asesor comercial"
+                                    className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-black bg-white"
+                                />
+                            </div>
+
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-slate-600 mb-1">Foto o GIF del empleado</label>
+                                <div className="grid gap-4 rounded-xl border border-dashed border-blue-200 bg-white p-4 md:grid-cols-[120px_1fr] md:items-center">
+                                    <div className="h-28 w-28 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
+                                        {ecardPhotoPreview ? (
+                                            <img src={ecardPhotoPreview} alt="Vista previa tarjeta" className="h-full w-full object-cover" />
+                                        ) : (
+                                            <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-slate-400">
+                                                Sin imagen
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <input
+                                            type="file"
+                                            accept="image/png,image/jpeg,image/webp,image/gif"
+                                            onChange={(event) => setEcardPhotoFile(event.target.files?.[0] || null)}
+                                            className="w-full rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-bold file:text-white"
+                                        />
+                                        <p className="mt-2 text-xs text-slate-500">
+                                            Puedes usar JPG, PNG, WEBP o GIF. La imagen se mostrará en la tarjeta pública.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {ecardPublicUrl && (
+                            <div className="mt-4 rounded-xl border border-blue-100 bg-white p-4">
+                                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Enlace para compartir</p>
+                                <div className="flex flex-col gap-2 md:flex-row">
+                                    <input
+                                        value={ecardPublicUrl}
+                                        readOnly
+                                        className="min-w-0 flex-1 rounded-lg border border-blue-100 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => navigator.clipboard?.writeText(ecardPublicUrl)}
+                                        className="rounded-lg border border-blue-200 px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-50"
+                                    >
+                                        Copiar
+                                    </button>
+                                    <a
+                                        href={ecardPublicUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="rounded-lg bg-slate-900 px-4 py-2 text-center text-sm font-bold text-white transition hover:bg-slate-800"
+                                    >
+                                        Ver tarjeta
+                                    </a>
+                                </div>
+                            </div>
                         )}
                     </div>
 

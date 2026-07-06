@@ -383,6 +383,10 @@ class User(Base):
     is_active = Column(Integer, default=1)
     auto_assign_leads = Column(Boolean, default=False, nullable=False)
     tracked_advisor_ids_json = Column(Text, nullable=True)
+    ecard_enabled = Column(Boolean, default=False, nullable=False)
+    ecard_slug = Column(String(120), nullable=True, index=True)
+    ecard_photo_url = Column(String(500), nullable=True)
+    ecard_position = Column(String(120), nullable=True)
     commission_percentage = Column(Integer, default=0) # e.g. 5 for 5%
     
     # New fields

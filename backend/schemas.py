@@ -43,6 +43,10 @@ class UserBase(BaseModel):
     company_id: Optional[int] = None
     auto_assign_leads: Optional[bool] = False
     tracked_advisor_ids: List[int] = []
+    ecard_enabled: Optional[bool] = False
+    ecard_slug: Optional[str] = None
+    ecard_photo_url: Optional[str] = None
+    ecard_position: Optional[str] = None
     commission_percentage: Optional[float] = 0.0
     base_salary: Optional[int] = None
     payment_dates: Optional[str] = None
@@ -94,6 +98,10 @@ class UserUpdate(BaseModel):
     is_active: Optional[int] = None
     auto_assign_leads: Optional[bool] = None
     tracked_advisor_ids: Optional[List[int]] = None
+    ecard_enabled: Optional[bool] = None
+    ecard_slug: Optional[str] = None
+    ecard_photo_url: Optional[str] = None
+    ecard_position: Optional[str] = None
     commission_percentage: Optional[float] = None
     base_salary: Optional[int] = None
     payment_dates: Optional[str] = None
@@ -146,6 +154,23 @@ class User(UserBase):
 class UserList(BaseModel):
     items: List[User]
     total: int
+
+
+class PublicTeamCardCompany(BaseModel):
+    name: str
+    logo_url: Optional[str] = None
+    contact_address: Optional[str] = None
+    contact_phone: Optional[str] = None
+    primary_color: Optional[str] = "#2563eb"
+    secondary_color: Optional[str] = "#0f172a"
+
+
+class PublicTeamCard(BaseModel):
+    full_name: str
+    email: EmailStr
+    position: Optional[str] = None
+    photo_url: Optional[str] = None
+    company: PublicTeamCardCompany
 
 class Token(BaseModel):
     access_token: str
