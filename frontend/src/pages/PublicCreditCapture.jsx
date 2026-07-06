@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { Link, useParams } from 'react-router-dom';
 import PublicBrandLogo from '../components/PublicBrandLogo';
@@ -18,9 +18,12 @@ const withAlpha = (hex, alpha = '18') => {
 const PublicCreditCapture = () => {
   const { token } = useParams();
   const company = usePublicCompany();
+  const canvasRef = useRef(null);
+  const drawingRef = useRef(false);
   const [session, setSession] = useState(null);
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [hasSignature, setHasSignature] = useState(false);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState({ type: '', message: '' });
@@ -68,6 +71,19 @@ const PublicCreditCapture = () => {
     };
   }, [token]);
 
+  useEffect(() => {
+    if (session?.side !== 'signature' || !canvasRef.current || session?.uploaded) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = theme.secondary;
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    setHasSignature(false);
+  }, [session?.side, session?.uploaded, theme.secondary]);
+
   const handleFileChange = (selectedFile) => {
     if (!selectedFile) return;
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -101,6 +117,83 @@ const PublicCreditCapture = () => {
     }
   };
 
+  const getCanvasPosition = (event) => {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const touch = event.touches?.[0];
+    const clientX = touch ? touch.clientX : event.clientX;
+    const clientY = touch ? touch.clientY : event.clientY;
+    return {
+      x: ((clientX - rect.left) / rect.width) * canvas.width,
+      y: ((clientY - rect.top) / rect.height) * canvas.height,
+    };
+  };
+
+  const startSignature = (event) => {
+    event.preventDefault();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    drawingRef.current = true;
+    const ctx = canvas.getContext('2d');
+    const { x, y } = getCanvasPosition(event);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const drawSignature = (event) => {
+    if (!drawingRef.current) return;
+    event.preventDefault();
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    const { x, y } = getCanvasPosition(event);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    setHasSignature(true);
+    setStatus({ type: '', message: '' });
+  };
+
+  const stopSignature = () => {
+    drawingRef.current = false;
+  };
+
+  const clearSignature = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    setHasSignature(false);
+    setStatus({ type: '', message: '' });
+  };
+
+  const uploadSignature = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas || !hasSignature) {
+      setStatus({ type: 'error', message: 'Primero firma dentro del recuadro.' });
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('No se pudo generar la imagen de la firma.');
+      const formData = new FormData();
+      formData.append('file', blob, 'firma_cliente.png');
+      const response = await axios.post(`/api/public/credit-request/capture-session/${token}/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setSession(response.data);
+      setStatus({ type: 'success', message: 'Firma enviada correctamente. Puedes volver al formulario en el computador.' });
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error?.response?.data?.detail || 'No se pudo enviar la firma.',
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const isSignature = session?.side === 'signature';
   const sideLabel = session?.side === 'back' ? 'cara posterior' : 'cara frontal';
   const brandName = company?.name || 'AutosQP';
@@ -121,7 +214,7 @@ const PublicCreditCapture = () => {
             <h1 className="text-2xl font-black text-slate-900">{isSignature ? 'Capturar firma' : 'Capturar cédula'}</h1>
             <p className="mt-2 text-sm text-slate-500">
               {isSignature
-                ? 'Toma o selecciona la imagen de la firma y envíala. El formulario del computador se actualizará automáticamente.'
+                ? 'Firma dentro del recuadro y envíala. El formulario del computador se actualizará automáticamente.'
                 : `Toma la foto de la ${sideLabel} y envíala. El formulario del computador se actualizará automáticamente.`}
             </p>
           </div>
@@ -140,11 +233,49 @@ const PublicCreditCapture = () => {
                 </div>
               )}
 
-              {session && !session.uploaded && (
+              {session && !session.uploaded && isSignature && (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <canvas
+                      ref={canvasRef}
+                      width={720}
+                      height={260}
+                      className="h-64 w-full touch-none rounded-xl bg-white"
+                      onMouseDown={startSignature}
+                      onMouseMove={drawSignature}
+                      onMouseUp={stopSignature}
+                      onMouseLeave={stopSignature}
+                      onTouchStart={startSignature}
+                      onTouchMove={drawSignature}
+                      onTouchEnd={stopSignature}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={clearSignature}
+                      className="rounded-2xl border border-slate-300 px-5 py-4 text-base font-black text-slate-700"
+                    >
+                      Limpiar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={uploadSignature}
+                      disabled={uploading || !hasSignature}
+                      className="rounded-2xl px-5 py-4 text-base font-black text-white disabled:opacity-60"
+                      style={{ backgroundColor: theme.primary }}
+                    >
+                      {uploading ? 'Enviando...' : 'Enviar firma'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {session && !session.uploaded && !isSignature && (
                 <div className="space-y-4">
                   <label className="block rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 p-5 text-center">
-                    <span className="block text-base font-bold text-slate-900">{isSignature ? 'Tomar o seleccionar firma' : 'Tomar foto o seleccionar imagen'}</span>
-                    <span className="mt-1 block text-sm text-slate-500">{isSignature ? 'Puedes fotografiar la firma en papel o seleccionar una imagen guardada.' : 'Usa la cámara trasera del celular.'}</span>
+                    <span className="block text-base font-bold text-slate-900">Tomar foto o seleccionar imagen</span>
+                    <span className="mt-1 block text-sm text-slate-500">Usa la cámara trasera del celular.</span>
                     <input
                       type="file"
                       accept="image/*"
