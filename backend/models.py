@@ -387,6 +387,12 @@ class User(Base):
     ecard_slug = Column(String(120), nullable=True, index=True)
     ecard_photo_url = Column(String(500), nullable=True)
     ecard_position = Column(String(120), nullable=True)
+    ecard_display_email = Column(String(150), nullable=True)
+    ecard_header_color = Column(String(50), nullable=True)
+    ecard_header_text_color = Column(String(50), nullable=True)
+    ecard_card_color = Column(String(50), nullable=True)
+    ecard_text_color = Column(String(50), nullable=True)
+    ecard_accent_color = Column(String(50), nullable=True)
     commission_percentage = Column(Integer, default=0) # e.g. 5 for 5%
     
     # New fields

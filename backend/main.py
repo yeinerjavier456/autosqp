@@ -4402,6 +4402,12 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
         ecard_slug=ecard_slug,
         ecard_photo_url=user.ecard_photo_url,
         ecard_position=(user.ecard_position or "").strip() or None,
+        ecard_display_email=(user.ecard_display_email or "").strip() or None,
+        ecard_header_color=(user.ecard_header_color or "").strip() or None,
+        ecard_header_text_color=(user.ecard_header_text_color or "").strip() or None,
+        ecard_card_color=(user.ecard_card_color or "").strip() or None,
+        ecard_text_color=(user.ecard_text_color or "").strip() or None,
+        ecard_accent_color=(user.ecard_accent_color or "").strip() or None,
         commission_percentage=user.commission_percentage or 0,
         base_salary=user.base_salary,
         payment_dates=user.payment_dates
@@ -4518,6 +4524,18 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
         db_user.ecard_position = (user_update.ecard_position or "").strip() or None
     if user_update.ecard_photo_url is not None:
         db_user.ecard_photo_url = (user_update.ecard_photo_url or "").strip() or None
+    if user_update.ecard_display_email is not None:
+        db_user.ecard_display_email = (user_update.ecard_display_email or "").strip() or None
+    if user_update.ecard_header_color is not None:
+        db_user.ecard_header_color = (user_update.ecard_header_color or "").strip() or None
+    if user_update.ecard_header_text_color is not None:
+        db_user.ecard_header_text_color = (user_update.ecard_header_text_color or "").strip() or None
+    if user_update.ecard_card_color is not None:
+        db_user.ecard_card_color = (user_update.ecard_card_color or "").strip() or None
+    if user_update.ecard_text_color is not None:
+        db_user.ecard_text_color = (user_update.ecard_text_color or "").strip() or None
+    if user_update.ecard_accent_color is not None:
+        db_user.ecard_accent_color = (user_update.ecard_accent_color or "").strip() or None
     if user_update.ecard_slug is not None:
         db_user.ecard_slug = ensure_unique_ecard_slug(
             db,
@@ -4564,12 +4582,12 @@ async def upload_user_ecard_photo(
         raise HTTPException(status_code=404, detail="User not found")
     ensure_user_management_scope(current_user, db_user)
 
-    allowed_extensions = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    allowed_extensions = {".jpg", ".jpeg", ".png", ".webp"}
     original_name = str(file.filename or "").strip()
     extension = os.path.splitext(original_name)[1].lower()
     content_type = str(file.content_type or "").lower()
     if extension not in allowed_extensions or not content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Solo se permiten imágenes JPG, PNG, WEBP o GIF")
+        raise HTTPException(status_code=400, detail="Solo se permiten imágenes JPG, PNG o WEBP")
 
     os.makedirs("static/user-ecards", exist_ok=True)
     safe_name = f"{uuid.uuid4().hex}{extension}"
@@ -4995,8 +5013,14 @@ def read_public_team_card(slug: str, request: Request, db: Session = Depends(get
     return schemas.PublicTeamCard(
         full_name=team_user.full_name or team_user.email,
         email=team_user.email,
+        display_email=team_user.ecard_display_email or team_user.email,
         position=team_user.ecard_position or role_label,
         photo_url=team_user.ecard_photo_url,
+        header_color=team_user.ecard_header_color,
+        header_text_color=team_user.ecard_header_text_color,
+        card_color=team_user.ecard_card_color,
+        text_color=team_user.ecard_text_color,
+        accent_color=team_user.ecard_accent_color,
         company=schemas.PublicTeamCardCompany(
             name=company.name or DEFAULT_PUBLIC_COMPANY_CONTEXT["name"],
             logo_url=company.logo_url,

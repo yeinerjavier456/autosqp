@@ -27,6 +27,12 @@ const UserForm = () => {
         ecard_slug: '',
         ecard_photo_url: '',
         ecard_position: '',
+        ecard_display_email: '',
+        ecard_header_color: '',
+        ecard_header_text_color: '',
+        ecard_card_color: '',
+        ecard_text_color: '',
+        ecard_accent_color: '',
     });
     const [companies, setCompanies] = useState([]);
     const [roles, setRoles] = useState([]);
@@ -161,6 +167,12 @@ const UserForm = () => {
                         ecard_slug: userData.ecard_slug || normalizeEcardSlug(userData.full_name || userData.email),
                         ecard_photo_url: userData.ecard_photo_url || '',
                         ecard_position: userData.ecard_position || '',
+                        ecard_display_email: userData.ecard_display_email || userData.email || '',
+                        ecard_header_color: userData.ecard_header_color || '',
+                        ecard_header_text_color: userData.ecard_header_text_color || '',
+                        ecard_card_color: userData.ecard_card_color || '',
+                        ecard_text_color: userData.ecard_text_color || '',
+                        ecard_accent_color: userData.ecard_accent_color || '',
                         tracked_advisor_ids: Array.isArray(userData.tracked_advisor_ids)
                             ? userData.tracked_advisor_ids.map((item) => Number(item)).filter((item) => Number.isInteger(item))
                             : [],
@@ -690,7 +702,53 @@ const UserForm = () => {
                             </div>
 
                             <div className="md:col-span-2">
-                                <label className="block text-sm font-medium text-slate-600 mb-1">Foto o GIF del empleado</label>
+                                <label className="block text-sm font-medium text-slate-600 mb-1">Email a mostrar</label>
+                                <input
+                                    type="email"
+                                    name="ecard_display_email"
+                                    value={user.ecard_display_email || ''}
+                                    onChange={handleChange}
+                                    placeholder={user.email || 'correo@empresa.com'}
+                                    className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-black bg-white"
+                                />
+                            </div>
+
+                            <div className="md:col-span-2">
+                                <p className="mb-3 text-sm font-semibold text-slate-700">Colores de la tarjeta</p>
+                                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                                    {[
+                                        ['ecard_header_color', 'Cabecera', selectedCompany?.secondary_color || '#071225'],
+                                        ['ecard_header_text_color', 'Texto cabecera', '#ffffff'],
+                                        ['ecard_card_color', 'Card', '#ffffff'],
+                                        ['ecard_text_color', 'Texto principal', '#071225'],
+                                        ['ecard_accent_color', 'Acento / botón', selectedCompany?.primary_color || '#2fe6bd'],
+                                    ].map(([fieldName, label, defaultColor]) => (
+                                        <label key={fieldName} className="rounded-xl border border-blue-100 bg-white p-3">
+                                            <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">{label}</span>
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="color"
+                                                    name={fieldName}
+                                                    value={user[fieldName] || defaultColor}
+                                                    onChange={handleChange}
+                                                    className="h-10 w-12 cursor-pointer rounded border border-slate-200 bg-white p-1"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    name={fieldName}
+                                                    value={user[fieldName] || ''}
+                                                    onChange={handleChange}
+                                                    placeholder={defaultColor}
+                                                    className="min-w-0 flex-1 rounded-lg border border-blue-100 px-3 py-2 text-sm text-slate-700"
+                                                />
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-slate-600 mb-1">Foto del empleado</label>
                                 <div className="grid gap-4 rounded-xl border border-dashed border-blue-200 bg-white p-4 md:grid-cols-[120px_1fr] md:items-center">
                                     <div className="h-28 w-28 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
                                         {ecardPhotoPreview ? (
@@ -704,12 +762,12 @@ const UserForm = () => {
                                     <div>
                                         <input
                                             type="file"
-                                            accept="image/png,image/jpeg,image/webp,image/gif"
+                                            accept="image/png,image/jpeg,image/webp"
                                             onChange={(event) => setEcardPhotoFile(event.target.files?.[0] || null)}
                                             className="w-full rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-bold file:text-white"
                                         />
                                         <p className="mt-2 text-xs text-slate-500">
-                                            Puedes usar JPG, PNG, WEBP o GIF. La imagen se mostrará en la tarjeta pública.
+                                            Puedes usar JPG, PNG o WEBP. La imagen se mostrará en la tarjeta pública.
                                         </p>
                                     </div>
                                 </div>

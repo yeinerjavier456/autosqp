@@ -110,6 +110,42 @@ def ensure_mysql_schema(engine: Engine) -> None:
             "ecard_position",
             "ALTER TABLE users ADD COLUMN ecard_position VARCHAR(120) NULL",
         )
+        _ensure_column(
+            engine,
+            "users",
+            "ecard_display_email",
+            "ALTER TABLE users ADD COLUMN ecard_display_email VARCHAR(150) NULL",
+        )
+        _ensure_column(
+            engine,
+            "users",
+            "ecard_header_color",
+            "ALTER TABLE users ADD COLUMN ecard_header_color VARCHAR(50) NULL",
+        )
+        _ensure_column(
+            engine,
+            "users",
+            "ecard_header_text_color",
+            "ALTER TABLE users ADD COLUMN ecard_header_text_color VARCHAR(50) NULL",
+        )
+        _ensure_column(
+            engine,
+            "users",
+            "ecard_card_color",
+            "ALTER TABLE users ADD COLUMN ecard_card_color VARCHAR(50) NULL",
+        )
+        _ensure_column(
+            engine,
+            "users",
+            "ecard_text_color",
+            "ALTER TABLE users ADD COLUMN ecard_text_color VARCHAR(50) NULL",
+        )
+        _ensure_column(
+            engine,
+            "users",
+            "ecard_accent_color",
+            "ALTER TABLE users ADD COLUMN ecard_accent_color VARCHAR(50) NULL",
+        )
         if not _mysql_index_exists(engine, "users", "ix_users_ecard_slug"):
             with engine.begin() as conn:
                 conn.execute(text("CREATE INDEX ix_users_ecard_slug ON users (ecard_slug)"))

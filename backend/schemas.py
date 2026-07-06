@@ -47,6 +47,12 @@ class UserBase(BaseModel):
     ecard_slug: Optional[str] = None
     ecard_photo_url: Optional[str] = None
     ecard_position: Optional[str] = None
+    ecard_display_email: Optional[str] = None
+    ecard_header_color: Optional[str] = None
+    ecard_header_text_color: Optional[str] = None
+    ecard_card_color: Optional[str] = None
+    ecard_text_color: Optional[str] = None
+    ecard_accent_color: Optional[str] = None
     commission_percentage: Optional[float] = 0.0
     base_salary: Optional[int] = None
     payment_dates: Optional[str] = None
@@ -102,6 +108,12 @@ class UserUpdate(BaseModel):
     ecard_slug: Optional[str] = None
     ecard_photo_url: Optional[str] = None
     ecard_position: Optional[str] = None
+    ecard_display_email: Optional[str] = None
+    ecard_header_color: Optional[str] = None
+    ecard_header_text_color: Optional[str] = None
+    ecard_card_color: Optional[str] = None
+    ecard_text_color: Optional[str] = None
+    ecard_accent_color: Optional[str] = None
     commission_percentage: Optional[float] = None
     base_salary: Optional[int] = None
     payment_dates: Optional[str] = None
@@ -168,8 +180,14 @@ class PublicTeamCardCompany(BaseModel):
 class PublicTeamCard(BaseModel):
     full_name: str
     email: EmailStr
+    display_email: Optional[str] = None
     position: Optional[str] = None
     photo_url: Optional[str] = None
+    header_color: Optional[str] = None
+    header_text_color: Optional[str] = None
+    card_color: Optional[str] = None
+    text_color: Optional[str] = None
+    accent_color: Optional[str] = None
     company: PublicTeamCardCompany
 
 class Token(BaseModel):
