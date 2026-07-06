@@ -5,6 +5,13 @@ import { useNotifications } from '../context/NotificationsContext';
 import Swal from 'sweetalert2';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { formatBogotaDateTime } from '../utils/dateTime';
+import {
+    COLOMBIA_CITY_OPTIONS,
+    VEHICLE_BRANDS,
+    formatMoneyInput,
+    getVehicleModelOptions,
+    sanitizeMoneyInput,
+} from '../utils/creditFormCatalogs';
 
 const API_BASE_URL = `${window.location.origin}/crm/api`;
 const BOARD_PAGE_SIZE = 20;
@@ -93,6 +100,18 @@ const CREDIT_REFERENCE_GROUPS = [
     ['personal1', 'Primera referencia personal'],
     ['personal2', 'Segunda referencia personal'],
 ];
+
+const CREDIT_MONEY_FIELDS = new Set([
+    'vehicleValue',
+    'requestedAmount',
+    'salary',
+    'salaryIncome',
+    'commissionsIncome',
+    'otherIncome',
+    'totalIncome',
+]);
+
+const CREDIT_CITY_FIELDS = new Set(['issuePlace', 'birthPlace', 'city', 'companyCity']);
 
 const createInternalCreditForm = (lead) => ({
     vehicle: {
@@ -257,8 +276,9 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
     }, [documentCaptures, signatureCapture]);
 
     const updateField = (section, field, value) => {
+        const normalizedValue = CREDIT_MONEY_FIELDS.has(field) ? sanitizeMoneyInput(value) : value;
         setForm((current) => {
-            const nextSection = { ...(current[section] || {}), [field]: value };
+            const nextSection = { ...(current[section] || {}), [field]: normalizedValue };
             if (section === 'income' && ['salaryIncome', 'commissionsIncome', 'otherIncome'].includes(field)) {
                 const total = ['salaryIncome', 'commissionsIncome', 'otherIncome']
                     .reduce((sum, key) => sum + (Number(nextSection[key]) || 0), 0);
@@ -476,9 +496,33 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
 
     const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100';
     const attachments = submission?.attachments || {};
+    const vehicleModelOptions = getVehicleModelOptions(form?.vehicle?.make);
     const attachmentPreview = (key) => {
         const value = attachments[key];
         return value ? resolveLeadFileUrl(value) : '';
+    };
+
+    const getCreditFieldListId = (sectionId, field) => {
+        if (sectionId === 'vehicle' && field === 'make') return 'lead-credit-vehicle-brands';
+        if (sectionId === 'vehicle' && field === 'model') return 'lead-credit-vehicle-models';
+        if (CREDIT_CITY_FIELDS.has(field)) return 'lead-credit-colombia-cities';
+        return undefined;
+    };
+
+    const renderCreditFieldInput = (sectionId, field, type, readOnly) => {
+        const isMoney = CREDIT_MONEY_FIELDS.has(field);
+        const value = form?.[sectionId]?.[field] ?? '';
+        return (
+            <input
+                type={type === 'date' || type === 'email' ? type : 'text'}
+                inputMode={isMoney ? 'numeric' : undefined}
+                list={getCreditFieldListId(sectionId, field)}
+                value={isMoney ? formatMoneyInput(value) : value}
+                onChange={(event) => updateField(sectionId, field, event.target.value)}
+                disabled={!canModify || readOnly}
+                className={`${inputClass} mt-1 font-normal normal-case tracking-normal`}
+            />
+        );
     };
 
     const renderPreviewBox = (label, previewUrl, file) => {
@@ -536,6 +580,15 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
 
     return (
         <div className="space-y-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <datalist id="lead-credit-vehicle-brands">
+                {VEHICLE_BRANDS.map((brand) => <option key={brand} value={brand} />)}
+            </datalist>
+            <datalist id="lead-credit-vehicle-models">
+                {vehicleModelOptions.map((model) => <option key={model} value={model} />)}
+            </datalist>
+            <datalist id="lead-credit-colombia-cities">
+                {COLOMBIA_CITY_OPTIONS.map((city) => <option key={city} value={city} />)}
+            </datalist>
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h3 className="text-lg font-bold text-slate-900">Formulario de crédito</h3>
@@ -603,13 +656,7 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
                         {section.fields.map(([field, label, type = 'text', readOnly = false]) => (
                             <label key={field} className="block text-xs font-bold uppercase tracking-wide text-slate-500">
                                 {label}
-                                <input
-                                    type={type}
-                                    value={form?.[section.id]?.[field] ?? ''}
-                                    onChange={(event) => updateField(section.id, field, event.target.value)}
-                                    disabled={!canModify || readOnly}
-                                    className={`${inputClass} mt-1 font-normal normal-case tracking-normal`}
-                                />
+                                {renderCreditFieldInput(section.id, field, type, readOnly)}
                             </label>
                         ))}
                     </div>
@@ -628,6 +675,7 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
                                         {label}
                                         <input
                                             type="text"
+                                            list={field === 'city' ? 'lead-credit-colombia-cities' : undefined}
                                             value={form?.references?.[group]?.[field] ?? ''}
                                             onChange={(event) => updateReference(group, field, event.target.value)}
                                             disabled={!canModify}
