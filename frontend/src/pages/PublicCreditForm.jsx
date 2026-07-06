@@ -1117,7 +1117,7 @@ const PublicCreditForm = () => {
                       <textarea readOnly value={POLICY_TEXT} className="h-64 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-600 outline-none" />
                     </div>
 
-                    <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+                    <div className={`grid gap-6 ${requiresEmailValidation ? 'lg:grid-cols-[1fr_1fr]' : ''}`}>
                       <div className="space-y-4 rounded-2xl border border-slate-200 p-5">
                         <h3 className="text-lg font-bold text-slate-900">Firma</h3>
                         <div className="flex gap-3">
@@ -1160,38 +1160,32 @@ const PublicCreditForm = () => {
                         </div>
                       </div>
 
-                      <div className="space-y-4 rounded-2xl border border-slate-200 p-5">
-                        <h3 className="text-lg font-bold text-slate-900">Validación por correo</h3>
-                        {requiresEmailValidation ? (
-                          <>
-                            <p className="text-sm text-slate-500">Se enviará un código aleatorio al correo registrado para validar la solicitud.</p>
-                            <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
-                              <strong>Correo:</strong> {form.personal.email || 'Aún no registrado'}
-                            </div>
-                            <button type="button" onClick={sendVerificationCode} disabled={sendingCode} className="rounded-xl px-4 py-3 text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: theme.primary }}>
-                              {sendingCode ? 'Enviando...' : accessToken ? 'Código enviado por asesor' : verificationSent ? 'Reenviar código' : 'Enviar código'}
-                            </button>
-                            <div>
-                              <label className="mb-1 block text-sm font-semibold text-slate-700">Código de verificación</label>
-                              <div className="flex gap-3">
-                                <input className={inputClassName} value={form.consent.verificationCode} onChange={(e) => updateSection('consent', 'verificationCode', e.target.value)} />
-                                <button type="button" onClick={verifyCode} disabled={!verificationSent || verifyingCode} className="rounded-xl px-4 py-3 text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: theme.secondary }}>
-                                  {verifyingCode ? 'Confirmando...' : 'Confirmar código'}
-                                </button>
-                              </div>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-                            Esta empresa no requiere código de validación por correo. Puedes firmar y enviar el formulario.
+                      {requiresEmailValidation && (
+                        <div className="space-y-4 rounded-2xl border border-slate-200 p-5">
+                          <h3 className="text-lg font-bold text-slate-900">Validación por correo</h3>
+                          <p className="text-sm text-slate-500">Se enviará un código aleatorio al correo registrado para validar la solicitud.</p>
+                          <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
+                            <strong>Correo:</strong> {form.personal.email || 'Aún no registrado'}
                           </div>
-                        )}
-                        {verificationVerified && (
-                          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-                            {requiresEmailValidation ? 'Correo validado correctamente.' : 'Validación por correo omitida por configuración de la empresa.'}
+                          <button type="button" onClick={sendVerificationCode} disabled={sendingCode} className="rounded-xl px-4 py-3 text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: theme.primary }}>
+                            {sendingCode ? 'Enviando...' : accessToken ? 'Código enviado por asesor' : verificationSent ? 'Reenviar código' : 'Enviar código'}
+                          </button>
+                          <div>
+                            <label className="mb-1 block text-sm font-semibold text-slate-700">Código de verificación</label>
+                            <div className="flex gap-3">
+                              <input className={inputClassName} value={form.consent.verificationCode} onChange={(e) => updateSection('consent', 'verificationCode', e.target.value)} />
+                              <button type="button" onClick={verifyCode} disabled={!verificationSent || verifyingCode} className="rounded-xl px-4 py-3 text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: theme.secondary }}>
+                                {verifyingCode ? 'Confirmando...' : 'Confirmar código'}
+                              </button>
+                            </div>
                           </div>
-                        )}
-                      </div>
+                          {verificationVerified && (
+                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+                              Correo validado correctamente.
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </section>
                 )}
