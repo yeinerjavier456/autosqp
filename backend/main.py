@@ -2979,9 +2979,7 @@ def get_active_advisor_users_for_redistribution(
     for user in candidates:
         if exclude_user_id and user.id == exclude_user_id:
             continue
-        if not is_active_user(user):
-            continue
-        if not is_advisor_role(getattr(user, "role", None)):
+        if not can_user_receive_auto_assigned_leads(user):
             continue
         valid_users.append(user)
 
@@ -4117,7 +4115,7 @@ def redistribute_user_leads(
     current_user: models.User = Depends(get_current_user)
 ):
     role_obj = db.query(models.Role).filter(models.Role.id == current_user.role_id).first()
-    effective_role_name = getattr(role_obj, "base_role_name", None) or getattr(role_obj, "name", None)
+    effective_role_name = get_user_role_name(current_user)
     if not role_obj or effective_role_name not in ["super_admin", "admin"]:
         raise HTTPException(status_code=403, detail="Solo administradores pueden redistribuir leads")
 
@@ -4139,7 +4137,10 @@ def redistribute_user_leads(
         exclude_user_id=source_user.id,
     )
     if not recipient_users:
-        raise HTTPException(status_code=400, detail="No hay usuarios activos disponibles para redistribuir estos leads")
+        raise HTTPException(
+            status_code=400,
+            detail="No hay asesores o vendedores activos con asignación automática habilitada para redistribuir estos leads"
+        )
 
     leads = db.query(models.Lead).options(
         joinedload(models.Lead.supervisors)

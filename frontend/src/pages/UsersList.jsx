@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { useAuth } from '../context/AuthContext';
 
+const API_BASE_URL = import.meta.env.DEV ? '/crm/api' : '/api';
+
 const UsersList = () => {
     const { user: currentUser } = useAuth();
     const [users, setUsers] = useState([]);
@@ -22,7 +24,7 @@ const UsersList = () => {
             const params = { skip, limit };
             if (search) params.q = search;
 
-            const response = await axios.get('/api/users/', {
+            const response = await axios.get(`${API_BASE_URL}/users/`, {
                 params,
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -51,7 +53,7 @@ const UsersList = () => {
     const handleRedistributeLeads = async (targetUser) => {
         const result = await Swal.fire({
             title: 'Redistribuir leads',
-            text: `Se redistribuirán aleatoriamente todos los leads asignados a ${targetUser.full_name || targetUser.email}.`,
+            text: `Se redistribuirán aleatoriamente todos los leads asignados a ${targetUser.full_name || targetUser.email} entre asesores/vendedores con asignación automática habilitada.`,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonText: 'Redistribuir',
@@ -64,7 +66,7 @@ const UsersList = () => {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.post(
-                `/api/users/${targetUser.id}/redistribute-leads`,
+                `${API_BASE_URL}/users/${targetUser.id}/redistribute-leads`,
                 {},
                 { headers: { Authorization: `Bearer ${token}` } }
             );
