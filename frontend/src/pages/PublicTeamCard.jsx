@@ -32,6 +32,35 @@ const normalizeExternalUrl = (url) => {
   return `https://${value}`;
 };
 
+const SocialIcon = ({ network }) => {
+  if (network === 'instagram') {
+    return (
+      <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden="true">
+        <path fill="currentColor" d="M7.8 2h8.4A5.8 5.8 0 0 1 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8A5.8 5.8 0 0 1 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2Zm0 2A3.8 3.8 0 0 0 4 7.8v8.4A3.8 3.8 0 0 0 7.8 20h8.4a3.8 3.8 0 0 0 3.8-3.8V7.8A3.8 3.8 0 0 0 16.2 4H7.8Zm4.2 3.1a4.9 4.9 0 1 1 0 9.8 4.9 4.9 0 0 1 0-9.8Zm0 2a2.9 2.9 0 1 0 0 5.8 2.9 2.9 0 0 0 0-5.8Zm5.1-2.35a1.15 1.15 0 1 1 0 2.3 1.15 1.15 0 0 1 0-2.3Z" />
+      </svg>
+    );
+  }
+  if (network === 'facebook') {
+    return (
+      <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden="true">
+        <path fill="currentColor" d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5.02 3.66 9.18 8.44 9.94v-7.03H7.9v-2.91h2.54V9.84c0-2.52 1.5-3.91 3.77-3.91 1.09 0 2.23.2 2.23.2v2.47h-1.25c-1.24 0-1.63.77-1.63 1.56v1.9h2.77l-.44 2.91h-2.33V22C18.34 21.24 22 17.08 22 12.06Z" />
+      </svg>
+    );
+  }
+  if (network === 'tiktok') {
+    return (
+      <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden="true">
+        <path fill="currentColor" d="M16.6 2c.35 2.22 1.58 3.55 3.8 3.69v3.05a7.2 7.2 0 0 1-3.75-1.1v6.54c0 4.1-2.6 6.82-6.45 6.82-3.35 0-6.2-2.23-6.2-5.87 0-3.74 2.9-5.89 6.28-5.89.48 0 .86.04 1.22.14v3.25a3.4 3.4 0 0 0-1.23-.23c-1.6 0-2.9.94-2.9 2.67 0 1.62 1.2 2.63 2.78 2.63 1.75 0 2.83-1.05 2.83-3.07V2h3.62Z" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden="true">
+      <path fill="currentColor" d="M12.04 2a9.9 9.9 0 0 0-8.58 14.85L2.2 22l5.28-1.23A9.95 9.95 0 1 0 12.04 2Zm0 1.9a8.05 8.05 0 1 1 0 16.1 8 8 0 0 1-4.08-1.12l-.36-.21-3.08.72.73-3-.24-.38A8.05 8.05 0 0 1 12.04 3.9Zm-3.42 3.7c-.18 0-.47.07-.72.35-.25.27-.95.93-.95 2.27s.98 2.64 1.12 2.82c.14.18 1.9 3.05 4.72 4.15 2.34.91 2.82.73 3.33.68.51-.05 1.65-.67 1.88-1.32.23-.65.23-1.2.16-1.32-.07-.12-.25-.19-.53-.33-.28-.14-1.65-.81-1.9-.9-.26-.1-.44-.14-.63.14-.18.28-.72.9-.88 1.08-.16.18-.32.2-.6.07-.28-.14-1.18-.44-2.25-1.39-.83-.74-1.39-1.65-1.55-1.93-.16-.28-.02-.43.12-.57.13-.13.28-.33.42-.49.14-.16.18-.28.28-.47.09-.18.05-.35-.02-.49-.07-.14-.62-1.54-.86-2.1-.23-.54-.46-.55-.64-.56h-.55Z" />
+    </svg>
+  );
+};
+
 const PublicTeamCard = () => {
   const { slug } = useParams();
   const [card, setCard] = useState(null);
@@ -225,17 +254,19 @@ const PublicTeamCard = () => {
           </a>
 
           {socialEntries.length ? (
-            <div className="mt-5 grid grid-cols-2 gap-3">
+            <div className="mt-5 flex flex-wrap justify-center gap-3">
               {socialEntries.map(([network, label, url]) => (
                 <a
                   key={network}
                   href={normalizeExternalUrl(url)}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-2xl border px-4 py-3 text-center text-xs font-black uppercase transition hover:-translate-y-0.5 hover:shadow-md"
+                  aria-label={label}
+                  title={label}
+                  className="flex h-12 w-12 items-center justify-center rounded-2xl border transition hover:-translate-y-0.5 hover:shadow-md"
                   style={{ borderColor: withAlpha(accentColor, '66'), color: textColor, background: withAlpha(accentColor, '10') }}
                 >
-                  {label}
+                  <SocialIcon network={network} />
                 </a>
               ))}
             </div>
