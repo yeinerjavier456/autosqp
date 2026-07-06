@@ -29,6 +29,22 @@ const UserForm = () => {
         ecard_position: '',
         ecard_display_email: '',
         ecard_display_phone: '',
+        ecard_headline: '',
+        ecard_headline_highlight: '',
+        ecard_subheadline: '',
+        ecard_visit_title: '',
+        ecard_visit_text: '',
+        ecard_footer_label_1: '',
+        ecard_footer_label_2: '',
+        ecard_footer_label_3: '',
+        ecard_show_instagram: false,
+        ecard_instagram_url: '',
+        ecard_show_facebook: false,
+        ecard_facebook_url: '',
+        ecard_show_tiktok: false,
+        ecard_tiktok_url: '',
+        ecard_show_whatsapp: true,
+        ecard_whatsapp_url: '',
         ecard_header_color: '',
         ecard_header_text_color: '',
         ecard_card_color: '',
@@ -170,6 +186,22 @@ const UserForm = () => {
                         ecard_position: userData.ecard_position || '',
                         ecard_display_email: userData.ecard_display_email || userData.email || '',
                         ecard_display_phone: userData.ecard_display_phone || '',
+                        ecard_headline: userData.ecard_headline || '',
+                        ecard_headline_highlight: userData.ecard_headline_highlight || '',
+                        ecard_subheadline: userData.ecard_subheadline || '',
+                        ecard_visit_title: userData.ecard_visit_title || '',
+                        ecard_visit_text: userData.ecard_visit_text || '',
+                        ecard_footer_label_1: userData.ecard_footer_label_1 || '',
+                        ecard_footer_label_2: userData.ecard_footer_label_2 || '',
+                        ecard_footer_label_3: userData.ecard_footer_label_3 || '',
+                        ecard_show_instagram: Boolean(userData.ecard_show_instagram),
+                        ecard_instagram_url: userData.ecard_instagram_url || '',
+                        ecard_show_facebook: Boolean(userData.ecard_show_facebook),
+                        ecard_facebook_url: userData.ecard_facebook_url || '',
+                        ecard_show_tiktok: Boolean(userData.ecard_show_tiktok),
+                        ecard_tiktok_url: userData.ecard_tiktok_url || '',
+                        ecard_show_whatsapp: userData.ecard_show_whatsapp !== false,
+                        ecard_whatsapp_url: userData.ecard_whatsapp_url || '',
                         ecard_header_color: userData.ecard_header_color || '',
                         ecard_header_text_color: userData.ecard_header_text_color || '',
                         ecard_card_color: userData.ecard_card_color || '',
@@ -762,6 +794,74 @@ const UserForm = () => {
                                         </label>
                                     ))}
                                 </div>
+                            </div>
+
+                            <div className="md:col-span-2">
+                                <p className="mb-3 text-sm font-semibold text-slate-700">Textos de la tarjeta</p>
+                                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                    {[
+                                        ['ecard_headline', 'Título cabecera', 'Gracias por confiar'],
+                                        ['ecard_headline_highlight', 'Texto destacado', 'en nosotros'],
+                                        ['ecard_subheadline', 'Subtítulo cabecera', 'Estamos aquí para ayudarte a encontrar el carro ideal.'],
+                                        ['ecard_visit_title', 'Título de visita', 'Visítanos en nuestra empresa'],
+                                        ['ecard_visit_text', 'Texto de visita', 'Conoce nuestras instalaciones y encuentra tu próximo carro.'],
+                                        ['ecard_footer_label_1', 'Texto inferior 1', 'Transparencia'],
+                                        ['ecard_footer_label_2', 'Texto inferior 2', 'Confianza'],
+                                        ['ecard_footer_label_3', 'Texto inferior 3', 'Calidad'],
+                                    ].map(([fieldName, label, placeholder]) => (
+                                        <label key={fieldName} className={fieldName === 'ecard_subheadline' || fieldName === 'ecard_visit_text' ? 'md:col-span-2' : ''}>
+                                            <span className="mb-1 block text-sm font-medium text-slate-600">{label}</span>
+                                            <input
+                                                type="text"
+                                                name={fieldName}
+                                                value={user[fieldName] || ''}
+                                                onChange={handleChange}
+                                                placeholder={placeholder}
+                                                className="w-full rounded-lg border border-blue-200 px-4 py-2 text-black outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="md:col-span-2">
+                                <p className="mb-3 text-sm font-semibold text-slate-700">Redes sociales visibles</p>
+                                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                    {[
+                                        ['instagram', 'Instagram'],
+                                        ['facebook', 'Facebook'],
+                                        ['tiktok', 'TikTok'],
+                                        ['whatsapp', 'WhatsApp'],
+                                    ].map(([network, label]) => {
+                                        const showField = `ecard_show_${network}`;
+                                        const urlField = `ecard_${network}_url`;
+                                        return (
+                                            <div key={network} className="rounded-xl border border-blue-100 bg-white p-3">
+                                                <label className="mb-3 flex items-center gap-3 text-sm font-semibold text-slate-700">
+                                                    <input
+                                                        type="checkbox"
+                                                        name={showField}
+                                                        checked={Boolean(user[showField])}
+                                                        onChange={handleChange}
+                                                        className="h-4 w-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                                                    />
+                                                    Mostrar {label}
+                                                </label>
+                                                <input
+                                                    type="url"
+                                                    name={urlField}
+                                                    value={user[urlField] || ''}
+                                                    onChange={handleChange}
+                                                    placeholder={network === 'whatsapp' ? 'https://wa.me/573001234567' : `Link de ${label}`}
+                                                    className="w-full rounded-lg border border-blue-100 px-3 py-2 text-sm text-slate-700"
+                                                />
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <p className="mt-2 text-xs text-slate-500">
+                                    Para WhatsApp puedes dejar el link vacío y se usará el teléfono configurado en la tarjeta.
+                                </p>
                             </div>
 
                             <div className="md:col-span-2">

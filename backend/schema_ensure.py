@@ -122,6 +122,22 @@ def ensure_mysql_schema(engine: Engine) -> None:
             "ecard_display_phone",
             "ALTER TABLE users ADD COLUMN ecard_display_phone VARCHAR(80) NULL",
         )
+        _ensure_column(engine, "users", "ecard_headline", "ALTER TABLE users ADD COLUMN ecard_headline VARCHAR(180) NULL")
+        _ensure_column(engine, "users", "ecard_headline_highlight", "ALTER TABLE users ADD COLUMN ecard_headline_highlight VARCHAR(80) NULL")
+        _ensure_column(engine, "users", "ecard_subheadline", "ALTER TABLE users ADD COLUMN ecard_subheadline VARCHAR(250) NULL")
+        _ensure_column(engine, "users", "ecard_visit_title", "ALTER TABLE users ADD COLUMN ecard_visit_title VARCHAR(160) NULL")
+        _ensure_column(engine, "users", "ecard_visit_text", "ALTER TABLE users ADD COLUMN ecard_visit_text VARCHAR(250) NULL")
+        _ensure_column(engine, "users", "ecard_footer_label_1", "ALTER TABLE users ADD COLUMN ecard_footer_label_1 VARCHAR(80) NULL")
+        _ensure_column(engine, "users", "ecard_footer_label_2", "ALTER TABLE users ADD COLUMN ecard_footer_label_2 VARCHAR(80) NULL")
+        _ensure_column(engine, "users", "ecard_footer_label_3", "ALTER TABLE users ADD COLUMN ecard_footer_label_3 VARCHAR(80) NULL")
+        _ensure_column(engine, "users", "ecard_show_instagram", "ALTER TABLE users ADD COLUMN ecard_show_instagram TINYINT(1) NOT NULL DEFAULT 0")
+        _ensure_column(engine, "users", "ecard_instagram_url", "ALTER TABLE users ADD COLUMN ecard_instagram_url VARCHAR(500) NULL")
+        _ensure_column(engine, "users", "ecard_show_facebook", "ALTER TABLE users ADD COLUMN ecard_show_facebook TINYINT(1) NOT NULL DEFAULT 0")
+        _ensure_column(engine, "users", "ecard_facebook_url", "ALTER TABLE users ADD COLUMN ecard_facebook_url VARCHAR(500) NULL")
+        _ensure_column(engine, "users", "ecard_show_tiktok", "ALTER TABLE users ADD COLUMN ecard_show_tiktok TINYINT(1) NOT NULL DEFAULT 0")
+        _ensure_column(engine, "users", "ecard_tiktok_url", "ALTER TABLE users ADD COLUMN ecard_tiktok_url VARCHAR(500) NULL")
+        _ensure_column(engine, "users", "ecard_show_whatsapp", "ALTER TABLE users ADD COLUMN ecard_show_whatsapp TINYINT(1) NOT NULL DEFAULT 1")
+        _ensure_column(engine, "users", "ecard_whatsapp_url", "ALTER TABLE users ADD COLUMN ecard_whatsapp_url VARCHAR(500) NULL")
         _ensure_column(
             engine,
             "users",

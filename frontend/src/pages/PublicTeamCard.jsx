@@ -25,6 +25,13 @@ const getWhatsAppUrl = (phone) => {
   return `https://wa.me/${normalized}`;
 };
 
+const normalizeExternalUrl = (url) => {
+  const value = String(url || '').trim();
+  if (!value || value === 'auto') return value;
+  if (/^https?:\/\//i.test(value)) return value;
+  return `https://${value}`;
+};
+
 const PublicTeamCard = () => {
   const { slug } = useParams();
   const [card, setCard] = useState(null);
@@ -65,6 +72,21 @@ const PublicTeamCard = () => {
   const emailToShow = card?.display_email || card?.email;
   const phoneToShow = card?.display_phone || company.contact_phone || '';
   const whatsappUrl = getWhatsAppUrl(phoneToShow);
+  const headline = card?.headline || 'Gracias por confiar';
+  const headlineHighlight = card?.headline_highlight || 'en nosotros';
+  const subheadline = card?.subheadline || 'Estamos aquí para ayudarte a encontrar el carro ideal.';
+  const visitTitle = card?.visit_title || 'Visítanos en nuestra empresa';
+  const visitText = card?.visit_text || 'Conoce nuestras instalaciones y encuentra tu próximo carro.';
+  const footerLabels = Array.isArray(card?.footer_labels) && card.footer_labels.length
+    ? card.footer_labels
+    : ['Transparencia', 'Confianza', 'Calidad'];
+  const socials = card?.socials || {};
+  const socialEntries = [
+    ['instagram', 'Instagram', socials.instagram],
+    ['facebook', 'Facebook', socials.facebook],
+    ['tiktok', 'TikTok', socials.tiktok],
+    ['whatsapp', 'WhatsApp', socials.whatsapp === 'auto' ? whatsappUrl : socials.whatsapp],
+  ].filter(([, , url]) => Boolean(url));
 
   const initials = useMemo(() => {
     const parts = String(card?.full_name || '').trim().split(/\s+/).filter(Boolean);
@@ -118,10 +140,10 @@ const PublicTeamCard = () => {
           </div>
           <div className="relative z-10 mt-10">
             <p className="text-3xl font-black leading-snug">
-              Gracias por confiar <span style={{ color: accentColor }}>en nosotros</span>
+              {headline} <span style={{ color: accentColor }}>{headlineHighlight}</span>
             </p>
             <p className="mt-5 max-w-[245px] text-sm leading-7" style={{ color: withAlpha(headerTextColor, 'd9') }}>
-              Estamos aquí para ayudarte a encontrar el carro ideal.
+              {subheadline}
             </p>
           </div>
           <div className="absolute bottom-6 left-7 grid grid-cols-4 gap-1">
@@ -176,9 +198,9 @@ const PublicTeamCard = () => {
                 </svg>
               </div>
               <div>
-                <p className="text-lg font-black leading-7" style={{ color: textColor }}>Visítanos en nuestra empresa</p>
+                <p className="text-lg font-black leading-7" style={{ color: textColor }}>{visitTitle}</p>
                 <p className="mt-2 text-sm leading-6" style={{ color: secondaryTextColor }}>
-                  Conoce nuestras instalaciones y encuentra tu próximo carro.
+                  {visitText}
                 </p>
               </div>
             </div>
@@ -193,24 +215,37 @@ const PublicTeamCard = () => {
               <p className="mt-4 text-center text-sm font-semibold" style={{ color: accentColor }}>{company.contact_address}</p>
             ) : null}
           </a>
+
+          <a
+            href={inventoryPath || '/autos'}
+            className="mt-4 flex w-full items-center justify-center rounded-2xl px-5 py-4 text-sm font-black uppercase text-white shadow-lg"
+            style={{ background: accentColor, color: headerColor }}
+          >
+            Ver inventario
+          </a>
+
+          {socialEntries.length ? (
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              {socialEntries.map(([network, label, url]) => (
+                <a
+                  key={network}
+                  href={normalizeExternalUrl(url)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-2xl border px-4 py-3 text-center text-xs font-black uppercase transition hover:-translate-y-0.5 hover:shadow-md"
+                  style={{ borderColor: withAlpha(accentColor, '66'), color: textColor, background: withAlpha(accentColor, '10') }}
+                >
+                  {label}
+                </a>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="grid grid-cols-3 gap-2 px-5 py-7 text-center text-xs font-semibold text-white" style={{ background: headerColor }}>
-          <span>Transparencia</span>
-          <span>Confianza</span>
-          <span>Calidad</span>
+          {footerLabels.slice(0, 3).map((label) => <span key={label}>{label}</span>)}
         </div>
       </section>
-      <div className="mx-auto mt-5 flex max-w-[390px] flex-wrap justify-center gap-3">
-        {whatsappUrl ? (
-          <a href={whatsappUrl} target="_blank" rel="noreferrer" className="rounded-xl px-5 py-3 text-sm font-black text-white shadow-lg" style={{ background: headerColor }}>
-            WhatsApp
-          </a>
-        ) : null}
-        <a href={inventoryPath || '/autos'} className="rounded-xl bg-white/95 px-5 py-3 text-sm font-black text-slate-900 shadow-lg">
-          Ver inventario
-        </a>
-      </div>
     </main>
   );
 };

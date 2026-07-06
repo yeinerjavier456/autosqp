@@ -4404,6 +4404,22 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
         ecard_position=(user.ecard_position or "").strip() or None,
         ecard_display_email=(user.ecard_display_email or "").strip() or None,
         ecard_display_phone=(user.ecard_display_phone or "").strip() or None,
+        ecard_headline=(user.ecard_headline or "").strip() or None,
+        ecard_headline_highlight=(user.ecard_headline_highlight or "").strip() or None,
+        ecard_subheadline=(user.ecard_subheadline or "").strip() or None,
+        ecard_visit_title=(user.ecard_visit_title or "").strip() or None,
+        ecard_visit_text=(user.ecard_visit_text or "").strip() or None,
+        ecard_footer_label_1=(user.ecard_footer_label_1 or "").strip() or None,
+        ecard_footer_label_2=(user.ecard_footer_label_2 or "").strip() or None,
+        ecard_footer_label_3=(user.ecard_footer_label_3 or "").strip() or None,
+        ecard_show_instagram=bool(user.ecard_show_instagram),
+        ecard_instagram_url=(user.ecard_instagram_url or "").strip() or None,
+        ecard_show_facebook=bool(user.ecard_show_facebook),
+        ecard_facebook_url=(user.ecard_facebook_url or "").strip() or None,
+        ecard_show_tiktok=bool(user.ecard_show_tiktok),
+        ecard_tiktok_url=(user.ecard_tiktok_url or "").strip() or None,
+        ecard_show_whatsapp=bool(user.ecard_show_whatsapp),
+        ecard_whatsapp_url=(user.ecard_whatsapp_url or "").strip() or None,
         ecard_header_color=(user.ecard_header_color or "").strip() or None,
         ecard_header_text_color=(user.ecard_header_text_color or "").strip() or None,
         ecard_card_color=(user.ecard_card_color or "").strip() or None,
@@ -4529,6 +4545,32 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
         db_user.ecard_display_email = (user_update.ecard_display_email or "").strip() or None
     if user_update.ecard_display_phone is not None:
         db_user.ecard_display_phone = (user_update.ecard_display_phone or "").strip() or None
+    for field_name in [
+        "ecard_headline",
+        "ecard_headline_highlight",
+        "ecard_subheadline",
+        "ecard_visit_title",
+        "ecard_visit_text",
+        "ecard_footer_label_1",
+        "ecard_footer_label_2",
+        "ecard_footer_label_3",
+        "ecard_instagram_url",
+        "ecard_facebook_url",
+        "ecard_tiktok_url",
+        "ecard_whatsapp_url",
+    ]:
+        value = getattr(user_update, field_name, None)
+        if value is not None:
+            setattr(db_user, field_name, (value or "").strip() or None)
+    for field_name in [
+        "ecard_show_instagram",
+        "ecard_show_facebook",
+        "ecard_show_tiktok",
+        "ecard_show_whatsapp",
+    ]:
+        value = getattr(user_update, field_name, None)
+        if value is not None:
+            setattr(db_user, field_name, bool(value))
     if user_update.ecard_header_color is not None:
         db_user.ecard_header_color = (user_update.ecard_header_color or "").strip() or None
     if user_update.ecard_header_text_color is not None:
@@ -5013,6 +5055,17 @@ def read_public_team_card(slug: str, request: Request, db: Session = Depends(get
         raise HTTPException(status_code=404, detail="La tarjeta no está disponible")
 
     role_label = getattr(getattr(team_user, "role", None), "label", None)
+    socials = {}
+    if getattr(team_user, "ecard_show_instagram", False) and getattr(team_user, "ecard_instagram_url", None):
+        socials["instagram"] = team_user.ecard_instagram_url
+    if getattr(team_user, "ecard_show_facebook", False) and getattr(team_user, "ecard_facebook_url", None):
+        socials["facebook"] = team_user.ecard_facebook_url
+    if getattr(team_user, "ecard_show_tiktok", False) and getattr(team_user, "ecard_tiktok_url", None):
+        socials["tiktok"] = team_user.ecard_tiktok_url
+    if getattr(team_user, "ecard_show_whatsapp", True):
+        whatsapp_url = getattr(team_user, "ecard_whatsapp_url", None)
+        socials["whatsapp"] = whatsapp_url or "auto"
+
     return schemas.PublicTeamCard(
         full_name=team_user.full_name or team_user.email,
         email=team_user.email,
@@ -5020,6 +5073,19 @@ def read_public_team_card(slug: str, request: Request, db: Session = Depends(get
         display_phone=team_user.ecard_display_phone or getattr(company, "contact_phone", None),
         position=team_user.ecard_position or role_label,
         photo_url=team_user.ecard_photo_url,
+        headline=team_user.ecard_headline,
+        headline_highlight=team_user.ecard_headline_highlight,
+        subheadline=team_user.ecard_subheadline,
+        visit_title=team_user.ecard_visit_title,
+        visit_text=team_user.ecard_visit_text,
+        footer_labels=[
+            label for label in [
+                team_user.ecard_footer_label_1,
+                team_user.ecard_footer_label_2,
+                team_user.ecard_footer_label_3,
+            ] if label
+        ],
+        socials=socials,
         header_color=team_user.ecard_header_color,
         header_text_color=team_user.ecard_header_text_color,
         card_color=team_user.ecard_card_color,
