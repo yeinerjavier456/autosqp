@@ -227,6 +227,7 @@ const PublicCreditForm = () => {
   const [creatingCapture, setCreatingCapture] = useState('');
   const [status, setStatus] = useState({ type: '', message: '' });
   const [draftReady, setDraftReady] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   const enabledModules = new Set(Array.isArray(company?.enabled_modules) ? company.enabled_modules : []);
   const isEnabled = enabledModules.has('public_credit_form');
@@ -692,6 +693,32 @@ const PublicCreditForm = () => {
     };
   };
 
+  const resetFormState = () => {
+    setForm(createEmptyForm());
+    setDocumentFront(null);
+    setDocumentBack(null);
+    setDocumentCaptures({ documentFront: null, documentBack: null });
+    setSignatureCapture(null);
+    setSignatureFile(null);
+    setVerificationSent(false);
+    setVerificationVerified(false);
+    setStep(0);
+    clearCanvas();
+    if (documentFrontPreview) URL.revokeObjectURL(documentFrontPreview);
+    if (documentBackPreview) URL.revokeObjectURL(documentBackPreview);
+    if (signaturePreview) URL.revokeObjectURL(signaturePreview);
+    setDocumentFrontPreview('');
+    setDocumentBackPreview('');
+    setSignaturePreview('');
+  };
+
+  const startAnotherForm = () => {
+    window.sessionStorage.removeItem(draftStorageKey);
+    resetFormState();
+    setStatus({ type: '', message: '' });
+    setSubmitted(false);
+  };
+
   const handleSubmit = async () => {
     resetStatus();
     if (!validateStep(5)) {
@@ -727,27 +754,10 @@ const PublicCreditForm = () => {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      setStatus({
-        type: 'success',
-        message: response?.data?.message || 'Solicitud enviada correctamente. Revisa tu correo y el seguimiento comercial.',
-      });
       window.sessionStorage.removeItem(draftStorageKey);
-      setForm(createEmptyForm());
-      setDocumentFront(null);
-      setDocumentBack(null);
-      setDocumentCaptures({ documentFront: null, documentBack: null });
-      setSignatureCapture(null);
-      setSignatureFile(null);
-      setVerificationSent(false);
-      setVerificationVerified(false);
-      setStep(0);
-      clearCanvas();
-      if (documentFrontPreview) URL.revokeObjectURL(documentFrontPreview);
-      if (documentBackPreview) URL.revokeObjectURL(documentBackPreview);
-      if (signaturePreview) URL.revokeObjectURL(signaturePreview);
-      setDocumentFrontPreview('');
-      setDocumentBackPreview('');
-      setSignaturePreview('');
+      resetFormState();
+      setStatus({ type: '', message: '' });
+      setSubmitted(true);
     } catch (error) {
       setStatus({
         type: 'error',
@@ -881,6 +891,25 @@ const PublicCreditForm = () => {
         <datalist id="credit-colombia-cities">
           {COLOMBIA_CITY_OPTIONS.map((city) => <option key={city} value={city} />)}
         </datalist>
+        {submitted ? (
+          <div className="mx-auto max-w-3xl rounded-[2rem] bg-white p-8 text-center shadow-2xl md:p-12">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-3xl font-black text-emerald-600">
+              ✓
+            </div>
+            <h1 className="mt-6 text-3xl font-black text-slate-900 md:text-4xl">Formulario enviado</h1>
+            <p className="mx-auto mt-3 max-w-xl text-base text-slate-600">
+              Recibimos tu solicitud de crédito correctamente. El equipo comercial revisará la información y continuará el seguimiento.
+            </p>
+            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+              <Link to="/autos" className="rounded-xl px-5 py-3 text-sm font-bold text-white" style={{ backgroundColor: theme.primary }}>
+                Ver inventario
+              </Link>
+              <button type="button" onClick={startAnotherForm} className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700">
+                Enviar otro formulario
+              </button>
+            </div>
+          </div>
+        ) : (
         <div className="rounded-[2rem] bg-white p-6 shadow-2xl md:p-10">
           <div className="mx-auto max-w-6xl">
             <div className="mb-8">
@@ -1210,6 +1239,7 @@ const PublicCreditForm = () => {
             )}
           </div>
         </div>
+        )}
       </main>
     </div>
   );
