@@ -28,6 +28,7 @@ const UserForm = () => {
         ecard_photo_url: '',
         ecard_position: '',
         ecard_display_email: '',
+        ecard_display_phone: '',
         ecard_header_color: '',
         ecard_header_text_color: '',
         ecard_card_color: '',
@@ -168,6 +169,7 @@ const UserForm = () => {
                         ecard_photo_url: userData.ecard_photo_url || '',
                         ecard_position: userData.ecard_position || '',
                         ecard_display_email: userData.ecard_display_email || userData.email || '',
+                        ecard_display_phone: userData.ecard_display_phone || '',
                         ecard_header_color: userData.ecard_header_color || '',
                         ecard_header_text_color: userData.ecard_header_text_color || '',
                         ecard_card_color: userData.ecard_card_color || '',
@@ -711,6 +713,21 @@ const UserForm = () => {
                                     placeholder={user.email || 'correo@empresa.com'}
                                     className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-black bg-white"
                                 />
+                            </div>
+
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-slate-600 mb-1">Teléfono / WhatsApp a mostrar</label>
+                                <input
+                                    type="text"
+                                    name="ecard_display_phone"
+                                    value={user.ecard_display_phone || ''}
+                                    onChange={handleChange}
+                                    placeholder={selectedCompany?.contact_phone || 'Ej: 3001234567'}
+                                    className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-black bg-white"
+                                />
+                                <p className="mt-1 text-xs text-slate-500">
+                                    Si lo dejas vacío, la tarjeta usará el teléfono configurado en la empresa.
+                                </p>
                             </div>
 
                             <div className="md:col-span-2">

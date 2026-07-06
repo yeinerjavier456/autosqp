@@ -388,6 +388,7 @@ class User(Base):
     ecard_photo_url = Column(String(500), nullable=True)
     ecard_position = Column(String(120), nullable=True)
     ecard_display_email = Column(String(150), nullable=True)
+    ecard_display_phone = Column(String(80), nullable=True)
     ecard_header_color = Column(String(50), nullable=True)
     ecard_header_text_color = Column(String(50), nullable=True)
     ecard_card_color = Column(String(50), nullable=True)

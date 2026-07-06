@@ -4403,6 +4403,7 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
         ecard_photo_url=user.ecard_photo_url,
         ecard_position=(user.ecard_position or "").strip() or None,
         ecard_display_email=(user.ecard_display_email or "").strip() or None,
+        ecard_display_phone=(user.ecard_display_phone or "").strip() or None,
         ecard_header_color=(user.ecard_header_color or "").strip() or None,
         ecard_header_text_color=(user.ecard_header_text_color or "").strip() or None,
         ecard_card_color=(user.ecard_card_color or "").strip() or None,
@@ -4526,6 +4527,8 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
         db_user.ecard_photo_url = (user_update.ecard_photo_url or "").strip() or None
     if user_update.ecard_display_email is not None:
         db_user.ecard_display_email = (user_update.ecard_display_email or "").strip() or None
+    if user_update.ecard_display_phone is not None:
+        db_user.ecard_display_phone = (user_update.ecard_display_phone or "").strip() or None
     if user_update.ecard_header_color is not None:
         db_user.ecard_header_color = (user_update.ecard_header_color or "").strip() or None
     if user_update.ecard_header_text_color is not None:
@@ -5014,6 +5017,7 @@ def read_public_team_card(slug: str, request: Request, db: Session = Depends(get
         full_name=team_user.full_name or team_user.email,
         email=team_user.email,
         display_email=team_user.ecard_display_email or team_user.email,
+        display_phone=team_user.ecard_display_phone or getattr(company, "contact_phone", None),
         position=team_user.ecard_position or role_label,
         photo_url=team_user.ecard_photo_url,
         header_color=team_user.ecard_header_color,

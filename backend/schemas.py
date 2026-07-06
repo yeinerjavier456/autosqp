@@ -48,6 +48,7 @@ class UserBase(BaseModel):
     ecard_photo_url: Optional[str] = None
     ecard_position: Optional[str] = None
     ecard_display_email: Optional[str] = None
+    ecard_display_phone: Optional[str] = None
     ecard_header_color: Optional[str] = None
     ecard_header_text_color: Optional[str] = None
     ecard_card_color: Optional[str] = None
@@ -109,6 +110,7 @@ class UserUpdate(BaseModel):
     ecard_photo_url: Optional[str] = None
     ecard_position: Optional[str] = None
     ecard_display_email: Optional[str] = None
+    ecard_display_phone: Optional[str] = None
     ecard_header_color: Optional[str] = None
     ecard_header_text_color: Optional[str] = None
     ecard_card_color: Optional[str] = None
@@ -181,6 +183,7 @@ class PublicTeamCard(BaseModel):
     full_name: str
     email: EmailStr
     display_email: Optional[str] = None
+    display_phone: Optional[str] = None
     position: Optional[str] = None
     photo_url: Optional[str] = None
     header_color: Optional[str] = None

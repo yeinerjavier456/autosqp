@@ -17,6 +17,14 @@ const getMapsUrl = (address) => {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 };
 
+const getWhatsAppUrl = (phone) => {
+  const firstPhone = String(phone || '').split(/[,;|/-]/).map((item) => item.trim()).find(Boolean) || '';
+  const digits = firstPhone.replace(/[^\d]/g, '');
+  if (!digits) return '';
+  const normalized = digits.length === 10 ? `57${digits}` : digits;
+  return `https://wa.me/${normalized}`;
+};
+
 const PublicTeamCard = () => {
   const { slug } = useParams();
   const [card, setCard] = useState(null);
@@ -55,6 +63,8 @@ const PublicTeamCard = () => {
   const photoUrl = card?.photo_url ? normalizeMediaUrl(card.photo_url) : '';
   const inventoryPath = `${import.meta.env.BASE_URL === '/' ? '' : import.meta.env.BASE_URL.replace(/\/$/, '')}/autos`;
   const emailToShow = card?.display_email || card?.email;
+  const phoneToShow = card?.display_phone || company.contact_phone || '';
+  const whatsappUrl = getWhatsAppUrl(phoneToShow);
 
   const initials = useMemo(() => {
     const parts = String(card?.full_name || '').trim().split(/\s+/).filter(Boolean);
@@ -137,6 +147,18 @@ const PublicTeamCard = () => {
                 <span className="shrink-0">✉</span>
                 <span className="truncate">{emailToShow}</span>
               </a>
+              {phoneToShow ? (
+                <a
+                  href={whatsappUrl || undefined}
+                  target={whatsappUrl ? '_blank' : undefined}
+                  rel={whatsappUrl ? 'noreferrer' : undefined}
+                  className="mt-3 flex min-w-0 items-center gap-3 text-sm font-semibold"
+                  style={{ color: secondaryTextColor }}
+                >
+                  <span className="shrink-0">☎</span>
+                  <span className="truncate">{phoneToShow}</span>
+                </a>
+              ) : null}
               <div className="mt-7 h-0.5 w-full" style={{ background: accentColor }} />
             </div>
           </div>
@@ -179,7 +201,12 @@ const PublicTeamCard = () => {
           <span>Calidad</span>
         </div>
       </section>
-      <div className="mx-auto mt-5 flex max-w-[390px] justify-center">
+      <div className="mx-auto mt-5 flex max-w-[390px] flex-wrap justify-center gap-3">
+        {whatsappUrl ? (
+          <a href={whatsappUrl} target="_blank" rel="noreferrer" className="rounded-xl px-5 py-3 text-sm font-black text-white shadow-lg" style={{ background: headerColor }}>
+            WhatsApp
+          </a>
+        ) : null}
         <a href={inventoryPath || '/autos'} className="rounded-xl bg-white/95 px-5 py-3 text-sm font-black text-slate-900 shadow-lg">
           Ver inventario
         </a>

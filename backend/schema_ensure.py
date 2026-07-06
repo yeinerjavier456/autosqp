@@ -119,6 +119,12 @@ def ensure_mysql_schema(engine: Engine) -> None:
         _ensure_column(
             engine,
             "users",
+            "ecard_display_phone",
+            "ALTER TABLE users ADD COLUMN ecard_display_phone VARCHAR(80) NULL",
+        )
+        _ensure_column(
+            engine,
+            "users",
             "ecard_header_color",
             "ALTER TABLE users ADD COLUMN ecard_header_color VARCHAR(50) NULL",
         )
