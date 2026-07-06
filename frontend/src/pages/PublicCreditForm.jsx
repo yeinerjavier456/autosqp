@@ -22,6 +22,9 @@ const STEP_TITLES = [
   'Consentimiento y Firma',
 ];
 
+const FORM_DRAFT_TTL_MS = 30 * 60 * 1000;
+const FORM_DRAFT_STORAGE_PREFIX = 'autosqp_public_credit_form_draft';
+
 const getBogotaCurrentDate = () =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
 
@@ -147,6 +150,46 @@ const buildVehicleLabel = (vehicle) => {
   return [vehicle.make, vehicle.model, vehicle.vehicleType].filter(Boolean).join(' ').trim();
 };
 
+const stripSensitiveDraftFields = (formValue) => ({
+  ...formValue,
+  consent: {
+    ...(formValue?.consent || {}),
+    verificationCode: '',
+    signatureDrawnDataUrl: '',
+  },
+});
+
+const readStoredDraft = (storageKey) => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const rawValue = window.sessionStorage.getItem(storageKey);
+    if (!rawValue) return null;
+    const parsed = JSON.parse(rawValue);
+    if (!parsed?.savedAt || Date.now() - Number(parsed.savedAt) > FORM_DRAFT_TTL_MS) {
+      window.sessionStorage.removeItem(storageKey);
+      return null;
+    }
+    return parsed.form && typeof parsed.form === 'object'
+      ? { form: parsed.form, step: Number(parsed.step) || 0 }
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeStoredDraft = (storageKey, formValue, stepValue) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(storageKey, JSON.stringify({
+      savedAt: Date.now(),
+      step: stepValue,
+      form: stripSensitiveDraftFields(formValue),
+    }));
+  } catch {
+    // Storage can be unavailable in private browsing; the form should still work.
+  }
+};
+
 const PublicCreditForm = () => {
   const company = usePublicCompany();
   const canvasRef = useRef(null);
@@ -155,6 +198,10 @@ const PublicCreditForm = () => {
     if (typeof window === 'undefined') return '';
     return new URLSearchParams(window.location.search).get('access') || '';
   }, []);
+  const draftStorageKey = useMemo(
+    () => `${FORM_DRAFT_STORAGE_PREFIX}:${accessToken || 'public'}`,
+    [accessToken]
+  );
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState(createEmptyForm);
@@ -176,6 +223,7 @@ const PublicCreditForm = () => {
   const [submitting, setSubmitting] = useState(false);
   const [creatingCapture, setCreatingCapture] = useState('');
   const [status, setStatus] = useState({ type: '', message: '' });
+  const [draftReady, setDraftReady] = useState(false);
 
   const enabledModules = new Set(Array.isArray(company?.enabled_modules) ? company.enabled_modules : []);
   const isEnabled = enabledModules.has('public_credit_form');
@@ -226,6 +274,45 @@ const PublicCreditForm = () => {
     loadAccess();
     return () => { active = false; };
   }, [accessToken]);
+
+  useEffect(() => {
+    if (accessToken) {
+      return;
+    }
+    const storedDraft = readStoredDraft(draftStorageKey);
+    if (storedDraft?.form) {
+      setForm(mergeCreditForm(storedDraft.form));
+      setStep(Math.max(0, Math.min(storedDraft.step || 0, STEP_TITLES.length - 1)));
+      setStatus({ type: 'success', message: 'Restauramos un borrador reciente de este formulario.' });
+    }
+    setDraftReady(true);
+  }, [accessToken, draftStorageKey]);
+
+  useEffect(() => {
+    if (!accessToken || loadingAccess) return;
+    const storedDraft = readStoredDraft(draftStorageKey);
+    if (storedDraft?.form) {
+      setForm((current) => mergeCreditForm({
+        vehicle: { ...current.vehicle, ...(storedDraft.form.vehicle || {}) },
+        personal: { ...current.personal, ...(storedDraft.form.personal || {}) },
+        employment: { ...current.employment, ...(storedDraft.form.employment || {}) },
+        income: { ...current.income, ...(storedDraft.form.income || {}) },
+        references: { ...current.references, ...(storedDraft.form.references || {}) },
+        consent: { ...current.consent, ...(storedDraft.form.consent || {}) },
+      }));
+      setStep(Math.max(0, Math.min(storedDraft.step || 0, STEP_TITLES.length - 1)));
+      setStatus({ type: 'success', message: 'Restauramos un borrador reciente de este acceso.' });
+    }
+    setDraftReady(true);
+  }, [accessToken, draftStorageKey, loadingAccess]);
+
+  useEffect(() => {
+    if (!draftReady || submitting) return undefined;
+    const timeoutId = window.setTimeout(() => {
+      writeStoredDraft(draftStorageKey, form, step);
+    }, 400);
+    return () => window.clearTimeout(timeoutId);
+  }, [draftReady, draftStorageKey, form, step, submitting]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -641,6 +728,7 @@ const PublicCreditForm = () => {
         type: 'success',
         message: response?.data?.message || 'Solicitud enviada correctamente. Revisa tu correo y el seguimiento comercial.',
       });
+      window.sessionStorage.removeItem(draftStorageKey);
       setForm(createEmptyForm());
       setDocumentFront(null);
       setDocumentBack(null);
