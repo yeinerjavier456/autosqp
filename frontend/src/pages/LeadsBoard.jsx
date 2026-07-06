@@ -278,14 +278,45 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
         return () => window.clearInterval(intervalId);
     }, [documentCaptures, signatureCapture]);
 
+    useEffect(() => {
+        setForm((current) => {
+            const salary = current?.employment?.salary || '';
+            const commissionsIncome = Number(current?.income?.commissionsIncome || 0);
+            const otherIncome = Number(current?.income?.otherIncome || 0);
+            const salaryIncome = Number(salary || 0);
+            const total = salaryIncome + commissionsIncome + otherIncome;
+            const totalIncome = total ? String(total) : '';
+            if (current?.income?.salaryIncome === salary && current?.income?.totalIncome === totalIncome) {
+                return current;
+            }
+            return {
+                ...current,
+                income: {
+                    ...(current.income || {}),
+                    salaryIncome: salary,
+                    totalIncome,
+                },
+            };
+        });
+    }, [form?.employment?.salary, form?.income?.commissionsIncome, form?.income?.otherIncome]);
+
     const updateField = (section, field, value) => {
         const normalizedValue = CREDIT_MONEY_FIELDS.has(field) ? sanitizeMoneyInput(value) : value;
         setForm((current) => {
             const nextSection = { ...(current[section] || {}), [field]: normalizedValue };
-            if (section === 'income' && ['salaryIncome', 'commissionsIncome', 'otherIncome'].includes(field)) {
+            if (section === 'employment' && field === 'salary') {
+                const income = { ...(current.income || {}), salaryIncome: normalizedValue };
                 const total = ['salaryIncome', 'commissionsIncome', 'otherIncome']
-                    .reduce((sum, key) => sum + (Number(nextSection[key]) || 0), 0);
+                    .reduce((sum, key) => sum + (Number(income[key]) || 0), 0);
+                income.totalIncome = total ? String(total) : '';
+                return { ...current, [section]: nextSection, income };
+            }
+            if (section === 'income' && ['commissionsIncome', 'otherIncome'].includes(field)) {
+                const income = { ...nextSection, salaryIncome: current.employment?.salary || nextSection.salaryIncome || '' };
+                const total = ['salaryIncome', 'commissionsIncome', 'otherIncome']
+                    .reduce((sum, key) => sum + (Number(income[key]) || 0), 0);
                 nextSection.totalIncome = total ? String(total) : '';
+                nextSection.salaryIncome = income.salaryIncome;
             }
             return { ...current, [section]: nextSection };
         });
@@ -586,6 +617,21 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
                             className={`${inputClass} mt-2 font-normal normal-case tracking-normal`}
                         />
                     )}
+                </>
+            );
+        }
+        if (sectionId === 'income' && field === 'salaryIncome') {
+            return (
+                <>
+                    <input
+                        type="text"
+                        value={formatMoneyInput(form?.employment?.salary || '')}
+                        disabled
+                        className={`${inputClass} mt-1 bg-slate-100 font-normal normal-case tracking-normal`}
+                    />
+                    <p className="mt-1 text-[11px] font-normal normal-case tracking-normal text-slate-500">
+                        Se toma del salario registrado en Datos laborales.
+                    </p>
                 </>
             );
         }

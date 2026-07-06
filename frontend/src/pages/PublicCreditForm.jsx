@@ -389,13 +389,13 @@ const PublicCreditForm = () => {
 
   useEffect(() => {
     setForm((prev) => {
-      const salaryIncome = Number(String(prev.income.salaryIncome || '').replace(/[^\d.-]/g, '')) || 0;
+      const salaryIncome = Number(String(prev.employment.salary || '').replace(/[^\d.-]/g, '')) || 0;
       const commissionsIncome = Number(String(prev.income.commissionsIncome || '').replace(/[^\d.-]/g, '')) || 0;
       const otherIncome = Number(String(prev.income.otherIncome || '').replace(/[^\d.-]/g, '')) || 0;
       const nextTotal = salaryIncome + commissionsIncome + otherIncome;
       const nextValue = nextTotal > 0 ? String(nextTotal) : '';
 
-      if (prev.income.totalIncome === nextValue) {
+      if (prev.income.salaryIncome === prev.employment.salary && prev.income.totalIncome === nextValue) {
         return prev;
       }
 
@@ -403,11 +403,12 @@ const PublicCreditForm = () => {
         ...prev,
         income: {
           ...prev.income,
+          salaryIncome: prev.employment.salary,
           totalIncome: nextValue,
         },
       };
     });
-  }, [form.income.salaryIncome, form.income.commissionsIncome, form.income.otherIncome]);
+  }, [form.employment.salary, form.income.commissionsIncome, form.income.otherIncome]);
 
   const updateSection = (section, key, value) => {
     setForm((prev) => ({
@@ -463,8 +464,8 @@ const PublicCreditForm = () => {
       return Boolean(activity && companyName && salary);
     }
     if (stepIndex === 3) {
-      const { salaryIncome, totalIncome } = form.income;
-      return Boolean(salaryIncome && totalIncome);
+      const { totalIncome } = form.income;
+      return Boolean(form.employment.salary && totalIncome);
     }
     if (stepIndex === 4) {
       const { personal1, personal2 } = form.references;
@@ -1101,7 +1102,11 @@ const PublicCreditForm = () => {
                   <section className="space-y-6">
                     <h2 className="border-b pb-3 text-2xl font-bold text-slate-900">{STEP_TITLES[3]}</h2>
                     <div className="grid gap-4 md:grid-cols-3">
-                      <div>{renderFieldLabel('Sueldo $', true)}<input inputMode="numeric" className={requiredInputClassName} value={formatMoneyInput(form.income.salaryIncome)} onChange={(e) => updateMoneySection('income', 'salaryIncome', e.target.value)} /></div>
+                      <div>
+                        {renderFieldLabel('Sueldo $', true)}
+                        <input className={`${requiredInputClassName} bg-slate-50 text-slate-600`} value={formatMoneyInput(form.employment.salary)} readOnly />
+                        <p className="mt-1 text-xs text-slate-500">Se toma automáticamente del salario registrado en Datos Laborales.</p>
+                      </div>
                       <div>{renderFieldLabel('Comisiones $')}<input inputMode="numeric" className={inputClassName} value={formatMoneyInput(form.income.commissionsIncome)} onChange={(e) => updateMoneySection('income', 'commissionsIncome', e.target.value)} /></div>
                       <div>{renderFieldLabel('Otros Ingresos Permanentes')}<input inputMode="numeric" className={inputClassName} value={formatMoneyInput(form.income.otherIncome)} onChange={(e) => updateMoneySection('income', 'otherIncome', e.target.value)} /></div>
                     </div>
