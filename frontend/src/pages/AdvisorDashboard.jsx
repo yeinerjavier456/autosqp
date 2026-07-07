@@ -530,9 +530,9 @@ const AdvisorDashboard = () => {
                 <div className="rounded-2xl border border-indigo-200 bg-white p-6 shadow-sm">
                     <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                         <div>
-                            <h3 className="text-lg font-bold text-slate-800">Seguimiento de asesores</h3>
+                            <h3 className="text-lg font-bold text-slate-800">Usuarios en supervision</h3>
                             <p className="text-sm text-slate-500">
-                                Resumen de los asesores o vendedores configurados en tu perfil para supervisión dentro del rango seleccionado.
+                                Resumen de los usuarios configurados en tu perfil para supervision dentro del rango seleccionado.
                             </p>
                         </div>
                         <button
@@ -554,7 +554,7 @@ const AdvisorDashboard = () => {
                                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                                         <div>
                                             <p className="text-sm font-bold text-slate-900">{advisor.full_name || advisor.email || `Usuario ${advisor.user_id}`}</p>
-                                            <p className="text-xs text-slate-500">{advisor.role_label || 'Asesor / Vendedor'}{advisor.email ? ` - ${advisor.email}` : ''}</p>
+                                            <p className="text-xs text-slate-500">{advisor.role_label || 'Usuario'}{advisor.email ? ` - ${advisor.email}` : ''}</p>
                                         </div>
                                         <span className="w-fit rounded-full bg-indigo-100 px-3 py-1 text-sm font-bold text-indigo-700">
                                             {advisor.total_leads || 0} leads
@@ -591,6 +591,20 @@ const AdvisorDashboard = () => {
                                             ))}
                                         </div>
                                     )}
+                                    <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+                                        <span className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-violet-700 ring-1 ring-violet-100">
+                                            Creditos: {advisor.credit_total || 0}
+                                        </span>
+                                        <span className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-pink-700 ring-1 ring-pink-100">
+                                            Compras: {advisor.purchase_total || 0}
+                                        </span>
+                                        <span className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">
+                                            Ventas: {advisor.sales_total || 0}
+                                        </span>
+                                        <span className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-cyan-700 ring-1 ring-cyan-100">
+                                            Citas: {advisor.appointments_total || 0}
+                                        </span>
+                                    </div>
                                 </div>
                             );
                         })}

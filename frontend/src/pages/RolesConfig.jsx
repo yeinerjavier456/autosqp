@@ -376,7 +376,7 @@ const RolesConfig = () => {
                         </div>
 
                         <div>
-                            <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500 mb-3">Seguimiento de asesor</h3>
+                            <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500 mb-3">Supervision de usuarios</h3>
                             <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
                                 <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 cursor-pointer">
                                     <input
@@ -389,9 +389,9 @@ const RolesConfig = () => {
                                         className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                                     />
                                     <div>
-                                        <p className="font-semibold text-slate-800">Permitir seguimiento de asesores o vendedores</p>
+                                        <p className="font-semibold text-slate-800">Permitir supervision de usuarios</p>
                                         <p className="text-xs text-slate-500 mt-1">
-                                            Si esta activo, en el perfil de cada usuario con este rol podras seleccionar a que asesores o vendedores va a supervisar.
+                                            Si esta activo, en el perfil de cada usuario con este rol podras seleccionar que usuarios de la empresa va a supervisar.
                                         </p>
                                     </div>
                                 </label>

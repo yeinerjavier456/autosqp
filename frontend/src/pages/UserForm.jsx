@@ -104,7 +104,6 @@ const UserForm = () => {
             .filter((candidate) => {
                 if (String(candidate.id) === String(id)) return false;
                 if (candidate?.is_active === false || candidate?.is_active === 0) return false;
-                if (!isAdvisorCandidate(candidate)) return false;
                 if (targetCompanyId && String(candidate.company_id || '') !== String(targetCompanyId)) return false;
                 return true;
             })
@@ -120,17 +119,6 @@ const UserForm = () => {
         }));
         setShowPassword(true);
     };
-
-    function isAdvisorCandidate(candidate) {
-        const roleName = (
-            candidate?.role?.base_role_name ||
-            candidate?.role?.name ||
-            candidate?.role?.label ||
-            ''
-        ).toString().trim().toLowerCase();
-
-        return roleName.includes('asesor') || roleName.includes('vendedor');
-    }
 
     useEffect(() => {
         const fetchDependencies = async () => {
@@ -593,9 +581,9 @@ const UserForm = () => {
                                     <div className="md:col-span-2">
                                         <div className="rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3">
                                             <div className="mb-3">
-                                                <p className="text-sm font-semibold text-slate-700">Seguimiento de asesores</p>
+                                                <p className="text-sm font-semibold text-slate-700">Usuarios en supervision</p>
                                                 <p className="text-xs text-slate-500 mt-1">
-                                                    Selecciona los asesores o vendedores cuyos leads podra ver este usuario en el tablero.
+                                                    Selecciona los usuarios de la empresa cuya informacion podra ver este usuario en su dashboard y tableros permitidos.
                                                 </p>
                                             </div>
                                             {advisorTrackingOptions.length > 0 ? (
@@ -632,7 +620,7 @@ const UserForm = () => {
                                                 </div>
                                             ) : (
                                                 <p className="rounded-lg border border-blue-100 bg-white px-3 py-3 text-sm text-slate-500">
-                                                    No hay asesores o vendedores activos disponibles para esta empresa.
+                                                    No hay usuarios activos disponibles para esta empresa.
                                                 </p>
                                             )}
                                         </div>

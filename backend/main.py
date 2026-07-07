@@ -3079,8 +3079,7 @@ def sanitize_tracked_advisor_ids(
     ).all()
     allowed_ids = {
         user.id for user in users
-        if is_advisor_role(getattr(user, "role", None))
-        and (excluded_user_id is None or user.id != excluded_user_id)
+        if excluded_user_id is None or user.id != excluded_user_id
     }
     return [advisor_id for advisor_id in normalized_ids if advisor_id in allowed_ids]
 
@@ -7748,6 +7747,7 @@ def read_advisor_stats(
     company_scope = role_name in {"admin", "super_admin"}
     ally_user_ids = set(get_company_ally_user_ids(db, current_user.company_id))
     tracked_advisor_ids = get_user_tracked_advisor_ids(current_user)
+    visible_user_ids = [current_user.id, *tracked_advisor_ids]
 
     visible_leads_query = db.query(models.Lead).filter(
         models.Lead.company_id == current_user.company_id
@@ -7819,6 +7819,10 @@ def read_advisor_stats(
             "unread_replies_count": 0,
             "new_leads_in_range": 0,
             "status_changes_in_range": 0,
+            "credit_total": 0,
+            "purchase_total": 0,
+            "sales_total": 0,
+            "appointments_total": 0,
             "status_distribution": {},
         }
         for advisor in tracked_advisor_users
@@ -8072,14 +8076,28 @@ def read_advisor_stats(
         credits_query = db.query(models.CreditApplication).filter(
             models.CreditApplication.company_id == current_user.company_id
         )
+        if not company_scope:
+            credits_query = credits_query.filter(
+                or_(
+                    models.CreditApplication.assigned_to_id.in_(visible_user_ids),
+                    models.CreditApplication.lead_id.in_(visible_lead_ids or [-1])
+                )
+            )
         credits = [
             credit for credit in credits_query.all()
-            if is_within_dashboard_range(getattr(credit, "updated_at", None) or getattr(credit, "created_at", None))
+            if not is_purchase_request_record(credit)
+            and is_within_dashboard_range(getattr(credit, "updated_at", None) or getattr(credit, "created_at", None))
         ]
         credit_total = len(credits)
         for credit in credits:
             status_key = credit.status or "pending"
             credit_status_distribution[status_key] = credit_status_distribution.get(status_key, 0) + 1
+            tracked_owner_ids = set(supervised_advisor_ids_by_lead.get(credit.lead_id, []))
+            if credit.assigned_to_id in supervised_advisor_map:
+                tracked_owner_ids.add(credit.assigned_to_id)
+            for advisor_id in tracked_owner_ids:
+                if advisor_id in supervised_advisor_map:
+                    supervised_advisor_map[advisor_id]["credit_total"] += 1
 
     purchase_status_distribution = {}
     purchase_total = 0
@@ -8087,14 +8105,28 @@ def read_advisor_stats(
         purchases_query = db.query(models.CreditApplication).filter(
             models.CreditApplication.company_id == current_user.company_id
         )
+        if not company_scope:
+            purchases_query = purchases_query.filter(
+                or_(
+                    models.CreditApplication.assigned_to_id.in_(visible_user_ids),
+                    models.CreditApplication.lead_id.in_(visible_lead_ids or [-1])
+                )
+            )
         purchases = [
             purchase for purchase in purchases_query.all()
-            if is_within_dashboard_range(getattr(purchase, "updated_at", None) or getattr(purchase, "created_at", None))
+            if is_purchase_request_record(purchase)
+            and is_within_dashboard_range(getattr(purchase, "updated_at", None) or getattr(purchase, "created_at", None))
         ]
         purchase_total = len(purchases)
         for purchase in purchases:
             status_key = purchase.status or "pending"
             purchase_status_distribution[status_key] = purchase_status_distribution.get(status_key, 0) + 1
+            tracked_owner_ids = set(supervised_advisor_ids_by_lead.get(purchase.lead_id, []))
+            if purchase.assigned_to_id in supervised_advisor_map:
+                tracked_owner_ids.add(purchase.assigned_to_id)
+            for advisor_id in tracked_owner_ids:
+                if advisor_id in supervised_advisor_map:
+                    supervised_advisor_map[advisor_id]["purchase_total"] += 1
 
     sales_status_distribution = {}
     sales_total = 0
@@ -8105,7 +8137,12 @@ def read_advisor_stats(
             models.Sale.company_id == current_user.company_id
         )
         if "my_sales" in permissions and not company_scope:
-            sales_query = sales_query.filter(models.Sale.seller_id == current_user.id)
+            sales_query = sales_query.filter(
+                or_(
+                    models.Sale.seller_id.in_(visible_user_ids),
+                    models.Sale.lead_id.in_(visible_lead_ids or [-1])
+                )
+            )
         sales = [
             sale for sale in sales_query.all()
             if is_within_dashboard_range(getattr(sale, "sale_date", None) or getattr(sale, "created_at", None))
@@ -8114,6 +8151,12 @@ def read_advisor_stats(
         for sale in sales:
             status_key = sale.status or "pending"
             sales_status_distribution[status_key] = sales_status_distribution.get(status_key, 0) + 1
+            tracked_owner_ids = set(supervised_advisor_ids_by_lead.get(sale.lead_id, []))
+            if sale.seller_id in supervised_advisor_map:
+                tracked_owner_ids.add(sale.seller_id)
+            for advisor_id in tracked_owner_ids:
+                if advisor_id in supervised_advisor_map:
+                    supervised_advisor_map[advisor_id]["sales_total"] += 1
         sales_approved = sales_status_distribution.get("approved", 0)
         sales_pending = sales_status_distribution.get("pending", 0)
 
@@ -8144,7 +8187,12 @@ def read_advisor_stats(
         )
 
         if not company_scope:
-            appointments_query = appointments_query.filter(models.LeadAppointment.user_id == current_user.id)
+            appointments_query = appointments_query.filter(
+                or_(
+                    models.LeadAppointment.user_id.in_(visible_user_ids),
+                    models.LeadAppointment.lead_id.in_(visible_lead_ids or [-1])
+                )
+            )
 
         appointments = [
             appointment for appointment in appointments_query.all()
@@ -8163,6 +8211,17 @@ def read_advisor_stats(
                 appointments_today += 1
             if appointment_date >= now_bogota and (appointment.status or "scheduled") != "cancelled":
                 appointments_upcoming += 1
+
+            if not appointment.user_id:
+                tracked_owner_ids = set(supervised_advisor_ids_by_lead.get(appointment.lead_id, []))
+            else:
+                tracked_owner_ids = set(supervised_advisor_ids_by_lead.get(appointment.lead_id, []))
+                if appointment.user_id in supervised_advisor_map:
+                    tracked_owner_ids.add(appointment.user_id)
+
+            for advisor_id in tracked_owner_ids:
+                if advisor_id in supervised_advisor_map:
+                    supervised_advisor_map[advisor_id]["appointments_total"] += 1
 
             if not appointment.user_id:
                 continue
