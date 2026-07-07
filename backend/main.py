@@ -1653,7 +1653,16 @@ def apply_lead_access_filters(
     if exact_date:
         try:
             parsed_date = datetime.date.fromisoformat(exact_date)
-            query = query.filter(func.date(models.Lead.created_at) == parsed_date)
+            range_start = datetime.datetime.combine(parsed_date, datetime.time.min)
+            range_end = range_start + datetime.timedelta(days=1)
+            query = query.filter(
+                models.Lead.history.any(
+                    and_(
+                        models.LeadHistory.created_at >= range_start,
+                        models.LeadHistory.created_at < range_end
+                    )
+                )
+            )
         except ValueError:
             raise HTTPException(status_code=400, detail="Formato de fecha inválido")
 
