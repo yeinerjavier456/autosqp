@@ -89,6 +89,16 @@ DEFAULT_PUBLIC_COMPANY_CONTEXT = {
     "social_facebook": None,
     "primary_color": "#2563eb",
     "secondary_color": "#0f172a",
+    "crm_header_color": None,
+    "crm_header_text_color": None,
+    "crm_sidebar_color": None,
+    "crm_sidebar_text_color": None,
+    "crm_body_color": None,
+    "crm_body_text_color": None,
+    "public_header_color": None,
+    "public_header_text_color": None,
+    "public_body_color": None,
+    "public_body_text_color": None,
     "enabled_modules": [],
     "public_credit_requires_email_validation": True,
     "license_status": "unlimited",
@@ -97,6 +107,18 @@ DEFAULT_PUBLIC_COMPANY_CONTEXT = {
 }
 
 DEFAULT_COMPANY_ENABLED_MODULES = sorted(COMPANY_VIEW_IDS)
+COMPANY_THEME_FIELDS = [
+    "crm_header_color",
+    "crm_header_text_color",
+    "crm_sidebar_color",
+    "crm_sidebar_text_color",
+    "crm_body_color",
+    "crm_body_text_color",
+    "public_header_color",
+    "public_header_text_color",
+    "public_body_color",
+    "public_body_text_color",
+]
 ROLE_REQUIRED_MODULES = {
     "inventario": {"inventory"},
     "compras": {"purchase_board"},
@@ -439,6 +461,16 @@ def serialize_public_company(company: Optional[models.Company]) -> schemas.Publi
         social_facebook=getattr(company, "social_facebook", None),
         primary_color=company.primary_color or DEFAULT_PUBLIC_COMPANY_CONTEXT["primary_color"],
         secondary_color=company.secondary_color or DEFAULT_PUBLIC_COMPANY_CONTEXT["secondary_color"],
+        crm_header_color=getattr(company, "crm_header_color", None),
+        crm_header_text_color=getattr(company, "crm_header_text_color", None),
+        crm_sidebar_color=getattr(company, "crm_sidebar_color", None),
+        crm_sidebar_text_color=getattr(company, "crm_sidebar_text_color", None),
+        crm_body_color=getattr(company, "crm_body_color", None),
+        crm_body_text_color=getattr(company, "crm_body_text_color", None),
+        public_header_color=getattr(company, "public_header_color", None),
+        public_header_text_color=getattr(company, "public_header_text_color", None),
+        public_body_color=getattr(company, "public_body_color", None),
+        public_body_text_color=getattr(company, "public_body_text_color", None),
         enabled_modules=get_company_enabled_modules(company),
         public_credit_requires_email_validation=bool(getattr(company, "public_credit_requires_email_validation", True)),
         license_status=license_state["status"],
@@ -1999,6 +2031,16 @@ def ensure_company_public_domain_columns():
             "social_instagram": "ALTER TABLE companies ADD COLUMN social_instagram VARCHAR(255) NULL",
             "social_tiktok": "ALTER TABLE companies ADD COLUMN social_tiktok VARCHAR(255) NULL",
             "social_facebook": "ALTER TABLE companies ADD COLUMN social_facebook VARCHAR(255) NULL",
+            "crm_header_color": "ALTER TABLE companies ADD COLUMN crm_header_color VARCHAR(50) NULL",
+            "crm_header_text_color": "ALTER TABLE companies ADD COLUMN crm_header_text_color VARCHAR(50) NULL",
+            "crm_sidebar_color": "ALTER TABLE companies ADD COLUMN crm_sidebar_color VARCHAR(50) NULL",
+            "crm_sidebar_text_color": "ALTER TABLE companies ADD COLUMN crm_sidebar_text_color VARCHAR(50) NULL",
+            "crm_body_color": "ALTER TABLE companies ADD COLUMN crm_body_color VARCHAR(50) NULL",
+            "crm_body_text_color": "ALTER TABLE companies ADD COLUMN crm_body_text_color VARCHAR(50) NULL",
+            "public_header_color": "ALTER TABLE companies ADD COLUMN public_header_color VARCHAR(50) NULL",
+            "public_header_text_color": "ALTER TABLE companies ADD COLUMN public_header_text_color VARCHAR(50) NULL",
+            "public_body_color": "ALTER TABLE companies ADD COLUMN public_body_color VARCHAR(50) NULL",
+            "public_body_text_color": "ALTER TABLE companies ADD COLUMN public_body_text_color VARCHAR(50) NULL",
             "public_credit_requires_email_validation": "ALTER TABLE companies ADD COLUMN public_credit_requires_email_validation BOOLEAN NOT NULL DEFAULT 1",
         }
         for column_name, ddl in company_columns.items():
@@ -4959,6 +5001,7 @@ def create_company(company: schemas.CompanyCreate, db: Session = Depends(get_db)
         social_facebook=company.social_facebook,
         primary_color=company.primary_color,
         secondary_color=company.secondary_color,
+        **{field_name: getattr(company, field_name, None) for field_name in COMPANY_THEME_FIELDS},
         max_users=company.max_users,
         max_leads=company.max_leads,
         max_active_accounts=company.max_active_accounts,
@@ -5009,6 +5052,8 @@ def update_company(company_id: int, company_update: schemas.CompanyCreate, db: S
     db_company.social_facebook = company_update.social_facebook
     db_company.primary_color = company_update.primary_color
     db_company.secondary_color = company_update.secondary_color
+    for field_name in COMPANY_THEME_FIELDS:
+        setattr(db_company, field_name, getattr(company_update, field_name, None))
     db_company.max_users = company_update.max_users
     db_company.max_leads = company_update.max_leads
     db_company.max_active_accounts = company_update.max_active_accounts

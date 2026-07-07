@@ -31,9 +31,13 @@ const PublicCreditCapture = () => {
   const theme = useMemo(() => {
     const primary = company?.primary_color || '#2563eb';
     const secondary = company?.secondary_color || '#0f172a';
+    const body = company?.public_body_color || '#f8fafc';
+    const text = company?.public_body_text_color || '#0f172a';
     return {
       primary,
       secondary,
+      body,
+      text,
       primarySoft: withAlpha(primary, '14'),
     };
   }, [company]);
@@ -199,7 +203,7 @@ const PublicCreditCapture = () => {
   const brandName = company?.name || 'AutosQP';
 
   return (
-    <div className="min-h-screen px-4 py-6" style={{ background: `linear-gradient(135deg, ${theme.secondary} 0%, ${theme.primary} 100%)` }}>
+    <div className="public-theme-scope min-h-screen px-4 py-6" style={{ '--public-body-text': theme.text, background: theme.body, color: theme.text }}>
       <main className="mx-auto max-w-lg rounded-3xl bg-white p-5 shadow-2xl">
         <div className="mb-6 flex items-center justify-between gap-3">
           <Link to="/autos" className="flex items-center gap-3">

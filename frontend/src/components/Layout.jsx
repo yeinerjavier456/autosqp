@@ -62,6 +62,12 @@ const Layout = () => {
     const isCompras = roleName === 'compras';
     const primaryColor = user?.company?.primary_color || '#0f172a';
     const secondaryColor = user?.company?.secondary_color || '#2563eb';
+    const crmHeaderColor = user?.company?.crm_header_color || primaryColor;
+    const crmHeaderTextColor = user?.company?.crm_header_text_color || '#ffffff';
+    const crmSidebarColor = user?.company?.crm_sidebar_color || primaryColor;
+    const crmSidebarTextColor = user?.company?.crm_sidebar_text_color || '#ffffff';
+    const crmBodyColor = user?.company?.crm_body_color || '#f3f4f6';
+    const crmBodyTextColor = user?.company?.crm_body_text_color || '#0f172a';
     const groupedMenuViews = getGroupedMenuViews(user);
     const publicWebUrl = getPublicCompanyHomeUrl(user?.company || null);
 
@@ -106,7 +112,7 @@ const Layout = () => {
                 ${nested && !isCollapsed ? 'ml-5 mr-1 py-2.5 border-l border-white/10 rounded-l-none' : ''}
                 ${!isActive(to) ? 'hover:bg-white/10 text-slate-300 hover:text-white' : 'text-white shadow-lg'}
             `}
-            style={isActive(to) ? { backgroundColor: secondaryColor } : {}}
+            style={isActive(to) ? { backgroundColor: secondaryColor, color: crmSidebarTextColor } : { color: crmSidebarTextColor }}
             title={isCollapsed ? label : ''}
         >
             <div className="w-6 h-6 flex-shrink-0 relative">
@@ -131,8 +137,15 @@ const Layout = () => {
     );
 
     return (
-        <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row font-sans">
-            <div className="md:hidden text-white p-4 flex justify-between items-center z-30 sticky top-0 shadow-md" style={{ backgroundColor: primaryColor }}>
+        <div
+            className="crm-theme-scope min-h-screen flex flex-col md:flex-row font-sans"
+            style={{
+                '--crm-body-text': crmBodyTextColor,
+                backgroundColor: crmBodyColor,
+                color: crmBodyTextColor,
+            }}
+        >
+            <div className="md:hidden p-4 flex justify-between items-center z-30 sticky top-0 shadow-md" style={{ backgroundColor: crmHeaderColor, color: crmHeaderTextColor }}>
                 <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: secondaryColor }}>
                         <span className="font-bold text-lg">A</span>
@@ -156,7 +169,7 @@ const Layout = () => {
                     ${isCollapsed ? 'md:w-20' : 'md:w-72'}
                     pt-0 md:pt-0
                 `}
-                style={{ backgroundColor: primaryColor }}
+                style={{ backgroundColor: crmSidebarColor, color: crmSidebarTextColor }}
             >
                 <div className="h-16 flex items-center justify-between px-4 border-b border-white/10 mb-6 relative">
                     <div className={`flex items-center gap-3 overflow-hidden transition-all duration-300 ${isCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'}`}>
@@ -167,7 +180,7 @@ const Layout = () => {
                             <span className="font-bold text-lg tracking-wide whitespace-nowrap overflow-hidden text-ellipsis capitalize">
                                 {user?.email?.split('@')[0].replace('.', ' ') || 'Usuario'}
                             </span>
-                            <span className="text-xs text-blue-200 truncate font-normal opacity-80">
+                            <span className="text-xs truncate font-normal opacity-80" style={{ color: crmSidebarTextColor }}>
                                 {isAliado ? 'Aliado' : isInventario ? 'Gestor de Inventario' : isCompras ? 'Gestor de Compras' : (user?.company?.name || 'AutosQP')}
                             </span>
                         </div>
@@ -197,8 +210,8 @@ const Layout = () => {
                         <div key={group.id} className="pb-1">
                             {!isCollapsed && (
                                 <div className="px-4 mb-2">
-                                    <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-white/45 flex items-center gap-2">
-                                        <span className="w-3.5 h-3.5 text-white/35">
+                                    <p className="text-[11px] uppercase tracking-[0.18em] font-bold flex items-center gap-2 opacity-60" style={{ color: crmSidebarTextColor }}>
+                                        <span className="w-3.5 h-3.5 opacity-80">
                                             {SECTION_ICONS[group.id] || SECTION_ICONS.general}
                                         </span>
                                         {group.label}
@@ -255,7 +268,7 @@ const Layout = () => {
                 </div>
             </aside>
 
-            <main className="flex-1 p-4 md:p-8 overflow-y-auto">
+            <main className="flex-1 p-4 md:p-8 overflow-y-auto" style={{ backgroundColor: crmBodyColor, color: crmBodyTextColor }}>
                 <Outlet />
             </main>
 

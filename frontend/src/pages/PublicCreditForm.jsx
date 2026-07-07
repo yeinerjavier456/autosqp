@@ -242,9 +242,17 @@ const PublicCreditForm = () => {
   const theme = useMemo(() => {
     const primary = company?.primary_color || '#2563eb';
     const secondary = company?.secondary_color || '#0f172a';
+    const header = company?.public_header_color || secondary;
+    const headerText = company?.public_header_text_color || '#ffffff';
+    const body = company?.public_body_color || '#f8fafc';
+    const text = company?.public_body_text_color || '#0f172a';
     return {
       primary,
       secondary,
+      header,
+      headerText,
+      body,
+      text,
       primarySoft: withAlpha(primary, '14'),
       primaryBorder: withAlpha(primary, '38'),
       secondarySoft: withAlpha(secondary, '12'),
@@ -861,8 +869,8 @@ const PublicCreditForm = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100" style={{ background: `linear-gradient(135deg, ${theme.secondary} 0%, ${theme.primary} 100%)` }}>
-      <header className="sticky top-0 z-40 border-b bg-white/95 backdrop-blur" style={{ borderColor: theme.primarySoft }}>
+    <div className="public-theme-scope min-h-screen" style={{ '--public-body-text': theme.text, background: theme.body, color: theme.text }}>
+      <header className="sticky top-0 z-40 border-b backdrop-blur" style={{ backgroundColor: theme.header, borderColor: theme.primarySoft, color: theme.headerText }}>
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
           <Link to="/autos" className="flex items-center gap-3">
             <PublicBrandLogo
@@ -874,13 +882,13 @@ const PublicCreditForm = () => {
               primaryColor={theme.primary}
               secondaryColor={theme.secondary}
             />
-            <span className="text-2xl font-black" style={{ color: theme.secondary }}>{brandName}</span>
+            <span className="text-2xl font-black" style={{ color: theme.headerText }}>{brandName}</span>
           </Link>
           <div className="flex items-center gap-3">
-            <Link to="/autos" className="rounded-xl border px-4 py-2 text-sm font-semibold text-slate-700" style={{ borderColor: theme.primaryBorder }}>
+            <Link to="/autos" className="rounded-xl border px-4 py-2 text-sm font-semibold" style={{ borderColor: theme.primaryBorder, color: theme.headerText }}>
               Ver inventario
             </Link>
-            <Link to="/login" className="rounded-xl px-4 py-2 text-sm font-bold text-white" style={{ backgroundColor: theme.primary }}>
+            <Link to="/login" className="rounded-xl px-4 py-2 text-sm font-bold" style={{ backgroundColor: theme.primary, color: theme.headerText }}>
               Ingresa
             </Link>
           </div>

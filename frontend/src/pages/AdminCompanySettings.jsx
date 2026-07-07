@@ -34,6 +34,23 @@ const INTEGRATION_TABS = [
     { id: 'gmail', label: 'Gmail' },
 ];
 
+const THEME_COLOR_FIELDS = [
+    ['crm_header_color', 'Cabecera CRM', 'Color de la barra superior móvil y cabeceras globales del CRM.', '#0f172a'],
+    ['crm_header_text_color', 'Texto cabecera CRM', 'Texto sobre la cabecera del CRM.', '#ffffff'],
+    ['crm_sidebar_color', 'Menú lateral CRM', 'Fondo del menú lateral del CRM.', '#0f172a'],
+    ['crm_sidebar_text_color', 'Texto menú CRM', 'Texto e iconos del menú lateral.', '#ffffff'],
+    ['crm_body_color', 'Body CRM', 'Fondo general de pantallas internas.', '#f3f4f6'],
+    ['crm_body_text_color', 'Texto CRM', 'Color base del texto en pantallas internas.', '#0f172a'],
+    ['public_header_color', 'Cabecera pública', 'Cabecera del inventario y formulario público.', '#0f172a'],
+    ['public_header_text_color', 'Texto cabecera pública', 'Texto sobre cabeceras públicas.', '#ffffff'],
+    ['public_body_color', 'Body público', 'Fondo de inventario público y formulario.', '#f8fafc'],
+    ['public_body_text_color', 'Texto público', 'Color base del texto público.', '#0f172a'],
+];
+
+const normalizeHexColor = (value, fallback) => (
+    /^#[0-9a-fA-F]{6}$/.test(String(value || '').trim()) ? value : fallback
+);
+
 const AdminCompanySettings = () => {
     const { id } = useParams();
     const [company, setCompany] = useState({
@@ -49,6 +66,16 @@ const AdminCompanySettings = () => {
         social_facebook: '',
         primary_color: '#3B82F6', // Blue-500
         secondary_color: '#1E40AF', // Blue-800
+        crm_header_color: '#0f172a',
+        crm_header_text_color: '#ffffff',
+        crm_sidebar_color: '#0f172a',
+        crm_sidebar_text_color: '#ffffff',
+        crm_body_color: '#f3f4f6',
+        crm_body_text_color: '#0f172a',
+        public_header_color: '#0f172a',
+        public_header_text_color: '#ffffff',
+        public_body_color: '#f8fafc',
+        public_body_text_color: '#0f172a',
         max_users: '',
         max_leads: '',
         max_active_accounts: '',
@@ -140,6 +167,16 @@ const AdminCompanySettings = () => {
                         social_instagram: companyResponse.data.social_instagram || '',
                         social_tiktok: companyResponse.data.social_tiktok || '',
                         social_facebook: companyResponse.data.social_facebook || '',
+                        crm_header_color: companyResponse.data.crm_header_color || companyResponse.data.secondary_color || '#0f172a',
+                        crm_header_text_color: companyResponse.data.crm_header_text_color || '#ffffff',
+                        crm_sidebar_color: companyResponse.data.crm_sidebar_color || companyResponse.data.secondary_color || '#0f172a',
+                        crm_sidebar_text_color: companyResponse.data.crm_sidebar_text_color || '#ffffff',
+                        crm_body_color: companyResponse.data.crm_body_color || '#f3f4f6',
+                        crm_body_text_color: companyResponse.data.crm_body_text_color || '#0f172a',
+                        public_header_color: companyResponse.data.public_header_color || companyResponse.data.secondary_color || '#0f172a',
+                        public_header_text_color: companyResponse.data.public_header_text_color || '#ffffff',
+                        public_body_color: companyResponse.data.public_body_color || '#f8fafc',
+                        public_body_text_color: companyResponse.data.public_body_text_color || '#0f172a',
                         enabled_modules: Array.isArray(companyResponse.data.enabled_modules)
                             ? companyResponse.data.enabled_modules
                             : COMPANY_VIEWS.map((view) => view.id),
@@ -646,6 +683,39 @@ const AdminCompanySettings = () => {
                                     />
                                     <span className="text-gray-500 text-sm font-mono">{company.secondary_color}</span>
                                 </div>
+                            </div>
+                        </div>
+
+                        <div className="pt-2">
+                            <div className="mb-4">
+                                <h3 className="text-lg font-bold text-slate-700">Tema visual por módulo</h3>
+                                <p className="text-sm text-slate-500">
+                                    Define cabeceras, menús laterales, body y textos para el CRM y las páginas públicas.
+                                </p>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                                {THEME_COLOR_FIELDS.map(([field, label, description, fallback]) => (
+                                    <div key={field} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                                        <label className="block text-sm font-semibold text-slate-700 mb-1">{label}</label>
+                                        <p className="min-h-[34px] text-xs text-slate-500 mb-3">{description}</p>
+                                        <div className="flex items-center gap-3">
+                                            <input
+                                                type="color"
+                                                name={field}
+                                                value={normalizeHexColor(company[field], fallback)}
+                                                onChange={handleChange}
+                                                className="h-10 w-10 p-0 border-none rounded cursor-pointer"
+                                            />
+                                            <input
+                                                type="text"
+                                                name={field}
+                                                value={company[field] || fallback}
+                                                onChange={handleChange}
+                                                className="w-28 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-mono text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                         </>

@@ -75,6 +75,10 @@ const VehicleDetail = () => {
     const isPublicChatEnabled = enabledModules.has('public_sales_chat');
     const primaryColor = company.primary_color || '#2563eb';
     const secondaryColor = company.secondary_color || '#0f172a';
+    const publicHeaderColor = company.public_header_color || secondaryColor;
+    const publicHeaderTextColor = company.public_header_text_color || '#ffffff';
+    const publicBodyColor = company.public_body_color || '#f8fafc';
+    const publicBodyTextColor = company.public_body_text_color || '#0f172a';
     const lightBorder = withAlpha(primaryColor, '22');
     const primarySoft = withAlpha(primaryColor, '18');
 
@@ -107,26 +111,27 @@ const VehicleDetail = () => {
 
     return (
         <div
-            className="min-h-screen font-sans pb-12"
-            style={{ background: `linear-gradient(180deg, ${withAlpha(primaryColor, '12')} 0%, #f8fafc 24%, #eef2f7 100%)` }}
+            className="public-theme-scope min-h-screen font-sans pb-12"
+            style={{ '--public-body-text': publicBodyTextColor, background: publicBodyColor, color: publicBodyTextColor }}
         >
             {/* Navbar */}
             <header
                 className="shadow-lg sticky top-0 z-50 border-b"
                 style={{
-                    background: `linear-gradient(90deg, ${secondaryColor} 0%, ${withAlpha(primaryColor, 'dd')} 100%)`,
+                    background: publicHeaderColor,
                     borderColor: withAlpha(primaryColor, '30'),
+                    color: publicHeaderTextColor,
                 }}
             >
                 <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-                    <a href={`${publicHomeUrl}/autos`} className="flex items-center gap-3 text-2xl font-extrabold text-white tracking-tight">
+                    <a href={`${publicHomeUrl}/autos`} className="flex items-center gap-3 text-2xl font-extrabold tracking-tight" style={{ color: publicHeaderTextColor }}>
                         <PublicBrandLogo
                             company={company}
                             brandName={brandName}
                             className="h-11 w-auto object-contain md:h-12"
                             fallbackClassName="flex h-11 w-11 items-center justify-center rounded-xl text-sm font-black text-white md:h-12 md:w-12"
                             showText={Boolean(company?.logo_url)}
-                            textClassName="hidden text-sm font-semibold text-white/85 md:inline"
+                            textClassName="hidden text-sm font-semibold md:inline"
                             primaryColor={primaryColor}
                             secondaryColor={secondaryColor}
                         />
@@ -135,16 +140,16 @@ const VehicleDetail = () => {
                         {isCreditFormEnabled && (
                             <Link
                                 to="/credito"
-                                className="text-white transition px-4 py-2 rounded-lg border"
-                                style={{ borderColor: withAlpha(primaryColor, '55'), backgroundColor: withAlpha(secondaryColor, '44') }}
+                                className="transition px-4 py-2 rounded-lg border"
+                                style={{ borderColor: withAlpha(primaryColor, '55'), backgroundColor: withAlpha(secondaryColor, '44'), color: publicHeaderTextColor }}
                             >
                                 Formulario de crédito
                             </Link>
                         )}
                         <Link
                             to="/login"
-                            className="text-white transition px-4 py-2 rounded-lg"
-                            style={{ backgroundColor: primaryColor }}
+                            className="transition px-4 py-2 rounded-lg"
+                            style={{ backgroundColor: primaryColor, color: publicHeaderTextColor }}
                         >
                             Ingresa
                         </Link>
