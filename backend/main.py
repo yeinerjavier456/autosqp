@@ -14,6 +14,7 @@ import datetime
 import os
 import traceback
 import requests
+import threading
 import time
 import re
 import json
@@ -8855,18 +8856,75 @@ def attach_sale_metadata_to_vehicle(vehicle: models.Vehicle, sale: Optional[mode
     setattr(vehicle, "sold_by_user", getattr(sale, "seller", None))
     return vehicle
 
+
+OPENAI_CHAT_TIMEOUT_SECONDS = int(os.getenv("OPENAI_CHAT_TIMEOUT_SECONDS", "25") or "25")
+OPENAI_EXTRACTION_TIMEOUT_SECONDS = int(os.getenv("OPENAI_EXTRACTION_TIMEOUT_SECONDS", "20") or "20")
+PUBLIC_CHAT_DUPLICATE_WINDOW_SECONDS = int(os.getenv("PUBLIC_CHAT_DUPLICATE_WINDOW_SECONDS", "90") or "90")
+_public_chat_locks: Dict[str, threading.Lock] = {}
+_public_chat_locks_guard = threading.Lock()
+
+
+def get_public_chat_lock(session_token: str) -> threading.Lock:
+    with _public_chat_locks_guard:
+        lock = _public_chat_locks.get(session_token)
+        if lock is None:
+            lock = threading.Lock()
+            _public_chat_locks[session_token] = lock
+        return lock
+
+
+def should_attempt_public_lead_extraction(session: models.PublicChatSession, full_text: str) -> bool:
+    if getattr(session, "lead_id", None):
+        return False
+    normalized_text = (full_text or "").strip()
+    if not normalized_text:
+        return False
+    has_phone_like_value = re.search(r"(?:\+?\d[\s().-]*){7,}", normalized_text) is not None
+    has_vehicle_interest = bool(re.search(r"\b(carro|auto|veh[ií]culo|camioneta|mazda|chevrolet|renault|kia|toyota|nissan|hyundai|ford)\b", normalized_text, re.IGNORECASE))
+    return has_phone_like_value and has_vehicle_interest
+
+
+def get_recent_public_chat_duplicate_response(
+    db: Session,
+    session_id: int,
+    user_message: str
+) -> Optional[Dict[str, Any]]:
+    recent_cutoff = datetime.datetime.utcnow() - datetime.timedelta(seconds=PUBLIC_CHAT_DUPLICATE_WINDOW_SECONDS)
+    recent_messages = db.query(models.PublicChatMessage).filter(
+        models.PublicChatMessage.session_id == session_id,
+        models.PublicChatMessage.created_at >= recent_cutoff
+    ).order_by(models.PublicChatMessage.created_at.asc()).all()
+
+    normalized_message = (user_message or "").strip()
+    for index, message in enumerate(recent_messages):
+        if message.role != "user" or (message.content or "").strip() != normalized_message:
+            continue
+        following_assistant = next(
+            (
+                item for item in recent_messages[index + 1:]
+                if item.role == "assistant" and (item.content or "").strip()
+            ),
+            None
+        )
+        if following_assistant:
+            return {"status": "completed", "reply": following_assistant.content}
+        return {"status": "processing", "reply": None}
+    return None
+
+
 def call_openai_chat(api_key: str, model_name: str, messages: List[Dict[str, str]]) -> str:
     url = "https://api.openai.com/v1/chat/completions"
     payload = {
         "model": model_name,
         "messages": messages,
-        "temperature": 0.5
+        "temperature": 0.5,
+        "max_tokens": 450
     }
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
-    response = requests.post(url, headers=headers, json=payload, timeout=45)
+    response = requests.post(url, headers=headers, json=payload, timeout=OPENAI_CHAT_TIMEOUT_SECONDS)
     response.raise_for_status()
     data = response.json()
     return data["choices"][0]["message"]["content"].strip()
@@ -8917,7 +8975,7 @@ def extract_prospect_data_with_ai(api_key: str, model_name: str, full_conversati
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
-    response = requests.post(url, headers=headers, json=payload, timeout=45)
+    response = requests.post(url, headers=headers, json=payload, timeout=OPENAI_EXTRACTION_TIMEOUT_SECONDS)
     response.raise_for_status()
     data = response.json()
     content = data["choices"][0]["message"]["content"]
@@ -9307,6 +9365,36 @@ def public_chat_message(payload: schemas.PublicChatMessageCreate, db: Session = 
     if payload.source_page:
         session.source_page = payload.source_page
 
+    duplicate_response = get_recent_public_chat_duplicate_response(db, session.id, user_message)
+    if duplicate_response and duplicate_response["status"] == "completed":
+        latest_messages = db.query(models.PublicChatMessage).filter(
+            models.PublicChatMessage.session_id == session.id
+        ).order_by(models.PublicChatMessage.created_at.asc()).all()
+        return {
+            "session_token": session.session_token,
+            "reply": duplicate_response["reply"],
+            "lead_created": bool(session.lead_id),
+            "lead_id": session.lead_id,
+            "messages": [{"role": m.role, "content": m.content, "created_at": m.created_at} for m in latest_messages]
+        }
+    if duplicate_response and duplicate_response["status"] == "processing":
+        raise HTTPException(status_code=429, detail="Ya estamos procesando ese mensaje. Espera la respuesta antes de reenviar.")
+
+    lock = get_public_chat_lock(session.session_token)
+    if not lock.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="Ya hay una respuesta de IA en proceso para esta conversación.")
+    try:
+        return _public_chat_message_locked(payload, db, session, user_message)
+    finally:
+        lock.release()
+
+
+def _public_chat_message_locked(
+    payload: schemas.PublicChatMessageCreate,
+    db: Session,
+    session: models.PublicChatSession,
+    user_message: str,
+):
     api_key, model_name = get_company_ai_settings(db, session.company_id)
     if not api_key:
         raise HTTPException(status_code=400, detail="OpenAI API key no configurada")
@@ -9373,19 +9461,20 @@ def public_chat_message(payload: schemas.PublicChatMessageCreate, db: Session = 
     db.add(models.PublicChatMessage(session_id=session.id, role="assistant", content=assistant_reply))
     db.commit()
 
-    full_text = "\n".join([f"{m.role}: {m.content}" for m in history[-30:]] + [f"assistant: {assistant_reply}"])
     lead_created = False
     lead_id = session.lead_id
-    try:
-        extraction_key = api_key
-        if env_fallback_key and env_fallback_key.strip():
-            extraction_key = env_fallback_key if api_key != env_fallback_key else api_key
-        extracted = extract_prospect_data_with_ai(extraction_key, model_name, full_text)
-        lead_id = maybe_create_public_chat_lead(db, session, extracted)
-        lead_created = bool(lead_id and not session.lead_id is None)
-    except Exception:
-        # Extraction failure should not break chat response.
-        lead_created = False
+    full_text = "\n".join([f"{m.role}: {m.content}" for m in history[-30:]] + [f"assistant: {assistant_reply}"])
+    if should_attempt_public_lead_extraction(session, full_text):
+        try:
+            extraction_key = api_key
+            if env_fallback_key and env_fallback_key.strip():
+                extraction_key = env_fallback_key if api_key != env_fallback_key else api_key
+            extracted = extract_prospect_data_with_ai(extraction_key, model_name, full_text)
+            lead_id = maybe_create_public_chat_lead(db, session, extracted)
+            lead_created = bool(lead_id and not session.lead_id is None)
+        except Exception:
+            # Extraction failure should not break chat response.
+            lead_created = False
 
     # Keep lead conversation in sync after each turn once lead exists.
     if session.lead_id:

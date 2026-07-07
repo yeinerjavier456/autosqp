@@ -26,6 +26,7 @@ const PublicSalesChatbot = ({
         typing_max_ms: 18000
     });
     const endRef = useRef(null);
+    const inFlightRef = useRef(false);
 
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
     const resolvedSourcePage = sourcePage || window.location.pathname;
@@ -130,13 +131,15 @@ const PublicSalesChatbot = ({
     const sendMessage = async (e) => {
         e.preventDefault();
         const text = input.trim();
-        if (!text || loading) return;
+        if (!text || loading || isTyping || inFlightRef.current) return;
 
+        inFlightRef.current = true;
         setLoading(true);
         setInput('');
         setMessages(prev => [...prev, { role: 'user', content: text }]);
 
         let assistantReply = 'Perdón, tuve un problema técnico. ¿Me repites tu mensaje?';
+        let shouldAppendAssistantReply = true;
         try {
             const token = sessionToken || await ensureSession();
             const res = await axios.post('/api/public-chat/message', {
@@ -144,13 +147,25 @@ const PublicSalesChatbot = ({
                 message: text,
                 vehicle_id: vehicleId || undefined,
                 source_page: resolvedSourcePage
+            }, {
+                timeout: 60000
             });
             assistantReply = res.data.reply || assistantReply;
         } catch (error) {
-            // Keep fallback reply
+            if (error.response?.status === 429) {
+                shouldAppendAssistantReply = false;
+                const token = sessionToken || browserStorage.getItem(sessionStorageKey);
+                if (token) await loadHistory(token);
+            }
         } finally {
-            setLoading(false);
-            await simulateTypingReply(assistantReply);
+            try {
+                setLoading(false);
+                if (shouldAppendAssistantReply) {
+                    await simulateTypingReply(assistantReply);
+                }
+            } finally {
+                inFlightRef.current = false;
+            }
         }
     };
 

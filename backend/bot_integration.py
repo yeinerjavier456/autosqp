@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import re
+import threading
 from typing import Any, Dict, Optional
 
 import requests
@@ -15,6 +16,20 @@ DIRECT_CONTACT_NUMBER = "3227704222"
 FACEBOOK_BOT_REPLY_WINDOW = datetime.timedelta(days=1)
 WHATSAPP_CHANNEL_SALES = "sales"
 WHATSAPP_CHANNEL_PURCHASES = "purchases"
+OPENAI_CHAT_TIMEOUT_SECONDS = int(os.getenv("OPENAI_CHAT_TIMEOUT_SECONDS", "25") or "25")
+OPENAI_EXTRACTION_TIMEOUT_SECONDS = int(os.getenv("OPENAI_EXTRACTION_TIMEOUT_SECONDS", "20") or "20")
+OPENAI_CHANNEL_CLASSIFICATION_ENABLED = (os.getenv("OPENAI_CHANNEL_CLASSIFICATION_ENABLED", "0") or "0").lower() in {"1", "true", "yes"}
+_channel_bot_locks: dict[str, threading.Lock] = {}
+_channel_bot_locks_guard = threading.Lock()
+
+
+def get_channel_bot_lock(lock_key: str) -> threading.Lock:
+    with _channel_bot_locks_guard:
+        lock = _channel_bot_locks.get(lock_key)
+        if lock is None:
+            lock = threading.Lock()
+            _channel_bot_locks[lock_key] = lock
+        return lock
 
 
 def get_company_ai_settings(db: Session, company_id: Optional[int]) -> tuple[Optional[str], str]:
@@ -94,8 +109,9 @@ def call_openai_chat(api_key: str, model_name: str, messages: list[Dict[str, str
             "model": model_name,
             "messages": messages,
             "temperature": 0.5,
+            "max_tokens": 450,
         },
-        timeout=45,
+        timeout=OPENAI_CHAT_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
     data = response.json()
@@ -148,7 +164,7 @@ def extract_prospect_data_with_ai(api_key: str, model_name: str, full_conversati
             "temperature": 0,
             "response_format": {"type": "json_object"},
         },
-        timeout=45,
+        timeout=OPENAI_EXTRACTION_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
     data = response.json()
@@ -182,7 +198,7 @@ def extract_purchase_prospect_data_with_ai(api_key: str, model_name: str, full_c
             "temperature": 0,
             "response_format": {"type": "json_object"},
         },
-        timeout=45,
+        timeout=OPENAI_EXTRACTION_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
     data = response.json()
@@ -496,7 +512,7 @@ def classify_whatsapp_channel_with_ai(api_key: str, model_name: str, conversatio
             "temperature": 0,
             "response_format": {"type": "json_object"},
         },
-        timeout=30,
+        timeout=10,
     )
     response.raise_for_status()
     data = response.json()
@@ -528,12 +544,13 @@ def resolve_whatsapp_channel(
         if legacy_id and recipient_value == legacy_id and not purchases_id:
             return WHATSAPP_CHANNEL_SALES
 
-    if api_key:
+    inferred_channel = infer_whatsapp_channel_from_text(conversation_text)
+    if api_key and OPENAI_CHANNEL_CLASSIFICATION_ENABLED:
         try:
             return classify_whatsapp_channel_with_ai(api_key, model_name, conversation_text)
         except Exception:
             pass
-    return infer_whatsapp_channel_from_text(conversation_text)
+    return inferred_channel
 
 
 def find_or_create_channel_session(
@@ -798,6 +815,50 @@ def process_channel_bot_message(
     media_url: Optional[str] = None,
     created_at: Optional[datetime.datetime] = None,
 ) -> Dict[str, Any]:
+    normalized_lock_source = (source or "").strip().lower() or "channel"
+    normalized_external_user_id = (external_user_id or "").strip()
+    normalized_recipient_id = (recipient_id or "").strip()
+    lock = get_channel_bot_lock(f"{company_id}:{normalized_lock_source}:{normalized_external_user_id}:{normalized_recipient_id}")
+    if not lock.acquire(blocking=False):
+        return {
+            "duplicate": True,
+            "conversation": None,
+            "chat_session": None,
+            "lead_id": None,
+            "assistant_reply": None,
+            "bot_name": "Autos QP",
+            "channel": WHATSAPP_CHANNEL_SALES,
+            "busy": True,
+        }
+    try:
+        return _process_channel_bot_message_locked(
+            db=db,
+            company_id=company_id,
+            source=source,
+            external_user_id=external_user_id,
+            recipient_id=recipient_id,
+            user_message=user_message,
+            external_message_id=external_message_id,
+            message_type=message_type,
+            media_url=media_url,
+            created_at=created_at,
+        )
+    finally:
+        lock.release()
+
+
+def _process_channel_bot_message_locked(
+    db: Session,
+    company_id: int,
+    source: str,
+    external_user_id: str,
+    recipient_id: Optional[str],
+    user_message: str,
+    external_message_id: str,
+    message_type: str = "text",
+    media_url: Optional[str] = None,
+    created_at: Optional[datetime.datetime] = None,
+) -> Dict[str, Any]:
     chat_session, conversation, is_new_contact, previous_last_message_at = find_or_create_channel_session(
         db=db,
         company_id=company_id,
@@ -878,7 +939,7 @@ def process_channel_bot_message(
         )
 
     lead_id = chat_session.lead_id
-    if api_key and assistant_reply:
+    if api_key and assistant_reply and not chat_session.lead_id:
         full_text = build_full_conversation_text(db, conversation.id)
         if full_text:
             full_text = f"{full_text}\nassistant: {assistant_reply}"
