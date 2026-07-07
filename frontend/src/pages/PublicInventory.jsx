@@ -315,6 +315,13 @@ const PublicInventory = () => {
                             </Link>
                         )}
                         <Link
+                            to="/politica-de-privacidad"
+                            className="hidden rounded-lg px-2 py-2 transition md:inline-flex"
+                            style={{ color: publicHeaderTextColor }}
+                        >
+                            Privacidad
+                        </Link>
+                        <Link
                             to="/login"
                             className="transition px-4 py-2 rounded-lg"
                             style={{ backgroundColor: primaryColor, color: publicHeaderTextColor }}

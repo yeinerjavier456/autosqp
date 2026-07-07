@@ -888,6 +888,9 @@ const PublicCreditForm = () => {
             <Link to="/autos" className="rounded-xl border px-4 py-2 text-sm font-semibold" style={{ borderColor: theme.primaryBorder, color: theme.headerText }}>
               Ver inventario
             </Link>
+            <Link to="/politica-de-privacidad" className="hidden rounded-xl px-3 py-2 text-sm font-semibold md:inline-flex" style={{ color: theme.headerText }}>
+              Privacidad
+            </Link>
             <Link to="/login" className="rounded-xl px-4 py-2 text-sm font-bold" style={{ backgroundColor: theme.primary, color: theme.headerText }}>
               Ingresa
             </Link>
@@ -1159,7 +1162,13 @@ const PublicCreditForm = () => {
                     <div className="rounded-2xl border border-slate-200 p-5">
                       <label className="mb-3 flex items-start gap-3 text-sm text-slate-700">
                         <input type="checkbox" checked={form.consent.accepted} onChange={(e) => updateSection('consent', 'accepted', e.target.checked)} className="mt-1 h-4 w-4" />
-                        <span>Estoy de acuerdo con la política de privacidad y autorizaciones de tratamiento de datos.</span>
+                        <span>
+                          Estoy de acuerdo con la{' '}
+                          <Link to="/politica-de-privacidad" target="_blank" className="font-bold underline" style={{ color: theme.primary }}>
+                            política de privacidad
+                          </Link>
+                          {' '}y autorizaciones de tratamiento de datos.
+                        </span>
                       </label>
                       <textarea readOnly value={POLICY_TEXT} className="h-64 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-600 outline-none" />
                     </div>

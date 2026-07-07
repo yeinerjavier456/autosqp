@@ -9,6 +9,7 @@ import PublicInventory from './pages/PublicInventory';
 import PublicCreditForm from './pages/PublicCreditForm';
 import PublicCreditCapture from './pages/PublicCreditCapture';
 import PublicTeamCard from './pages/PublicTeamCard';
+import PublicPrivacyPolicy from './pages/PublicPrivacyPolicy';
 import TikTokLanding from './pages/TikTokLanding';
 import VehicleDetail from './pages/VehicleDetail'; // Import VehicleDetail
 import LoginPage from './pages/LoginPage';
@@ -87,6 +88,8 @@ function App() {
           <Route path="/nuestroequipo/:slug" element={<PublicTeamCard />} />
           <Route path="/credito" element={<PublicCreditForm />} />
           <Route path="/credito/captura/:token" element={<PublicCreditCapture />} />
+          <Route path="/politica-de-privacidad" element={<PublicPrivacyPolicy />} />
+          <Route path="/privacidad" element={<PublicPrivacyPolicy />} />
           <Route path="/renovar-licencia" element={<LicenseRenewalPage />} />
           <Route path="/tiktok" element={<TikTokLanding />} />
           <Route path="/autos/:id" element={<VehicleDetail />} /> {/* New Route */}
