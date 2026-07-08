@@ -1602,6 +1602,7 @@ def apply_lead_access_filters(
     exact_date: Optional[str] = None,
     assigned_mode: Optional[str] = None,
     responsible_user_id: Optional[int] = None,
+    assigned_to_id: Optional[int] = None,
     only_my_leads: bool = False,
 ):
     role_name = get_user_role_name(current_user)
@@ -1714,6 +1715,9 @@ def apply_lead_access_filters(
                 models.Lead.supervisors.any(models.User.id == responsible_user_id)
             )
         )
+
+    if assigned_to_id:
+        query = query.filter(models.Lead.assigned_to_id == assigned_to_id)
 
     if assigned_mode == "assigned":
         query = query.filter(
@@ -3458,9 +3462,7 @@ def get_active_reassignment_candidates(
     for user in candidates:
         if exclude_user_id and user.id == exclude_user_id:
             continue
-        if not is_active_user(user):
-            continue
-        if not user.role:
+        if not is_valid_lead_assignee(user, company_id):
             continue
         if advisor_only and get_user_role_name(user) != "asesor":
             continue
@@ -4743,25 +4745,40 @@ def delete_user(
             raise HTTPException(status_code=403, detail="No puedes eliminar a un Súper Administrador")
             
     reassignment_target_id = disable_request.reassign_leads_to_user_id if disable_request else None
-    assigned_leads_query = db.query(models.Lead).filter(
+    assigned_leads = db.query(models.Lead).options(
+        joinedload(models.Lead.supervisors)
+    ).filter(
         models.Lead.assigned_to_id == user_id,
         models.Lead.deleted_at.is_(None)
-    )
-    assigned_leads_count = assigned_leads_query.count()
+    ).all()
+    assigned_leads_count = len(assigned_leads)
 
     replacement_user = None
     if reassignment_target_id is not None:
-        replacement_user = db.query(models.User).filter(models.User.id == reassignment_target_id).first()
+        valid_reassignment_candidates = get_active_reassignment_candidates(
+            db=db,
+            company_id=db_user.company_id,
+            current_user=current_user,
+            exclude_user_id=db_user.id,
+        )
+        replacement_user = next(
+            (candidate for candidate in valid_reassignment_candidates if candidate.id == reassignment_target_id),
+            None,
+        )
         if not replacement_user:
-            raise HTTPException(status_code=404, detail="El usuario destino para reasignación no existe")
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "El usuario destino no es válido para recibir los leads. "
+                    "Debe estar activo, pertenecer a la misma empresa y tener un rol permitido."
+                )
+            )
         if replacement_user.company_id != db_user.company_id:
             raise HTTPException(status_code=400, detail="Solo puedes reasignar los leads a un usuario de la misma empresa")
         if replacement_user.id == db_user.id:
             raise HTTPException(status_code=400, detail="Debes escoger un usuario diferente para la reasignación")
         if not getattr(replacement_user, "is_active", True):
             raise HTTPException(status_code=400, detail="El usuario destino está inhabilitado")
-        if get_user_role_name(replacement_user) != "asesor":
-            raise HTTPException(status_code=400, detail="Solo puedes reasignar leads a usuarios con rol Asesor / Vendedor")
 
     if assigned_leads_count > 0 and replacement_user is None:
         raise HTTPException(
@@ -4773,8 +4790,44 @@ def delete_user(
             
     try:
         if replacement_user is not None:
-            assigned_leads_query.update({"assigned_to_id": replacement_user.id}, synchronize_session=False)
+            for lead in assigned_leads:
+                lead.assigned_to_id = replacement_user.id
 
+                supervisor_ids = [
+                    supervisor.id
+                    for supervisor in (getattr(lead, "supervisors", None) or [])
+                    if (
+                        supervisor
+                        and supervisor.id != db_user.id
+                        and is_active_user(supervisor)
+                    )
+                ]
+                sync_lead_supervisors(db, lead, supervisor_ids, current_user.id)
+
+                db.add(models.LeadHistory(
+                    lead_id=lead.id,
+                    user_id=current_user.id,
+                    previous_status=lead.status,
+                    new_status=lead.status,
+                    comment=(
+                        f"Lead reasignado por inhabilitacion de "
+                        f"{db_user.full_name or db_user.email} hacia "
+                        f"{replacement_user.full_name or replacement_user.email}. "
+                        f"Se conserva el estado actual."
+                    )
+                ))
+                db.add(models.Notification(
+                    user_id=replacement_user.id,
+                    title="Lead Reasignado",
+                    message=(
+                        f"Se te reasigno el lead: {lead.name}. "
+                        "Conserva su estado actual para que continues la gestion."
+                    ),
+                    type="info",
+                    link=build_lead_board_link(replacement_user, lead.id)
+                ))
+
+        db_user.auto_assign_leads = False
         db_user.is_active = False
         db.commit()
         
@@ -7018,6 +7071,7 @@ def read_leads(
     status: str = None,
     board_scope: str = None,
     q: str = None,
+    assigned_to_id: int = None,
     skip: int = 0, 
     limit: int = 5000, 
     db: Session = Depends(get_db), 
@@ -7031,6 +7085,7 @@ def read_leads(
         status=status,
         board_scope=board_scope,
         q=q,
+        assigned_to_id=assigned_to_id,
     )
 
     total = query.count()
