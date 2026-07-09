@@ -162,6 +162,12 @@ class UserLeadRedistributeResponse(BaseModel):
     redistributed_leads: int
     recipient_users: int
 
+
+class UserLeadSupervisionClearResponse(BaseModel):
+    status: str
+    message: str
+    removed_supervisions: int
+
 class UserCompany(BaseModel):
     id: int
     name: str

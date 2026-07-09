@@ -146,8 +146,10 @@ const UserForm = () => {
     const [ecardPhotoFile, setEcardPhotoFile] = useState(null);
     const [ecardQrDataUrl, setEcardQrDataUrl] = useState('');
     const [activeTab, setActiveTab] = useState('general');
+    const [clearingLeadSupervisions, setClearingLeadSupervisions] = useState(false);
 
     const currentRoleName = getRoleName(currentUser?.role);
+    const isOwnUserProfile = isEditing && Number(id) === Number(currentUser?.id);
     const isSuperAdmin = currentRoleName === 'super_admin';
     const selectedRole = useMemo(
         () => roles.find((role) => String(role.id) === String(user.role_id)),
@@ -579,6 +581,68 @@ const UserForm = () => {
         }
     };
 
+    const handleClearLeadSupervisions = async () => {
+        if (!isEditing) return;
+
+        const actionLabel = isOwnUserProfile
+            ? 'darte de baja de todas las supervisiones'
+            : 'retirar a este usuario de todas las supervisiones';
+
+        const result = await Swal.fire({
+            title: 'Quitar supervisiones de leads',
+            html: `
+                <div style="text-align:left">
+                    <p style="margin-bottom:12px;">
+                        Se eliminará a <strong>${escapeHtml(user.full_name || user.email || 'este usuario')}</strong> como supervisor en todos los leads donde aparezca.
+                    </p>
+                    <p style="font-size:13px;color:#475569;">
+                        Esta acción no cambia el asesor asignado, no mueve leads y no altera su estado actual.
+                    </p>
+                </div>
+            `,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#2563eb',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Sí, quitar supervisiones',
+            cancelButtonText: 'Cancelar',
+        });
+
+        if (!result.isConfirmed) return;
+
+        setClearingLeadSupervisions(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post(
+                `${API_BASE_URL}/users/${id}/clear-lead-supervisions`,
+                {},
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            const removedCount = Number(response.data?.removed_supervisions || 0);
+            setStatus({
+                type: 'success',
+                message: removedCount > 0
+                    ? `Se retiró al usuario de ${removedCount} supervision(es) de lead.`
+                    : 'El usuario no tenía supervisiones activas en leads.',
+            });
+            Swal.fire(
+                'Supervisiones actualizadas',
+                removedCount > 0
+                    ? `Se completó la acción de ${actionLabel}. Se eliminaron ${removedCount} supervision(es) de lead.`
+                    : 'El usuario no tenía supervisiones activas en leads.',
+                'success'
+            );
+        } catch (error) {
+            console.error('Error clearing lead supervisions', error);
+            const errorMsg = error.response?.data?.detail || 'No se pudo quitar al usuario de las supervisiones';
+            setStatus({ type: 'error', message: `Error: ${errorMsg}` });
+            Swal.fire('Error', errorMsg, 'error');
+        } finally {
+            setClearingLeadSupervisions(false);
+        }
+    };
+
     const renderGeneralTab = () => (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_320px]">
             <div className="space-y-6">
@@ -751,6 +815,33 @@ const UserForm = () => {
 
     const renderOperationTab = () => (
         <div className="space-y-6">
+            {isEditing && (isOwnUserProfile || currentRoleName === 'super_admin' || currentRoleName === 'admin') && (
+                <section className={SECTION_CLASS}>
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                            <h2 className="text-lg font-extrabold text-slate-800">Salir de supervisiones de leads</h2>
+                            <p className="mt-1 text-sm text-slate-500">
+                                Usa esta acción para quitar a {user.full_name || user.email || 'este usuario'} de todas las supervisiones de leads donde aparezca.
+                            </p>
+                            <p className="mt-2 text-xs text-slate-400">
+                                Solo elimina la supervisión. No cambia responsables asignados ni estados de los leads.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleClearLeadSupervisions}
+                            disabled={clearingLeadSupervisions || status.type === 'loading'}
+                            className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm font-bold text-amber-900 shadow-sm transition hover:border-amber-300 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                            {clearingLeadSupervisions
+                                ? 'Quitando supervisiones...'
+                                : isOwnUserProfile
+                                    ? 'Darme de baja de todas las supervisiones'
+                                    : 'Quitar de todas las supervisiones'}
+                        </button>
+                    </div>
+                </section>
+            )}
             {isInventarioRoleSelected ? (
                 <section className={SECTION_CLASS}>
                     <h2 className="text-lg font-extrabold text-slate-800">Configuración comercial no aplica</h2>

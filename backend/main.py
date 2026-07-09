@@ -4668,6 +4668,57 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
     return serialize_user(db_user)
 
 
+@app.post("/users/{user_id}/clear-lead-supervisions", response_model=schemas.UserLeadSupervisionClearResponse)
+def clear_user_lead_supervisions(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    target_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if current_user.id != target_user.id:
+        ensure_user_management_scope(current_user, target_user)
+
+    supervision_query = db.query(models.LeadSupervisor).filter(
+        models.LeadSupervisor.user_id == target_user.id
+    )
+    removed_supervisions = supervision_query.count()
+
+    if removed_supervisions < 1:
+        return {
+            "status": "success",
+            "message": "El usuario no tenía supervisiones activas en leads.",
+            "removed_supervisions": 0,
+        }
+
+    try:
+        supervision_query.delete(synchronize_session=False)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"No se pudo retirar al usuario de las supervisiones. {exc}") from exc
+
+    log_action_to_db(
+        db,
+        current_user.id,
+        "CLEAR_LEAD_SUPERVISION",
+        "User",
+        target_user.id,
+        (
+            f"Usuario retirado de {removed_supervisions} supervision(es) de lead: "
+            f"{target_user.full_name or target_user.email}"
+        )
+    )
+
+    return {
+        "status": "success",
+        "message": "El usuario fue retirado de todas sus supervisiones en leads.",
+        "removed_supervisions": removed_supervisions,
+    }
+
+
 @app.post("/users/{user_id}/ecard-photo", response_model=schemas.User)
 async def upload_user_ecard_photo(
     user_id: int,
@@ -7904,7 +7955,6 @@ def read_advisor_stats(
     )
 
     leads_query = visible_leads_query.options(
-        joinedload(models.Lead.assigned_to).joinedload(models.User.role),
         joinedload(models.Lead.supervisors),
         joinedload(models.Lead.purchase_options)
     )
@@ -8074,6 +8124,10 @@ def read_advisor_stats(
             models.LeadHistory.lead_id.in_(visible_lead_ids),
             models.LeadHistory.created_at >= period_start,
             models.LeadHistory.created_at < period_end
+        ).order_by(
+            models.LeadHistory.lead_id.asc(),
+            models.LeadHistory.created_at.desc(),
+            models.LeadHistory.id.desc()
         ).all()
 
     def is_automatic_alert_history(entry: models.LeadHistory) -> bool:
@@ -8081,11 +8135,8 @@ def read_advisor_stats(
         if not comment:
             return False
         return (
-            "[auto_alert]" in comment
-            or "apariciones de alerta" in comment
-            or "por regla" in comment and "alerta" in comment
-            or "lead reasignado automaticamente" in comment
-            or "lead reasignado automáticamente" in comment
+            "[auto alert]" in comment
+            or "lead reasignado automaticamente a" in comment
         )
 
     def is_human_management_history(entry: models.LeadHistory) -> bool:
@@ -8109,19 +8160,14 @@ def read_advisor_stats(
     ally_unattended_alert_reassignment_distribution: Dict[str, int] = {}
     unattended_alert_reassignment_user_map: Dict[str, Dict[str, Any]] = {}
     ally_unattended_alert_reassignment_user_map: Dict[str, Dict[str, Any]] = {}
-    history_entries_by_lead: Dict[int, List[models.LeadHistory]] = {}
-    for entry in history_entries:
-        if not getattr(entry, "lead_id", None):
-            continue
-        history_entries_by_lead.setdefault(entry.lead_id, []).append(entry)
 
     def accumulate_unattended_alert_user_metric(
         target_map: Dict[str, Dict[str, Any]],
         lead: Optional[models.Lead],
         trailing_auto_reassignments: int
     ) -> None:
-        assigned_user = getattr(lead, "assigned_to", None) if lead else None
         assigned_to_id = getattr(lead, "assigned_to_id", None) if lead else None
+        assigned_user = users_by_id.get(assigned_to_id) if assigned_to_id else None
         item_key = f"user:{assigned_to_id}" if assigned_to_id else "unassigned"
         fallback_name = f"Usuario {assigned_to_id}" if assigned_to_id else "Sin asignar"
         current_item = target_map.setdefault(
@@ -8150,25 +8196,12 @@ def read_advisor_stats(
             or fallback_name
         )
 
-    for lead_id, lead_history_entries in history_entries_by_lead.items():
-        trailing_auto_reassignments = 0
-        ordered_entries = sorted(
-            lead_history_entries,
-            key=lambda entry: (
-                getattr(entry, "created_at", None) or datetime.datetime.min,
-                getattr(entry, "id", 0) or 0,
-            ),
-        )
+    def finalize_unattended_alert_lead(lead_id: Optional[int], trailing_auto_reassignments: int) -> None:
+        nonlocal unattended_alert_reassigned_leads_total
+        nonlocal ally_unattended_alert_reassigned_leads_total
 
-        for entry in reversed(ordered_entries):
-            if is_automatic_alert_history(entry):
-                trailing_auto_reassignments += 1
-                continue
-            if is_human_management_history(entry):
-                break
-
-        if trailing_auto_reassignments < 1:
-            continue
+        if not lead_id or trailing_auto_reassignments < 1:
+            return
 
         bucket_key = str(trailing_auto_reassignments)
         current_lead = all_leads_by_id.get(lead_id)
@@ -8192,6 +8225,35 @@ def read_advisor_stats(
                 current_lead,
                 trailing_auto_reassignments,
             )
+
+    current_unattended_lead_id: Optional[int] = None
+    current_unattended_reassignment_count = 0
+    current_unattended_closed = False
+    for entry in history_entries:
+        entry_lead_id = getattr(entry, "lead_id", None)
+        if entry_lead_id != current_unattended_lead_id:
+            finalize_unattended_alert_lead(
+                current_unattended_lead_id,
+                current_unattended_reassignment_count,
+            )
+            current_unattended_lead_id = entry_lead_id
+            current_unattended_reassignment_count = 0
+            current_unattended_closed = False
+
+        if current_unattended_closed:
+            continue
+
+        if is_automatic_alert_history(entry):
+            current_unattended_reassignment_count += 1
+            continue
+
+        if is_human_management_history(entry):
+            current_unattended_closed = True
+
+    finalize_unattended_alert_lead(
+        current_unattended_lead_id,
+        current_unattended_reassignment_count,
+    )
 
     human_history_entries = [
         entry for entry in history_entries

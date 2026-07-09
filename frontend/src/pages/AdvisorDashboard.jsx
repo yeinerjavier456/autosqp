@@ -156,6 +156,8 @@ const AdvisorDashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const [stats, setStats] = useState(null);
+    const [loadingStats, setLoadingStats] = useState(true);
+    const [statsError, setStatsError] = useState('');
     const [dashboardView, setDashboardView] = useState('autosqp');
     const defaultRange = getLast7DaysRange();
     const [rangePreset, setRangePreset] = useState('last7');
@@ -176,6 +178,8 @@ const AdvisorDashboard = () => {
 
     useEffect(() => {
         const fetchStats = async () => {
+            setLoadingStats(true);
+            setStatsError('');
             try {
                 const token = localStorage.getItem('token');
                 const params = rangePreset === 'all'
@@ -190,15 +194,27 @@ const AdvisorDashboard = () => {
                 });
                 setStats(response.data);
             } catch (error) {
+                setStatsError(error?.response?.data?.detail || 'No se pudo cargar el dashboard. Intenta recargar la página.');
                 console.error('Error fetching role dashboard stats', error);
+            } finally {
+                setLoadingStats(false);
             }
         };
 
         if (user?.company_id && (rangePreset === 'all' || (startDate && endDate))) fetchStats();
     }, [user, startDate, endDate, rangePreset]);
 
-    if (!stats) {
+    if (loadingStats && !stats) {
         return <div className="p-8 text-center text-gray-500">Cargando tablero...</div>;
+    }
+
+    if (statsError && !stats) {
+        return (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center text-red-700 shadow-sm">
+                <p className="text-lg font-bold">No se pudo cargar el dashboard</p>
+                <p className="mt-2 text-sm">{statsError}</p>
+            </div>
+        );
     }
 
     const leadEntries = Object.entries(stats.status_distribution || {})
@@ -518,11 +534,11 @@ const AdvisorDashboard = () => {
                         </p>
                         <h3 className="mt-3 text-2xl font-bold">Leads reasignados sin atencion</h3>
                         <p className={`mt-2 text-sm ${isAllyDashboard ? 'text-teal-800' : 'text-rose-800'}`}>
-                            Cuenta los leads que recibieron reasignaciones automaticas por alerta y aun no muestran una gestion humana posterior dentro del rango seleccionado.
+                            Cuenta solo reasignaciones automaticas ejecutadas por alerta. No suma las apariciones previas de la alerta antes de reasignar.
                         </p>
                         <p className="mt-6 text-5xl font-black">{currentUnattendedAlertReassignedLeadsTotal}</p>
                         <p className={`mt-3 text-sm font-semibold ${isAllyDashboard ? 'text-teal-700' : 'text-rose-700'}`}>
-                            {currentUnattendedAlertReassignmentEventsTotal} reasignaciones automaticas siguen pendientes de atencion {rangeLabel}.
+                            {currentUnattendedAlertReassignmentEventsTotal} reasignaciones ejecutadas siguen pendientes de atencion {rangeLabel}.
                         </p>
                         <button
                             type="button"
@@ -537,7 +553,7 @@ const AdvisorDashboard = () => {
                         <div className="mb-4">
                             <h3 className="text-lg font-bold text-slate-800">Usuarios con menor gestion</h3>
                             <p className="text-sm text-slate-500">
-                                La grafica ordena a los responsables actuales con mas reasignaciones automaticas sin atencion. Entre mas alto el valor, menos gestion efectiva han tenido esos leads.
+                                La grafica ordena a los responsables actuales con mas reasignaciones ejecutadas por alerta que siguen sin atencion. No toma como valor las veces que aparecio la alerta.
                             </p>
                         </div>
                         <div className="h-72">
@@ -556,7 +572,7 @@ const AdvisorDashboard = () => {
                                                         const item = currentUnattendedAlertReassignmentUsersForChart[context.dataIndex];
                                                         const reassignments = Number(item?.reassignment_count || 0);
                                                         const leadsCount = Number(item?.lead_count || 0);
-                                                        return `${reassignments} reasignaciones sin atencion en ${leadsCount} lead(s).`;
+                                                        return `${reassignments} reasignaciones ejecutadas sin atencion en ${leadsCount} lead(s).`;
                                                     },
                                                 },
                                             },
