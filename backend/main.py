@@ -7956,6 +7956,7 @@ def read_advisor_stats(
 
     leads_query = visible_leads_query.options(
         joinedload(models.Lead.supervisors),
+        joinedload(models.Lead.assigned_to).joinedload(models.User.role),
         joinedload(models.Lead.purchase_options)
     )
     all_leads = leads_query.all()
@@ -8167,7 +8168,7 @@ def read_advisor_stats(
         trailing_auto_reassignments: int
     ) -> None:
         assigned_to_id = getattr(lead, "assigned_to_id", None) if lead else None
-        assigned_user = users_by_id.get(assigned_to_id) if assigned_to_id else None
+        assigned_user = getattr(lead, "assigned_to", None) if lead else None
         item_key = f"user:{assigned_to_id}" if assigned_to_id else "unassigned"
         fallback_name = f"Usuario {assigned_to_id}" if assigned_to_id else "Sin asignar"
         current_item = target_map.setdefault(
