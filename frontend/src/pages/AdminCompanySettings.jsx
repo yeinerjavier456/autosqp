@@ -134,53 +134,61 @@ const AdminCompanySettings = () => {
     const [activeIntegrationTab, setActiveIntegrationTab] = useState('meta');
     const [smtpTestEmail, setSmtpTestEmail] = useState('');
     const [testingSmtp, setTestingSmtp] = useState(false);
+    const [integrationSettingsLoaded, setIntegrationSettingsLoaded] = useState(!id);
     const groupedViews = useMemo(() => COMPANY_VIEW_GROUPS, []);
     const activeTabMeta = SETTINGS_TABS.find((tab) => tab.id === activeTab) || SETTINGS_TABS[0];
 
     useEffect(() => {
         if (id) {
             setIsEditing(true);
+            setIntegrationSettingsLoaded(false);
             const fetchCompany = async () => {
                 try {
                     const token = localStorage.getItem('token');
-                    const [companyResponse, integrationsResponse] = await Promise.all([
+                    const [companyResponse, integrationsResponse] = await Promise.allSettled([
                         axios.get(`/api/companies/${id}`, {
                             headers: { Authorization: `Bearer ${token}` }
                         }),
                         axios.get(`/api/companies/${id}/integrations`, {
                             headers: { Authorization: `Bearer ${token}` }
-                        }).catch(() => ({ data: {} })),
+                        }),
                     ]);
-                    const integrationSettings = integrationsResponse.data || {};
+                    if (companyResponse.status !== 'fulfilled') {
+                        throw companyResponse.reason;
+                    }
+                    const integrationSettings = integrationsResponse.status === 'fulfilled'
+                        ? (integrationsResponse.value.data || {})
+                        : {};
+                    setIntegrationSettingsLoaded(integrationsResponse.status === 'fulfilled');
                     setCompany({
-                        ...companyResponse.data,
-                        public_domains: Array.isArray(companyResponse.data.public_domains)
-                            ? companyResponse.data.public_domains
-                            : (companyResponse.data.public_domain ? [companyResponse.data.public_domain] : []),
-                        max_users: companyResponse.data.max_users ?? '',
-                        max_leads: companyResponse.data.max_leads ?? '',
-                        max_active_accounts: companyResponse.data.max_active_accounts ?? '',
-                        license_start_date: companyResponse.data.license_start_date || '',
-                        license_end_date: companyResponse.data.license_end_date || '',
-                        contact_address: companyResponse.data.contact_address || '',
-                        contact_phone: companyResponse.data.contact_phone || '',
-                        social_instagram: companyResponse.data.social_instagram || '',
-                        social_tiktok: companyResponse.data.social_tiktok || '',
-                        social_facebook: companyResponse.data.social_facebook || '',
-                        crm_header_color: companyResponse.data.crm_header_color || companyResponse.data.secondary_color || '#0f172a',
-                        crm_header_text_color: companyResponse.data.crm_header_text_color || '#ffffff',
-                        crm_sidebar_color: companyResponse.data.crm_sidebar_color || companyResponse.data.secondary_color || '#0f172a',
-                        crm_sidebar_text_color: companyResponse.data.crm_sidebar_text_color || '#ffffff',
-                        crm_body_color: companyResponse.data.crm_body_color || '#f3f4f6',
-                        crm_body_text_color: companyResponse.data.crm_body_text_color || '#0f172a',
-                        public_header_color: companyResponse.data.public_header_color || companyResponse.data.secondary_color || '#0f172a',
-                        public_header_text_color: companyResponse.data.public_header_text_color || '#ffffff',
-                        public_body_color: companyResponse.data.public_body_color || '#f8fafc',
-                        public_body_text_color: companyResponse.data.public_body_text_color || '#0f172a',
-                        enabled_modules: Array.isArray(companyResponse.data.enabled_modules)
-                            ? companyResponse.data.enabled_modules
+                        ...companyResponse.value.data,
+                        public_domains: Array.isArray(companyResponse.value.data.public_domains)
+                            ? companyResponse.value.data.public_domains
+                            : (companyResponse.value.data.public_domain ? [companyResponse.value.data.public_domain] : []),
+                        max_users: companyResponse.value.data.max_users ?? '',
+                        max_leads: companyResponse.value.data.max_leads ?? '',
+                        max_active_accounts: companyResponse.value.data.max_active_accounts ?? '',
+                        license_start_date: companyResponse.value.data.license_start_date || '',
+                        license_end_date: companyResponse.value.data.license_end_date || '',
+                        contact_address: companyResponse.value.data.contact_address || '',
+                        contact_phone: companyResponse.value.data.contact_phone || '',
+                        social_instagram: companyResponse.value.data.social_instagram || '',
+                        social_tiktok: companyResponse.value.data.social_tiktok || '',
+                        social_facebook: companyResponse.value.data.social_facebook || '',
+                        crm_header_color: companyResponse.value.data.crm_header_color || companyResponse.value.data.secondary_color || '#0f172a',
+                        crm_header_text_color: companyResponse.value.data.crm_header_text_color || '#ffffff',
+                        crm_sidebar_color: companyResponse.value.data.crm_sidebar_color || companyResponse.value.data.secondary_color || '#0f172a',
+                        crm_sidebar_text_color: companyResponse.value.data.crm_sidebar_text_color || '#ffffff',
+                        crm_body_color: companyResponse.value.data.crm_body_color || '#f3f4f6',
+                        crm_body_text_color: companyResponse.value.data.crm_body_text_color || '#0f172a',
+                        public_header_color: companyResponse.value.data.public_header_color || companyResponse.value.data.secondary_color || '#0f172a',
+                        public_header_text_color: companyResponse.value.data.public_header_text_color || '#ffffff',
+                        public_body_color: companyResponse.value.data.public_body_color || '#f8fafc',
+                        public_body_text_color: companyResponse.value.data.public_body_text_color || '#0f172a',
+                        enabled_modules: Array.isArray(companyResponse.value.data.enabled_modules)
+                            ? companyResponse.value.data.enabled_modules
                             : COMPANY_VIEWS.map((view) => view.id),
-                        public_credit_requires_email_validation: companyResponse.data.public_credit_requires_email_validation ?? true,
+                        public_credit_requires_email_validation: companyResponse.value.data.public_credit_requires_email_validation ?? true,
                         facebook_access_token: integrationSettings.facebook_access_token || '',
                         facebook_pixel_id: integrationSettings.facebook_pixel_id || '',
                         instagram_access_token: integrationSettings.instagram_access_token || '',
@@ -224,8 +232,16 @@ const AdminCompanySettings = () => {
                         smtp_use_tls: integrationSettings.smtp_use_tls ?? true,
                         smtp_always_recipients: integrationSettings.smtp_always_recipients || '',
                     });
+                    if (integrationsResponse.status !== 'fulfilled') {
+                        console.error('Error fetching integration settings', integrationsResponse.reason);
+                        setStatus({
+                            type: 'error',
+                            message: 'No se pudieron cargar las integraciones de esta empresa. Recarga antes de guardar para no sobrescribir la configuración SMTP.',
+                        });
+                    }
                 } catch (error) {
                     console.error("Error fetching company", error);
+                    setIntegrationSettingsLoaded(false);
                     setStatus({ type: 'error', message: 'Error al cargar la empresa.' });
                 }
             };
@@ -336,6 +352,13 @@ const AdminCompanySettings = () => {
     const handleSave = async () => {
         if (company.license_start_date && company.license_end_date && company.license_end_date < company.license_start_date) {
             setStatus({ type: 'error', message: 'La fecha final no puede ser menor que la fecha inicial.' });
+            return;
+        }
+        if (isEditing && !integrationSettingsLoaded) {
+            setStatus({
+                type: 'error',
+                message: 'No se pudieron cargar las integraciones de esta empresa. Recarga antes de guardar para evitar perder la configuración SMTP.',
+            });
             return;
         }
         setStatus({ type: 'loading', message: 'Guardando...' });
@@ -452,6 +475,7 @@ const AdminCompanySettings = () => {
                     whatsapp_calling_provider_token: '',
                     whatsapp_calling_provider_token_configured: Boolean(prev.whatsapp_calling_provider_token_configured || whatsapp_calling_provider_token),
                 }));
+                setIntegrationSettingsLoaded(true);
                 setStatus({ type: 'success', message: `Empresa "${company.name}" actualizada exitosamente!` });
             } else {
                 const response = await axios.post('/api/companies/', payload, { headers });
@@ -463,6 +487,7 @@ const AdminCompanySettings = () => {
                     whatsapp_calling_provider_token: '',
                     whatsapp_calling_provider_token_configured: Boolean(whatsapp_calling_provider_token),
                 }));
+                setIntegrationSettingsLoaded(true);
                 setStatus({ type: 'success', message: `Empresa "${response.data.name}" creada exitosamente!` });
             }
         } catch (error) {

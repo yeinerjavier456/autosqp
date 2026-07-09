@@ -3921,6 +3921,13 @@ def ensure_public_credit_delete_permissions(current_user: models.User):
         raise HTTPException(status_code=403, detail="Solo un administrador puede eliminar solicitudes públicas de crédito")
 
 
+def ensure_company_settings_scope(current_user: models.User, company_id: int):
+    ensure_role_management_permissions(current_user)
+    role_name = get_user_role_name(current_user) or ""
+    if role_name != "super_admin" and current_user.company_id and current_user.company_id != company_id:
+        raise HTTPException(status_code=403, detail="Not authorized to manage this company")
+
+
 ensure_role_view_defaults_synced()
 
 
@@ -5131,6 +5138,7 @@ def read_companies(skip: int = 0, limit: int = 10, q: str = None, db: Session = 
 
 @app.get("/companies/{company_id}", response_model=schemas.Company)
 def read_company(company_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    ensure_company_settings_scope(current_user, company_id)
     company = db.query(models.Company).filter(models.Company.id == company_id).first()
     if company is None:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -5138,6 +5146,7 @@ def read_company(company_id: int, db: Session = Depends(get_db), current_user: m
 
 @app.put("/companies/{company_id}", response_model=schemas.Company)
 def update_company(company_id: int, company_update: schemas.CompanyCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    ensure_company_settings_scope(current_user, company_id)
     db_company = db.query(models.Company).filter(models.Company.id == company_id).first()
     if not db_company:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -6813,9 +6822,7 @@ def serialize_integration_settings(settings: models.IntegrationSettings) -> Dict
 
 @app.get("/companies/{company_id}/integrations", response_model=schemas.IntegrationSettings)
 def read_integration_settings(company_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    # Check permissions
-    if current_user.company_id and current_user.company_id != company_id:
-        raise HTTPException(status_code=403, detail="Not authorized to view these settings")
+    ensure_company_settings_scope(current_user, company_id)
     
     settings = db.query(models.IntegrationSettings).filter(models.IntegrationSettings.company_id == company_id).first()
     if not settings:
@@ -7038,13 +7045,7 @@ def delete_role(
 
 @app.put("/companies/{company_id}/integrations", response_model=schemas.IntegrationSettings)
 def update_integration_settings(company_id: int, settings_update: schemas.IntegrationSettingsUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    # Check permissions (only admins or super admins)
-    role_name = get_user_role_name(current_user)
-    if role_name not in ["super_admin", "admin"]:
-         raise HTTPException(status_code=403, detail="Not authorized")
-
-    if role_name != "super_admin" and current_user.company_id and current_user.company_id != company_id:
-        raise HTTPException(status_code=403, detail="Not authorized to modify these settings")
+    ensure_company_settings_scope(current_user, company_id)
         
     settings = db.query(models.IntegrationSettings).filter(models.IntegrationSettings.company_id == company_id).first()
     if not settings:
@@ -7076,11 +7077,7 @@ def test_company_smtp_settings(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    role_name = get_user_role_name(current_user)
-    if role_name not in ["super_admin", "admin"]:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    if role_name != "super_admin" and current_user.company_id and current_user.company_id != company_id:
-        raise HTTPException(status_code=403, detail="Not authorized to test these settings")
+    ensure_company_settings_scope(current_user, company_id)
 
     company = db.query(models.Company).filter(models.Company.id == company_id).first()
     if not company:
