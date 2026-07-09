@@ -7979,6 +7979,8 @@ def read_advisor_stats(
     ally_unread_replies_count = 0
     active_pipeline_count = 0
     ally_active_pipeline_count = 0
+    autos_assigned_leads_by_user: Dict[int, Set[int]] = {}
+    ally_assigned_leads_by_user: Dict[int, Set[int]] = {}
     purchase_option_decision_distribution = {"pending": 0, "accepted": 0, "rejected": 0}
     recent_leads_by_day = {label: 0 for label in trend_labels}
     ally_recent_leads_by_day = {label: 0 for label in trend_labels}
@@ -8055,6 +8057,8 @@ def read_advisor_stats(
             )
         )
         if touches_ally_board:
+            if lead.assigned_to_id:
+                ally_assigned_leads_by_user.setdefault(lead.assigned_to_id, set()).add(lead.id)
             ally_total += 1
             ally_lead_ids.append(lead.id)
             ally_status_distribution[status_key] = ally_status_distribution.get(status_key, 0) + 1
@@ -8076,6 +8080,8 @@ def read_advisor_stats(
                     ally_recent_leads_by_day[trend_bucket] += 1
             continue
 
+        if lead.assigned_to_id:
+            autos_assigned_leads_by_user.setdefault(lead.assigned_to_id, set()).add(lead.id)
         autos_lead_ids.append(lead.id)
         status_distribution[status_key] = status_distribution.get(status_key, 0) + 1
         source_key = (lead.source or "sin_fuente").strip().lower() or "sin_fuente"
@@ -8289,6 +8295,8 @@ def read_advisor_stats(
     manager_activity_map: Dict[int, Dict[str, Any]] = {}
     status_mover_map: Dict[int, Dict[str, Any]] = {}
     ally_manager_activity_map: Dict[int, Dict[str, Any]] = {}
+    manager_managed_lead_ids: Dict[int, Set[int]] = {}
+    ally_manager_managed_lead_ids: Dict[int, Set[int]] = {}
     for entry in autos_history_entries:
         if not entry.user_id:
             continue
@@ -8304,6 +8312,8 @@ def read_advisor_stats(
             }
         )
         current_item["count"] += 1
+        if entry.lead_id:
+            manager_managed_lead_ids.setdefault(entry.user_id, set()).add(entry.lead_id)
         if not current_item.get("full_name"):
             current_item["full_name"] = getattr(getattr(entry, "user", None), "full_name", None)
         if not current_item.get("email"):
@@ -8350,6 +8360,8 @@ def read_advisor_stats(
             }
         )
         current_item["count"] += 1
+        if entry.lead_id:
+            ally_manager_managed_lead_ids.setdefault(entry.user_id, set()).add(entry.lead_id)
         if not current_item.get("full_name"):
             current_item["full_name"] = getattr(getattr(entry, "user", None), "full_name", None)
         if not current_item.get("email"):
@@ -8358,6 +8370,12 @@ def read_advisor_stats(
             current_item["role_name"] = get_user_role_name(getattr(entry, "user", None))
         if not current_item.get("role_label"):
             current_item["role_label"] = getattr(getattr(getattr(entry, "user", None), "role", None), "label", None)
+    for user_id, current_item in manager_activity_map.items():
+        current_item["assigned_leads_count"] = len(autos_assigned_leads_by_user.get(user_id, set()))
+        current_item["managed_leads_count"] = len(manager_managed_lead_ids.get(user_id, set()))
+    for user_id, current_item in ally_manager_activity_map.items():
+        current_item["assigned_leads_count"] = len(ally_assigned_leads_by_user.get(user_id, set()))
+        current_item["managed_leads_count"] = len(ally_manager_managed_lead_ids.get(user_id, set()))
     top_managers = sorted(
         manager_activity_map.values(),
         key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")

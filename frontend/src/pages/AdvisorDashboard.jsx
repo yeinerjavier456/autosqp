@@ -814,14 +814,22 @@ const AdvisorDashboard = () => {
                 {currentRanking.length > 0 ? (
                     <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
                         {currentRanking.map((manager, index) => (
-                            <div key={`${manager.user_id}-${index}`} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                            <div key={`${manager.user_id}-${index}`} className="flex flex-col gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
                                 <div>
                                     <p className="text-sm font-semibold text-slate-800">{manager.full_name || manager.email || `Usuario ${manager.user_id}`}</p>
                                     <p className="text-xs text-slate-500">{manager.email || 'Sin correo visible'}</p>
                                 </div>
-                                <span className="rounded-full bg-blue-100 px-3 py-1 text-sm font-bold text-blue-700">
-                                    {manager.count}
-                                </span>
+                                <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                                    <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700">
+                                        Asignados: {Number(manager.assigned_leads_count || 0)}
+                                    </span>
+                                    <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
+                                        Gestionados: {Number(manager.managed_leads_count || 0)}
+                                    </span>
+                                    <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+                                        Acciones: {Number(manager.count || 0)}
+                                    </span>
+                                </div>
                             </div>
                         ))}
                     </div>
