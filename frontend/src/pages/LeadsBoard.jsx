@@ -168,6 +168,7 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
     const [otherModelMode, setOtherModelMode] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [downloadingPdf, setDownloadingPdf] = useState(false);
     const [sendingAccess, setSendingAccess] = useState(false);
     const [copyingAccess, setCopyingAccess] = useState(false);
     const [accessLink, setAccessLink] = useState(null);
@@ -458,6 +459,42 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
         }
     };
 
+    const downloadCreditFormPdf = async () => {
+        if (!submission?.id) {
+            Swal.fire('Sin formulario', 'Primero guarda o carga un formulario de crédito para descargarlo en PDF.', 'info');
+            return;
+        }
+
+        setDownloadingPdf(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.get(
+                `${API_BASE_URL}/leads/${lead.id}/credit-form/pdf`,
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                    responseType: 'blob',
+                }
+            );
+            const objectUrl = URL.createObjectURL(response.data);
+            const link = document.createElement('a');
+            const safeName = String(submission.applicant_name || lead?.name || 'solicitante')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^A-Za-z0-9_-]+/g, '_');
+            link.href = objectUrl;
+            link.download = `formulario_credito_${safeName || submission.id}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(objectUrl);
+        } catch (error) {
+            console.error('Error downloading lead credit form pdf', error);
+            Swal.fire('Error', error?.response?.data?.detail || 'No se pudo descargar el formulario.', 'error');
+        } finally {
+            setDownloadingPdf(false);
+        }
+    };
+
     const copyAccessLink = async () => {
         setCopyingAccess(true);
         try {
@@ -719,6 +756,14 @@ const LeadCreditFormTab = ({ lead, canModify }) => {
                         {origin === 'public' ? 'Enviado y validado por el cliente desde la web.' : exists ? 'Formulario diligenciado internamente.' : 'Aún no se ha diligenciado; completa los datos del cliente.'}
                     </p>
                 </div>
+                <button
+                    type="button"
+                    onClick={downloadCreditFormPdf}
+                    disabled={downloadingPdf || !submission?.id}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                    {downloadingPdf ? 'Descargando...' : 'Descargar formulario'}
+                </button>
                 <span className={`rounded-full px-3 py-1 text-xs font-bold ${origin === 'public' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
                     {origin === 'public' ? 'Origen público' : 'Origen interno'}
                 </span>

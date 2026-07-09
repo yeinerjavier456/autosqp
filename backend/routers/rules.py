@@ -142,6 +142,16 @@ def get_reassignment_candidates(db: Session, company_id: int, excluded_user_id: 
     ]
 
 
+def remove_user_from_lead_supervision(db: Session, lead_id: int, user_id: Optional[int]) -> None:
+    if not lead_id or not user_id:
+        return
+
+    db.query(models.LeadSupervisor).filter(
+        models.LeadSupervisor.lead_id == lead_id,
+        models.LeadSupervisor.user_id == user_id,
+    ).delete(synchronize_session=False)
+
+
 def build_rule_alert_message(rule: models.AutomationRule, lead: models.Lead, alert_count_after_current_log: int) -> str:
     message = (
         f"El lead {lead.name} ha estado en '{lead.status}' "
@@ -190,6 +200,8 @@ def perform_rule_reassignment_if_needed(
 
     previous_assigned_to_id = lead.assigned_to_id
     lead.assigned_to_id = target_user.id
+    if previous_assigned_to_id and previous_assigned_to_id != target_user.id:
+        remove_user_from_lead_supervision(db, lead.id, previous_assigned_to_id)
     db.add(models.LeadHistory(
         lead_id=lead.id,
         user_id=target_user.id,
@@ -197,7 +209,8 @@ def perform_rule_reassignment_if_needed(
         new_status=lead.status,
         comment=(
             f"[AUTO_ALERT] Lead reasignado automaticamente a {target_user.full_name or target_user.email} "
-            f"por regla '{rule.name}' tras {alert_count_after_current_log} apariciones de alerta."
+            f"por regla '{rule.name}' tras {alert_count_after_current_log} apariciones de alerta. "
+            f"El responsable anterior sale de supervision."
         )
     ))
     db.add(models.Notification(

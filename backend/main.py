@@ -6262,6 +6262,36 @@ def read_lead_credit_form(
     }
 
 
+@app.get("/leads/{lead_id}/credit-form/pdf")
+def download_lead_credit_form_pdf(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    lead = _get_accessible_lead_for_credit_form(db, current_user, lead_id)
+    submission = db.query(models.PublicCreditSubmission).filter(
+        models.PublicCreditSubmission.lead_id == lead.id
+    ).order_by(
+        models.PublicCreditSubmission.updated_at.desc(),
+        models.PublicCreditSubmission.id.desc(),
+    ).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Este lead aún no tiene un formulario de crédito guardado.")
+
+    company = db.query(models.Company).filter(models.Company.id == submission.company_id).first()
+    pdf_bytes = _build_public_credit_submission_pdf(company, submission)
+    safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", submission.applicant_name or lead.name or "solicitante").strip("_")
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="formulario_credito_{safe_name or submission.id}.pdf"'
+            )
+        },
+    )
+
+
 @app.put("/leads/{lead_id}/credit-form", response_model=schemas.PublicCreditSubmissionDetail)
 def save_lead_credit_form(
     lead_id: int,
