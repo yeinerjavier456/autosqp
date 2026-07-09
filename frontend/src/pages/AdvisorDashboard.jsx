@@ -276,6 +276,12 @@ const AdvisorDashboard = () => {
     const allyTopManagers = Array.isArray(stats.ally_top_managers) ? stats.ally_top_managers : [];
     const appointmentsByUser = Array.isArray(stats.appointments_by_user) ? stats.appointments_by_user : [];
     const supervisedAdvisors = Array.isArray(stats.supervised_advisors) ? stats.supervised_advisors : [];
+    const unattendedAlertReassignmentUsers = Array.isArray(stats.unattended_alert_reassignment_users)
+        ? stats.unattended_alert_reassignment_users
+        : [];
+    const allyUnattendedAlertReassignmentUsers = Array.isArray(stats.ally_unattended_alert_reassignment_users)
+        ? stats.ally_unattended_alert_reassignment_users
+        : [];
     const advisorManagers = topManagers.filter((manager) => manager?.role_name === 'asesor');
 
     const rangeLabel = rangePreset === 'all'
@@ -335,6 +341,29 @@ const AdvisorDashboard = () => {
         ? 'Leads donde un aliado participa dentro del rango seleccionado.'
         : trendDescription;
     const currentRanking = isAllyDashboard ? allyTopManagers : topManagers;
+    const currentUnattendedAlertReassignmentUsers = isAllyDashboard
+        ? allyUnattendedAlertReassignmentUsers
+        : unattendedAlertReassignmentUsers
+    ;
+    const currentUnattendedAlertReassignmentUsersForChart = currentUnattendedAlertReassignmentUsers.slice(0, 8);
+    const currentUnattendedAlertReassignedLeadsTotal = isAllyDashboard
+        ? Number(stats.ally_unattended_alert_reassigned_leads_total || 0)
+        : Number(stats.unattended_alert_reassigned_leads_total || 0);
+    const currentUnattendedAlertReassignmentEventsTotal = currentUnattendedAlertReassignmentUsers.reduce(
+        (total, item) => total + Number(item?.reassignment_count || 0),
+        0
+    );
+    const unattendedAlertReassignmentData = {
+        labels: currentUnattendedAlertReassignmentUsersForChart.map((item) => item?.display_name || item?.full_name || item?.email || 'Sin asignar'),
+        datasets: [
+            {
+                label: 'Reasignaciones sin atencion',
+                data: currentUnattendedAlertReassignmentUsersForChart.map((item) => Number(item?.reassignment_count || 0)),
+                backgroundColor: isAllyDashboard ? '#0f766e' : '#dc2626',
+                borderRadius: 10,
+            },
+        ],
+    };
 
     return (
         <div className="space-y-6">
@@ -480,6 +509,70 @@ const AdvisorDashboard = () => {
                     />
                 )}
             </div>
+
+            {(isAllyDashboard ? hasAllySection : hasLeadsSection) && (
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+                    <div className={`rounded-2xl border p-6 shadow-sm ${isAllyDashboard ? 'border-teal-200 bg-teal-50 text-teal-950' : 'border-rose-200 bg-rose-50 text-rose-950'}`}>
+                        <p className={`text-xs font-bold uppercase tracking-[0.24em] ${isAllyDashboard ? 'text-teal-700' : 'text-rose-700'}`}>
+                            Reasignacion por alerta
+                        </p>
+                        <h3 className="mt-3 text-2xl font-bold">Leads reasignados sin atencion</h3>
+                        <p className={`mt-2 text-sm ${isAllyDashboard ? 'text-teal-800' : 'text-rose-800'}`}>
+                            Cuenta los leads que recibieron reasignaciones automaticas por alerta y aun no muestran una gestion humana posterior dentro del rango seleccionado.
+                        </p>
+                        <p className="mt-6 text-5xl font-black">{currentUnattendedAlertReassignedLeadsTotal}</p>
+                        <p className={`mt-3 text-sm font-semibold ${isAllyDashboard ? 'text-teal-700' : 'text-rose-700'}`}>
+                            {currentUnattendedAlertReassignmentEventsTotal} reasignaciones automaticas siguen pendientes de atencion {rangeLabel}.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => navigate(isAllyDashboard ? '/aliado/dashboard' : leadBoardPath)}
+                            className={`mt-6 rounded-xl px-4 py-2 text-sm font-bold transition ${isAllyDashboard ? 'bg-teal-700 text-white hover:bg-teal-800' : 'bg-rose-700 text-white hover:bg-rose-800'}`}
+                        >
+                            Ver tablero
+                        </button>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
+                        <div className="mb-4">
+                            <h3 className="text-lg font-bold text-slate-800">Usuarios con menor gestion</h3>
+                            <p className="text-sm text-slate-500">
+                                La grafica ordena a los responsables actuales con mas reasignaciones automaticas sin atencion. Entre mas alto el valor, menos gestion efectiva han tenido esos leads.
+                            </p>
+                        </div>
+                        <div className="h-72">
+                            {currentUnattendedAlertReassignmentUsersForChart.length > 0 ? (
+                                <Bar
+                                    data={unattendedAlertReassignmentData}
+                                    options={{
+                                        indexAxis: 'y',
+                                        maintainAspectRatio: false,
+                                        responsive: true,
+                                        plugins: {
+                                            legend: { display: false },
+                                            tooltip: {
+                                                callbacks: {
+                                                    label: (context) => {
+                                                        const item = currentUnattendedAlertReassignmentUsersForChart[context.dataIndex];
+                                                        const reassignments = Number(item?.reassignment_count || 0);
+                                                        const leadsCount = Number(item?.lead_count || 0);
+                                                        return `${reassignments} reasignaciones sin atencion en ${leadsCount} lead(s).`;
+                                                    },
+                                                },
+                                            },
+                                        },
+                                        scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+                                    }}
+                                />
+                            ) : (
+                                <div className="flex h-full items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
+                                    No hay leads con reasignaciones automaticas sin atencion en este rango.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {!isAllyDashboard && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">

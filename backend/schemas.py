@@ -1131,12 +1131,18 @@ class RoleDashboardStats(BaseModel):
     ally_active_pipeline_count: int
     unread_replies_count: int
     ally_unread_replies_count: int
+    unattended_alert_reassigned_leads_total: int
+    ally_unattended_alert_reassigned_leads_total: int
     status_distribution: Dict[str, int]
     ally_status_distribution: Dict[str, int]
     source_distribution: Dict[str, int]
     ally_source_distribution: Dict[str, int]
     recent_leads_by_day: Dict[str, int]
     ally_recent_leads_by_day: Dict[str, int]
+    unattended_alert_reassignment_distribution: Dict[str, int]
+    ally_unattended_alert_reassignment_distribution: Dict[str, int]
+    unattended_alert_reassignment_users: List[Dict[str, Any]] = []
+    ally_unattended_alert_reassignment_users: List[Dict[str, Any]] = []
     credit_total: int
     credit_status_distribution: Dict[str, int]
     purchase_total: int

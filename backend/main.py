@@ -7904,10 +7904,12 @@ def read_advisor_stats(
     )
 
     leads_query = visible_leads_query.options(
+        joinedload(models.Lead.assigned_to).joinedload(models.User.role),
         joinedload(models.Lead.supervisors),
         joinedload(models.Lead.purchase_options)
     )
     all_leads = leads_query.all()
+    all_leads_by_id = {lead.id: lead for lead in all_leads}
 
     def is_within_dashboard_range(dt_value: Optional[datetime.datetime]) -> bool:
         return bool(dt_value and period_start <= dt_value < period_end)
@@ -8085,6 +8087,111 @@ def read_advisor_stats(
             or "lead reasignado automaticamente" in comment
             or "lead reasignado automáticamente" in comment
         )
+
+    def is_human_management_history(entry: models.LeadHistory) -> bool:
+        if is_automatic_alert_history(entry) or not getattr(entry, "user_id", None):
+            return False
+
+        comment = normalize_role_text(getattr(entry, "comment", None))
+        automatic_markers = (
+            "automatic",
+            "automatica",
+            "automaticamente",
+            "[credit request]",
+            "[purchase request]",
+            "[auto alert]",
+        )
+        return not any(marker in comment for marker in automatic_markers)
+
+    unattended_alert_reassigned_leads_total = 0
+    ally_unattended_alert_reassigned_leads_total = 0
+    unattended_alert_reassignment_distribution: Dict[str, int] = {}
+    ally_unattended_alert_reassignment_distribution: Dict[str, int] = {}
+    unattended_alert_reassignment_user_map: Dict[str, Dict[str, Any]] = {}
+    ally_unattended_alert_reassignment_user_map: Dict[str, Dict[str, Any]] = {}
+    history_entries_by_lead: Dict[int, List[models.LeadHistory]] = {}
+    for entry in history_entries:
+        if not getattr(entry, "lead_id", None):
+            continue
+        history_entries_by_lead.setdefault(entry.lead_id, []).append(entry)
+
+    def accumulate_unattended_alert_user_metric(
+        target_map: Dict[str, Dict[str, Any]],
+        lead: Optional[models.Lead],
+        trailing_auto_reassignments: int
+    ) -> None:
+        assigned_user = getattr(lead, "assigned_to", None) if lead else None
+        assigned_to_id = getattr(lead, "assigned_to_id", None) if lead else None
+        item_key = f"user:{assigned_to_id}" if assigned_to_id else "unassigned"
+        fallback_name = f"Usuario {assigned_to_id}" if assigned_to_id else "Sin asignar"
+        current_item = target_map.setdefault(
+            item_key,
+            {
+                "user_id": assigned_to_id,
+                "full_name": getattr(assigned_user, "full_name", None),
+                "email": getattr(assigned_user, "email", None),
+                "role_label": getattr(getattr(assigned_user, "role", None), "label", None),
+                "lead_count": 0,
+                "reassignment_count": 0,
+                "display_name": getattr(assigned_user, "full_name", None) or getattr(assigned_user, "email", None) or fallback_name,
+            }
+        )
+        current_item["lead_count"] += 1
+        current_item["reassignment_count"] += trailing_auto_reassignments
+        if not current_item.get("full_name"):
+            current_item["full_name"] = getattr(assigned_user, "full_name", None)
+        if not current_item.get("email"):
+            current_item["email"] = getattr(assigned_user, "email", None)
+        if not current_item.get("role_label"):
+            current_item["role_label"] = getattr(getattr(assigned_user, "role", None), "label", None)
+        current_item["display_name"] = (
+            current_item.get("full_name")
+            or current_item.get("email")
+            or fallback_name
+        )
+
+    for lead_id, lead_history_entries in history_entries_by_lead.items():
+        trailing_auto_reassignments = 0
+        ordered_entries = sorted(
+            lead_history_entries,
+            key=lambda entry: (
+                getattr(entry, "created_at", None) or datetime.datetime.min,
+                getattr(entry, "id", 0) or 0,
+            ),
+        )
+
+        for entry in reversed(ordered_entries):
+            if is_automatic_alert_history(entry):
+                trailing_auto_reassignments += 1
+                continue
+            if is_human_management_history(entry):
+                break
+
+        if trailing_auto_reassignments < 1:
+            continue
+
+        bucket_key = str(trailing_auto_reassignments)
+        current_lead = all_leads_by_id.get(lead_id)
+        if lead_id in ally_visible_lead_ids:
+            ally_unattended_alert_reassigned_leads_total += 1
+            ally_unattended_alert_reassignment_distribution[bucket_key] = (
+                ally_unattended_alert_reassignment_distribution.get(bucket_key, 0) + 1
+            )
+            accumulate_unattended_alert_user_metric(
+                ally_unattended_alert_reassignment_user_map,
+                current_lead,
+                trailing_auto_reassignments,
+            )
+        elif lead_id in autos_visible_lead_ids:
+            unattended_alert_reassigned_leads_total += 1
+            unattended_alert_reassignment_distribution[bucket_key] = (
+                unattended_alert_reassignment_distribution.get(bucket_key, 0) + 1
+            )
+            accumulate_unattended_alert_user_metric(
+                unattended_alert_reassignment_user_map,
+                current_lead,
+                trailing_auto_reassignments,
+            )
 
     human_history_entries = [
         entry for entry in history_entries
@@ -8389,6 +8496,22 @@ def read_advisor_stats(
             item.get("full_name") or item.get("email") or ""
         )
     )
+    unattended_alert_reassignment_users = sorted(
+        unattended_alert_reassignment_user_map.values(),
+        key=lambda item: (
+            -int(item.get("reassignment_count") or 0),
+            -int(item.get("lead_count") or 0),
+            item.get("display_name") or "",
+        )
+    )
+    ally_unattended_alert_reassignment_users = sorted(
+        ally_unattended_alert_reassignment_user_map.values(),
+        key=lambda item: (
+            -int(item.get("reassignment_count") or 0),
+            -int(item.get("lead_count") or 0),
+            item.get("display_name") or "",
+        )
+    )
 
     return {
         "total_leads": total_leads,
@@ -8408,12 +8531,18 @@ def read_advisor_stats(
         "ally_active_pipeline_count": ally_active_pipeline_count,
         "unread_replies_count": unread_replies_count,
         "ally_unread_replies_count": ally_unread_replies_count,
+        "unattended_alert_reassigned_leads_total": unattended_alert_reassigned_leads_total,
+        "ally_unattended_alert_reassigned_leads_total": ally_unattended_alert_reassigned_leads_total,
         "status_distribution": status_distribution,
         "ally_status_distribution": ally_status_distribution,
         "source_distribution": source_distribution,
         "ally_source_distribution": ally_source_distribution,
         "recent_leads_by_day": recent_leads_by_day,
         "ally_recent_leads_by_day": ally_recent_leads_by_day,
+        "unattended_alert_reassignment_distribution": unattended_alert_reassignment_distribution,
+        "ally_unattended_alert_reassignment_distribution": ally_unattended_alert_reassignment_distribution,
+        "unattended_alert_reassignment_users": unattended_alert_reassignment_users,
+        "ally_unattended_alert_reassignment_users": ally_unattended_alert_reassignment_users,
         "credit_total": credit_total,
         "credit_status_distribution": credit_status_distribution,
         "purchase_total": purchase_total,
