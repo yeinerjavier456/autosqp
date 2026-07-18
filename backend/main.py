@@ -1182,31 +1182,115 @@ def _build_public_credit_submission_pdf_reference_style(
             lines.append(current)
         return lines or [""]
 
+    def company_initials() -> str:
+        words = [word for word in re.split(r"\s+", safe_text(company_name)) if word and word.lower() != "sin"]
+        if not words:
+            return "EM"
+        if len(words) == 1:
+            return words[0][:2].upper()
+        return f"{words[0][0]}{words[1][0]}".upper()
+
+    def company_logo_reader() -> Optional[Any]:
+        logo_url = str(getattr(company, "logo_url", None) or "").strip()
+        if not logo_url:
+            return None
+
+        clean_value = logo_url.split("?", 1)[0].replace("\\", "/")
+        candidates = []
+        if os.path.isabs(clean_value):
+            candidates.append(clean_value)
+        for marker in ("/api/static/", "/static/", "api/static/", "static/"):
+            if clean_value.startswith(marker):
+                relative = clean_value[len(marker):]
+                candidates.append(os.path.join("static", *relative.split("/")))
+            elif marker in clean_value:
+                relative = clean_value.split(marker, 1)[1]
+                candidates.append(os.path.join("static", *relative.split("/")))
+        candidates.append(clean_value.lstrip("/"))
+
+        for candidate in candidates:
+            if candidate and os.path.isfile(candidate):
+                try:
+                    return ImageReader(candidate)
+                except Exception:
+                    pass
+
+        if clean_value.startswith(("http://", "https://")):
+            try:
+                response = requests.get(logo_url, timeout=8)
+                response.raise_for_status()
+                return ImageReader(BytesIO(response.content))
+            except Exception:
+                return None
+        return None
+
+    def draw_logo_or_initials(x: float, y: float, box_width: float, box_height: float) -> None:
+        logo_reader = company_logo_reader()
+        if logo_reader:
+            try:
+                image_width, image_height = logo_reader.getSize()
+                scale = min(box_width / max(image_width, 1), box_height / max(image_height, 1))
+                draw_width = image_width * scale
+                draw_height = image_height * scale
+                pdf.drawImage(
+                    logo_reader,
+                    x + (box_width - draw_width) / 2,
+                    y + (box_height - draw_height) / 2,
+                    width=draw_width,
+                    height=draw_height,
+                    preserveAspectRatio=True,
+                    mask="auto",
+                )
+                return
+            except Exception:
+                pass
+
+        pdf.setFillColor(HexColor("#f8fafc"))
+        pdf.setStrokeColor(border)
+        pdf.setLineWidth(1)
+        pdf.roundRect(x, y, box_width, box_height, 8, stroke=1, fill=1)
+        pdf.setFillColor(text_color)
+        pdf.setFont("Helvetica-Bold", 19)
+        pdf.drawCentredString(x + box_width / 2, y + box_height / 2 - 7, company_initials())
+
     def draw_brand():
         pdf.setFillColor(text_color)
         pdf.setStrokeColor(text_color)
         pdf.setLineWidth(1)
-        pdf.setFont("Helvetica", 22)
-        pdf.drawString(left + 86, page_height - 58, "Autos")
-        pdf.setFont("Helvetica-Bold", 33)
-        pdf.drawString(left + 88, page_height - 92, "QP")
-        pdf.line(left + 76, page_height - 100, left + 76, page_height - 38)
-        pdf.setFont("Helvetica-Bold", 12)
-        pdf.drawCentredString(left + 38, page_height - 54, "AUTO")
-        pdf.drawCentredString(left + 38, page_height - 74, "QP")
-        pdf.setFont("Helvetica", 8)
-        pdf.drawCentredString(left + 38, page_height - 90, "credito")
+        logo_x = left
+        logo_y = page_height - 98
+        logo_width = 72
+        logo_height = 58
+        draw_logo_or_initials(logo_x, logo_y, logo_width, logo_height)
+        pdf.line(left + 86, page_height - 100, left + 86, page_height - 38)
+        pdf.setFont("Helvetica-Bold", 19)
+        pdf.drawString(left + 102, page_height - 58, clipped_text(company_name, 205, "Helvetica-Bold", 19))
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(left + 104, page_height - 77, "Formulario de credito")
+        website_label = getattr(company, "website_url", None) or getattr(company, "public_domain", None)
+        if website_label:
+            pdf.setFillColor(muted)
+            pdf.setFont("Helvetica", 7.5)
+            pdf.drawString(left + 104, page_height - 91, clipped_text(website_label, 190, "Helvetica", 7.5))
 
     def draw_footer():
-        contact_address = safe_text(getattr(company, "contact_address", None) or "Centro Comercial Outlet Factory, Av. de las Americas #62-84 Local 128, Puente Aranda, Bogota")
-        contact_phone = safe_text(getattr(company, "contact_phone", None) or "3002523226 - 3218912903")
-        contact_email = safe_text(getattr(company, "contact_email", None) or "autosqpc@gmail.com")
-        website = safe_text(getattr(company, "website_url", None) or getattr(company, "public_domain", None) or "www.autosqp.com")
+        contact_address = getattr(company, "contact_address", None)
+        contact_phone = getattr(company, "contact_phone", None)
+        contact_email = getattr(company, "contact_email", None)
+        website = getattr(company, "website_url", None) or getattr(company, "public_domain", None)
+        contact_parts = [
+            contact_address,
+            f"Tel: {contact_phone}" if contact_phone else None,
+            contact_email,
+            website,
+        ]
+        contact_line = "   ".join(safe_text(part) for part in contact_parts if part)
         pdf.setFillColor(text_color)
         pdf.setFont("Helvetica-Bold", 9)
         pdf.drawCentredString(page_width / 2, 60, safe_text(company_name).upper())
-        pdf.setFont("Helvetica", 8.2)
-        pdf.drawCentredString(page_width / 2, 35, clipped_text(f"{contact_address}        Tel: {contact_phone}   {contact_email}   {website}", usable_width, "Helvetica", 8.2))
+        if contact_line:
+            pdf.setFont("Helvetica", 8.2)
+            pdf.drawCentredString(page_width / 2, 35, clipped_text(contact_line, usable_width, "Helvetica", 8.2))
 
     def start_page(page_number: int, with_brand: bool = True):
         if with_brand:
@@ -12194,6 +12278,7 @@ def download_sale_invoice_pdf(
         joinedload(models.Sale.vehicle),
         joinedload(models.Sale.seller),
         joinedload(models.Sale.lead),
+        joinedload(models.Sale.company),
         joinedload(models.Sale.payment_receipts)
     ).filter(models.Sale.id == sale_id).first()
     if not sale:
@@ -12227,13 +12312,14 @@ def download_sale_invoice_pdf(
     pdf = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
     pdf.setTitle(f"factura_venta_{sale.id}.pdf")
+    company_name = re.sub(r"\s+admin$", "", str(getattr(sale.company, "name", None) or "Empresa").strip(), flags=re.IGNORECASE) or "Empresa"
 
     def draw_header():
         pdf.setFillColor(HexColor("#1e293b"))
         pdf.rect(0, height - 100, width, 100, fill=1, stroke=0)
         pdf.setFillColor(HexColor("#ffffff"))
         pdf.setFont("Helvetica-Bold", 22)
-        pdf.drawString(50, height - 58, "AUTOS QP - FACTURA CONSOLIDADA")
+        pdf.drawString(50, height - 58, f"{company_name.upper()} - FACTURA CONSOLIDADA"[:58])
         pdf.setFont("Helvetica", 10)
         pdf.drawString(50, height - 78, "Resumen contable de venta y movimientos relacionados")
         pdf.setFont("Helvetica-Bold", 14)
@@ -12389,6 +12475,7 @@ def download_payment_receipt_pdf(
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
+    company_name = re.sub(r"\s+admin$", "", str(getattr(receipt.company, "name", None) or "Empresa").strip(), flags=re.IGNORECASE) or "Empresa"
 
     y = height - 60
     pdf.setTitle(f"recibo_{receipt.id}.pdf")
@@ -12399,7 +12486,7 @@ def download_payment_receipt_pdf(
     
     pdf.setFillColor(HexColor("#ffffff"))
     pdf.setFont("Helvetica-Bold", 24)
-    pdf.drawString(50, height - 60, "AUTOS QP - COMPRA Y VENTA")
+    pdf.drawString(50, height - 60, f"{company_name.upper()} - COMPRA Y VENTA"[:58])
     
     pdf.setFont("Helvetica", 10)
     pdf.drawString(50, height - 80, "Soporte de Contabilidad | Gestion Financiera")
@@ -12481,7 +12568,7 @@ def download_payment_receipt_pdf(
     
     pdf.setFont("Helvetica-Oblique", 8)
     pdf.setFillColor(HexColor("#94a3b8"))
-    pdf.drawCentredString(width/2, 85, "Este documento es un soporte interno de contabilidad de AUTOS QP.")
+    pdf.drawCentredString(width/2, 85, f"Este documento es un soporte interno de contabilidad de {company_name}.")
     pdf.drawCentredString(width/2, 75, f"Generado digitalmente el {datetime.datetime.utcnow().strftime('%d/%m/%Y %H:%M')}")
 
     pdf.showPage()
