@@ -44,6 +44,8 @@ const createEmptyForm = () => ({
     make: '',
     model: '',
     vehicleType: 'Automóvil',
+    advisorId: '',
+    advisor: '',
   },
   personal: {
     firstName: '',
@@ -233,11 +235,37 @@ const PublicCreditForm = () => {
   const [status, setStatus] = useState({ type: '', message: '' });
   const [draftReady, setDraftReady] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [advisors, setAdvisors] = useState([]);
+  const [loadingAdvisors, setLoadingAdvisors] = useState(false);
 
   const enabledModules = new Set(Array.isArray(company?.enabled_modules) ? company.enabled_modules : []);
   const isEnabled = enabledModules.has('public_credit_form');
   const requiresEmailValidation = accessContext?.requires_email_validation ?? company?.public_credit_requires_email_validation ?? true;
   const vehicleModelOptions = useMemo(() => getVehicleModelOptions(form.vehicle.make), [form.vehicle.make]);
+
+  useEffect(() => {
+    if (!isEnabled) return undefined;
+    let active = true;
+    const loadAdvisors = async () => {
+      setLoadingAdvisors(true);
+      try {
+        const response = await axios.get('/api/public/credit-request/advisors');
+        if (active) setAdvisors(Array.isArray(response.data?.items) ? response.data.items : []);
+      } catch (error) {
+        if (active) {
+          setAdvisors([]);
+          setStatus({
+            type: 'error',
+            message: error?.response?.data?.detail || 'No se pudo cargar la lista de asesores.',
+          });
+        }
+      } finally {
+        if (active) setLoadingAdvisors(false);
+      }
+    };
+    loadAdvisors();
+    return () => { active = false; };
+  }, [isEnabled]);
 
   const theme = useMemo(() => {
     const primary = company?.primary_color || '#2563eb';
@@ -463,8 +491,8 @@ const PublicCreditForm = () => {
 
   const validateStep = (stepIndex) => {
     if (stepIndex === 0) {
-      const { vehicleValue, requestedAmount, requestDate, make, model } = form.vehicle;
-      return Boolean(vehicleValue && requestedAmount && requestDate && make && model);
+      const { vehicleValue, requestedAmount, requestDate, make, model, advisorId } = form.vehicle;
+      return Boolean(vehicleValue && requestedAmount && requestDate && make && model && advisorId);
     }
     if (stepIndex === 1) {
       const { firstName, lastName, documentNumber, mobilePhone, address, email } = form.personal;
@@ -764,7 +792,7 @@ const PublicCreditForm = () => {
       }
       if (accessToken) formData.append('access_token', accessToken);
 
-      const response = await axios.post('/api/public/credit-request/submit', formData, {
+      await axios.post('/api/public/credit-request/submit', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
@@ -983,7 +1011,7 @@ const PublicCreditForm = () => {
                         <p className="mt-1 text-xs text-slate-500">Fecha automática según Bogotá, Colombia.</p>
                       </div>
                     </div>
-                    <div className="grid gap-4 md:grid-cols-3">
+                    <div className="grid gap-4 md:grid-cols-4">
                       <div>
                         {renderFieldLabel('Marca', true)}
                         <select
@@ -1030,6 +1058,28 @@ const PublicCreditForm = () => {
                           <option>SUV</option>
                           <option>Camión</option>
                           <option>Moto</option>
+                        </select>
+                      </div>
+                      <div>
+                        {renderFieldLabel('Asesor', true)}
+                        <select
+                          className={requiredInputClassName}
+                          value={form.vehicle.advisorId}
+                          disabled={loadingAdvisors}
+                          onChange={(e) => {
+                            const selectedAdvisor = advisors.find((advisor) => String(advisor.id) === e.target.value);
+                            setForm((prev) => ({
+                              ...prev,
+                              vehicle: {
+                                ...prev.vehicle,
+                                advisorId: e.target.value,
+                                advisor: selectedAdvisor?.name || '',
+                              },
+                            }));
+                          }}
+                        >
+                          <option value="">{loadingAdvisors ? 'Cargando asesores...' : 'Selecciona un asesor'}</option>
+                          {advisors.map((advisor) => <option key={advisor.id} value={advisor.id}>{advisor.name}</option>)}
                         </select>
                       </div>
                     </div>

@@ -1555,6 +1555,8 @@ def _send_public_credit_submission_email(
     vehicle = (submission.form_payload or {}).get("vehicle", {}) or {}
     vehicle_value = _public_credit_display_value("vehicleValue", vehicle.get("vehicleValue"))
     requested_amount = _public_credit_display_value("requestedAmount", vehicle.get("requestedAmount"))
+    advisor_name = str(vehicle.get("advisor") or vehicle.get("commercialAdvisor") or "Sin asesor").strip()
+    advisor_email = str(vehicle.get("advisorEmail") or "").strip().lower()
     company_name = getattr(company, "name", None) or "AutosQP"
     primary_color = getattr(company, "primary_color", None) or "#2563eb"
     secondary_color = getattr(company, "secondary_color", None) or "#0f172a"
@@ -1564,6 +1566,8 @@ def _send_public_credit_submission_email(
     message["From"] = smtp_settings["sender"]
     message["To"] = submission.email
     internal_recipients = [email for email in recipients if email != submission.email.lower()]
+    if advisor_email and "@" in advisor_email and advisor_email != submission.email.lower() and advisor_email not in internal_recipients:
+        internal_recipients.append(advisor_email)
     if internal_recipients:
         message["Bcc"] = ", ".join(internal_recipients)
     message.set_content(
@@ -1571,6 +1575,7 @@ def _send_public_credit_submission_email(
             "Formulario de crédito",
             f"Nombre: {submission.applicant_name}",
             f"Correo: {submission.email}",
+            f"Asesor: {advisor_name}",
             f"Valor del carro: {vehicle_value}",
             f"Valor del crédito solicitado: {requested_amount}",
             "",
@@ -1592,6 +1597,7 @@ def _send_public_credit_submission_email(
                 <table style="width:100%;border-collapse:collapse;">
                   <tr><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;">Nombre</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;">{escape(submission.applicant_name)}</td></tr>
                   <tr><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;">Correo</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;">{escape(submission.email)}</td></tr>
+                  <tr><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;">Asesor</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;">{escape(advisor_name)}</td></tr>
                   <tr><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;">Valor del carro</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;">{escape(vehicle_value)}</td></tr>
                   <tr><td style="padding:10px;font-weight:bold;">Crédito solicitado</td><td style="padding:10px;">{escape(requested_amount)}</td></tr>
                 </table>
@@ -5449,6 +5455,49 @@ def verify_public_credit_verification_code(
     )
 
 
+def _get_public_credit_advisor(db: Session, company_id: int, advisor_id: Any) -> models.User:
+    try:
+        normalized_advisor_id = int(advisor_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Debes seleccionar un asesor válido.")
+
+    advisor = db.query(models.User).options(joinedload(models.User.role)).filter(
+        models.User.id == normalized_advisor_id,
+        models.User.company_id == company_id,
+        models.User.is_active == 1,
+    ).first()
+    if not advisor or not is_advisor_role(advisor.role):
+        raise HTTPException(status_code=400, detail="El asesor seleccionado no está disponible.")
+    return advisor
+
+
+@app.get("/public/credit-request/advisors")
+def read_public_credit_advisors(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    company = resolve_public_company(db, request)
+    if not company:
+        raise HTTPException(status_code=404, detail="No se encontró una empresa asociada a este dominio")
+    if not company_has_enabled_module("public_credit_form", company=company):
+        raise HTTPException(status_code=403, detail="El formulario de crédito no está habilitado para esta empresa")
+
+    users = db.query(models.User).options(joinedload(models.User.role)).filter(
+        models.User.company_id == company.id,
+        models.User.is_active == 1,
+    ).all()
+    items = [
+        {
+            "id": user.id,
+            "name": user.full_name or user.email,
+        }
+        for user in users
+        if is_advisor_role(user.role)
+    ]
+    items.sort(key=lambda item: str(item["name"] or "").casefold())
+    return {"items": items}
+
+
 @app.get("/public/credit-request/access/{token}")
 def read_public_credit_lead_access(
     token: str,
@@ -5472,6 +5521,12 @@ def read_public_credit_lead_access(
         models.PublicCreditSubmission.id.desc(),
     ).first()
 
+    form_payload = _build_lead_credit_access_payload(db, lead)
+    if lead.assigned_to and is_advisor_role(lead.assigned_to.role):
+        vehicle_payload = form_payload.setdefault("vehicle", {})
+        vehicle_payload["advisorId"] = str(lead.assigned_to.id)
+        vehicle_payload["advisor"] = lead.assigned_to.full_name or lead.assigned_to.email
+
     return {
         "status": "ok",
         "lead_id": lead.id,
@@ -5480,7 +5535,7 @@ def read_public_credit_lead_access(
         "verified": bool(access.verified_at),
         "requires_email_validation": company_requires_public_credit_email_validation(company),
         "expires_at": access.expires_at,
-        "form_payload": _build_lead_credit_access_payload(db, lead),
+        "form_payload": form_payload,
         "attachments": submission.attachments if submission and isinstance(submission.attachments, dict) else {},
     }
 
@@ -5744,6 +5799,11 @@ async def submit_public_credit_request(
     desired_vehicle = str(vehicle.get("label") or "").strip()
     document_number = str(personal.get("documentNumber") or "").strip()
     verification_code = str(consent.get("verificationCode") or "").strip()
+    selected_advisor = _get_public_credit_advisor(db, company.id, vehicle.get("advisorId"))
+    selected_advisor_name = selected_advisor.full_name or selected_advisor.email
+    vehicle["advisorId"] = str(selected_advisor.id)
+    vehicle["advisor"] = selected_advisor_name
+    vehicle["advisorEmail"] = selected_advisor.email
 
     if not applicant_name or not applicant_email or not applicant_phone or not desired_vehicle or not document_number:
         raise HTTPException(status_code=400, detail="Faltan datos obligatorios del formulario.")
@@ -5829,6 +5889,7 @@ async def submit_public_credit_request(
         linked_lead.email = applicant_email or linked_lead.email
         linked_lead.phone = applicant_phone or linked_lead.phone
         linked_lead.message = _build_public_credit_lead_message(payload)
+        linked_lead.assigned_to_id = selected_advisor.id
         linked_lead.updated_at = datetime.datetime.now()
 
         process_detail = db.query(models.LeadProcessDetail).filter(
@@ -5975,10 +6036,7 @@ async def submit_public_credit_request(
             submission_id=submission.id,
         )
 
-    assigned_user_id = None
-    auto_assigned_user = choose_auto_assign_user(db, company.id)
-    if auto_assigned_user:
-        assigned_user_id = auto_assigned_user.id
+    assigned_user_id = selected_advisor.id
 
     effective_status = normalize_company_lead_status(
         models.LeadStatus.CREDIT_STUDY.value,
