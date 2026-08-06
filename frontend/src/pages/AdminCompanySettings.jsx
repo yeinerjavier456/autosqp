@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useParams } from 'react-router-dom';
 import { COMPANY_MODULE_OPTIONS } from '../config/views';
 import { normalizeMediaUrl } from '../utils/media';
+import UsersList from './UsersList';
 
 const COMPANY_VIEWS = COMPANY_MODULE_OPTIONS;
 const COMPANY_VIEW_GROUPS = COMPANY_VIEWS.reduce((acc, view) => {
@@ -23,6 +24,7 @@ const SETTINGS_TABS = [
     { id: 'license', label: 'Licencia', description: 'Límites de uso y vigencia.' },
     { id: 'integrations', label: 'Integraciones', description: 'Meta, WhatsApp, IA y Gmail.' },
     { id: 'email', label: 'Correo', description: 'Validación, SMTP y destinatarios.' },
+    { id: 'users', label: 'Usuarios', description: 'Usuarios, roles y estado en esta empresa.' },
     { id: 'modules', label: 'Módulos', description: 'Vistas habilitadas para la empresa.' },
 ];
 
@@ -380,7 +382,7 @@ const AdminCompanySettings = () => {
                 whatsapp_calling_mode,
                 whatsapp_calling_provider_url,
                 whatsapp_calling_provider_token,
-                whatsapp_calling_provider_token_configured,
+                whatsapp_calling_provider_token_configured: _whatsappCallingProviderTokenConfigured,
                 whatsapp_sales_agent_name,
                 whatsapp_sales_agent_prompt,
                 whatsapp_purchases_agent_name,
@@ -404,7 +406,7 @@ const AdminCompanySettings = () => {
                 smtp_port,
                 smtp_username,
                 smtp_password,
-                smtp_password_configured,
+                smtp_password_configured: _smtpPasswordConfigured,
                 smtp_from,
                 smtp_use_tls,
                 smtp_always_recipients,
@@ -551,7 +553,7 @@ const AdminCompanySettings = () => {
 
             <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
                 <div className="flex gap-2 overflow-x-auto">
-                    {SETTINGS_TABS.map((tab) => {
+                    {SETTINGS_TABS.filter((tab) => tab.id !== 'users' || isEditing).map((tab) => {
                         const isActive = activeTab === tab.id;
                         return (
                             <button
@@ -1500,7 +1502,11 @@ const AdminCompanySettings = () => {
                         </div>
                         )}
 
-                        <div className="pt-4">
+                        {activeTab === 'users' && isEditing && (
+                            <UsersList embedded companyId={id} />
+                        )}
+
+                        {activeTab !== 'users' && <div className="pt-4">
                             <button
                                 onClick={handleSave}
                                 disabled={status.type === 'loading'}
@@ -1509,7 +1515,7 @@ const AdminCompanySettings = () => {
                             >
                                 {status.type === 'loading' ? 'Guardando...' : 'Guardar Cambios'}
                             </button>
-                        </div>
+                        </div>}
                     </div>
                 </div>
             </div>

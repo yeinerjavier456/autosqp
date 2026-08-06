@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
-import UsersList from './UsersList';
 
 const CompaniesList = () => {
     const [companies, setCompanies] = useState([]);
@@ -10,9 +9,6 @@ const CompaniesList = () => {
     const [limit] = useState(10);
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState('companies');
-    const [companyOptions, setCompanyOptions] = useState([]);
-    const [selectedCompanyId, setSelectedCompanyId] = useState('');
 
     const fetchCompanies = async () => {
         setLoading(true);
@@ -39,25 +35,6 @@ const CompaniesList = () => {
         fetchCompanies();
     }, [page, search]);
 
-    useEffect(() => {
-        if (activeTab !== 'users' || companyOptions.length > 0) return;
-        const fetchCompanyOptions = async () => {
-            try {
-                const token = localStorage.getItem('token');
-                const response = await axios.get('/api/companies/', {
-                    params: { skip: 0, limit: 1000 },
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                const items = Array.isArray(response.data?.items) ? response.data.items : [];
-                setCompanyOptions(items);
-                if (items.length > 0) setSelectedCompanyId(String(items[0].id));
-            } catch (error) {
-                console.error('Error fetching company options', error);
-            }
-        };
-        fetchCompanyOptions();
-    }, [activeTab, companyOptions.length]);
-
     const handleSearch = (e) => {
         setSearch(e.target.value);
         setPage(1); // Reset to first page on new search
@@ -78,43 +55,6 @@ const CompaniesList = () => {
                     </Link>
                 </div>
             </header>
-
-            <div className="mb-6 flex gap-2 border-b border-slate-200">
-                <button
-                    type="button"
-                    onClick={() => setActiveTab('companies')}
-                    className={`border-b-2 px-5 py-3 text-sm font-bold transition ${activeTab === 'companies' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-                >
-                    Empresas
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setActiveTab('users')}
-                    className={`border-b-2 px-5 py-3 text-sm font-bold transition ${activeTab === 'users' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-                >
-                    Usuarios por empresa
-                </button>
-            </div>
-
-            {activeTab === 'users' ? (
-                <div className="space-y-6">
-                    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <label className="mb-2 block text-sm font-bold text-slate-700">Empresa</label>
-                        <select
-                            value={selectedCompanyId}
-                            onChange={(event) => setSelectedCompanyId(event.target.value)}
-                            className="w-full max-w-xl rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                        >
-                            {companyOptions.length === 0 && <option value="">Cargando empresas...</option>}
-                            {companyOptions.map((company) => (
-                                <option key={company.id} value={company.id}>{company.name}</option>
-                            ))}
-                        </select>
-                    </div>
-                    {selectedCompanyId ? <UsersList embedded companyId={selectedCompanyId} /> : null}
-                </div>
-            ) : (
-            <>
 
             <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
                 {/* Search Bar */}
@@ -218,8 +158,6 @@ const CompaniesList = () => {
                     </div>
                 </div>
             </div>
-            </>
-            )}
         </div>
     );
 };
