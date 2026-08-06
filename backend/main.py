@@ -4458,6 +4458,7 @@ def read_users(
     limit: int = 100, 
     q: str = None, 
     role_id: int = None,
+    company_id: int = None,
     include_inactive: bool = False,
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(get_current_user)
@@ -4476,12 +4477,17 @@ def read_users(
     # Global super admins without company_id can still inspect all companies.
     if current_user.company_id:
         query = query.filter(models.User.company_id == current_user.company_id)
+    elif company_id:
+        query = query.filter(models.User.company_id == company_id)
 
     if not include_inactive:
         query = query.filter(or_(models.User.is_active == True, models.User.is_active.is_(None)))
 
     if q:
-        query = query.filter(models.User.email.ilike(f"%{q}%"))
+        query = query.filter(or_(
+            models.User.email.ilike(f"%{q}%"),
+            models.User.full_name.ilike(f"%{q}%"),
+        ))
     
     if role_id:
         query = query.filter(models.User.role_id == role_id)

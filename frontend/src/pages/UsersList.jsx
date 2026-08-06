@@ -8,7 +8,7 @@ import { getEcardPublicUrl } from '../utils/ecards';
 
 const API_BASE_URL = import.meta.env.DEV ? '/crm/api' : '/api';
 
-const UsersList = () => {
+const UsersList = ({ embedded = false, companyId = '' }) => {
     const { user: currentUser } = useAuth();
     const [users, setUsers] = useState([]);
     const [total, setTotal] = useState(0);
@@ -25,6 +25,8 @@ const UsersList = () => {
             const skip = (page - 1) * limit;
             const params = { skip, limit };
             if (search) params.q = search;
+            if (companyId) params.company_id = companyId;
+            if (embedded) params.include_inactive = true;
 
             const response = await axios.get(`${API_BASE_URL}/users/`, {
                 params,
@@ -42,7 +44,11 @@ const UsersList = () => {
 
     useEffect(() => {
         fetchUsers();
-    }, [page, search]);
+    }, [page, search, companyId]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [companyId]);
 
     const handleSearch = (e) => {
         setSearch(e.target.value);
@@ -133,11 +139,11 @@ const UsersList = () => {
     const totalPages = Math.ceil(total / limit);
 
     return (
-        <div className="bg-gray-50 min-h-full">
+        <div className={embedded ? '' : 'bg-gray-50 min-h-full'}>
             <header className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between">
                 <div>
-                    <h1 className="text-3xl font-extrabold text-slate-800">Listado de Usuarios</h1>
-                    <p className="text-slate-500 mt-2">Gestiona los usuarios y sus permisos.</p>
+                    <h1 className={`${embedded ? 'text-2xl' : 'text-3xl'} font-extrabold text-slate-800`}>{embedded ? 'Usuarios asignados' : 'Listado de Usuarios'}</h1>
+                    <p className="text-slate-500 mt-2">Gestiona los usuarios, roles y permisos.</p>
                 </div>
                 <div className="mt-4 md:mt-0 flex gap-3">
                     <Link to="/admin/roles" className="px-6 py-2 bg-slate-700 text-white font-bold rounded-lg shadow hover:bg-slate-800 transition">
@@ -175,6 +181,7 @@ const UsersList = () => {
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rol</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registro</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Comisión %</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sueldo</th>
@@ -202,6 +209,8 @@ const UsersList = () => {
                                                     roleName === 'compras' ? 'Compras' :
                                                         roleName === 'user' ? 'Usuario' : 'Sin Rol');
 
+                                    const isActive = user.is_active !== false && Number(user.is_active) !== 0;
+
                                     return (
                                         <tr key={user.id} className="hover:bg-gray-50 transition">
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -223,6 +232,11 @@ const UsersList = () => {
                                                                     roleName === 'compras' ? 'bg-pink-100 text-pink-800' :
                                                                         'bg-green-100 text-green-800'}`}>
                                                     {roleLabel}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${isActive ? (user.is_online ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800') : 'bg-slate-200 text-slate-600'}`}>
+                                                    {isActive ? (user.is_online ? 'En línea' : 'Activo') : 'Inactivo'}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
