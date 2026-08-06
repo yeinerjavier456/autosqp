@@ -961,7 +961,7 @@ def _build_public_credit_submission_pdf_three_pages(
     y = draw_rows([
         ("Valor vehiculo $", field(vehicle, "vehicleValue")),
         ("Monto solicitado $", field(vehicle, "requestedAmount")),
-        ("Asesor comercial", safe_text(vehicle.get("advisor") or vehicle.get("commercialAdvisor"))),
+        ("Asesor / responsable", safe_text(vehicle.get("advisor") or vehicle.get("commercialAdvisor"))),
         ("Fecha de solicitud", field(vehicle, "requestDate")),
         ("Marca", field(vehicle, "make")),
         ("Modelo", field(vehicle, "model")),
@@ -1410,7 +1410,7 @@ def _build_public_credit_submission_pdf_reference_style(
     y = row_fields(y, [
         ("Valor vehiculo $", field(vehicle, "vehicleValue"), 1),
         ("Monto solicitado $", field(vehicle, "requestedAmount"), 1),
-        ("Asesor comercial", safe_text(vehicle.get("advisor") or vehicle.get("commercialAdvisor")), 1),
+        ("Asesor / responsable", safe_text(vehicle.get("advisor") or vehicle.get("commercialAdvisor")), 1),
         ("Fecha de solicitud", field(vehicle, "requestDate"), 1),
     ])
     y = row_fields(y, [
@@ -1575,7 +1575,7 @@ def _send_public_credit_submission_email(
             "Formulario de crédito",
             f"Nombre: {submission.applicant_name}",
             f"Correo: {submission.email}",
-            f"Asesor: {advisor_name}",
+            f"Asesor / responsable: {advisor_name}",
             f"Valor del carro: {vehicle_value}",
             f"Valor del crédito solicitado: {requested_amount}",
             "",
@@ -1597,7 +1597,7 @@ def _send_public_credit_submission_email(
                 <table style="width:100%;border-collapse:collapse;">
                   <tr><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;">Nombre</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;">{escape(submission.applicant_name)}</td></tr>
                   <tr><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;">Correo</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;">{escape(submission.email)}</td></tr>
-                  <tr><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;">Asesor</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;">{escape(advisor_name)}</td></tr>
+                  <tr><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;">Asesor / responsable</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;">{escape(advisor_name)}</td></tr>
                   <tr><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;">Valor del carro</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;">{escape(vehicle_value)}</td></tr>
                   <tr><td style="padding:10px;font-weight:bold;">Crédito solicitado</td><td style="padding:10px;">{escape(requested_amount)}</td></tr>
                 </table>
@@ -5455,20 +5455,26 @@ def verify_public_credit_verification_code(
     )
 
 
+def _get_public_credit_assignable_users(db: Session, company_id: int) -> List[models.User]:
+    active_users = db.query(models.User).options(joinedload(models.User.role)).filter(
+        models.User.company_id == company_id,
+        models.User.is_active == 1,
+    ).all()
+    advisors = [user for user in active_users if is_advisor_role(user.role)]
+    return advisors or active_users
+
+
 def _get_public_credit_advisor(db: Session, company_id: int, advisor_id: Any) -> models.User:
     try:
         normalized_advisor_id = int(advisor_id)
     except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="Debes seleccionar un asesor válido.")
+        raise HTTPException(status_code=400, detail="Debes seleccionar un asesor o usuario válido.")
 
-    advisor = db.query(models.User).options(joinedload(models.User.role)).filter(
-        models.User.id == normalized_advisor_id,
-        models.User.company_id == company_id,
-        models.User.is_active == 1,
-    ).first()
-    if not advisor or not is_advisor_role(advisor.role):
-        raise HTTPException(status_code=400, detail="El asesor seleccionado no está disponible.")
-    return advisor
+    assignable_users = _get_public_credit_assignable_users(db, company_id)
+    selected_user = next((user for user in assignable_users if user.id == normalized_advisor_id), None)
+    if not selected_user:
+        raise HTTPException(status_code=400, detail="El asesor o usuario seleccionado no está disponible.")
+    return selected_user
 
 
 @app.get("/public/credit-request/advisors")
@@ -5482,20 +5488,17 @@ def read_public_credit_advisors(
     if not company_has_enabled_module("public_credit_form", company=company):
         raise HTTPException(status_code=403, detail="El formulario de crédito no está habilitado para esta empresa")
 
-    users = db.query(models.User).options(joinedload(models.User.role)).filter(
-        models.User.company_id == company.id,
-        models.User.is_active == 1,
-    ).all()
+    users = _get_public_credit_assignable_users(db, company.id)
+    fallback_to_users = not any(is_advisor_role(user.role) for user in users)
     items = [
         {
             "id": user.id,
             "name": user.full_name or user.email,
         }
         for user in users
-        if is_advisor_role(user.role)
     ]
     items.sort(key=lambda item: str(item["name"] or "").casefold())
-    return {"items": items}
+    return {"items": items, "fallback_to_users": fallback_to_users}
 
 
 @app.get("/public/credit-request/access/{token}")
@@ -5522,7 +5525,8 @@ def read_public_credit_lead_access(
     ).first()
 
     form_payload = _build_lead_credit_access_payload(db, lead)
-    if lead.assigned_to and is_advisor_role(lead.assigned_to.role):
+    assignable_user_ids = {user.id for user in _get_public_credit_assignable_users(db, company.id)}
+    if lead.assigned_to and lead.assigned_to.id in assignable_user_ids:
         vehicle_payload = form_payload.setdefault("vehicle", {})
         vehicle_payload["advisorId"] = str(lead.assigned_to.id)
         vehicle_payload["advisor"] = lead.assigned_to.full_name or lead.assigned_to.email

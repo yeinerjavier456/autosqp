@@ -1061,7 +1061,7 @@ const PublicCreditForm = () => {
                         </select>
                       </div>
                       <div>
-                        {renderFieldLabel('Asesor', true)}
+                        {renderFieldLabel('Asesor / responsable', true)}
                         <select
                           className={requiredInputClassName}
                           value={form.vehicle.advisorId}
@@ -1078,7 +1078,7 @@ const PublicCreditForm = () => {
                             }));
                           }}
                         >
-                          <option value="">{loadingAdvisors ? 'Cargando asesores...' : 'Selecciona un asesor'}</option>
+                          <option value="">{loadingAdvisors ? 'Cargando usuarios...' : 'Selecciona un asesor o usuario'}</option>
                           {advisors.map((advisor) => <option key={advisor.id} value={advisor.id}>{advisor.name}</option>)}
                         </select>
                       </div>
