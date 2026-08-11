@@ -1708,7 +1708,7 @@ def apply_lead_access_filters(
 
     query = query.filter(models.Lead.deleted_at.is_(None))
 
-    if current_user.company_id:
+    if current_user.company_id and role_name != "super_admin":
         query = query.filter(models.Lead.company_id == current_user.company_id)
 
     aliado_user_ids = get_company_ally_user_ids(db, current_user.company_id)
@@ -4011,6 +4011,10 @@ def ensure_public_credit_delete_permissions(current_user: models.User):
         raise HTTPException(status_code=403, detail="Solo un administrador puede eliminar solicitudes públicas de crédito")
 
 
+def should_scope_public_credit_to_company(current_user: models.User) -> bool:
+    return bool(current_user.company_id and get_user_role_name(current_user) != "super_admin")
+
+
 def ensure_company_settings_scope(current_user: models.User, company_id: int):
     ensure_role_management_permissions(current_user)
     role_name = get_user_role_name(current_user) or ""
@@ -6228,7 +6232,7 @@ def read_public_credit_submissions(
         joinedload(models.PublicCreditSubmission.lead)
     )
 
-    if current_user.company_id:
+    if should_scope_public_credit_to_company(current_user):
         query = query.filter(models.PublicCreditSubmission.company_id == current_user.company_id)
 
     normalized_status = str(status or "").strip().lower()
@@ -6272,7 +6276,7 @@ def read_public_credit_submission_detail(
         joinedload(models.PublicCreditSubmission.lead)
     ).filter(models.PublicCreditSubmission.id == submission_id)
 
-    if current_user.company_id:
+    if should_scope_public_credit_to_company(current_user):
         query = query.filter(models.PublicCreditSubmission.company_id == current_user.company_id)
 
     submission = query.first()
@@ -6292,7 +6296,7 @@ def download_public_credit_submission_pdf(
     query = db.query(models.PublicCreditSubmission).filter(
         models.PublicCreditSubmission.id == submission_id
     )
-    if current_user.company_id:
+    if should_scope_public_credit_to_company(current_user):
         query = query.filter(models.PublicCreditSubmission.company_id == current_user.company_id)
     submission = query.first()
     if not submission:
@@ -6325,7 +6329,7 @@ def update_public_credit_submission(
         joinedload(models.PublicCreditSubmission.lead)
     ).filter(models.PublicCreditSubmission.id == submission_id)
 
-    if current_user.company_id:
+    if should_scope_public_credit_to_company(current_user):
         query = query.filter(models.PublicCreditSubmission.company_id == current_user.company_id)
 
     submission = query.first()
@@ -6356,7 +6360,7 @@ def delete_public_credit_submission(
     query = db.query(models.PublicCreditSubmission).filter(
         models.PublicCreditSubmission.id == submission_id
     )
-    if current_user.company_id:
+    if should_scope_public_credit_to_company(current_user):
         query = query.filter(models.PublicCreditSubmission.company_id == current_user.company_id)
 
     submission = query.first()
