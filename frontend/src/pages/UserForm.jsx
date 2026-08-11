@@ -163,10 +163,22 @@ const UserForm = () => {
         : currentUser?.company || null;
 
     const availableRoles = useMemo(
-        () => roles.filter((role) => {
+        () => {
+            const scopedRoles = roles.filter((role) => {
+                if (!selectedCompany) return !role.company_id;
+                return !role.company_id || String(role.company_id) === String(selectedCompany.id);
+            });
+            const overriddenRoleNames = new Set(
+                scopedRoles
+                    .filter((role) => role.company_id && role.base_role_name)
+                    .map((role) => role.base_role_name)
+            );
+            return scopedRoles.filter((role) => {
+                if (role.is_system && overriddenRoleNames.has(role.name)) return false;
             if (currentUser?.company_id && role.name === 'super_admin') return false;
             return isRoleAvailableForCompany(role, selectedCompany);
-        }),
+            });
+        },
         [roles, currentUser?.company_id, selectedCompany]
     );
 

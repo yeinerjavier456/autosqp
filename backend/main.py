@@ -7000,22 +7000,26 @@ def read_role_views(current_user: models.User = Depends(get_current_user)):
 
 @app.get("/roles/", response_model=list[schemas.Role])
 def read_roles(
+    company_id: int = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     query = db.query(models.Role)
-    if current_user.company_id:
+    effective_role_name = get_user_role_name(current_user)
+    scope_company_id = company_id if effective_role_name == "super_admin" else current_user.company_id
+    if scope_company_id:
         query = query.filter(
             or_(
-                models.Role.company_id == current_user.company_id,
+                models.Role.company_id == scope_company_id,
                 and_(models.Role.company_id.is_(None), models.Role.is_system == True)
             )
         )
     roles = query.order_by(models.Role.is_system.desc(), models.Role.label.asc()).all()
-    if current_user.company_id:
-        override_names = {role.base_role_name for role in roles if role.company_id == current_user.company_id and role.base_role_name}
+    if scope_company_id:
+        target_company = db.query(models.Company).filter(models.Company.id == scope_company_id).first()
+        override_names = {role.base_role_name for role in roles if role.company_id == scope_company_id and role.base_role_name}
         roles = [role for role in roles if not (role.is_system and role.name in override_names)]
-        roles = [role for role in roles if is_role_enabled_for_company(role, current_user.company)]
+        roles = [role for role in roles if is_role_enabled_for_company(role, target_company)]
     return [serialize_role(role) for role in roles]
 
 
