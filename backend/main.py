@@ -2995,11 +2995,11 @@ def log_action_to_db(db: Session, user_id: int, action: str, entity_type: str, e
         db.rollback()
 
 def is_inventory_editor(current_user: models.User) -> bool:
-    role_name = current_user.role.name if current_user.role else ""
+    role_name = get_user_role_name(current_user) or ""
     return role_name in ["admin", "inventario"] or (role_name == "super_admin" and bool(current_user.company_id))
 
 def is_company_admin_for_inventory(current_user: models.User) -> bool:
-    role_name = current_user.role.name if current_user.role else ""
+    role_name = get_user_role_name(current_user) or ""
     return role_name == "admin" or (role_name == "super_admin" and bool(current_user.company_id))
 
 def ensure_inventory_editor(current_user: models.User):

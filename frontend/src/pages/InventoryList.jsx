@@ -7,7 +7,7 @@ import { normalizeMediaUrl } from '../utils/media';
 
 const InventoryList = () => {
     const { user } = useAuth();
-    const roleName = user?.role?.name || (typeof user?.role === 'string' ? user?.role : '');
+    const roleName = user?.role?.base_role_name || user?.role?.name || (typeof user?.role === 'string' ? user?.role : '');
     const isCompanyAdmin = roleName === 'admin' || (roleName === 'super_admin' && !!user?.company_id);
     const canEditInventory = isCompanyAdmin || roleName === 'inventario';
     const [vehicles, setVehicles] = useState([]);
