@@ -72,6 +72,16 @@ def ensure_rules_admin(current_user: models.User):
         raise HTTPException(status_code=403, detail="Not authorized")
 
 
+def get_rules_company_id(current_user: models.User) -> int:
+    company_id = getattr(current_user, "company_id", None)
+    if not company_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Debes tener una empresa asignada para administrar sus alertas"
+        )
+    return company_id
+
+
 def validate_rule_payload(rule: schemas.AutomationRuleCreate):
     if rule.event_type != "time_in_status":
         raise HTTPException(status_code=400, detail="Tipo de evento inválido")
@@ -101,7 +111,7 @@ def ensure_specific_user_scope(rule: schemas.AutomationRuleCreate, db: Session, 
     recipient = db.query(models.User).filter(models.User.id == rule.specific_user_id).first()
     if not recipient:
         raise HTTPException(status_code=400, detail="El usuario seleccionado no existe")
-    if get_effective_role_name(current_user) != "super_admin" and recipient.company_id != current_user.company_id:
+    if recipient.company_id != get_rules_company_id(current_user):
         raise HTTPException(status_code=403, detail="No puedes asignar alertas a usuarios de otra empresa")
     if is_admin_user(recipient):
         raise HTTPException(status_code=400, detail="No se pueden enviar alertas automáticas a administradores")
@@ -120,7 +130,7 @@ def ensure_reassignment_user_scope(rule: schemas.AutomationRuleCreate, db: Sessi
     ).first()
     if not target_user:
         raise HTTPException(status_code=400, detail="El usuario destino de reasignación no existe")
-    if get_effective_role_name(current_user) != "super_admin" and target_user.company_id != current_user.company_id:
+    if target_user.company_id != get_rules_company_id(current_user):
         raise HTTPException(status_code=403, detail="No puedes reasignar leads a usuarios de otra empresa")
     if not getattr(target_user, "is_active", True):
         raise HTTPException(status_code=400, detail="El usuario destino de reasignación está inactivo")
@@ -247,13 +257,14 @@ def create_rule(
     current_user: models.User = Depends(get_current_user)
 ):
     ensure_rules_admin(current_user)
+    company_id = get_rules_company_id(current_user)
     validate_rule_payload(rule)
     ensure_specific_user_scope(rule, db, current_user)
     ensure_reassignment_user_scope(rule, db, current_user)
     
     # Force company_id from current user
     rule_data = rule.model_dump()
-    new_rule = models.AutomationRule(**rule_data, company_id=current_user.company_id)
+    new_rule = models.AutomationRule(**rule_data, company_id=company_id)
     
     db.add(new_rule)
     db.commit()
@@ -266,12 +277,10 @@ def get_rules(
     current_user: models.User = Depends(get_current_user)
 ):
     ensure_rules_admin(current_user)
-    
-    # Filter by company
-    if get_effective_role_name(current_user) == 'super_admin':
-        return db.query(models.AutomationRule).all()
-    else:
-        return db.query(models.AutomationRule).filter(models.AutomationRule.company_id == current_user.company_id).all()
+    company_id = get_rules_company_id(current_user)
+    return db.query(models.AutomationRule).filter(
+        models.AutomationRule.company_id == company_id
+    ).all()
 
 
 @router.post("/board-alerts")
@@ -385,16 +394,17 @@ def update_rule(
     current_user: models.User = Depends(get_current_user)
 ):
     ensure_rules_admin(current_user)
+    company_id = get_rules_company_id(current_user)
     validate_rule_payload(rule_update)
     ensure_specific_user_scope(rule_update, db, current_user)
     ensure_reassignment_user_scope(rule_update, db, current_user)
     
-    db_rule = db.query(models.AutomationRule).filter(models.AutomationRule.id == rule_id).first()
+    db_rule = db.query(models.AutomationRule).filter(
+        models.AutomationRule.id == rule_id,
+        models.AutomationRule.company_id == company_id
+    ).first()
     if not db_rule:
         raise HTTPException(status_code=404, detail="Rule not found")
-    if get_effective_role_name(current_user) != "super_admin" and db_rule.company_id != current_user.company_id:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
     for key, value in rule_update.model_dump().items():
         setattr(db_rule, key, value)
     
@@ -409,13 +419,14 @@ def delete_rule(
     current_user: models.User = Depends(get_current_user)
 ):
     ensure_rules_admin(current_user)
+    company_id = get_rules_company_id(current_user)
     
-    db_rule = db.query(models.AutomationRule).filter(models.AutomationRule.id == rule_id).first()
+    db_rule = db.query(models.AutomationRule).filter(
+        models.AutomationRule.id == rule_id,
+        models.AutomationRule.company_id == company_id
+    ).first()
     if not db_rule:
         raise HTTPException(status_code=404, detail="Rule not found")
-    if get_effective_role_name(current_user) != "super_admin" and db_rule.company_id != current_user.company_id:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
     db.query(models.SentAlertLog).filter(models.SentAlertLog.rule_id == rule_id).delete(synchronize_session=False)
 
     db.delete(db_rule)
@@ -424,12 +435,15 @@ def delete_rule(
 
 # --- Logic Engine ---
 
-def check_and_trigger_rules(db: Session):
+def check_and_trigger_rules(db: Session, company_id: int):
     """
     Evaluates active rules against leads and generates notifications.
     """
     # optimization: fetch rules joined with company to check context if needed
-    rules = db.query(models.AutomationRule).filter(models.AutomationRule.is_active == 1).all()
+    rules = db.query(models.AutomationRule).filter(
+        models.AutomationRule.company_id == company_id,
+        models.AutomationRule.is_active == 1
+    ).all()
     
     for rule in rules:
         if rule.event_type == 'time_in_status':
@@ -536,7 +550,7 @@ def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
 
 import time
 
-LAST_CHECK_TIME = 0
+LAST_CHECK_TIME_BY_COMPANY: dict[int, float] = {}
 CHECK_INTERVAL = 60
 
 @router.post("/run-checks")
@@ -546,22 +560,23 @@ def trigger_checks(
 ):
     """
     Manual trigger or called by frontend polling to lazy-evaluate rules.
-    Throttled globally to avoid locking the DB.
+    Throttled independently per company to avoid locking the DB.
     """
-    global LAST_CHECK_TIME
+    company_id = get_rules_company_id(current_user)
     current_time = time.time()
+    last_check_time = LAST_CHECK_TIME_BY_COMPANY.get(company_id, 0)
     
     # Solo ejecutar como maximo 1 vez por minuto
-    if current_time - LAST_CHECK_TIME < CHECK_INTERVAL:
+    if current_time - last_check_time < CHECK_INTERVAL:
         return {"status": "skipped", "message": "Throttled to prevent DB locks"}
         
-    LAST_CHECK_TIME = current_time
+    LAST_CHECK_TIME_BY_COMPANY[company_id] = current_time
     
     try:
-        check_and_trigger_rules(db)
+        check_and_trigger_rules(db, company_id)
     except Exception as e:
         # Reset on failure to allow retry
-        LAST_CHECK_TIME = 0 
+        LAST_CHECK_TIME_BY_COMPANY.pop(company_id, None)
         raise e
         
     return {"status": "checked"}

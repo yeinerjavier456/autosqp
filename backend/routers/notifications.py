@@ -31,7 +31,7 @@ def maybe_run_automation_rules(db: Session, company_id: Optional[int]):
     LAST_RULES_CHECK_BY_COMPANY[company_id] = now_local
     
     try:
-        check_and_trigger_rules(db)
+        check_and_trigger_rules(db, company_id)
     except Exception as e:
         LAST_RULES_CHECK_BY_COMPANY[company_id] = None
         raise e
