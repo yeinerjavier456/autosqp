@@ -217,6 +217,7 @@ const PublicCreditSubmissions = () => {
     const token = useMemo(() => localStorage.getItem('token'), []);
     const currentRoleName = getEffectiveRoleName(user?.role);
     const canDeleteSubmissions = currentRoleName === 'admin' || currentRoleName === 'super_admin';
+    const canCreateManualSubmission = ['admin', 'super_admin', 'gestion_creditos'].includes(currentRoleName);
 
     const fetchItems = async () => {
         setLoading(true);
@@ -347,12 +348,23 @@ const PublicCreditSubmissions = () => {
                         Revisa los formularios públicos enviados, sus adjuntos y el lead creado desde la web.
                     </p>
                 </div>
-                <button
-                    onClick={fetchItems}
-                    className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 transition hover:bg-blue-100"
-                >
-                    Recargar
-                </button>
+                <div className="flex flex-wrap gap-2">
+                    {canCreateManualSubmission && (
+                        <button
+                            type="button"
+                            onClick={() => navigate('/admin/leads?newCredit=1')}
+                            className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700"
+                        >
+                            + Nueva solicitud manual
+                        </button>
+                    )}
+                    <button
+                        onClick={fetchItems}
+                        className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 transition hover:bg-blue-100"
+                    >
+                        Recargar
+                    </button>
+                </div>
             </div>
 
             <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

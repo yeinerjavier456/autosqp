@@ -1792,7 +1792,7 @@ const KanbanColumn = ({
 };
 
 // History Modal Component
-const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervisors, onDeleteLead, advisors, onAssign, onRefreshLeadBoard, onRequestStatusChange, availableVehicles, currentUserRole, boardMode = 'general', loadingDetail = false }) => {
+const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervisors, onDeleteLead, advisors, onAssign, onRefreshLeadBoard, onRequestStatusChange, availableVehicles, currentUserRole, boardMode = 'general', loadingDetail = false, initialTab = 'resumen' }) => {
     const { user } = useAuth();
     const [assignedAdvisor, setAssignedAdvisor] = useState(getLeadAssignedUserId(lead) || '');
     const [selectedSupervisors, setSelectedSupervisors] = useState(getLeadSupervisorIds(lead));
@@ -1836,7 +1836,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
         calling_mode: 'whatsapp_link',
     });
     const whatsappDocumentInputRef = useRef(null);
-    const [activeDetailTab, setActiveDetailTab] = useState('resumen');
+    const [activeDetailTab, setActiveDetailTab] = useState(initialTab);
 
     // Reminder State
     const [reminderDate, setReminderDate] = useState('');
@@ -1865,10 +1865,10 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     const [savingContactInfo, setSavingContactInfo] = useState(false);
     const supervisorSyncKey = JSON.stringify(getLeadSupervisorIds(lead));
     useEffect(() => {
-        setActiveDetailTab('resumen');
+        setActiveDetailTab(initialTab);
         setActiveLeadPurchaseOptionTab('');
         setActiveLeadPurchaseOptionGroup('pending');
-    }, [lead?.id]);
+    }, [lead?.id, initialTab]);
 
     useEffect(() => {
         setAssignedAdvisor(getLeadAssignedUserId(lead) || '');
@@ -4625,6 +4625,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     // Modal State - History View
     const [selectedLeadForHistory, setSelectedLeadForHistory] = useState(null);
     const [showHistoryModal, setShowHistoryModal] = useState(false);
+    const [initialHistoryTab, setInitialHistoryTab] = useState('resumen');
     const [loadingLeadDetail, setLoadingLeadDetail] = useState(false);
     const [highlightedLeadId, setHighlightedLeadId] = useState(null);
 
@@ -4766,9 +4767,15 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         const targetLead = leads.find(lead => lead.id === leadIdFromQuery);
         if (!targetLead) return;
 
+        setInitialHistoryTab(searchParams.get('tab') === 'credit' ? 'formulario-credito' : 'resumen');
         handleViewHistory(targetLead);
         navigate(isAllyBoard ? '/aliado/dashboard' : '/admin/leads', { replace: true });
     }, [searchParams, leads, showHistoryModal, navigate, isAllyBoard]);
+
+    useEffect(() => {
+        if (isAllyBoard || searchParams.get('newCredit') !== '1') return;
+        setShowAddLeadModal(true);
+    }, [isAllyBoard, searchParams]);
 
     useEffect(() => {
         if (!highlightedLeadId) return;
@@ -4808,12 +4815,18 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     .filter((id) => Number.isInteger(id))
                 : [];
 
-            await axios.post(`${API_BASE_URL}/leads`, payload, {
+            const response = await axios.post(`${API_BASE_URL}/leads`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             await fetchBoardLeads(searchTerm);
             setShowAddLeadModal(false);
             setNewLeadForm({ name: '', email: '', phone: '', source: isAllyBoard ? 'referral' : 'web', message: '', status: 'new', assigned_to_id: '', supervisor_ids: [] });
+
+            if (searchParams.get('newCredit') === '1' && response.data?.id) {
+                setInitialHistoryTab('formulario-credito');
+                navigate('/admin/leads', { replace: true });
+                await handleViewHistory(response.data);
+            }
 
             Swal.fire({
                 icon: 'success',
@@ -4831,6 +4844,13 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 text: "Error creando el lead: " + (error.response?.data?.error || error.response?.data?.detail || error.message),
                 confirmButtonColor: '#2563eb'
             });
+        }
+    };
+
+    const closeAddLeadModal = () => {
+        setShowAddLeadModal(false);
+        if (searchParams.get('newCredit') === '1') {
+            navigate('/admin/leads', { replace: true });
         }
     };
 
@@ -6226,6 +6246,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     currentUserRole={currentRoleName}
                     boardMode={boardMode}
                     loadingDetail={loadingLeadDetail}
+                    initialTab={initialHistoryTab}
                 />
             )}
 
@@ -6235,7 +6256,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     <div className="bg-white rounded-2xl p-8 w-full max-w-lg shadow-2xl animate-fade-in-up border border-gray-100 max-h-[90vh] overflow-y-auto">
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-2xl font-bold text-gray-800">{isAllyBoard ? 'Nuevo Lead para Cola de Aliados' : 'Nuevo Lead'}</h2>
-                            <button onClick={() => setShowAddLeadModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                            <button onClick={closeAddLeadModal} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
                         </div>
 
                         <form onSubmit={handleCreateLead} className="space-y-4">
@@ -6320,7 +6341,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                             <div className="flex gap-4 pt-4">
                                 <button
                                     type="button"
-                                    onClick={() => setShowAddLeadModal(false)}
+                                    onClick={closeAddLeadModal}
                                     className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition"
                                 >
                                     Cancelar
