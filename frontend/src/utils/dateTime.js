@@ -1,13 +1,20 @@
 export const BOGOTA_TIMEZONE = 'America/Bogota';
 
-const buildSafeDate = (value) => {
+const buildSafeDate = (value, assumeUtc = true) => {
     if (!value) return null;
-    const parsedDate = new Date(value);
+    // SQLAlchemy serializa los DateTime UTC sin sufijo de zona. JavaScript los
+    // interpretaría como hora local, desplazando el historial cinco horas.
+    const normalizedValue = assumeUtc && typeof value === 'string'
+        && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)
+        && !/(Z|[+-]\d{2}:?\d{2})$/i.test(value)
+        ? `${value}Z`
+        : value;
+    const parsedDate = new Date(normalizedValue);
     return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
 };
 
-export const formatBogotaDateTime = (value, options = {}) => {
-    const parsedDate = buildSafeDate(value);
+export const formatBogotaDateTime = (value, options = {}, assumeUtc = true) => {
+    const parsedDate = buildSafeDate(value, assumeUtc);
     if (!parsedDate) return '';
 
     return parsedDate.toLocaleString('es-CO', {

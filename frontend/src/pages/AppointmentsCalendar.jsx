@@ -338,7 +338,7 @@ const AppointmentsCalendar = () => {
                             <div>
                                 <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Fecha registrada</p>
                                 <p className="mt-1 text-sm text-slate-700">
-                                    {formatBogotaDateTime(activeAppointment?.appointment_date) || 'Sin fecha'}
+                                    {formatBogotaDateTime(activeAppointment?.appointment_date, {}, false) || 'Sin fecha'}
                                 </p>
                             </div>
                         </div>

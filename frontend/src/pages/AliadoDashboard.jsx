@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { formatBogotaDateTime } from '../utils/dateTime';
 import { useAuth } from '../context/AuthContext';
 import Swal from 'sweetalert2';
 
@@ -632,7 +633,7 @@ const HistoryModal = ({ lead, onClose, onAddNote }) => {
                                                   </p>
                                                   <p className="text-gray-800">{note.content}</p>
                                                   <span className="text-[10px] text-gray-400">
-                                                      {new Date(note.created_at).toLocaleString()}
+                                                      {formatBogotaDateTime(note.created_at)}
                                                   </span>
                                               </div>
                                         ))}
@@ -704,7 +705,7 @@ const HistoryModal = ({ lead, onClose, onAddNote }) => {
                                                         </span>
                                                     </div>
                                                     <span className="text-[10px] text-gray-400 font-mono">
-                                                        {record.created_at ? new Date(record.created_at).toLocaleString() : 'Reciente'}
+                                                        {record.created_at ? formatBogotaDateTime(record.created_at) : 'Reciente'}
                                                     </span>
                                                 </div>
                                                 <p className="text-sm text-gray-700 italic">"{record.comment || 'Sin comentario'}"</p>

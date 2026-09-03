@@ -1,6 +1,7 @@
 ﻿import React, { useRef, useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import axios from 'axios';
+import { formatBogotaDateTime } from '../utils/dateTime';
 import { useAuth } from '../context/AuthContext';
 import Swal from 'sweetalert2';
 import { useNavigate } from 'react-router-dom';
@@ -1329,7 +1330,7 @@ const PurchaseBoard = () => {
                                                             {note.user?.full_name || note.user?.email || 'Usuario'}
                                                         </p>
                                                         <p className="text-sm text-slate-700">{note.content}</p>
-                                                        <p className="mt-1 text-[11px] text-slate-400">{note.created_at ? new Date(note.created_at).toLocaleString() : 'Reciente'}</p>
+                                                        <p className="mt-1 text-[11px] text-slate-400">{note.created_at ? formatBogotaDateTime(note.created_at) : 'Reciente'}</p>
                                                     </div>
                                                 ))}
                                             </div>

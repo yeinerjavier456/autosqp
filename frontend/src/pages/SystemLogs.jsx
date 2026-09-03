@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { formatBogotaDateTime } from '../utils/dateTime';
 
 function SystemLogs() {
     const { user } = useAuth();
@@ -182,7 +183,7 @@ function SystemLogs() {
                                 logs.map((log) => (
                                     <tr key={log.id} className="hover:bg-gray-50">
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-l-4" style={{ borderLeftColor: log.action === 'DELETE' ? '#EF4444' : log.action === 'CREATE' ? '#10B981' : log.action === 'LOGIN' ? '#8B5CF6' : '#3B82F6' }}>
-                                            {new Date(log.created_at).toLocaleString()}
+                                            {formatBogotaDateTime(log.created_at)}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="text-sm font-medium text-gray-900">

@@ -3382,7 +3382,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
                                                             {appointment.status || 'scheduled'}
                                                         </span>
                                                         <span className="text-xs font-medium text-slate-500">
-                                                            {formatBogotaDateTime(appointment.appointment_date)}
+                                                            {formatBogotaDateTime(appointment.appointment_date, {}, false)}
                                                         </span>
                                                     </div>
                                                 </div>
