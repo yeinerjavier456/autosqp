@@ -9336,6 +9336,12 @@ def apply_receipt_group_search_filter(
             models.Vehicle.model.ilike(search),
             models.Vehicle.plate.ilike(search),
             models.Sale.external_seller_name.ilike(search),
+            models.Sale.seller.has(or_(
+                models.User.full_name.ilike(search),
+                models.User.email.ilike(search),
+                models.User.ecard_display_email.ilike(search),
+                models.User.ecard_display_phone.ilike(search),
+            )),
             models.Sale.tax_seller_name.ilike(search),
             models.Sale.tax_seller_document.ilike(search),
             models.Sale.tax_seller_email.ilike(search),
@@ -11002,6 +11008,37 @@ def create_sale(
     db.refresh(new_sale)
     return new_sale
 
+def apply_sale_general_search(query, q: Optional[str]):
+    if not q:
+        return query
+    search = f"%{q.strip()}%"
+    return query.join(models.Vehicle).outerjoin(
+        models.Lead, models.Lead.id == models.Sale.lead_id
+    ).filter(or_(
+        models.Vehicle.make.ilike(search),
+        models.Vehicle.model.ilike(search),
+        models.Vehicle.plate.ilike(search),
+        models.Lead.name.ilike(search),
+        models.Lead.email.ilike(search),
+        models.Lead.phone.ilike(search),
+        models.Sale.seller.has(or_(
+            models.User.full_name.ilike(search),
+            models.User.email.ilike(search),
+            models.User.ecard_display_email.ilike(search),
+            models.User.ecard_display_phone.ilike(search),
+        )),
+        models.Sale.external_seller_name.ilike(search),
+        models.Sale.tax_seller_name.ilike(search),
+        models.Sale.tax_seller_document.ilike(search),
+        models.Sale.tax_seller_email.ilike(search),
+        models.Sale.tax_seller_phone.ilike(search),
+        models.Sale.tax_buyer_name.ilike(search),
+        models.Sale.tax_buyer_document.ilike(search),
+        models.Sale.tax_buyer_email.ilike(search),
+        models.Sale.tax_buyer_phone.ilike(search),
+    ))
+
+
 @app.get("/sales/", response_model=schemas.SaleList)
 def read_sales(
     status: str = None, # Optional status
@@ -11055,27 +11092,7 @@ def read_sales(
         end_date = datetime.datetime(year, month, last_day, 23, 59, 59)
         query = query.filter(models.Sale.sale_date >= start_date, models.Sale.sale_date <= end_date)
         
-    if q:
-        search = f"%{q}%"
-        query = query.join(models.Vehicle).outerjoin(
-            models.Lead, models.Lead.id == models.Sale.lead_id
-        ).filter(or_(
-            models.Vehicle.make.ilike(search),
-            models.Vehicle.model.ilike(search),
-            models.Vehicle.plate.ilike(search),
-            models.Lead.name.ilike(search),
-            models.Lead.email.ilike(search),
-            models.Lead.phone.ilike(search),
-            models.Sale.external_seller_name.ilike(search),
-            models.Sale.tax_seller_name.ilike(search),
-            models.Sale.tax_seller_document.ilike(search),
-            models.Sale.tax_seller_email.ilike(search),
-            models.Sale.tax_seller_phone.ilike(search),
-            models.Sale.tax_buyer_name.ilike(search),
-            models.Sale.tax_buyer_document.ilike(search),
-            models.Sale.tax_buyer_email.ilike(search),
-            models.Sale.tax_buyer_phone.ilike(search),
-        ))
+    query = apply_sale_general_search(query, q)
         
     total = query.count()
     sales = query.order_by(models.Sale.sale_date.desc()).offset(skip).limit(limit).all()
@@ -11172,6 +11189,7 @@ def _sale_tax_row(sale: models.Sale) -> dict:
     sale_date = sale.sale_date or datetime.datetime.utcnow()
     vehicle = sale.vehicle
     lead = sale.lead
+    seller = sale.seller
     purchase_price = int(getattr(vehicle, "purchase_price", None) or 0)
     commission_base = int(round(purchase_price * 0.03))
     tax_iva = int(round(commission_base * 0.19))
@@ -11193,11 +11211,11 @@ def _sale_tax_row(sale: models.Sale) -> dict:
         "iva_base": commission_base,
         "transaction_type": _tax_clean(getattr(sale, "tax_transaction_type", None)) or "INTERMEDIACION",
         "transfer_to_cars": _tax_clean(getattr(sale, "tax_transfer_to_cars", None)),
-        "seller_name": _tax_clean(getattr(sale, "tax_seller_name", None)) or _tax_clean(getattr(sale, "external_seller_name", None)),
+        "seller_name": _tax_clean(getattr(sale, "tax_seller_name", None)) or _tax_clean(getattr(sale, "external_seller_name", None)) or _tax_clean(getattr(seller, "full_name", None)),
         "seller_document": _tax_clean(getattr(sale, "tax_seller_document", None)),
-        "seller_email": _tax_clean(getattr(sale, "tax_seller_email", None)),
+        "seller_email": _tax_clean(getattr(sale, "tax_seller_email", None)) or _tax_clean(getattr(seller, "ecard_display_email", None)) or _tax_clean(getattr(seller, "email", None)),
         "seller_address": _tax_clean(getattr(sale, "tax_seller_address", None)),
-        "seller_phone": _tax_clean(getattr(sale, "tax_seller_phone", None)),
+        "seller_phone": _tax_clean(getattr(sale, "tax_seller_phone", None)) or _tax_clean(getattr(seller, "ecard_display_phone", None)),
         "seller_payment_method": _tax_clean(getattr(sale, "tax_seller_payment_method", None)),
         "buyer_name": _tax_clean(getattr(sale, "tax_buyer_name", None)) or _tax_clean(getattr(lead, "name", None)),
         "buyer_document": _tax_clean(getattr(sale, "tax_buyer_document", None)),
@@ -11258,7 +11276,9 @@ def _tax_row_matches(row: dict, q: Optional[str]) -> bool:
         return True
     needle = q.strip().lower()
     return any(needle in str(row.get(field) or "").lower() for field in [
-        "make", "reference", "plate", "seller_name", "buyer_name", "seller_document", "buyer_document"
+        "make", "reference", "plate", "seller_name", "buyer_name",
+        "seller_document", "buyer_document", "seller_email", "buyer_email",
+        "seller_phone", "buyer_phone"
     ])
 
 
@@ -11552,6 +11572,7 @@ def reject_sale(
 def get_finance_stats(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    q: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -11576,6 +11597,7 @@ def get_finance_stats(
         query = query.filter(models.Sale.company_id == current_user.company_id)
     if range_start and range_end:
         query = query.filter(models.Sale.sale_date >= range_start, models.Sale.sale_date < range_end)
+    query = apply_sale_general_search(query, q)
     sales = query.all()
     
     total_revenue = sum(s.net_revenue for s in sales)
@@ -11588,6 +11610,7 @@ def get_finance_stats(
         pending_query = pending_query.filter(models.Sale.company_id == current_user.company_id)
     if range_start and range_end:
         pending_query = pending_query.filter(models.Sale.sale_date >= range_start, models.Sale.sale_date < range_end)
+    pending_query = apply_sale_general_search(pending_query, q)
     pending_count = pending_query.count()
 
     # 3. Monthly Stats (Current Month)
@@ -11602,6 +11625,14 @@ def get_finance_stats(
     user_query = db.query(models.User)
     if current_user.company_id:
         user_query = user_query.filter(models.User.company_id == current_user.company_id)
+    if q:
+        user_search = f"%{q.strip()}%"
+        user_query = user_query.filter(or_(
+            models.User.full_name.ilike(user_search),
+            models.User.email.ilike(user_search),
+            models.User.ecard_display_email.ilike(user_search),
+            models.User.ecard_display_phone.ilike(user_search),
+        ))
     
     users = user_query.all()
     payroll_expenses = sum(u.base_salary or 0 for u in users)
@@ -11612,6 +11643,13 @@ def get_finance_stats(
     if range_start and range_end:
         receipt_date_field = func.coalesce(models.PaymentReceipt.payment_date, models.PaymentReceipt.created_at)
         receipts_query = receipts_query.filter(receipt_date_field >= range_start, receipt_date_field < range_end)
+    if q:
+        receipts_query = apply_receipt_group_search_filter(
+            receipts_query,
+            db,
+            q,
+            current_user.company_id
+        )
     receipts = receipts_query.all()
     current_month_receipts = receipts if (range_start and range_end) else [
         receipt for receipt in receipts

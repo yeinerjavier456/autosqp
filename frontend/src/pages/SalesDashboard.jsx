@@ -239,22 +239,29 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             }
 
             const activeYear = startDate ? Number(startDate.slice(0, 4)) : new Date().getFullYear();
+            const generalSearch = receiptSearch || undefined;
             const [statsRes, salesRes, approvedSalesRes, receiptsRes, taxRes] = await Promise.all([
-                axios.get('/api/finance/stats', { headers, params: rangeParams }),
+                axios.get('/api/finance/stats', {
+                    headers,
+                    params: { ...rangeParams, q: generalSearch }
+                }),
                 axios.get('/api/sales/', {
                     headers,
                     params: {
                         status: filterStatus,
-                        q: salesSearch || undefined,
+                        q: generalSearch || salesSearch || undefined,
                         limit: 300,
                         ...rangeParams
                     }
                 }),
-                axios.get('/api/sales/?status=approved&limit=300', { headers }),
+                axios.get('/api/sales/', {
+                    headers,
+                    params: { status: 'approved', limit: 300, q: generalSearch }
+                }),
                 axios.get('/api/finance/receipts', {
                     headers,
                     params: {
-                        q: receiptSearch || undefined,
+                        q: generalSearch,
                         category: receiptCategory || undefined,
                         movement_type: receiptMovementType || undefined,
                         limit: 300,
@@ -265,6 +272,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                     headers,
                     params: {
                         year: activeYear,
+                        q: generalSearch,
                         limit: 500
                     }
                 })
@@ -1960,12 +1968,12 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
                     <div>
-                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Buscar recibos</label>
+                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Búsqueda general</label>
                         <input
                             type="text"
                             value={receiptSearchInput}
                             onChange={(e) => setReceiptSearchInput(e.target.value)}
-                            placeholder="Buscar por nombre, correo, placa, documento, teléfono o recibo..."
+                            placeholder="Buscar en ventas, recibos, contabilidad y tributación..."
                             className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
                         />
                     </div>
