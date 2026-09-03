@@ -164,6 +164,8 @@ def get_public_vehicles(
             or_(
                 models.Vehicle.make.ilike(search),
                 models.Vehicle.model.ilike(search),
+                models.Vehicle.plate.ilike(search),
+                models.Vehicle.internal_code.ilike(search),
                 models.Vehicle.description.ilike(search)
             )
         )
@@ -287,7 +289,8 @@ def read_vehicles(
             or_(
                 models.Vehicle.make.ilike(search),
                 models.Vehicle.model.ilike(search),
-                models.Vehicle.plate.ilike(search)
+                models.Vehicle.plate.ilike(search),
+                models.Vehicle.internal_code.ilike(search)
             )
         )
 

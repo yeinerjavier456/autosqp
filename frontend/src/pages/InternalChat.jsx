@@ -160,9 +160,12 @@ const InternalChat = () => {
     });
 
     // Valid users to show in sidebar (exclude self)
-    const sidebarUsers = usersList.filter(u => u.id !== user?.id &&
-        (searchTerm === '' || u.email.toLowerCase().includes(searchTerm.toLowerCase()) || (u.full_name && u.full_name.toLowerCase().includes(searchTerm.toLowerCase())))
-    );
+    const sidebarUsers = usersList.filter((u) => {
+        if (u.id === user?.id) return false;
+        const query = searchTerm.toLowerCase();
+        return !query || [u.email, u.full_name, u.ecard_display_email, u.ecard_display_phone]
+            .some((value) => String(value || '').toLowerCase().includes(query));
+    });
     const groupedSidebarUsers = sidebarUsers.reduce((acc, currentUser) => {
         const roleName = getEffectiveRoleName(currentUser?.role);
         const groupId = ROLE_LABELS[roleName] ? roleName : 'user';
@@ -241,7 +244,7 @@ const InternalChat = () => {
                     <div className="relative">
                         <input
                             type="text"
-                            placeholder="Buscar usuario..."
+                            placeholder="Buscar por nombre, correo o teléfono..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full bg-slate-800 border-none rounded-lg pl-10 pr-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:ring-2 focus:ring-blue-500 outline-none"

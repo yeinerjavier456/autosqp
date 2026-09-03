@@ -147,7 +147,7 @@ const WhatsAppDashboard = () => {
                     <div className="relative">
                         <input
                             type="text"
-                            placeholder="Buscar cliente o teléfono..."
+                            placeholder="Buscar por nombre, correo, placa, documento o teléfono..."
                             className="w-full pl-9 pr-4 py-2 bg-white border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#00a884] transition-all"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
@@ -168,7 +168,10 @@ const WhatsAppDashboard = () => {
                                     const query = searchTerm.toLowerCase();
                                     const name = getConversationDisplayName(conv).toLowerCase();
                                     const phone = getConversationPhone(conv).toLowerCase();
-                                    return name.includes(query) || phone.includes(query);
+                                    const email = String(conv.lead?.email || '').toLowerCase();
+                                    const document = String(conv.lead?.document_number || '').toLowerCase();
+                                    const plate = String(conv.lead?.plate || conv.lead?.purchase_vehicle_plate || '').toLowerCase();
+                                    return [name, phone, email, document, plate].some((value) => value.includes(query));
                                 })
                                 .map(conv => (
                                     <li

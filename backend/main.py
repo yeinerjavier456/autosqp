@@ -1680,6 +1680,47 @@ def build_lead_summary_query(db: Session):
     )
 
 
+def build_lead_search_filter(db: Session, raw_query: Optional[str]):
+    search = f"%{str(raw_query or '').strip()}%"
+    public_submission_leads = db.query(models.PublicCreditSubmission.lead_id).filter(
+        models.PublicCreditSubmission.lead_id.isnot(None),
+        or_(
+            models.PublicCreditSubmission.applicant_name.ilike(search),
+            models.PublicCreditSubmission.email.ilike(search),
+            models.PublicCreditSubmission.phone.ilike(search),
+            models.PublicCreditSubmission.document_number.ilike(search),
+            models.PublicCreditSubmission.desired_vehicle.ilike(search),
+        )
+    )
+    credit_application_leads = db.query(models.CreditApplication.lead_id).filter(
+        models.CreditApplication.lead_id.isnot(None),
+        or_(
+            models.CreditApplication.client_name.ilike(search),
+            models.CreditApplication.email.ilike(search),
+            models.CreditApplication.phone.ilike(search),
+            models.CreditApplication.desired_vehicle.ilike(search),
+            models.CreditApplication.purchase_vehicle_plate.ilike(search),
+        )
+    )
+    sold_vehicle_leads = db.query(models.Sale.lead_id).join(
+        models.Vehicle, models.Vehicle.id == models.Sale.vehicle_id
+    ).filter(
+        models.Sale.lead_id.isnot(None),
+        models.Vehicle.plate.ilike(search)
+    )
+    return or_(
+        models.Lead.name.ilike(search),
+        models.Lead.email.ilike(search),
+        models.Lead.phone.ilike(search),
+        models.Lead.id.in_(public_submission_leads),
+        models.Lead.id.in_(credit_application_leads),
+        models.Lead.id.in_(sold_vehicle_leads),
+        models.Lead.process_detail.has(
+            models.LeadProcessDetail.vehicle.has(models.Vehicle.plate.ilike(search))
+        ),
+    )
+
+
 def apply_lead_access_filters(
     query,
     db: Session,
@@ -1765,14 +1806,7 @@ def apply_lead_access_filters(
         query = query.filter(models.Lead.status == normalize_lead_status_value(status))
 
     if q:
-        search = f"%{q}%"
-        query = query.filter(
-            or_(
-                models.Lead.name.ilike(search),
-                models.Lead.email.ilike(search),
-                models.Lead.phone.ilike(search)
-            )
-        )
+        query = query.filter(build_lead_search_filter(db, q))
 
     if exact_date:
         try:
@@ -4492,6 +4526,8 @@ def read_users(
         query = query.filter(or_(
             models.User.email.ilike(f"%{q}%"),
             models.User.full_name.ilike(f"%{q}%"),
+            models.User.ecard_display_email.ilike(f"%{q}%"),
+            models.User.ecard_display_phone.ilike(f"%{q}%"),
         ))
     
     if role_id:
@@ -6242,6 +6278,16 @@ def read_public_credit_submissions(
     normalized_q = str(q or "").strip().lower()
     if normalized_q:
         like_value = f"%{normalized_q}%"
+        matching_plate_leads = db.query(models.CreditApplication.lead_id).filter(
+            models.CreditApplication.lead_id.isnot(None),
+            func.lower(func.coalesce(models.CreditApplication.purchase_vehicle_plate, "")).like(like_value)
+        )
+        matching_sold_plate_leads = db.query(models.Sale.lead_id).join(
+            models.Vehicle, models.Vehicle.id == models.Sale.vehicle_id
+        ).filter(
+            models.Sale.lead_id.isnot(None),
+            func.lower(func.coalesce(models.Vehicle.plate, "")).like(like_value)
+        )
         query = query.filter(
             or_(
                 func.lower(models.PublicCreditSubmission.applicant_name).like(like_value),
@@ -6249,6 +6295,8 @@ def read_public_credit_submissions(
                 func.lower(func.coalesce(models.PublicCreditSubmission.document_number, "")).like(like_value),
                 func.lower(func.coalesce(models.PublicCreditSubmission.phone, "")).like(like_value),
                 func.lower(func.coalesce(models.PublicCreditSubmission.desired_vehicle, "")).like(like_value),
+                models.PublicCreditSubmission.lead_id.in_(matching_plate_leads),
+                models.PublicCreditSubmission.lead_id.in_(matching_sold_plate_leads),
             )
         )
 
@@ -7493,15 +7541,10 @@ def read_deleted_leads(
         query = query.filter(models.Lead.company_id == current_user.company_id)
 
     if q:
-        search = f"%{q}%"
-        query = query.filter(
-            or_(
-                models.Lead.name.ilike(search),
-                models.Lead.email.ilike(search),
-                models.Lead.phone.ilike(search),
-                models.Lead.deleted_reason.ilike(search)
-            )
-        )
+        query = query.filter(or_(
+            build_lead_search_filter(db, q),
+            models.Lead.deleted_reason.ilike(f"%{q}%")
+        ))
 
     total = query.count()
     items = query.order_by(models.Lead.deleted_at.desc(), models.Lead.id.desc()).offset(skip).limit(limit).all()
@@ -9295,8 +9338,12 @@ def apply_receipt_group_search_filter(
             models.Sale.external_seller_name.ilike(search),
             models.Sale.tax_seller_name.ilike(search),
             models.Sale.tax_seller_document.ilike(search),
+            models.Sale.tax_seller_email.ilike(search),
+            models.Sale.tax_seller_phone.ilike(search),
             models.Sale.tax_buyer_name.ilike(search),
             models.Sale.tax_buyer_document.ilike(search),
+            models.Sale.tax_buyer_email.ilike(search),
+            models.Sale.tax_buyer_phone.ilike(search),
             models.Lead.name.ilike(search),
             models.Lead.email.ilike(search),
             models.Lead.phone.ilike(search),
@@ -10690,7 +10737,9 @@ def get_public_vehicles(
         query = query.filter(
             (models.Vehicle.make.ilike(search)) |
             (models.Vehicle.model.ilike(search)) |
-            (models.Vehicle.plate.ilike(search))
+            (models.Vehicle.plate.ilike(search)) |
+            (models.Vehicle.internal_code.ilike(search)) |
+            (models.Vehicle.description.ilike(search))
         )
     if make:
         query = query.filter(models.Vehicle.make.ilike(f"%{make}%"))
@@ -10736,7 +10785,8 @@ def read_vehicles(
         query = query.filter(
             (models.Vehicle.make.ilike(search)) |
             (models.Vehicle.model.ilike(search)) |
-            (models.Vehicle.plate.ilike(search))
+            (models.Vehicle.plate.ilike(search)) |
+            (models.Vehicle.internal_code.ilike(search))
         )
 
     effective_status = status if is_inventory_editor(current_user) else "available"
@@ -11007,11 +11057,25 @@ def read_sales(
         
     if q:
         search = f"%{q}%"
-        query = query.join(models.Vehicle).filter(
-            (models.Vehicle.make.ilike(search)) |
-            (models.Vehicle.model.ilike(search)) |
-            (models.Vehicle.plate.ilike(search))
-        )
+        query = query.join(models.Vehicle).outerjoin(
+            models.Lead, models.Lead.id == models.Sale.lead_id
+        ).filter(or_(
+            models.Vehicle.make.ilike(search),
+            models.Vehicle.model.ilike(search),
+            models.Vehicle.plate.ilike(search),
+            models.Lead.name.ilike(search),
+            models.Lead.email.ilike(search),
+            models.Lead.phone.ilike(search),
+            models.Sale.external_seller_name.ilike(search),
+            models.Sale.tax_seller_name.ilike(search),
+            models.Sale.tax_seller_document.ilike(search),
+            models.Sale.tax_seller_email.ilike(search),
+            models.Sale.tax_seller_phone.ilike(search),
+            models.Sale.tax_buyer_name.ilike(search),
+            models.Sale.tax_buyer_document.ilike(search),
+            models.Sale.tax_buyer_email.ilike(search),
+            models.Sale.tax_buyer_phone.ilike(search),
+        ))
         
     total = query.count()
     sales = query.order_by(models.Sale.sale_date.desc()).offset(skip).limit(limit).all()

@@ -531,6 +531,20 @@ def _build_purchase_feed(
     if status:
         purchases = [item for item in purchases if item.status == status]
 
+    lead_ids = [item.lead_id for item in purchases if item.lead_id]
+    document_by_lead = {}
+    if lead_ids:
+        for lead_id, document_number in db.query(
+            models.PublicCreditSubmission.lead_id,
+            models.PublicCreditSubmission.document_number
+        ).filter(
+            models.PublicCreditSubmission.lead_id.in_(lead_ids),
+            models.PublicCreditSubmission.document_number.isnot(None)
+        ).order_by(models.PublicCreditSubmission.id.desc()).all():
+            document_by_lead.setdefault(lead_id, document_number)
+    for item in purchases:
+        item.document_number = document_by_lead.get(item.lead_id)
+
     if q:
         normalized_q = q.lower()
         purchases = [
@@ -538,7 +552,12 @@ def _build_purchase_feed(
             if normalized_q in (item.client_name or "").lower()
             or normalized_q in (item.email or "").lower()
             or normalized_q in (item.phone or "").lower()
+            or normalized_q in (item.document_number or "").lower()
             or normalized_q in (item.desired_vehicle or "").lower()
+            or normalized_q in (item.purchase_vehicle_plate or "").lower()
+            or normalized_q in (getattr(item.lead, "name", None) or "").lower()
+            or normalized_q in (getattr(item.lead, "email", None) or "").lower()
+            or normalized_q in (getattr(item.lead, "phone", None) or "").lower()
         ]
 
     purchases.sort(key=lambda item: item.created_at or 0, reverse=True)

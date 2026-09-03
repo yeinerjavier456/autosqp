@@ -910,7 +910,17 @@ const PurchaseBoard = () => {
 
     const filteredPurchases = purchases.filter((purchase) => {
         const normalizedSearch = searchTerm.trim().toLowerCase();
-        const matchesSearch = !normalizedSearch || [purchase.client_name, purchase.phone, purchase.email, purchase.desired_vehicle]
+        const matchesSearch = !normalizedSearch || [
+            purchase.client_name,
+            purchase.phone,
+            purchase.email,
+            purchase.document_number,
+            purchase.desired_vehicle,
+            purchase.purchase_vehicle_plate,
+            purchase.lead?.name,
+            purchase.lead?.email,
+            purchase.lead?.phone
+        ]
             .some((value) => String(value || '').toLowerCase().includes(normalizedSearch));
         const createdDate = purchase.created_at ? String(purchase.created_at).slice(0, 10) : '';
         const matchesDate = !dateFilter || createdDate === dateFilter;
@@ -973,7 +983,7 @@ const PurchaseBoard = () => {
 
             <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
-                    <input type="text" placeholder="Buscar por cliente, telefono, email o vehiculo..." className="xl:col-span-2 w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    <input type="text" placeholder="Buscar por nombre, correo, placa, documento o teléfono..." className="xl:col-span-2 w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                     <input type="date" className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
                     <select className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500 bg-white" value={assignedFilter} onChange={(e) => setAssignedFilter(e.target.value)}>
                         <option value="">Asignacion</option>

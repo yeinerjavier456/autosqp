@@ -5730,7 +5730,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     </div>
                     <input
                         type="text"
-                        placeholder="Buscar por nombre o teléfono..."
+                        placeholder="Buscar por nombre, correo, placa, documento o teléfono..."
                         className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-shadow text-sm"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}

@@ -709,7 +709,12 @@ const CreditBoard = () => {
             credit.client_name,
             credit.phone,
             credit.email,
-            credit.desired_vehicle
+            credit.document_number,
+            credit.desired_vehicle,
+            credit.purchase_vehicle_plate,
+            credit.lead?.name,
+            credit.lead?.email,
+            credit.lead?.phone
         ].some((value) => String(value || '').toLowerCase().includes(normalizedSearch));
 
         const createdDate = formatBogotaDateForInput(credit.created_at);
@@ -806,7 +811,7 @@ const CreditBoard = () => {
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
                     <input
                         type="text"
-                        placeholder="Buscar por cliente, telefono, email o vehiculo..."
+                        placeholder="Buscar por nombre, correo, placa, documento o teléfono..."
                         className="xl:col-span-2 w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}

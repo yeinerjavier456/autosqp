@@ -373,7 +373,7 @@ const PublicCreditSubmissions = () => {
                         type="text"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Buscar por nombre, correo, documento o vehículo..."
+                        placeholder="Buscar por nombre, correo, placa, documento o teléfono..."
                         className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
                     />
                     <select

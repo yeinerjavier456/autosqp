@@ -165,7 +165,7 @@ const LeadsTable = ({ source, title }) => {
                         <form onSubmit={handleSearch} className="flex gap-2">
                             <input
                                 type="text"
-                                placeholder="Buscar..."
+                                placeholder="Buscar por nombre, correo, placa, documento o teléfono..."
                                 className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}

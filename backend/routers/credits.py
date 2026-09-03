@@ -563,6 +563,20 @@ def _build_credit_feed(
     if status:
         credits = [credit for credit in credits if credit.status == status]
 
+    lead_ids = [credit.lead_id for credit in credits if credit.lead_id]
+    document_by_lead = {}
+    if lead_ids:
+        for lead_id, document_number in db.query(
+            models.PublicCreditSubmission.lead_id,
+            models.PublicCreditSubmission.document_number
+        ).filter(
+            models.PublicCreditSubmission.lead_id.in_(lead_ids),
+            models.PublicCreditSubmission.document_number.isnot(None)
+        ).order_by(models.PublicCreditSubmission.id.desc()).all():
+            document_by_lead.setdefault(lead_id, document_number)
+    for credit in credits:
+        credit.document_number = document_by_lead.get(credit.lead_id)
+
     if q:
         normalized_q = q.lower()
         credits = [
@@ -570,7 +584,12 @@ def _build_credit_feed(
             if normalized_q in (credit.client_name or "").lower()
             or normalized_q in (credit.email or "").lower()
             or normalized_q in (credit.phone or "").lower()
+            or normalized_q in (credit.document_number or "").lower()
             or normalized_q in (credit.desired_vehicle or "").lower()
+            or normalized_q in (credit.purchase_vehicle_plate or "").lower()
+            or normalized_q in (getattr(credit.lead, "name", None) or "").lower()
+            or normalized_q in (getattr(credit.lead, "email", None) or "").lower()
+            or normalized_q in (getattr(credit.lead, "phone", None) or "").lower()
         ]
 
     credits.sort(key=lambda credit: credit.created_at or 0, reverse=True)

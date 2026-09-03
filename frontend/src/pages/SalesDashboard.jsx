@@ -1506,7 +1506,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                 type="text"
                                 value={receiptSearchInput}
                                 onChange={(e) => setReceiptSearchInput(e.target.value)}
-                                placeholder="Buscar por placa, nombre, documento, concepto o número de recibo..."
+                                placeholder="Buscar por nombre, correo, placa, documento, teléfono o recibo..."
                                 autoFocus
                                 className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
                             />
@@ -1965,7 +1965,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                             type="text"
                             value={receiptSearchInput}
                             onChange={(e) => setReceiptSearchInput(e.target.value)}
-                            placeholder="Buscar por placa, nombre, documento, concepto o número de recibo..."
+                            placeholder="Buscar por nombre, correo, placa, documento, teléfono o recibo..."
                             className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
                         />
                     </div>
@@ -2479,7 +2479,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                         type="text"
                                         value={receiptSearchInput}
                                         onChange={(e) => setReceiptSearchInput(e.target.value)}
-                                        placeholder="Buscar por concepto, recibo, placa..."
+                                        placeholder="Buscar por nombre, correo, placa, documento, teléfono o recibo..."
                                         className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500"
                                     />
                                     <select

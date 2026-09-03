@@ -1279,6 +1279,7 @@ class CreditNoteCreate(BaseModel):
 class CreditApplication(CreditApplicationBase):
     id: int
     lead_id: Optional[int] = None
+    document_number: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     company_id: int

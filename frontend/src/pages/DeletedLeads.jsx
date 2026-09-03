@@ -83,7 +83,7 @@ const DeletedLeads = () => {
                         type="text"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Buscar por nombre, telefono o motivo..."
+                        placeholder="Buscar por nombre, correo, placa, documento, teléfono o motivo..."
                         className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 sm:w-80"
                     />
                     <button
