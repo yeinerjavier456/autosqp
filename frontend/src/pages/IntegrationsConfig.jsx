@@ -156,6 +156,27 @@ const IntegrationsConfig = () => {
         }
     };
 
+    const handleDownloadTemplate = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.get('/api/vehicles/upload/template', {
+                headers: { Authorization: `Bearer ${token}` },
+                responseType: 'blob'
+            });
+            const url = window.URL.createObjectURL(response.data);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'plantilla_carga_masiva_vehiculos.xlsx';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error(error);
+            setStatus({ type: 'error', message: 'No se pudo descargar la plantilla.' });
+        }
+    };
+
     const handleConnectGmail = async () => {
         if (!user?.company_id) return;
         setGmailConnecting(true);
@@ -669,14 +690,27 @@ const IntegrationsConfig = () => {
                     {/* Import Tab */}
                     {activeTab === 'import' && (
                         <div className="space-y-6 fade-in">
-                            <h2 className="text-xl font-bold text-slate-800 border-b pb-2">Importar Inventario desde Excel</h2>
+                            <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
+                                <h2 className="text-xl font-bold text-slate-800">Importar Inventario desde Excel</h2>
+                                <button
+                                    type="button"
+                                    onClick={handleDownloadTemplate}
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100"
+                                >
+                                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v12m0 0l-4-4m4 4l4-4M5 20h14" />
+                                    </svg>
+                                    Descargar plantilla
+                                </button>
+                            </div>
 
                             <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg text-sm mb-4">
                                 <p className="font-semibold mb-1">Instrucciones:</p>
                                 <ul className="list-disc pl-5 space-y-1">
                                     <li>Sube el archivo Excel con el formato "INVENTARIO PAGINA WEB CRM.xlsx".</li>
                                     <li>Las columnas deben coincidir con la plantilla oficial (Marca & Modelo, Año, Precio, etc).</li>
-                                    <li>Los vehículos nuevos se agregarán, los existentes (por Placa) se actualizarán.</li>
+                                    <li>La carga solo afecta el inventario de tu empresa.</li>
+                                    <li>Una placa con el mismo kilometraje se omite; con kilometraje diferente se agrega como nuevo registro.</li>
                                 </ul>
                             </div>
 

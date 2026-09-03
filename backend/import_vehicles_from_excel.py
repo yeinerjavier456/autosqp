@@ -67,13 +67,14 @@ def import_inventory(file_path="INVENTARIO PAGINA WEB CRM.xlsx", default_company
     error_details = []
     
     with engine.connect() as conn:
-        # Determine the company ID dynamically! Important!
-        company = conn.execute(text("SELECT id FROM companies LIMIT 1")).fetchone()
+        # La empresa siempre proviene del usuario autenticado que realiza la carga.
+        company = conn.execute(
+            text("SELECT id FROM companies WHERE id = :company_id"),
+            {"company_id": default_company_id}
+        ).fetchone()
         if not company:
-            print("❌ Error Fatal: No hay ninguna compañía (company) en la base de datos.")
-            return
-        default_company_id = company[0]
-        print(f"Usando Company ID: {default_company_id} por defecto.")
+            return {"error": "La empresa asociada al usuario no existe"}
+        print(f"Usando Company ID: {default_company_id}.")
 
         for idx, row in df.iterrows():
             make_model = str(row.get("Marca & Modelo", ""))
@@ -116,8 +117,15 @@ def import_inventory(file_path="INVENTARIO PAGINA WEB CRM.xlsx", default_company
             tecno = clean_excel_date(row.get("Tecno:"))
             
             try:
-                check_query = text("SELECT id, mileage FROM vehicles WHERE plate = :plate ORDER BY id DESC LIMIT 1")
-                result = conn.execute(check_query, {"plate": plate}).fetchone()
+                check_query = text("""
+                    SELECT id, mileage FROM vehicles
+                    WHERE plate = :plate AND company_id = :company_id
+                    ORDER BY id DESC LIMIT 1
+                """)
+                result = conn.execute(check_query, {
+                    "plate": plate,
+                    "company_id": default_company_id
+                }).fetchone()
                 
                 if result:
                     existing_id = result[0]

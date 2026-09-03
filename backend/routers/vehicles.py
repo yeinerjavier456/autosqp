@@ -1,4 +1,5 @@
 ﻿from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Request
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Optional
@@ -7,6 +8,7 @@ from database import get_db
 import os
 import shutil
 import json
+from pathlib import Path
 from import_vehicles_from_excel import import_inventory
 
 # Attempting to import log_action_to_db (will require circular import bypassing if done wrong, but from main is fine if deferred)
@@ -338,6 +340,21 @@ def upload_vehicles_excel(
                 os.remove(temp_file_path)
             except:
                 pass
+
+@router.get("/upload/template")
+def download_vehicles_template(
+    current_user: models.User = Depends(get_current_user)
+):
+    ensure_inventory_editor(current_user)
+    template_path = Path(__file__).resolve().parent.parent / "templates" / "plantilla_carga_masiva_vehiculos.xlsx"
+    if not template_path.exists():
+        raise HTTPException(status_code=404, detail="La plantilla no está disponible")
+    return FileResponse(
+        path=template_path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename="plantilla_carga_masiva_vehiculos.xlsx"
+    )
+
 
 @router.get("/{vehicle_id}", response_model=schemas.Vehicle)
 def read_vehicle(vehicle_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
