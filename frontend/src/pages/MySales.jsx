@@ -3,6 +3,13 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import Swal from 'sweetalert2';
 
+const formatMoney = (value) => `$${Number(value || 0).toLocaleString('es-CO')}`;
+const formatDate = (value) => value
+    ? new Date(value).toLocaleDateString('es-CO', { timeZone: 'America/Bogota' })
+    : 'Sin registrar';
+const showValue = (value) => value === null || value === undefined || value === '' ? 'Sin registrar' : value;
+const saleStatusLabel = (status) => status === 'approved' ? 'Aprobada' : status === 'rejected' ? 'Rechazada' : 'Pendiente';
+
 const MySales = () => {
     const { user } = useAuth();
     const [sales, setSales] = useState([]);
@@ -10,6 +17,7 @@ const MySales = () => {
     const [page, setPage] = useState(1);
     const [total, setTotal] = useState(0);
     const [limit] = useState(10); // Max 10 per page as requested
+    const [selectedSale, setSelectedSale] = useState(null);
 
     // Filters
     const [search, setSearch] = useState('');
@@ -21,6 +29,19 @@ const MySales = () => {
             fetchSales();
         }
     }, [page, search, selectedMonth, selectedYear, user]);
+
+    useEffect(() => {
+        if (!selectedSale) return undefined;
+        const closeOnEscape = (event) => {
+            if (event.key === 'Escape') setSelectedSale(null);
+        };
+        document.addEventListener('keydown', closeOnEscape);
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.removeEventListener('keydown', closeOnEscape);
+            document.body.style.overflow = '';
+        };
+    }, [selectedSale]);
 
     const fetchSales = async () => {
         setLoading(true);
@@ -138,6 +159,7 @@ const MySales = () => {
                                         <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Precio Venta</th>
                                         <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Comisión</th>
                                         <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Estado</th>
+                                        <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Detalle</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -177,11 +199,20 @@ const MySales = () => {
                                                             sale.status === 'rejected' ? 'Rechazada' : 'Pendiente'}
                                                     </span>
                                                 </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedSale(sale)}
+                                                        className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-blue-700"
+                                                    >
+                                                        Ver más
+                                                    </button>
+                                                </td>
                                             </tr>
                                         ))
                                     ) : (
                                         <tr>
-                                            <td colSpan="7" className="px-6 py-10 text-center text-gray-500 italic">
+                                            <td colSpan="8" className="px-6 py-10 text-center text-gray-500 italic">
                                                 No se encontraron ventas en este período.
                                             </td>
                                         </tr>
@@ -212,6 +243,89 @@ const MySales = () => {
                                 >
                                     Siguiente
                                 </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {selectedSale && (
+                        <div
+                            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"
+                            onMouseDown={(event) => {
+                                if (event.target === event.currentTarget) setSelectedSale(null);
+                            }}
+                        >
+                            <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-slate-50 shadow-2xl">
+                                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+                                    <div>
+                                        <h2 className="text-2xl font-extrabold text-slate-900">Detalle de la venta #{selectedSale.id}</h2>
+                                        <p className="text-sm text-slate-500">{selectedSale.vehicle?.make} {selectedSale.vehicle?.model} · {selectedSale.vehicle?.plate || 'Sin placa'}</p>
+                                    </div>
+                                    <button type="button" onClick={() => setSelectedSale(null)} className="rounded-full p-2 text-2xl text-slate-500 hover:bg-slate-100" aria-label="Cerrar">×</button>
+                                </div>
+
+                                <div className="grid gap-5 p-6 lg:grid-cols-2">
+                                    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                                        <h3 className="mb-4 text-lg font-bold text-slate-900">Información de la venta</h3>
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Fecha</p><p className="font-medium">{formatDate(selectedSale.sale_date)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Estado</p><p className="font-medium">{saleStatusLabel(selectedSale.status)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Precio de venta</p><p className="font-bold text-slate-900">{formatMoney(selectedSale.sale_price)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Comisión</p><p className="font-bold text-emerald-600">{formatMoney(selectedSale.commission_amount)} ({selectedSale.commission_percentage || 0}%)</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Ingreso neto</p><p className="font-medium">{formatMoney(selectedSale.net_revenue)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Financiación</p><p className="font-medium">{showValue(selectedSale.tax_buyer_financing_entity)}</p></div>
+                                        </div>
+                                        <div className="mt-5 border-t border-slate-100 pt-4 text-sm">
+                                            <p><span className="font-semibold">Asesor vendedor:</span> {selectedSale.seller?.full_name || selectedSale.external_seller_name || 'Sin asignar'}</p>
+                                            <p><span className="font-semibold">Encargado de compra:</span> {selectedSale.purchase_manager?.full_name || 'Sin asignar'}</p>
+                                            <p><span className="font-semibold">Gestor de crédito:</span> {selectedSale.credit_manager?.full_name || 'No aplica / sin asignar'}</p>
+                                        </div>
+                                    </section>
+
+                                    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                                        <h3 className="mb-4 text-lg font-bold text-slate-900">Información del cliente</h3>
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Nombre</p><p className="font-medium">{selectedSale.lead?.name || selectedSale.tax_buyer_name || 'Cliente directo'}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Documento</p><p className="font-medium">{showValue(selectedSale.tax_buyer_document)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Correo</p><p className="break-all font-medium">{showValue(selectedSale.lead?.email || selectedSale.tax_buyer_email)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Teléfono</p><p className="font-medium">{showValue(selectedSale.lead?.phone || selectedSale.tax_buyer_phone)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Dirección</p><p className="font-medium">{showValue(selectedSale.tax_buyer_address)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Medio de pago</p><p className="font-medium">{showValue(selectedSale.tax_buyer_payment_method)}</p></div>
+                                        </div>
+                                    </section>
+
+                                    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
+                                        <h3 className="mb-4 text-lg font-bold text-slate-900">Información del vehículo</h3>
+                                        {Array.isArray(selectedSale.vehicle?.photos) && selectedSale.vehicle.photos.length > 0 && (
+                                            <div className="mb-5 flex gap-3 overflow-x-auto pb-2">
+                                                {selectedSale.vehicle.photos.map((photo, index) => (
+                                                    <img key={`${photo}-${index}`} src={photo} alt={`Vehículo ${index + 1}`} className="h-32 w-44 flex-none rounded-xl border border-slate-200 object-cover" />
+                                                ))}
+                                            </div>
+                                        )}
+                                        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Marca</p><p className="font-medium">{showValue(selectedSale.vehicle?.make)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Modelo</p><p className="font-medium">{showValue(selectedSale.vehicle?.model)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Año</p><p className="font-medium">{showValue(selectedSale.vehicle?.year)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Placa</p><p className="font-medium">{showValue(selectedSale.vehicle?.plate)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Kilometraje</p><p className="font-medium">{selectedSale.vehicle?.mileage ? `${Number(selectedSale.vehicle.mileage).toLocaleString('es-CO')} km` : 'Sin registrar'}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Color</p><p className="font-medium">{showValue(selectedSale.vehicle?.color)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Combustible</p><p className="font-medium">{showValue(selectedSale.vehicle?.fuel_type)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Transmisión</p><p className="font-medium">{showValue(selectedSale.vehicle?.transmission)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Motor</p><p className="font-medium">{showValue(selectedSale.vehicle?.engine)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Código interno</p><p className="font-medium">{showValue(selectedSale.vehicle?.internal_code)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Ubicación</p><p className="font-medium">{showValue(selectedSale.vehicle?.location)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Precio de compra</p><p className="font-medium">{selectedSale.vehicle?.purchase_price == null ? 'Sin registrar' : formatMoney(selectedSale.vehicle.purchase_price)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">SOAT</p><p className="font-medium">{formatDate(selectedSale.vehicle?.soat)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Técnico-mecánica</p><p className="font-medium">{formatDate(selectedSale.vehicle?.tecno)}</p></div>
+                                        </div>
+                                        {selectedSale.vehicle?.description && (
+                                            <div className="mt-5 border-t border-slate-100 pt-4">
+                                                <p className="text-xs font-semibold uppercase text-slate-400">Descripción</p>
+                                                <p className="mt-1 whitespace-pre-line text-sm text-slate-700">{selectedSale.vehicle.description}</p>
+                                            </div>
+                                        )}
+                                    </section>
+                                </div>
                             </div>
                         </div>
                     )}
