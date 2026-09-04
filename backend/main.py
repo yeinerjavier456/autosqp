@@ -9301,6 +9301,55 @@ def enrich_receipt_display_names(
     return receipts
 
 
+def enrich_receipt_buyer_details(
+    db: Session,
+    receipts: List[models.PaymentReceipt]
+) -> List[models.PaymentReceipt]:
+    lead_ids = {
+        receipt.sale.lead_id
+        for receipt in receipts
+        if getattr(receipt, "sale", None) and getattr(receipt.sale, "lead_id", None)
+    }
+    submission_by_lead = {}
+    if lead_ids:
+        submissions = db.query(models.PublicCreditSubmission).filter(
+            models.PublicCreditSubmission.lead_id.in_(lead_ids)
+        ).order_by(models.PublicCreditSubmission.id.desc()).all()
+        for submission in submissions:
+            submission_by_lead.setdefault(submission.lead_id, submission)
+
+    for receipt in receipts:
+        sale = getattr(receipt, "sale", None)
+        lead = getattr(sale, "lead", None) if sale else None
+        submission = submission_by_lead.get(getattr(sale, "lead_id", None)) if sale else None
+        receipt.resolved_customer_name = (
+            (receipt.customer_name or "").strip()
+            or (getattr(sale, "tax_buyer_name", None) or "").strip()
+            or (getattr(lead, "name", None) or "").strip()
+            or (getattr(submission, "applicant_name", None) or "").strip()
+            or None
+        )
+        receipt.resolved_customer_document = (
+            (receipt.customer_document or "").strip()
+            or (getattr(sale, "tax_buyer_document", None) or "").strip()
+            or (getattr(submission, "document_number", None) or "").strip()
+            or None
+        )
+        receipt.resolved_customer_email = (
+            (getattr(sale, "tax_buyer_email", None) or "").strip()
+            or (getattr(lead, "email", None) or "").strip()
+            or (getattr(submission, "email", None) or "").strip()
+            or None
+        )
+        receipt.resolved_customer_phone = (
+            (getattr(sale, "tax_buyer_phone", None) or "").strip()
+            or (getattr(lead, "phone", None) or "").strip()
+            or (getattr(submission, "phone", None) or "").strip()
+            or None
+        )
+    return receipts
+
+
 def apply_receipt_group_search_filter(
     query,
     db: Session,
@@ -11975,6 +12024,7 @@ def read_payment_receipts(
     query = db.query(models.PaymentReceipt).options(
         joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.vehicle),
         joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.seller),
+        joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.lead),
         joinedload(models.PaymentReceipt.user)
     )
     if current_user.company_id:
@@ -12003,6 +12053,7 @@ def read_payment_receipts(
     total = query.count()
     items = query.order_by(models.PaymentReceipt.payment_date.desc(), models.PaymentReceipt.id.desc()).offset(skip).limit(limit).all()
     items = enrich_receipt_display_names(db, items, current_user.company_id)
+    items = enrich_receipt_buyer_details(db, items)
     return {"items": items, "total": total}
 
 

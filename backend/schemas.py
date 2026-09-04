@@ -1106,6 +1106,10 @@ class PaymentReceiptUpdate(BaseModel):
 class PaymentReceipt(PaymentReceiptMinimal):
     sale: Optional[Sale] = None
     user: Optional[User] = None
+    resolved_customer_name: Optional[str] = None
+    resolved_customer_document: Optional[str] = None
+    resolved_customer_email: Optional[str] = None
+    resolved_customer_phone: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

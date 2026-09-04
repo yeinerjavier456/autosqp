@@ -483,6 +483,24 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             .find(Boolean) || '';
     };
 
+    const getGroupBuyerDetails = (group) => {
+        const groupReceipts = group?.receipts || [];
+        const sale = group?.sale || {};
+        const lead = sale?.lead || {};
+        return {
+            name: getBestGroupFieldValue(groupReceipts, 'resolved_customer_name')
+                || getBestGroupFieldValue(groupReceipts, 'customer_name')
+                || sale.tax_buyer_name || lead.name || '',
+            document: getBestGroupFieldValue(groupReceipts, 'resolved_customer_document')
+                || getBestGroupFieldValue(groupReceipts, 'customer_document')
+                || sale.tax_buyer_document || '',
+            email: getBestGroupFieldValue(groupReceipts, 'resolved_customer_email')
+                || sale.tax_buyer_email || lead.email || '',
+            phone: getBestGroupFieldValue(groupReceipts, 'resolved_customer_phone')
+                || sale.tax_buyer_phone || lead.phone || ''
+        };
+    };
+
     const getReceiptUpdatePayload = (receipt, overrides = {}) => ({
         sale_id: receipt.sale?.id || receipt.sale_id || null,
         receipt_number: receipt.receipt_number || null,
@@ -1577,8 +1595,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                             const receipt = group.latestReceipt;
                                             const supportDisplayId = group.receiptNumber || receipt.receipt_number || `REC-${receipt.id}`;
                                             const supportDisplayName = getBestGroupDisplayName(group.receipts);
-                                            const customerName = getBestGroupFieldValue(group.receipts, 'customer_name');
-                                            const customerDocument = getBestGroupFieldValue(group.receipts, 'customer_document');
+                                            const buyer = getGroupBuyerDetails(group);
                                             return (
                                                 <tr
                                                     key={group.key}
@@ -1606,9 +1623,9 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                                                 ? `${group.sale?.vehicle?.plate || 'Sin placa'} · ${group.sale?.seller?.full_name || group.sale?.seller?.email || ''}`
                                                                 : `Soporte ${supportDisplayId}`}
                                                         </div>
-                                                        {(customerName || customerDocument) && (
+                                                        {(buyer.name || buyer.document || buyer.email || buyer.phone) && (
                                                             <div className="mt-1 text-xs font-medium text-slate-500">
-                                                                {[customerName, customerDocument].filter(Boolean).join(' · ')}
+                                                                {[buyer.name, buyer.document, buyer.email, buyer.phone].filter(Boolean).join(' · ')}
                                                             </div>
                                                         )}
                                                     </td>
@@ -1642,8 +1659,9 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                             {(() => {
                                 const isSaleGroup = Boolean(selectedReceiptGroup.sale?.id);
                                 const supportDisplayName = getBestGroupDisplayName(selectedReceiptGroup.receipts) || '';
-                                const customerName = getBestGroupFieldValue(selectedReceiptGroup.receipts, 'customer_name');
-                                const customerDocument = getBestGroupFieldValue(selectedReceiptGroup.receipts, 'customer_document');
+                                const buyer = getGroupBuyerDetails(selectedReceiptGroup);
+                                const customerName = getBestGroupFieldValue(selectedReceiptGroup.receipts, 'customer_name') || buyer.name;
+                                const customerDocument = getBestGroupFieldValue(selectedReceiptGroup.receipts, 'customer_document') || buyer.document;
                                 const groupTitle = isSaleGroup
                                     ? `#${selectedReceiptGroup.sale?.id} - ${selectedReceiptGroup.sale?.vehicle?.make || ''} ${selectedReceiptGroup.sale?.vehicle?.model || ''} · ${selectedReceiptGroup.sale?.vehicle?.plate || 'Sin placa'}`
                                     : `Soporte ${selectedReceiptGroup.receiptNumber || selectedReceiptGroup.latestReceipt?.receipt_number || ''}`;
@@ -1706,6 +1724,15 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                         </div>
 
                                         <div className="max-h-[70vh] overflow-y-auto px-6 py-4">
+                                            <div className="mb-4 rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+                                                <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">Información del comprador</p>
+                                                <div className="mt-2 grid grid-cols-1 gap-2 text-sm text-slate-700 md:grid-cols-2">
+                                                    <p><strong>Nombre:</strong> {buyer.name || 'Sin información'}</p>
+                                                    <p><strong>Documento:</strong> {buyer.document || 'Sin información'}</p>
+                                                    <p><strong>Correo:</strong> {buyer.email || 'Sin información'}</p>
+                                                    <p><strong>Teléfono:</strong> {buyer.phone || 'Sin información'}</p>
+                                                </div>
+                                            </div>
                                             <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
                                                 <div className="rounded-xl bg-emerald-50 p-4">
                                                     <p className="text-xs font-semibold uppercase text-emerald-700">Ingresos</p>
@@ -2529,6 +2556,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                         <tr className="bg-gray-50 text-xs uppercase tracking-wider text-gray-600">
                                             <th className="border-b p-4">Fecha</th>
                                             <th className="border-b p-4">Venta</th>
+                                            <th className="border-b p-4">Comprador</th>
                                             <th className="border-b p-4">Recibo</th>
                                             <th className="border-b p-4">Tipo</th>
                                             <th className="border-b p-4">Cuenta</th>
@@ -2543,6 +2571,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                             const isEditableGroup = true;
                                             const supportDisplayId = group.receiptNumber || receipt.receipt_number || `REC-${receipt.id}`;
                                             const supportDisplayName = getBestGroupDisplayName(group.receipts);
+                                            const buyer = getGroupBuyerDetails(group);
                                             return (
                                             <tr key={group.key} className="hover:bg-gray-50">
                                                 <td className="p-4 text-sm text-gray-600">
@@ -2564,6 +2593,11 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                                             {group.receipts.length} movimientos relacionados
                                                         </div>
                                                     )}
+                                                </td>
+                                                <td className="p-4 text-sm text-slate-600">
+                                                    <div className="font-semibold text-slate-800">{buyer.name || 'Sin información'}</div>
+                                                    <div className="text-xs">{buyer.document || 'Sin documento'}</div>
+                                                    <div className="text-xs">{buyer.email || buyer.phone || ''}</div>
                                                 </td>
                                                 <td className="p-4 text-sm text-gray-600">
                                                     <div className="font-medium">
@@ -2617,7 +2651,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                         )})}
                                         {receiptGroups.length === 0 && (
                                             <tr>
-                                                <td colSpan="8" className="p-8 text-center italic text-gray-400">
+                                                <td colSpan="9" className="p-8 text-center italic text-gray-400">
                                                     Aun no hay recibos registrados en contabilidad.
                                                 </td>
                                             </tr>
@@ -2729,8 +2763,9 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                         {(() => {
                             const isSaleGroup = Boolean(selectedReceiptGroup.sale?.id);
                             const supportDisplayName = getBestGroupDisplayName(selectedReceiptGroup.receipts) || '';
-                            const customerName = getBestGroupFieldValue(selectedReceiptGroup.receipts, 'customer_name');
-                            const customerDocument = getBestGroupFieldValue(selectedReceiptGroup.receipts, 'customer_document');
+                            const buyer = getGroupBuyerDetails(selectedReceiptGroup);
+                            const customerName = getBestGroupFieldValue(selectedReceiptGroup.receipts, 'customer_name') || buyer.name;
+                            const customerDocument = getBestGroupFieldValue(selectedReceiptGroup.receipts, 'customer_document') || buyer.document;
                             const groupTitle = isSaleGroup
                                 ? `#${selectedReceiptGroup.sale?.id} - ${selectedReceiptGroup.sale?.vehicle?.make} ${selectedReceiptGroup.sale?.vehicle?.model} · ${selectedReceiptGroup.sale?.vehicle?.plate || 'Sin placa'}`
                                 : `Soporte ${selectedReceiptGroup.receiptNumber || selectedReceiptGroup.latestReceipt?.receipt_number || ''}`;
@@ -2831,6 +2866,15 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                             </div>
                         </div>
                         <div className="max-h-[70vh] overflow-y-auto px-6 py-4">
+                            <div className="mb-4 rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+                                <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">Información del comprador</p>
+                                <div className="mt-2 grid grid-cols-1 gap-2 text-sm text-slate-700 md:grid-cols-2">
+                                    <p><strong>Nombre:</strong> {buyer.name || 'Sin información'}</p>
+                                    <p><strong>Documento:</strong> {buyer.document || 'Sin información'}</p>
+                                    <p><strong>Correo:</strong> {buyer.email || 'Sin información'}</p>
+                                    <p><strong>Teléfono:</strong> {buyer.phone || 'Sin información'}</p>
+                                </div>
+                            </div>
                             <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
                                 <div className="rounded-xl bg-emerald-50 p-4">
                                     <p className="text-xs font-semibold uppercase text-emerald-700">Ingresos</p>
