@@ -105,7 +105,6 @@ class RoleUpdate(BaseModel):
     permissions: Optional[List[str]] = None
     menu_order: Optional[List[str]] = None
     auto_assign_leads: Optional[bool] = None
-    lead_reassignment_enabled: Optional[bool] = None
     assignable_role_ids: Optional[List[int]] = None
     advisor_tracking_enabled: Optional[bool] = None
     tracked_advisor_ids: Optional[List[int]] = None
@@ -122,6 +121,7 @@ class UserUpdate(BaseModel):
     company_id: Optional[int] = None
     is_active: Optional[int] = None
     auto_assign_leads: Optional[bool] = None
+    lead_reassignment_enabled: Optional[bool] = None
     tracked_advisor_ids: Optional[List[int]] = None
     ecard_enabled: Optional[bool] = None
     ecard_slug: Optional[str] = None
