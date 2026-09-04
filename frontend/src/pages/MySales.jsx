@@ -53,14 +53,18 @@ const MySales = () => {
             const params = {
                 skip,
                 limit,
-                month: selectedMonth,
-                year: selectedYear,
                 status: 'approved' // Only show approved sales? Or all? Usually my sales implies confirmed sales. Let's show all or just approved. User said "ventas realizadas" implying completed. But let's verify logic. If pending, it's not a sale yet.
                 // However, user might want to see pending approvals. AutoSQP logic: "approved" is final. "pending" is waitinf for admin.
                 // Let's remove status filter to show everything (pending + approved) so they can track their commissions.
             };
 
-            if (search) params.q = search;
+            const normalizedSearch = search.trim();
+            if (normalizedSearch) {
+                params.q = normalizedSearch;
+            } else {
+                params.month = selectedMonth;
+                params.year = selectedYear;
+            }
 
             // Removing status filter to show Pending/Approved/Rejected.
             // But usually "My Sales" means successful ones. 
@@ -127,12 +131,12 @@ const MySales = () => {
                         />
                     </div>
                     <div className="h-6 w-px bg-gray-200"></div>
-                    <select value={selectedMonth} onChange={handleMonthChange} className="text-sm border-none focus:ring-0 text-slate-600 font-medium cursor-pointer bg-transparent">
+                    <select value={selectedMonth} onChange={handleMonthChange} disabled={Boolean(search.trim())} title={search.trim() ? 'El buscador consulta todo el historial' : 'Filtrar por mes'} className="text-sm border-none focus:ring-0 text-slate-600 font-medium cursor-pointer bg-transparent disabled:cursor-not-allowed disabled:opacity-40">
                         {[...Array(12)].map((_, i) => (
                             <option key={i + 1} value={i + 1}>{new Date(0, i).toLocaleString('es-ES', { month: 'long' })}</option>
                         ))}
                     </select>
-                    <select value={selectedYear} onChange={handleYearChange} className="text-sm border-none focus:ring-0 text-slate-600 font-medium cursor-pointer bg-transparent">
+                    <select value={selectedYear} onChange={handleYearChange} disabled={Boolean(search.trim())} title={search.trim() ? 'El buscador consulta todo el historial' : 'Filtrar por año'} className="text-sm border-none focus:ring-0 text-slate-600 font-medium cursor-pointer bg-transparent disabled:cursor-not-allowed disabled:opacity-40">
                         {[2024, 2025, 2026].map(y => (
                             <option key={y} value={y}>{y}</option>
                         ))}
