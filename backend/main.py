@@ -8146,22 +8146,15 @@ def read_advisor_stats(
     company_scope = role_name in {"admin", "super_admin"}
     ally_user_ids = set(get_company_ally_user_ids(db, current_user.company_id))
     tracked_advisor_ids = get_user_tracked_advisor_ids(current_user)
-    visible_user_ids = [current_user.id, *tracked_advisor_ids]
+    visible_user_ids = [current_user.id] if not company_scope else [current_user.id, *tracked_advisor_ids]
 
     visible_leads_query = db.query(models.Lead).filter(
         models.Lead.company_id == current_user.company_id
     )
     if not company_scope:
-        visibility_conditions = [
-            models.Lead.assigned_to_id == current_user.id,
-            models.Lead.supervisors.any(models.User.id == current_user.id)
-        ]
-        if tracked_advisor_ids:
-            visibility_conditions.extend([
-                models.Lead.assigned_to_id.in_(tracked_advisor_ids),
-                models.Lead.supervisors.any(models.User.id.in_(tracked_advisor_ids))
-            ])
-        visible_leads_query = visible_leads_query.filter(or_(*visibility_conditions))
+        visible_leads_query = visible_leads_query.filter(
+            models.Lead.assigned_to_id == current_user.id
+        )
 
     oldest_visible_lead = visible_leads_query.order_by(models.Lead.created_at.asc()).first()
     normalized_period, period_start, period_end, trend_labels, get_trend_bucket = get_dashboard_period_bounds(
@@ -8608,7 +8601,7 @@ def read_advisor_stats(
 
     credit_status_distribution = {}
     credit_total = 0
-    if "credits" in permissions:
+    if "credits" in permissions or not company_scope:
         credits_query = db.query(models.CreditApplication).filter(
             models.CreditApplication.company_id == current_user.company_id
         )
@@ -8668,11 +8661,11 @@ def read_advisor_stats(
     sales_total = 0
     sales_approved = 0
     sales_pending = 0
-    if "sales" in permissions or "my_sales" in permissions:
+    if "sales" in permissions or "my_sales" in permissions or not company_scope:
         sales_query = db.query(models.Sale).filter(
             models.Sale.company_id == current_user.company_id
         )
-        if "my_sales" in permissions and not company_scope:
+        if not company_scope:
             sales_query = sales_query.filter(
                 or_(
                     models.Sale.seller_id.in_(visible_user_ids),
@@ -8711,7 +8704,7 @@ def read_advisor_stats(
     appointments_today = 0
     appointments_upcoming = 0
     appointments_by_user_map: Dict[int, Dict[str, Any]] = {}
-    if "appointments_calendar" in permissions:
+    if "appointments_calendar" in permissions or not company_scope:
         appointments_query = db.query(models.LeadAppointment).options(
             joinedload(models.LeadAppointment.user),
             joinedload(models.LeadAppointment.lead)

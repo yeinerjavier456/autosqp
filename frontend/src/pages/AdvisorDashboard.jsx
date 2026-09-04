@@ -165,6 +165,7 @@ const AdvisorDashboard = () => {
     const [endDate, setEndDate] = useState(defaultRange.end);
 
     const roleName = getRoleName(user);
+    const isAdministrator = roleName === 'admin' || roleName === 'super_admin';
     const roleLabel = user?.role?.label || roleName || 'Usuario';
     const permissions = new Set(getRolePermissions(user?.role || { name: roleName }));
 
@@ -380,6 +381,90 @@ const AdvisorDashboard = () => {
             },
         ],
     };
+
+    if (!isAdministrator) {
+        return (
+            <div className="space-y-6">
+                <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-blue-950 to-cyan-900 px-6 py-7 text-white shadow-xl">
+                    <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                        <div>
+                            <h1 className="text-3xl font-bold">Mi Dashboard</h1>
+                            <p className="mt-2 max-w-2xl text-sm text-slate-200">
+                                Resumen personal de tus leads asignados, citas, solicitudes de crédito y ventas.
+                            </p>
+                        </div>
+                        <div className="w-full max-w-3xl">
+                            <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-cyan-100">Rango de fechas</label>
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                                <input type="date" value={startDate} disabled={rangePreset === 'all'} onChange={(event) => setStartDate(event.target.value)} className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white outline-none disabled:opacity-60" />
+                                <input type="date" value={endDate} disabled={rangePreset === 'all'} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white outline-none disabled:opacity-60" />
+                                <select
+                                    value={rangePreset}
+                                    onChange={(event) => {
+                                        const preset = event.target.value;
+                                        setRangePreset(preset);
+                                        if (preset === 'month') {
+                                            const range = getCurrentMonthRange();
+                                            setStartDate(range.start);
+                                            setEndDate(range.end);
+                                        } else if (preset === 'last7') {
+                                            const range = getLast7DaysRange();
+                                            setStartDate(range.start);
+                                            setEndDate(range.end);
+                                        }
+                                    }}
+                                    className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-cyan-50 outline-none"
+                                >
+                                    <option value="all" className="text-slate-900">Todo</option>
+                                    <option value="month" className="text-slate-900">Mes</option>
+                                    <option value="last7" className="text-slate-900">Últimos 7 días</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <DashboardMetric
+                        title="Leads asignados"
+                        value={stats.total_leads || 0}
+                        helper={`Leads asignados directamente a ti ${rangeLabel}.`}
+                        onClick={hasLeadsSection ? () => navigate(leadBoardPath) : undefined}
+                        className="border-blue-200 bg-blue-50 text-blue-900"
+                        helperClassName="text-blue-700"
+                    />
+                    <DashboardMetric
+                        title="Citas programadas"
+                        value={stats.appointments_total || 0}
+                        helper={`${stats.appointments_today || 0} para hoy y ${stats.appointments_upcoming || 0} próximas.`}
+                        onClick={hasAppointmentsSection ? () => navigate('/admin/appointments') : undefined}
+                        className="border-cyan-200 bg-cyan-50 text-cyan-900"
+                        helperClassName="text-cyan-700"
+                    />
+                    <DashboardMetric
+                        title="Solicitudes de crédito"
+                        value={stats.credit_total || 0}
+                        helper={`Solicitudes relacionadas con tus leads ${rangeLabel}.`}
+                        onClick={hasCreditsSection ? () => navigate('/admin/credits') : undefined}
+                        className="border-violet-200 bg-violet-50 text-violet-900"
+                        helperClassName="text-violet-700"
+                    />
+                    <DashboardMetric
+                        title="Ventas"
+                        value={stats.sales_total || 0}
+                        helper={`${stats.sales_approved || 0} aprobadas y ${stats.sales_pending || 0} pendientes.`}
+                        onClick={hasSalesSection ? () => navigate(permissions.has('my_sales') && !permissions.has('sales') ? '/admin/my-sales' : '/admin/sales') : undefined}
+                        className="border-emerald-200 bg-emerald-50 text-emerald-900"
+                        helperClassName="text-emerald-700"
+                    />
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
+                    Este tablero muestra únicamente información vinculada a tu usuario. Las métricas generales, comparaciones entre usuarios, fuentes y estados globales están disponibles solo para administradores.
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
