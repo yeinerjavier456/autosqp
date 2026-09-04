@@ -11221,6 +11221,13 @@ def read_sales(
             responsibles_updated = responsibles_updated or bool(sale.credit_manager_id)
     if responsibles_updated:
         db.commit()
+    for sale in sales:
+        purchase_percentage = float(getattr(getattr(sale, "purchase_manager", None), "commission_percentage", 0) or 0)
+        credit_percentage = float(getattr(getattr(sale, "credit_manager", None), "commission_percentage", 0) or 0)
+        sale.purchase_commission_percentage = purchase_percentage
+        sale.purchase_commission_amount = int(round((sale.sale_price or 0) * purchase_percentage / 100))
+        sale.credit_commission_percentage = credit_percentage
+        sale.credit_commission_amount = int(round((sale.sale_price or 0) * credit_percentage / 100))
     return {"items": sales, "total": total}
 
 @app.put("/sales/{sale_id}", response_model=schemas.Sale)

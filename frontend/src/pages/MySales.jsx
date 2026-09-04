@@ -183,9 +183,9 @@ const MySales = () => {
                                                     <div className="text-xs text-slate-500">Cel: {sale.client_phone || sale.lead?.phone || sale.tax_buyer_phone || 'Sin registrar'}</div>
                                                 </td>
                                                 <td className="px-6 py-4 text-sm text-gray-600">
-                                                    <div><span className="font-semibold text-slate-700">Venta:</span> {sale.seller?.full_name || sale.external_seller_name || 'Sin asignar'}</div>
-                                                    <div><span className="font-semibold text-slate-700">Compra:</span> {sale.purchase_manager?.full_name || 'Sin asignar'}</div>
-                                                    <div><span className="font-semibold text-slate-700">Crédito:</span> {sale.credit_manager?.full_name || 'No aplica / sin asignar'}</div>
+                                                    <div><span className="font-semibold text-slate-700">Venta:</span> {sale.seller?.full_name || sale.external_seller_name || 'Sin asignar'} <span className="font-semibold text-emerald-600">· {formatMoney(sale.commission_amount)}</span></div>
+                                                    <div><span className="font-semibold text-slate-700">Compra:</span> {sale.purchase_manager?.full_name || 'Sin asignar'} <span className="font-semibold text-emerald-600">· {formatMoney(sale.purchase_commission_amount)}</span></div>
+                                                    <div><span className="font-semibold text-slate-700">Crédito:</span> {sale.credit_manager?.full_name || 'No aplica / sin asignar'} <span className="font-semibold text-emerald-600">· {formatMoney(sale.credit_commission_amount)}</span></div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-800">
                                                     ${sale.sale_price.toLocaleString()}
@@ -277,9 +277,9 @@ const MySales = () => {
                                             <div><p className="text-xs font-semibold uppercase text-slate-400">Financiación</p><p className="font-medium">{showValue(selectedSale.tax_buyer_financing_entity)}</p></div>
                                         </div>
                                         <div className="mt-5 border-t border-slate-100 pt-4 text-sm">
-                                            <p><span className="font-semibold">Asesor vendedor:</span> {selectedSale.seller?.full_name || selectedSale.external_seller_name || 'Sin asignar'}</p>
-                                            <p><span className="font-semibold">Encargado de compra:</span> {selectedSale.purchase_manager?.full_name || 'Sin asignar'}</p>
-                                            <p><span className="font-semibold">Gestor de crédito:</span> {selectedSale.credit_manager?.full_name || 'No aplica / sin asignar'}</p>
+                                            <p><span className="font-semibold">Asesor vendedor:</span> {selectedSale.seller?.full_name || selectedSale.external_seller_name || 'Sin asignar'} <span className="font-semibold text-emerald-600">· {formatMoney(selectedSale.commission_amount)} ({selectedSale.commission_percentage || 0}%)</span></p>
+                                            <p><span className="font-semibold">Encargado de compra:</span> {selectedSale.purchase_manager?.full_name || 'Sin asignar'} <span className="font-semibold text-emerald-600">· {formatMoney(selectedSale.purchase_commission_amount)} ({selectedSale.purchase_commission_percentage || 0}%)</span></p>
+                                            <p><span className="font-semibold">Gestor de crédito:</span> {selectedSale.credit_manager?.full_name || 'No aplica / sin asignar'} <span className="font-semibold text-emerald-600">· {formatMoney(selectedSale.credit_commission_amount)} ({selectedSale.credit_commission_percentage || 0}%)</span></p>
                                         </div>
                                     </section>
 

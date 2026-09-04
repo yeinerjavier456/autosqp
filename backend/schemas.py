@@ -1026,6 +1026,10 @@ class Sale(SaleBase):
     credit_manager_id: Optional[int] = None
     client_document_number: Optional[str] = None
     client_phone: Optional[str] = None
+    purchase_commission_percentage: float = 0
+    purchase_commission_amount: int = 0
+    credit_commission_percentage: float = 0
+    credit_commission_amount: int = 0
     
     vehicle: Optional[Vehicle] = None
     lea: Optional[Lead] = None # Typo fixed
