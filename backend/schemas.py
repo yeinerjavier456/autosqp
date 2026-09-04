@@ -42,6 +42,7 @@ class UserBase(BaseModel):
     role_id: int
     company_id: Optional[int] = None
     auto_assign_leads: Optional[bool] = False
+    lead_reassignment_enabled: Optional[bool] = False
     tracked_advisor_ids: List[int] = []
     ecard_enabled: Optional[bool] = False
     ecard_slug: Optional[str] = None
@@ -104,6 +105,7 @@ class RoleUpdate(BaseModel):
     permissions: Optional[List[str]] = None
     menu_order: Optional[List[str]] = None
     auto_assign_leads: Optional[bool] = None
+    lead_reassignment_enabled: Optional[bool] = None
     assignable_role_ids: Optional[List[int]] = None
     advisor_tracking_enabled: Optional[bool] = None
     tracked_advisor_ids: Optional[List[int]] = None
@@ -805,6 +807,9 @@ class Lead(LeadBase):
     notes: List[LeadNote] = []
     files: List[LeadFile] = []
     purchase_options: List[PurchaseOption] = []
+    is_duplicate: bool = False
+    duplicate_count: int = 0
+    duplicate_match: Optional[str] = None
     
     model_config = ConfigDict(from_attributes=True)
 

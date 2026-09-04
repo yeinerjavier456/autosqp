@@ -1342,7 +1342,7 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
             id={`lead-card-${lead.id}`}
             draggable={canDrag}
             onDragStart={(e) => onDragStart(e, lead.id)}
-            className={`p-3 rounded-lg shadow-sm border-2 hover:shadow-md transition-all transform hover:-translate-y-0.5 group relative animate-fade-in ${canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed opacity-95'} ${agePalette.cardClassName} ${agePalette.borderClassName}`}
+            className={`p-3 rounded-lg shadow-sm border-2 hover:shadow-md transition-all transform hover:-translate-y-0.5 group relative animate-fade-in ${canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed opacity-95'} ${lead.is_duplicate ? 'ring-2 ring-amber-400 bg-amber-50' : agePalette.cardClassName} ${lead.is_duplicate ? 'border-amber-500' : agePalette.borderClassName}`}
             style={{
                 borderColor: isHighlighted ? '#2563eb' : undefined,
                 borderLeftColor: statusMeta.borderColor,
@@ -1355,6 +1355,14 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
                     {lead.source || 'WEB'}
                 </span>
                 <div className="flex flex-wrap items-center justify-end gap-2">
+                    {lead.is_duplicate && (
+                        <span
+                            className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-900"
+                            title={`Coincidencia por ${lead.duplicate_match || 'datos del cliente'}`}
+                        >
+                            ⚠️ Duplicado ({lead.duplicate_count})
+                        </span>
+                    )}
                     {isHighlighted && (
                         <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wide border border-blue-200">
                             Desde alerta
@@ -4589,6 +4597,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const [assignedFilter, setAssignedFilter] = useState('');
     const [userFilter, setUserFilter] = useState('');
     const [globalStatusFilter, setGlobalStatusFilter] = useState('');
+    const [duplicatesOnly, setDuplicatesOnly] = useState(false);
     const [showFiltersMenu, setShowFiltersMenu] = useState(false);
     const [showMyLeadsOnly, setShowMyLeadsOnly] = useState(false);
     const [visibleLeadsByStatus, setVisibleLeadsByStatus] = useState({});
@@ -4631,6 +4640,9 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
     // Modal State - New Lead
     const [showAddLeadModal, setShowAddLeadModal] = useState(false);
+    const [creatingLead, setCreatingLead] = useState(false);
+    const [duplicateCheck, setDuplicateCheck] = useState(null);
+    const [checkingDuplicate, setCheckingDuplicate] = useState(false);
     const [newLeadForm, setNewLeadForm] = useState({
         name: '',
         email: '',
@@ -4645,6 +4657,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const isAllyBoard = boardMode === 'ally';
     const currentUserId = parseUserId(user?.id);
     const currentRoleName = normalizeRoleKey(user?.role);
+    const canManageDuplicates = currentRoleName === 'admin' || currentRoleName === 'super_admin';
     const leadStatusOptions = React.useMemo(() => getEnabledLeadStatusOptions(user), [user]);
     const enabledModules = React.useMemo(() => new Set(getCompanyEnabledModules(user)), [user]);
     const hasCreditsModule = enabledModules.has('credits');
@@ -4659,6 +4672,42 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     });
     const supervisionUsers = advisors.filter((adv) => normalizeRoleKey(adv.role) !== 'user');
     const shownBoardCreditNotificationsRef = React.useRef('');
+
+    useEffect(() => {
+        if (!showAddLeadModal) {
+            setDuplicateCheck(null);
+            setCheckingDuplicate(false);
+            return undefined;
+        }
+        const name = newLeadForm.name.trim();
+        const phone = newLeadForm.phone.trim();
+        if (name.length < 3 && phone.replace(/\D/g, '').length < 7) {
+            setDuplicateCheck(null);
+            setCheckingDuplicate(false);
+            return undefined;
+        }
+        const controller = new AbortController();
+        const timer = setTimeout(async () => {
+            setCheckingDuplicate(true);
+            try {
+                const token = localStorage.getItem('token');
+                const response = await axios.get(`${API_BASE_URL}/leads/check-duplicate`, {
+                    params: { name: name || undefined, phone: phone || undefined },
+                    headers: { Authorization: `Bearer ${token}` },
+                    signal: controller.signal,
+                });
+                setDuplicateCheck(response.data?.exists ? response.data : null);
+            } catch (error) {
+                if (error.code !== 'ERR_CANCELED') console.error('Error checking duplicate lead', error);
+            } finally {
+                if (!controller.signal.aborted) setCheckingDuplicate(false);
+            }
+        }, 400);
+        return () => {
+            clearTimeout(timer);
+            controller.abort();
+        };
+    }, [showAddLeadModal, newLeadForm.name, newLeadForm.phone]);
 
     useEffect(() => {
         setLoading(true);
@@ -4698,7 +4747,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
     useEffect(() => {
         setVisibleLeadsByStatus({});
-    }, [boardMode, searchTerm, dateFilter, assignedFilter, userFilter, globalStatusFilter, showMyLeadsOnly]);
+    }, [boardMode, searchTerm, dateFilter, assignedFilter, userFilter, globalStatusFilter, showMyLeadsOnly, duplicatesOnly]);
 
     useEffect(() => {
         if (!fetchNotifications) return;
@@ -4750,7 +4799,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         }, 250);
 
         return () => clearTimeout(searchTimer);
-    }, [searchTerm, boardMode, dateFilter, assignedFilter, userFilter, globalStatusFilter, showMyLeadsOnly, visibleLeadsByStatus]);
+    }, [searchTerm, boardMode, dateFilter, assignedFilter, userFilter, globalStatusFilter, showMyLeadsOnly, duplicatesOnly, visibleLeadsByStatus]);
 
     useEffect(() => {
         const intervalId = setInterval(() => {
@@ -4758,7 +4807,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         }, 15000);
 
         return () => clearInterval(intervalId);
-    }, [boardMode, searchTerm, dateFilter, assignedFilter, userFilter, globalStatusFilter, showMyLeadsOnly, visibleLeadsByStatus]);
+    }, [boardMode, searchTerm, dateFilter, assignedFilter, userFilter, globalStatusFilter, showMyLeadsOnly, duplicatesOnly, visibleLeadsByStatus]);
 
     useEffect(() => {
         const leadIdFromQuery = parseInt(searchParams.get('leadId') || '', 10);
@@ -4792,6 +4841,12 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
     const handleCreateLead = async (e) => {
         e.preventDefault();
+        if (creatingLead) return;
+        if (checkingDuplicate || duplicateCheck?.exists) {
+            Swal.fire('Lead duplicado', duplicateCheck?.message || 'Espera a que termine la validación de duplicados.', 'warning');
+            return;
+        }
+        setCreatingLead(true);
         try {
             const token = localStorage.getItem('token');
         if (isAllyBoard && currentRoleName !== 'aliado' && !newLeadForm.assigned_to_id) {
@@ -4838,12 +4893,15 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             });
         } catch (error) {
             console.error("Error creating lead", error);
+            const isDuplicateLead = error.response?.status === 409;
             Swal.fire({
-                icon: 'error',
-                title: 'Error',
-                text: "Error creando el lead: " + (error.response?.data?.error || error.response?.data?.detail || error.message),
+                icon: isDuplicateLead ? 'warning' : 'error',
+                title: isDuplicateLead ? 'Lead duplicado' : 'Error',
+                text: error.response?.data?.error || error.response?.data?.detail || error.message,
                 confirmButtonColor: '#2563eb'
             });
+        } finally {
+            setCreatingLead(false);
         }
     };
 
@@ -4873,7 +4931,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     global_status: globalStatusFilter || undefined,
                     only_my_leads: showMyLeadsOnly || undefined,
                     load_all_matching: normalizedSearchTerm ? true : undefined,
-                    status_limits: normalizedSearchTerm ? undefined : JSON.stringify(statusLimitsPayload)
+                    duplicates_only: duplicatesOnly || undefined,
+                    status_limits: (normalizedSearchTerm || duplicatesOnly) ? undefined : JSON.stringify(statusLimitsPayload)
                 }
             });
             const columns = Array.isArray(response.data.columns) ? response.data.columns : [];
@@ -5740,10 +5799,10 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 <div className="relative">
                     <button
                         onClick={() => setShowFiltersMenu(!showFiltersMenu)}
-                        className={`flex items-center gap-2 px-3.5 py-2 border rounded-lg text-sm font-semibold transition-colors ${showFiltersMenu || globalStatusFilter || userFilter || assignedFilter || dateFilter ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+                        className={`flex items-center gap-2 px-3.5 py-2 border rounded-lg text-sm font-semibold transition-colors ${showFiltersMenu || globalStatusFilter || userFilter || assignedFilter || dateFilter || duplicatesOnly ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
-                        Filtros {(globalStatusFilter || userFilter || assignedFilter || dateFilter) && (<span className="w-2 h-2 rounded-full bg-blue-600"></span>)}
+                        Filtros {(globalStatusFilter || userFilter || assignedFilter || dateFilter || duplicatesOnly) && (<span className="w-2 h-2 rounded-full bg-blue-600"></span>)}
                     </button>
 
                     {/* Dropdown Menu */}
@@ -5751,18 +5810,31 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                         <div className="absolute right-0 top-12 mt-2 w-72 md:w-80 bg-white rounded-2xl shadow-xl border border-gray-100 z-40 p-5 origin-top-right animate-fade-in-down py-6 grid gap-4">
                             <div className="flex items-center justify-between border-b pb-2">
                                 <h3 className="font-bold text-gray-800">Filtros Avanzados</h3>
-                                {(globalStatusFilter || userFilter || assignedFilter || dateFilter) && (
+                                {(globalStatusFilter || userFilter || assignedFilter || dateFilter || duplicatesOnly) && (
                                     <button
                                         onClick={() => {
                                             setGlobalStatusFilter('');
                                             setUserFilter('');
                                             setAssignedFilter('');
                                             setDateFilter('');
+                                            setDuplicatesOnly(false);
                                         }}
                                         className="text-xs text-red-500 hover:text-red-700 font-semibold"
                                     >Limpiar todo</button>
                                 )}
                             </div>
+
+                            {canManageDuplicates && (
+                                <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                                    <input
+                                        type="checkbox"
+                                        checked={duplicatesOnly}
+                                        onChange={(event) => setDuplicatesOnly(event.target.checked)}
+                                        className="h-5 w-5 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                                    />
+                                    <span className="text-sm font-bold text-amber-900">⚠️ Solo leads duplicados</span>
+                                </label>
+                            )}
 
                             <div className="space-y-1">
                                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado en Tablero</label>
@@ -5849,6 +5921,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                                 </label>
                             </div>
                         </div>
+
                     )}
                 </div>
             </div>
@@ -6292,6 +6365,14 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                             </div>
                         </div>
 
+                        {(checkingDuplicate || duplicateCheck?.exists) && (
+                            <div className={`rounded-xl border px-4 py-3 text-sm font-semibold ${duplicateCheck?.exists ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-blue-200 bg-blue-50 text-blue-700'}`}>
+                                {duplicateCheck?.exists
+                                    ? `⚠️ ${duplicateCheck.message}`
+                                    : 'Verificando si el lead ya existe...'}
+                            </div>
+                        )}
+
                         {isAllyBoard && currentRoleName !== 'aliado' && (
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 mb-1">Asignar a aliado</label>
@@ -6348,9 +6429,10 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                                 </button>
                                 <button
                                     type="submit"
-                                    className={`flex-1 px-4 py-3 text-white rounded-xl transition font-bold shadow-lg ${isAllyBoard ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'}`}
+                                    disabled={creatingLead || checkingDuplicate || Boolean(duplicateCheck?.exists)}
+                                    className={`flex-1 px-4 py-3 text-white rounded-xl transition font-bold shadow-lg disabled:cursor-not-allowed disabled:opacity-60 ${isAllyBoard ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'}`}
                                 >
-                                    {isAllyBoard ? 'Crear y dejar en aliados' : 'Crear Lead'}
+                                    {creatingLead ? 'Guardando...' : (isAllyBoard ? 'Crear y dejar en aliados' : 'Crear Lead')}
                                 </button>
                             </div>
                         </form>

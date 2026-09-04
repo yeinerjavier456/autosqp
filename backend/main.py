@@ -2188,6 +2188,7 @@ def ensure_user_status_columns():
             user_columns = {
                 "is_active": "ALTER TABLE users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1",
                 "auto_assign_leads": "ALTER TABLE users ADD COLUMN auto_assign_leads BOOLEAN NOT NULL DEFAULT 0",
+                "lead_reassignment_enabled": "ALTER TABLE users ADD COLUMN lead_reassignment_enabled BOOLEAN NOT NULL DEFAULT 0",
                 "tracked_advisor_ids_json": "ALTER TABLE users ADD COLUMN tracked_advisor_ids_json TEXT NULL",
             }
             created_columns = set()
@@ -2211,6 +2212,13 @@ def ensure_user_status_columns():
                         COALESCE(r.base_role_name, r.name) = 'asesor'
                         OR COALESCE(r.auto_assign_leads, 0) = 1
                       )
+                """))
+            if "lead_reassignment_enabled" in created_columns:
+                conn.execute(text("""
+                    UPDATE users u
+                    LEFT JOIN roles r ON r.id = u.role_id
+                    SET u.lead_reassignment_enabled = 1
+                    WHERE COALESCE(r.base_role_name, r.name) IN ('admin', 'super_admin')
                 """))
     except Exception as exc:
         print(f"Warning: could not ensure user status columns: {exc}", flush=True)
@@ -3445,6 +3453,10 @@ def can_user_receive_auto_assigned_leads(user: Optional[models.User]) -> bool:
     return lead_assignment.can_user_receive_auto_assigned_leads(user)
 
 
+def can_user_receive_reassigned_leads(user: Optional[models.User]) -> bool:
+    return lead_assignment.can_user_receive_reassigned_leads(user)
+
+
 def is_valid_lead_assignee(user: Optional[models.User], company_id: Optional[int] = None) -> bool:
     if not user or not is_active_user(user):
         return False
@@ -3606,7 +3618,7 @@ def get_active_reassignment_candidates(
             continue
         if advisor_only and get_user_role_name(user) != "asesor":
             continue
-        if auto_assign_only and not can_user_receive_auto_assigned_leads(user):
+        if auto_assign_only and not can_user_receive_reassigned_leads(user):
             continue
         if not can_assign_lead_to_user(current_user, user):
             continue
@@ -3631,7 +3643,7 @@ def get_active_advisor_users_for_redistribution(
     for user in candidates:
         if exclude_user_id and user.id == exclude_user_id:
             continue
-        if not can_user_receive_auto_assigned_leads(user):
+        if not can_user_receive_reassigned_leads(user):
             continue
         valid_users.append(user)
 
@@ -4184,6 +4196,7 @@ def serialize_user(user: models.User, is_online: Optional[bool] = None) -> dict:
     if payload.get("company"):
         payload["company"]["enabled_modules"] = get_company_enabled_modules(company)
     payload["auto_assign_leads"] = bool(getattr(user, "auto_assign_leads", False) and is_advisor_role(getattr(user, "role", None)))
+    payload["lead_reassignment_enabled"] = bool(getattr(user, "lead_reassignment_enabled", False))
     payload["tracked_advisor_ids"] = get_user_tracked_advisor_ids(user)
     if is_online is not None:
         payload["is_online"] = is_online
@@ -4597,6 +4610,8 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
     
     hashed_password = auth_utils.get_password_hash(user.password)
     auto_assign_leads = bool(user.auto_assign_leads) if is_advisor_role(role_obj) else False
+    role_name = getattr(role_obj, "base_role_name", None) or getattr(role_obj, "name", "")
+    lead_reassignment_enabled = True if role_name in {"admin", "super_admin"} else bool(user.lead_reassignment_enabled)
     tracked_advisor_ids = sanitize_tracked_advisor_ids(
         db,
         user.tracked_advisor_ids if bool(getattr(role_obj, "advisor_tracking_enabled", False)) else [],
@@ -4610,6 +4625,7 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
         role_id=role_obj.id, 
         company_id=user.company_id,
         auto_assign_leads=auto_assign_leads,
+        lead_reassignment_enabled=lead_reassignment_enabled,
         tracked_advisor_ids_json=json.dumps(tracked_advisor_ids),
         ecard_enabled=bool(user.ecard_enabled),
         ecard_slug=ecard_slug,
@@ -4737,6 +4753,8 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
         db_user.auto_assign_leads = bool(user_update.auto_assign_leads) if is_advisor_role(resolved_role) else False
     elif not is_advisor_role(resolved_role):
         db_user.auto_assign_leads = False
+    if user_update.lead_reassignment_enabled is not None:
+        db_user.lead_reassignment_enabled = bool(user_update.lead_reassignment_enabled)
     if user_update.tracked_advisor_ids is not None:
         db_user.tracked_advisor_ids_json = json.dumps(
             sanitize_tracked_advisor_ids(
@@ -5039,6 +5057,7 @@ def delete_user(
                 ))
 
         db_user.auto_assign_leads = False
+        db_user.lead_reassignment_enabled = False
         db_user.is_active = False
         db.commit()
         
@@ -5088,7 +5107,7 @@ def redistribute_user_leads(
     if not recipient_users:
         raise HTTPException(
             status_code=400,
-            detail="No hay asesores o vendedores activos con asignación automática habilitada para redistribuir estos leads"
+            detail="No hay usuarios activos habilitados para recibir reasignaciones"
         )
 
     leads = db.query(models.Lead).options(
@@ -7408,11 +7427,15 @@ def read_leads_board(
     global_status: str = None,
     only_my_leads: bool = False,
     load_all_matching: bool = False,
+    duplicates_only: bool = False,
     status_limits: str = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     company = get_company_by_id(db, current_user.company_id)
+    if duplicates_only and not is_company_admin(current_user):
+        raise HTTPException(status_code=403, detail="Solo los administradores pueden filtrar leads duplicados")
+    duplicate_map = build_company_lead_duplicate_map(db, current_user.company_id)
     parsed_status_limits: Dict[str, int] = {}
     if status_limits:
         try:
@@ -7455,7 +7478,7 @@ def read_leads_board(
         )
 
         total = base_query.count()
-        status_limit = total if load_all_matching else parsed_status_limits.get(normalized_status, 10)
+        status_limit = total if (load_all_matching or duplicates_only) else parsed_status_limits.get(normalized_status, 10)
 
         items_query = apply_lead_access_filters(
             build_lead_summary_query(db),
@@ -7476,6 +7499,14 @@ def read_leads_board(
             models.Lead.id.desc()
         ).limit(status_limit).all()
         hydrate_lead_summary_fields(db, items)
+        for item in items:
+            duplicate_meta = duplicate_map.get(item.id)
+            item.is_duplicate = bool(duplicate_meta)
+            item.duplicate_count = int(duplicate_meta.get("count", 0)) if duplicate_meta else 0
+            item.duplicate_match = duplicate_meta.get("match") if duplicate_meta else None
+        if duplicates_only:
+            items = [item for item in items if item.is_duplicate]
+            total = len(items)
 
         columns.append(
             schemas.LeadBoardColumn(
@@ -7675,6 +7706,107 @@ def bulk_assign_leads(
     return {"message": f"Successfully assigned {result} leads to user {target_user.email}"}
 
 
+def normalize_lead_duplicate_name(value: Optional[str]) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or "").strip().lower())
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+    return " ".join(normalized.split())
+
+
+def normalize_lead_duplicate_phone(value: Optional[str]) -> str:
+    digits = re.sub(r"\D", "", str(value or ""))
+    return digits[-10:] if len(digits) >= 10 else digits
+
+
+def find_duplicate_company_lead(
+    db: Session,
+    company_id: int,
+    name: Optional[str],
+    phone: Optional[str],
+) -> Optional[models.Lead]:
+    normalized_name = normalize_lead_duplicate_name(name)
+    normalized_phone = normalize_lead_duplicate_phone(phone)
+    if not normalized_name and not normalized_phone:
+        return None
+
+    existing_leads = db.query(models.Lead).options(
+        joinedload(models.Lead.assigned_to)
+    ).filter(
+        models.Lead.company_id == company_id,
+        models.Lead.deleted_at.is_(None),
+    ).order_by(models.Lead.id.desc()).all()
+
+    if normalized_phone:
+        for existing_lead in existing_leads:
+            if normalize_lead_duplicate_phone(existing_lead.phone) == normalized_phone:
+                return existing_lead
+    if normalized_name:
+        for existing_lead in existing_leads:
+            if normalize_lead_duplicate_name(existing_lead.name) == normalized_name:
+                return existing_lead
+    return None
+
+
+def build_company_lead_duplicate_map(db: Session, company_id: Optional[int]) -> Dict[int, Dict[str, Any]]:
+    if not company_id:
+        return {}
+    company_leads = db.query(models.Lead.id, models.Lead.name, models.Lead.phone).filter(
+        models.Lead.company_id == company_id,
+        models.Lead.deleted_at.is_(None),
+    ).all()
+    phone_groups: Dict[str, List[int]] = {}
+    name_groups: Dict[str, List[int]] = {}
+    for lead_id, name, phone in company_leads:
+        normalized_phone = normalize_lead_duplicate_phone(phone)
+        normalized_name = normalize_lead_duplicate_name(name)
+        if normalized_phone:
+            phone_groups.setdefault(normalized_phone, []).append(lead_id)
+        if normalized_name:
+            name_groups.setdefault(normalized_name, []).append(lead_id)
+
+    duplicate_map: Dict[int, Dict[str, Any]] = {}
+    for match_type, groups in (("teléfono", phone_groups), ("nombre", name_groups)):
+        for lead_ids in groups.values():
+            if len(lead_ids) < 2:
+                continue
+            for lead_id in lead_ids:
+                current = duplicate_map.setdefault(lead_id, {"count": 0, "matches": []})
+                current["count"] = max(current["count"], len(lead_ids))
+                current["matches"].append(match_type)
+    for metadata in duplicate_map.values():
+        metadata["match"] = " y ".join(metadata.pop("matches"))
+    return duplicate_map
+
+
+@app.get("/leads/check-duplicate")
+def check_lead_duplicate(
+    name: Optional[str] = None,
+    phone: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    duplicate = find_duplicate_company_lead(db, current_user.company_id, name, phone)
+    if not duplicate:
+        return {"exists": False}
+    assigned_user = getattr(duplicate, "assigned_to", None)
+    assigned_name = (
+        getattr(assigned_user, "full_name", None)
+        or getattr(assigned_user, "email", None)
+        or "Sin asignar"
+    )
+    normalized_phone = normalize_lead_duplicate_phone(phone)
+    matched_by = "teléfono" if (
+        normalized_phone and normalize_lead_duplicate_phone(duplicate.phone) == normalized_phone
+    ) else "nombre"
+    return {
+        "exists": True,
+        "lead_id": duplicate.id,
+        "lead_name": duplicate.name,
+        "assigned_to": assigned_name,
+        "matched_by": matched_by,
+        "message": f"Este lead ya existe — asignado a {assigned_name}",
+    }
+
+
 @app.post("/leads", response_model=schemas.Lead)
 def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     import datetime
@@ -7686,6 +7818,22 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
             company_id = current_user.company_id
         else:
              raise HTTPException(status_code=400, detail="Company ID required for assignment")
+
+    duplicate_lead = find_duplicate_company_lead(db, company_id, lead.name, lead.phone)
+    if duplicate_lead:
+        assigned_user = getattr(duplicate_lead, "assigned_to", None)
+        assigned_name = (
+            getattr(assigned_user, "full_name", None)
+            or getattr(assigned_user, "email", None)
+            or "Sin asignar"
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Lead duplicado: ya existe {duplicate_lead.name or 'este contacto'} "
+                f"(ID #{duplicate_lead.id}) y está asignado a {assigned_name}."
+            ),
+        )
 
     # 2. Assignment Logic
     company = get_company_by_id(db, company_id)

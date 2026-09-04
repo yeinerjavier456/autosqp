@@ -49,6 +49,14 @@ def can_user_receive_auto_assigned_leads(user: Optional[models.User]) -> bool:
     return bool(getattr(user, "auto_assign_leads", False))
 
 
+def can_user_receive_reassigned_leads(user: Optional[models.User]) -> bool:
+    return bool(
+        user
+        and is_active_user(user)
+        and getattr(user, "lead_reassignment_enabled", False)
+    )
+
+
 def get_auto_assign_candidate_users(db: Session, company_id: Optional[int]) -> List[models.User]:
     if not company_id:
         return []

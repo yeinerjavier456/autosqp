@@ -17,6 +17,7 @@ const UsersList = ({ embedded = false, companyId = '' }) => {
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(false);
     const [redistributingUserId, setRedistributingUserId] = useState(null);
+    const [updatingReassignmentUserId, setUpdatingReassignmentUserId] = useState(null);
 
     const fetchUsers = async () => {
         setLoading(true);
@@ -104,7 +105,7 @@ const UsersList = ({ embedded = false, companyId = '' }) => {
     const handleRedistributeLeads = async (targetUser) => {
         const result = await Swal.fire({
             title: 'Redistribuir leads',
-            text: `Se redistribuirán aleatoriamente todos los leads asignados a ${targetUser.full_name || targetUser.email} entre asesores/vendedores con asignación automática habilitada.`,
+            text: `Se redistribuirán aleatoriamente todos los leads asignados a ${targetUser.full_name || targetUser.email} entre usuarios habilitados para recibir reasignaciones.`,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonText: 'Redistribuir',
@@ -133,6 +134,25 @@ const UsersList = ({ embedded = false, companyId = '' }) => {
             Swal.fire('Error', error.response?.data?.detail || 'No se pudieron redistribuir los leads', 'error');
         } finally {
             setRedistributingUserId(null);
+        }
+    };
+
+    const handleReassignmentToggle = async (targetUser, enabled) => {
+        setUpdatingReassignmentUserId(targetUser.id);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.put(
+                `${API_BASE_URL}/users/${targetUser.id}`,
+                { lead_reassignment_enabled: enabled },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            setUsers((current) => current.map((item) => (
+                item.id === targetUser.id ? { ...item, ...response.data } : item
+            )));
+        } catch (error) {
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo actualizar la reasignación de leads', 'error');
+        } finally {
+            setUpdatingReassignmentUserId(null);
         }
     };
 
@@ -181,6 +201,7 @@ const UsersList = ({ embedded = false, companyId = '' }) => {
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rol</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recibe reasignaciones</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registro</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Comisión %</th>
@@ -233,6 +254,18 @@ const UsersList = ({ embedded = false, companyId = '' }) => {
                                                                         'bg-green-100 text-green-800'}`}>
                                                     {roleLabel}
                                                 </span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-600">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={Boolean(user.lead_reassignment_enabled)}
+                                                        disabled={!canRedistributeLeads || updatingReassignmentUserId === user.id}
+                                                        onChange={(event) => handleReassignmentToggle(user, event.target.checked)}
+                                                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                                                    />
+                                                    {user.lead_reassignment_enabled ? 'Habilitado' : 'Inhabilitado'}
+                                                </label>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${isActive ? (user.is_online ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800') : 'bg-slate-200 text-slate-600'}`}>

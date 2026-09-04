@@ -49,6 +49,7 @@ const createInitialUserState = () => ({
     role_id: '',
     company_id: '',
     auto_assign_leads: false,
+    lead_reassignment_enabled: false,
     tracked_advisor_ids: [],
     commission_percentage: 0,
     base_salary: '',
@@ -273,6 +274,7 @@ const UserForm = () => {
                     ...userData,
                     role_id: loadedRoleId,
                     auto_assign_leads: Boolean(userData.auto_assign_leads),
+                    lead_reassignment_enabled: Boolean(userData.lead_reassignment_enabled),
                     tracked_advisor_ids: Array.isArray(userData.tracked_advisor_ids)
                         ? userData.tracked_advisor_ids.map((item) => Number(item)).filter((item) => Number.isInteger(item))
                         : [],
@@ -339,6 +341,7 @@ const UserForm = () => {
                 ...current,
                 role_id: nextValue,
                 auto_assign_leads: isAdvisorRole(nextRole) ? Boolean(current.auto_assign_leads) : false,
+                lead_reassignment_enabled: ['admin', 'super_admin'].includes(getRoleName(nextRole)),
                 tracked_advisor_ids: nextCanTrackAdvisors ? current.tracked_advisor_ids : [],
             }));
             return;
@@ -390,6 +393,7 @@ const UserForm = () => {
             }
 
             payload.auto_assign_leads = Boolean(payload.auto_assign_leads);
+            payload.lead_reassignment_enabled = Boolean(payload.lead_reassignment_enabled);
             payload.commission_percentage = payload.commission_percentage === '' || payload.commission_percentage == null
                 ? 0
                 : Number(payload.commission_percentage);
@@ -883,6 +887,23 @@ const UserForm = () => {
                             </label>
                         </section>
                     )}
+
+                    <section className={SECTION_CLASS}>
+                        <h2 className="text-lg font-extrabold text-slate-800">Reasignación de leads</h2>
+                        <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50/70 px-4 py-4">
+                            <input
+                                type="checkbox"
+                                name="lead_reassignment_enabled"
+                                checked={Boolean(user.lead_reassignment_enabled)}
+                                onChange={handleChange}
+                                className="mt-1 h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                            />
+                            <div>
+                                <span className="block text-sm font-semibold text-slate-700">Permitir recibir leads reasignados</span>
+                                <span className="mt-1 block text-xs text-slate-500">Este usuario podrá recibir leads provenientes de alertas o redistribuciones.</span>
+                            </div>
+                        </label>
+                    </section>
 
                     {canTrackAdvisors && (
                         <section className={SECTION_CLASS}>
