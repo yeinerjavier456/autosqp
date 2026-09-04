@@ -943,6 +943,32 @@ class SaleCommissionsUpdate(BaseModel):
     purchase_value: Optional[float] = None
     credit_mode: Optional[str] = None
     credit_value: Optional[float] = None
+    sale_price: Optional[int] = None
+    seller_id: Optional[int] = None
+    purchase_manager_id: Optional[int] = None
+    credit_manager_id: Optional[int] = None
+    client_name: Optional[str] = None
+    client_document: Optional[str] = None
+    client_phone: Optional[str] = None
+    client_email: Optional[str] = None
+    client_address: Optional[str] = None
+    client_payment_method: Optional[str] = None
+    client_financing_entity: Optional[str] = None
+    vehicle_make: Optional[str] = None
+    vehicle_model: Optional[str] = None
+    vehicle_year: Optional[int] = None
+    vehicle_plate: Optional[str] = None
+    vehicle_mileage: Optional[int] = None
+    vehicle_purchase_price: Optional[int] = None
+    vehicle_color: Optional[str] = None
+    vehicle_location: Optional[str] = None
+    vehicle_fuel_type: Optional[str] = None
+    vehicle_transmission: Optional[str] = None
+    vehicle_engine: Optional[str] = None
+    vehicle_internal_code: Optional[str] = None
+    vehicle_soat: Optional[str] = None
+    vehicle_tecno: Optional[str] = None
+    vehicle_description: Optional[str] = None
 
 class SaleTaxInfoUpdate(BaseModel):
     tax_transaction_type: Optional[str] = None

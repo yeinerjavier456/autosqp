@@ -46,7 +46,15 @@ const sortReceiptsByRecentFirst = (items = []) => {
     });
 };
 
-const SaleRequestModal = ({ sale, saving, requireCommissions, onClose, onSave }) => {
+const ReviewField = ({ label, value, onChange, type = 'text', className = '' }) => (
+    <label className={className}>
+        <span className="mb-1 block text-xs font-semibold uppercase text-slate-400">{label}</span>
+        <input type={type} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+    </label>
+);
+
+const SaleRequestModal = ({ sale, users = [], saving, requireCommissions, onClose, onSave }) => {
+    const availableUsers = users.filter((item) => Number(item.company_id || item.company?.id) === Number(sale.company_id));
     const initialValue = (mode, percentage, amount) => mode === 'percentage'
         ? String(percentage ?? '')
         : mode === 'amount' ? formatCurrencyInput(amount) : '';
@@ -57,15 +65,68 @@ const SaleRequestModal = ({ sale, saving, requireCommissions, onClose, onSave })
         purchase_value: initialValue(sale.purchase_commission_mode, sale.purchase_commission_percentage, sale.purchase_commission_amount),
         credit_mode: sale.credit_commission_mode || '',
         credit_value: initialValue(sale.credit_commission_mode, sale.credit_commission_percentage, sale.credit_commission_amount),
+        sale_price: formatCurrencyInput(sale.sale_price),
+        seller_id: sale.seller?.id ? String(sale.seller.id) : '',
+        purchase_manager_id: sale.purchase_manager?.id ? String(sale.purchase_manager.id) : '',
+        credit_manager_id: sale.credit_manager?.id ? String(sale.credit_manager.id) : '',
+        client_name: sale.lead?.name || sale.tax_buyer_name || '',
+        client_document: sale.client_document_number || sale.tax_buyer_document || '',
+        client_phone: sale.client_phone || sale.lead?.phone || sale.tax_buyer_phone || '',
+        client_email: sale.lead?.email || sale.tax_buyer_email || '',
+        client_address: sale.tax_buyer_address || '',
+        client_payment_method: sale.tax_buyer_payment_method || '',
+        client_financing_entity: sale.tax_buyer_financing_entity || '',
+        vehicle_make: sale.vehicle?.make || '',
+        vehicle_model: sale.vehicle?.model || '',
+        vehicle_year: sale.vehicle?.year || '',
+        vehicle_plate: sale.vehicle?.plate || '',
+        vehicle_mileage: sale.vehicle?.mileage || '',
+        vehicle_purchase_price: formatCurrencyInput(sale.vehicle?.purchase_price),
+        vehicle_color: sale.vehicle?.color || '',
+        vehicle_location: sale.vehicle?.location || '',
+        vehicle_fuel_type: sale.vehicle?.fuel_type || '',
+        vehicle_transmission: sale.vehicle?.transmission || '',
+        vehicle_engine: sale.vehicle?.engine || '',
+        vehicle_internal_code: sale.vehicle?.internal_code || '',
+        vehicle_soat: sale.vehicle?.soat ? String(sale.vehicle.soat).slice(0, 10) : '',
+        vehicle_tecno: sale.vehicle?.tecno ? String(sale.vehicle.tecno).slice(0, 10) : '',
+        vehicle_description: sale.vehicle?.description || '',
     });
 
     const involved = [
-        { key: 'seller', label: 'Asesor vendedor', name: sale.seller?.full_name || sale.external_seller_name, present: Boolean(sale.seller?.id || sale.external_seller_name) },
-        { key: 'purchase', label: 'Encargado de compra', name: sale.purchase_manager?.full_name, present: Boolean(sale.purchase_manager?.id) },
-        { key: 'credit', label: 'Gestor de crédito', name: sale.credit_manager?.full_name, present: Boolean(sale.credit_manager?.id) },
+        { key: 'seller', userField: 'seller_id', label: 'Asesor vendedor', name: availableUsers.find((item) => String(item.id) === form.seller_id)?.full_name || sale.external_seller_name, present: Boolean(form.seller_id || sale.external_seller_name) },
+        { key: 'purchase', userField: 'purchase_manager_id', label: 'Encargado de compra', name: availableUsers.find((item) => String(item.id) === form.purchase_manager_id)?.full_name, present: Boolean(form.purchase_manager_id) },
+        { key: 'credit', userField: 'credit_manager_id', label: 'Gestor de crédito', name: availableUsers.find((item) => String(item.id) === form.credit_manager_id)?.full_name, present: Boolean(form.credit_manager_id) },
     ];
 
-    const buildPayload = () => Object.fromEntries(involved.flatMap(({ key, present }) => {
+    const buildPayload = () => ({
+        sale_price: parseCurrencyInput(form.sale_price),
+        seller_id: form.seller_id ? Number(form.seller_id) : null,
+        purchase_manager_id: form.purchase_manager_id ? Number(form.purchase_manager_id) : null,
+        credit_manager_id: form.credit_manager_id ? Number(form.credit_manager_id) : null,
+        client_name: form.client_name,
+        client_document: form.client_document,
+        client_phone: form.client_phone,
+        client_email: form.client_email,
+        client_address: form.client_address,
+        client_payment_method: form.client_payment_method,
+        client_financing_entity: form.client_financing_entity,
+        vehicle_make: form.vehicle_make,
+        vehicle_model: form.vehicle_model,
+        vehicle_year: form.vehicle_year ? Number(form.vehicle_year) : null,
+        vehicle_plate: form.vehicle_plate,
+        vehicle_mileage: form.vehicle_mileage ? Number(form.vehicle_mileage) : null,
+        vehicle_purchase_price: parseCurrencyInput(form.vehicle_purchase_price),
+        vehicle_color: form.vehicle_color,
+        vehicle_location: form.vehicle_location,
+        vehicle_fuel_type: form.vehicle_fuel_type,
+        vehicle_transmission: form.vehicle_transmission,
+        vehicle_engine: form.vehicle_engine,
+        vehicle_internal_code: form.vehicle_internal_code,
+        vehicle_soat: form.vehicle_soat,
+        vehicle_tecno: form.vehicle_tecno,
+        vehicle_description: form.vehicle_description,
+        ...Object.fromEntries(involved.flatMap(({ key, present }) => {
         if (!present) return [];
         const mode = form[`${key}_mode`];
         const rawValue = form[`${key}_value`];
@@ -73,9 +134,14 @@ const SaleRequestModal = ({ sale, saving, requireCommissions, onClose, onSave })
             [`${key}_mode`, mode],
             [`${key}_value`, mode === 'amount' ? parseCurrencyInput(rawValue) : Number(rawValue)],
         ];
-    }));
+        })),
+    });
 
     const submit = (approve) => {
+        if (!form.client_name.trim() || !form.vehicle_make.trim() || !form.vehicle_plate.trim() || !form.vehicle_year || !parseCurrencyInput(form.sale_price)) {
+            Swal.fire('Información incompleta', 'Completa nombre del cliente, marca, placa, año y precio de venta.', 'warning');
+            return;
+        }
         const missing = involved.find(({ key, present }) => present && (
             !form[`${key}_mode`] || form[`${key}_value`] === ''
         ));
@@ -86,8 +152,6 @@ const SaleRequestModal = ({ sale, saving, requireCommissions, onClose, onSave })
         onSave(buildPayload(), approve);
     };
 
-    const vehicle = sale.vehicle || {};
-    const client = sale.lead || {};
     return (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
             <div className="max-h-[94vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-slate-50 shadow-2xl">
@@ -102,35 +166,36 @@ const SaleRequestModal = ({ sale, saving, requireCommissions, onClose, onSave })
                 <div className="grid gap-5 p-6 lg:grid-cols-2">
                     <section className="rounded-2xl border border-slate-200 bg-white p-5">
                         <h3 className="mb-4 text-lg font-bold text-slate-900">Cliente</h3>
-                        <div className="grid gap-3 sm:grid-cols-2 text-sm">
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Nombre</span>{client.name || sale.tax_buyer_name || 'Sin registrar'}</div>
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Documento</span>{sale.client_document_number || sale.tax_buyer_document || 'Sin registrar'}</div>
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Celular</span>{sale.client_phone || client.phone || sale.tax_buyer_phone || 'Sin registrar'}</div>
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Correo</span>{client.email || sale.tax_buyer_email || 'Sin registrar'}</div>
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Forma de pago</span>{sale.tax_buyer_payment_method || 'Sin registrar'}</div>
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Entidad financiera</span>{sale.tax_buyer_financing_entity || 'No aplica'}</div>
-                            <div className="sm:col-span-2"><span className="block text-xs font-semibold uppercase text-slate-400">Dirección</span>{sale.tax_buyer_address || 'Sin registrar'}</div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <ReviewField label="Nombre" value={form.client_name} onChange={(value) => setForm({ ...form, client_name: value })} />
+                            <ReviewField label="Documento" value={form.client_document} onChange={(value) => setForm({ ...form, client_document: value })} />
+                            <ReviewField label="Celular" value={form.client_phone} onChange={(value) => setForm({ ...form, client_phone: value })} />
+                            <ReviewField label="Correo" type="email" value={form.client_email} onChange={(value) => setForm({ ...form, client_email: value })} />
+                            <ReviewField label="Forma de pago" value={form.client_payment_method} onChange={(value) => setForm({ ...form, client_payment_method: value })} />
+                            <ReviewField label="Entidad financiera" value={form.client_financing_entity} onChange={(value) => setForm({ ...form, client_financing_entity: value })} />
+                            <ReviewField label="Dirección" className="sm:col-span-2" value={form.client_address} onChange={(value) => setForm({ ...form, client_address: value })} />
                         </div>
                     </section>
 
                     <section className="rounded-2xl border border-slate-200 bg-white p-5">
                         <h3 className="mb-4 text-lg font-bold text-slate-900">Vehículo y venta</h3>
-                        <div className="grid gap-3 sm:grid-cols-2 text-sm">
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Vehículo</span>{vehicle.make || ''} {vehicle.model || ''}</div>
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Placa</span>{vehicle.plate || 'Sin registrar'}</div>
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Año</span>{vehicle.year || 'Sin registrar'}</div>
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Kilometraje</span>{vehicle.mileage ? `${Number(vehicle.mileage).toLocaleString('es-CO')} km` : 'Sin registrar'}</div>
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Precio de compra</span>${Number(vehicle.purchase_price || 0).toLocaleString('es-CO')}</div>
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Precio de venta</span><strong>${Number(sale.sale_price || 0).toLocaleString('es-CO')}</strong></div>
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Color</span>{vehicle.color || 'Sin registrar'}</div>
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Ubicación</span>{vehicle.location || 'Sin registrar'}</div>
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Combustible</span>{vehicle.fuel_type || 'Sin registrar'}</div>
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Transmisión</span>{vehicle.transmission || 'Sin registrar'}</div>
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Motor</span>{vehicle.engine || 'Sin registrar'}</div>
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Código interno</span>{vehicle.internal_code || 'Sin registrar'}</div>
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">SOAT</span>{vehicle.soat ? new Date(vehicle.soat).toLocaleDateString('es-CO') : 'Sin registrar'}</div>
-                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Técnico-mecánica</span>{vehicle.tecno ? new Date(vehicle.tecno).toLocaleDateString('es-CO') : 'Sin registrar'}</div>
-                            {vehicle.description && <div className="sm:col-span-2"><span className="block text-xs font-semibold uppercase text-slate-400">Descripción</span><p className="whitespace-pre-line">{vehicle.description}</p></div>}
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <ReviewField label="Marca" value={form.vehicle_make} onChange={(value) => setForm({ ...form, vehicle_make: value })} />
+                            <ReviewField label="Modelo" value={form.vehicle_model} onChange={(value) => setForm({ ...form, vehicle_model: value })} />
+                            <ReviewField label="Placa" value={form.vehicle_plate} onChange={(value) => setForm({ ...form, vehicle_plate: value.toUpperCase() })} />
+                            <ReviewField label="Año" type="number" value={form.vehicle_year} onChange={(value) => setForm({ ...form, vehicle_year: value })} />
+                            <ReviewField label="Kilometraje" type="number" value={form.vehicle_mileage} onChange={(value) => setForm({ ...form, vehicle_mileage: value })} />
+                            <ReviewField label="Precio de compra" value={form.vehicle_purchase_price} onChange={(value) => setForm({ ...form, vehicle_purchase_price: formatCurrencyInput(value) })} />
+                            <ReviewField label="Precio de venta" value={form.sale_price} onChange={(value) => setForm({ ...form, sale_price: formatCurrencyInput(value) })} />
+                            <ReviewField label="Color" value={form.vehicle_color} onChange={(value) => setForm({ ...form, vehicle_color: value })} />
+                            <ReviewField label="Ubicación" value={form.vehicle_location} onChange={(value) => setForm({ ...form, vehicle_location: value })} />
+                            <ReviewField label="Combustible" value={form.vehicle_fuel_type} onChange={(value) => setForm({ ...form, vehicle_fuel_type: value })} />
+                            <ReviewField label="Transmisión" value={form.vehicle_transmission} onChange={(value) => setForm({ ...form, vehicle_transmission: value })} />
+                            <ReviewField label="Motor" value={form.vehicle_engine} onChange={(value) => setForm({ ...form, vehicle_engine: value })} />
+                            <ReviewField label="Código interno" value={form.vehicle_internal_code} onChange={(value) => setForm({ ...form, vehicle_internal_code: value })} />
+                            <ReviewField label="SOAT" type="date" value={form.vehicle_soat} onChange={(value) => setForm({ ...form, vehicle_soat: value })} />
+                            <ReviewField label="Técnico-mecánica" type="date" value={form.vehicle_tecno} onChange={(value) => setForm({ ...form, vehicle_tecno: value })} />
+                            <label className="sm:col-span-2"><span className="mb-1 block text-xs font-semibold uppercase text-slate-400">Descripción</span><textarea rows={3} value={form.vehicle_description} onChange={(event) => setForm({ ...form, vehicle_description: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" /></label>
                         </div>
                     </section>
 
@@ -139,9 +204,16 @@ const SaleRequestModal = ({ sale, saving, requireCommissions, onClose, onSave })
                         <p className="mb-4 text-sm text-slate-500">Selecciona si cada comisión se paga como valor fijo o como porcentaje del precio de venta.</p>
                         {requireCommissions && <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Debes completar las comisiones pendientes para poder aprobar esta venta.</div>}
                         <div className="space-y-3">
-                            {involved.map(({ key, label, name, present }) => (
+                            {involved.map(({ key, userField, label, present }) => (
                                 <div key={key} className="grid items-end gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-[minmax(220px,1fr)_180px_minmax(180px,1fr)_180px]">
-                                    <div><span className="block text-xs font-semibold uppercase text-slate-400">{label}</span><strong>{name || 'No hubo responsable asignado'}</strong></div>
+                                    <div>
+                                        <label className="mb-1 block text-xs font-semibold uppercase text-slate-400">{label}</label>
+                                        <select value={form[userField]} onChange={(event) => setForm({ ...form, [userField]: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                                            <option value="">Sin responsable</option>
+                                            {availableUsers.map((item) => <option key={item.id} value={item.id}>{item.full_name || item.email}</option>)}
+                                        </select>
+                                        {!form[userField] && sale.external_seller_name && key === 'seller' && <p className="mt-1 text-xs text-slate-500">Externo actual: {sale.external_seller_name}</p>}
+                                    </div>
                                     {present ? <>
                                         <div>
                                             <label className="mb-1 block text-xs font-semibold text-slate-600">Tipo de comisión</label>
@@ -156,7 +228,7 @@ const SaleRequestModal = ({ sale, saving, requireCommissions, onClose, onSave })
                                             <input type="text" inputMode="decimal" value={form[`${key}_value`]} onChange={(e) => setForm({ ...form, [`${key}_value`]: form[`${key}_mode`] === 'amount' ? formatCurrencyInput(e.target.value) : e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.') })} disabled={!form[`${key}_mode`]} className="w-full rounded-lg border border-slate-300 px-3 py-2 disabled:bg-slate-100" />
                                         </div>
                                         <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                                            Comisión: <strong>${Number(form[`${key}_mode`] === 'percentage' ? (sale.sale_price || 0) * Number(form[`${key}_value`] || 0) / 100 : parseCurrencyInput(form[`${key}_value`])).toLocaleString('es-CO', { maximumFractionDigits: 0 })}</strong>
+                                            Comisión: <strong>${Number(form[`${key}_mode`] === 'percentage' ? parseCurrencyInput(form.sale_price) * Number(form[`${key}_value`] || 0) / 100 : parseCurrencyInput(form[`${key}_value`])).toLocaleString('es-CO', { maximumFractionDigits: 0 })}</strong>
                                         </div>
                                     </> : <div className="text-sm text-slate-400 md:col-span-3">No se exige comisión para este rol.</div>}
                                 </div>
@@ -209,6 +281,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
     });
     const [sales, setSales] = useState([]);
     const [approvedSales, setApprovedSales] = useState([]);
+    const [companyUsers, setCompanyUsers] = useState([]);
     const [receipts, setReceipts] = useState([]);
     const [taxRows, setTaxRows] = useState([]);
     const [loading, setLoading] = useState(!receiptSearchOnly);
@@ -384,7 +457,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
 
             const activeYear = startDate ? Number(startDate.slice(0, 4)) : new Date().getFullYear();
             const generalSearch = receiptSearch || undefined;
-            const [statsRes, salesRes, approvedSalesRes, receiptsRes, taxRes] = await Promise.all([
+            const [statsRes, salesRes, approvedSalesRes, receiptsRes, taxRes, usersRes] = await Promise.all([
                 axios.get('/api/finance/stats', {
                     headers,
                     params: { ...rangeParams, q: generalSearch }
@@ -419,6 +492,10 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                         q: generalSearch,
                         limit: 500
                     }
+                }),
+                axios.get('/api/users/', {
+                    headers,
+                    params: { limit: 500 }
                 })
             ]);
 
@@ -427,6 +504,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             setApprovedSales(Array.isArray(approvedSalesRes.data?.items) ? approvedSalesRes.data.items : []);
             setReceipts(Array.isArray(receiptsRes.data?.items) ? receiptsRes.data.items : []);
             setTaxRows(Array.isArray(taxRes.data?.items) ? taxRes.data.items : []);
+            setCompanyUsers(Array.isArray(usersRes.data?.items) ? usersRes.data.items : []);
         } catch (error) {
             console.error('Error fetching sales data', error);
         } finally {
@@ -3253,6 +3331,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             <SaleRequestModal
                 key={`${selectedSaleRequest.id}-${selectedSaleRequest.commissions_complete ? 'complete' : 'pending'}`}
                 sale={selectedSaleRequest}
+                users={companyUsers}
                 saving={savingSaleCommissions}
                 requireCommissions={commissionReviewRequired}
                 onClose={() => {

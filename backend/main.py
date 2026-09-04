@@ -11298,6 +11298,118 @@ def update_sale_commissions(
     if sale.status != models.SaleStatus.PENDING.value:
         raise HTTPException(status_code=400, detail="Solo se pueden editar comisiones de ventas pendientes")
 
+    payload_fields = payload.model_fields_set
+    if "sale_price" in payload_fields:
+        if not payload.sale_price or payload.sale_price <= 0:
+            raise HTTPException(status_code=400, detail="El precio de venta debe ser mayor que cero")
+        sale.sale_price = int(payload.sale_price)
+
+    responsible_fields = {
+        "seller_id": "seller_id",
+        "purchase_manager_id": "purchase_manager_id",
+        "credit_manager_id": "credit_manager_id",
+    }
+    for payload_field, sale_field in responsible_fields.items():
+        if payload_field not in payload_fields:
+            continue
+        user_id = getattr(payload, payload_field)
+        target_user = None
+        if user_id:
+            target_user = db.query(models.User).filter(
+                models.User.id == user_id,
+                models.User.company_id == sale.company_id,
+                or_(models.User.is_active == True, models.User.is_active.is_(None)),
+            ).first()
+            if not target_user:
+                raise HTTPException(status_code=400, detail="El responsable seleccionado no pertenece a la empresa")
+        setattr(sale, sale_field, target_user.id if target_user else None)
+        if payload_field == "seller_id" and target_user:
+            sale.seller_type = "internal"
+            sale.external_seller_name = None
+
+    lead = sale.lead
+    client_field_map = {
+        "client_name": "name",
+        "client_phone": "phone",
+        "client_email": "email",
+    }
+    if any(field in payload_fields for field in client_field_map) and not lead:
+        lead = models.Lead(
+            company_id=sale.company_id,
+            name=(payload.client_name or "Cliente de venta").strip(),
+            phone=(payload.client_phone or "").strip() or None,
+            email=(payload.client_email or "").strip() or None,
+            source="manual",
+            status="sold",
+        )
+        db.add(lead)
+        db.flush()
+        sale.lead_id = lead.id
+    if lead:
+        for payload_field, lead_field in client_field_map.items():
+            if payload_field in payload_fields:
+                value = (getattr(payload, payload_field) or "").strip() or None
+                if payload_field == "client_name" and not value:
+                    raise HTTPException(status_code=400, detail="El nombre del cliente es obligatorio")
+                setattr(lead, lead_field, value)
+
+    client_tax_fields = {
+        "client_document": "tax_buyer_document",
+        "client_address": "tax_buyer_address",
+        "client_payment_method": "tax_buyer_payment_method",
+        "client_financing_entity": "tax_buyer_financing_entity",
+    }
+    for payload_field, sale_field in client_tax_fields.items():
+        if payload_field in payload_fields:
+            setattr(sale, sale_field, (getattr(payload, payload_field) or "").strip() or None)
+    if "client_name" in payload_fields:
+        sale.tax_buyer_name = (payload.client_name or "").strip() or None
+    if "client_phone" in payload_fields:
+        sale.tax_buyer_phone = (payload.client_phone or "").strip() or None
+    if "client_email" in payload_fields:
+        sale.tax_buyer_email = (payload.client_email or "").strip() or None
+    if "client_document" in payload_fields and lead:
+        submission = db.query(models.PublicCreditSubmission).filter(
+            models.PublicCreditSubmission.lead_id == lead.id
+        ).order_by(models.PublicCreditSubmission.id.desc()).first()
+        if submission:
+            submission.document_number = (payload.client_document or "").strip() or None
+
+    vehicle = sale.vehicle
+    if not vehicle:
+        raise HTTPException(status_code=400, detail="La venta no tiene un vehículo relacionado")
+    if "vehicle_make" in payload_fields and not (payload.vehicle_make or "").strip():
+        raise HTTPException(status_code=400, detail="La marca del vehículo es obligatoria")
+    if "vehicle_plate" in payload_fields and not (payload.vehicle_plate or "").strip():
+        raise HTTPException(status_code=400, detail="La placa del vehículo es obligatoria")
+    if "vehicle_year" in payload_fields and (not payload.vehicle_year or payload.vehicle_year < 1900):
+        raise HTTPException(status_code=400, detail="Debes indicar un año válido para el vehículo")
+    vehicle_field_map = {
+        "vehicle_make": "make", "vehicle_model": "model", "vehicle_year": "year",
+        "vehicle_plate": "plate", "vehicle_mileage": "mileage",
+        "vehicle_purchase_price": "purchase_price", "vehicle_color": "color",
+        "vehicle_location": "location", "vehicle_fuel_type": "fuel_type",
+        "vehicle_transmission": "transmission", "vehicle_engine": "engine",
+        "vehicle_internal_code": "internal_code", "vehicle_description": "description",
+    }
+    for payload_field, vehicle_field in vehicle_field_map.items():
+        if payload_field in payload_fields:
+            setattr(vehicle, vehicle_field, getattr(payload, payload_field))
+    vehicle.price = int(sale.sale_price or vehicle.price or 0)
+    if "vehicle_make" in payload_fields or "vehicle_model" in payload_fields:
+        upsert_brand_model(db, vehicle.make, vehicle.model)
+    for payload_field, vehicle_field in {"vehicle_soat": "soat", "vehicle_tecno": "tecno"}.items():
+        if payload_field in payload_fields:
+            raw_date = (getattr(payload, payload_field) or "").strip()
+            try:
+                parsed_date = datetime.datetime.combine(datetime.date.fromisoformat(raw_date), datetime.time.min) if raw_date else None
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Las fechas del vehículo deben usar formato YYYY-MM-DD")
+            setattr(vehicle, vehicle_field, parsed_date)
+
+    db.flush()
+    db.refresh(sale)
+
     role_fields = [
         (bool(sale.seller_id or (sale.external_seller_name or "").strip()), "seller", "commission_percentage", "commission_amount"),
         (bool(sale.purchase_manager_id), "purchase", "purchase_commission_percentage", "purchase_commission_amount"),
