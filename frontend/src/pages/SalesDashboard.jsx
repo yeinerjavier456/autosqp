@@ -170,7 +170,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
 
     useEffect(() => {
         fetchData({ silent: sales.length > 0 || receipts.length > 0 });
-    }, [filterStatus, salesSearch, receiptSearch, receiptCategory, receiptMovementType, startDate, endDate]);
+    }, [filterStatus, salesSearch, receiptSearch, receiptCategory, receiptMovementType, periodPreset, startDate, endDate]);
 
     useEffect(() => {
         const timeoutId = window.setTimeout(() => {
@@ -2054,7 +2054,11 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                             type="date"
                             value={startDate}
                             disabled={periodPreset === 'all'}
-                            onChange={(e) => setStartDate(e.target.value)}
+                            max={endDate || undefined}
+                            onChange={(e) => {
+                                setPeriodPreset('custom');
+                                setStartDate(e.target.value);
+                            }}
                             className="w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                         />
                     </div>
@@ -2065,11 +2069,22 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                             value={endDate}
                             disabled={periodPreset === 'all'}
                             min={startDate || undefined}
-                            onChange={(e) => setEndDate(e.target.value)}
+                            onChange={(e) => {
+                                setPeriodPreset('custom');
+                                setEndDate(e.target.value);
+                            }}
                             className="w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none transition focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                         />
                     </div>
-                    <div className="flex items-end">
+                    <div className="flex items-end gap-2">
+                        <button
+                            type="button"
+                            onClick={() => fetchData()}
+                            disabled={periodPreset !== 'all' && (!startDate || !endDate)}
+                            className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 md:w-auto"
+                        >
+                            Aplicar
+                        </button>
                         <button
                             type="button"
                             onClick={() => {
