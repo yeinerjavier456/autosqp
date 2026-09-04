@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Query, Query, Body,
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session, joinedload, selectinload, noload
-from sqlalchemy import or_, and_, func, text, false
+from sqlalchemy import or_, and_, func, text, false, select
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, get_db
 import models, schemas, auth_utils
@@ -11155,6 +11155,10 @@ def apply_sale_general_search(query, q: Optional[str]):
     if not q:
         return query
     search = f"%{q.strip()}%"
+    public_credit_leads_by_document = select(models.PublicCreditSubmission.lead_id).where(
+        models.PublicCreditSubmission.lead_id.isnot(None),
+        models.PublicCreditSubmission.document_number.ilike(search),
+    )
     return query.join(models.Vehicle).outerjoin(
         models.Lead, models.Lead.id == models.Sale.lead_id
     ).filter(or_(
@@ -11164,6 +11168,7 @@ def apply_sale_general_search(query, q: Optional[str]):
         models.Lead.name.ilike(search),
         models.Lead.email.ilike(search),
         models.Lead.phone.ilike(search),
+        models.Sale.lead_id.in_(public_credit_leads_by_document),
         models.Sale.seller.has(or_(
             models.User.full_name.ilike(search),
             models.User.email.ilike(search),
