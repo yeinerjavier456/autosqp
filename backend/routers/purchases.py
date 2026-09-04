@@ -939,6 +939,7 @@ def update_purchase(
                         new_sale = models.Sale(
                             vehicle_id=new_vehicle.id,
                             seller_id=seller_user.id if seller_user else None,
+                            purchase_manager_id=purchase.assigned_to_id or current_user.id,
                             seller_type="internal",
                             company_id=purchase.company_id,
                             lead_id=lead.id,

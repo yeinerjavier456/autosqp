@@ -134,6 +134,7 @@ const MySales = () => {
                                         <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Fecha</th>
                                         <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Vehículo</th>
                                         <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Cliente</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Responsables</th>
                                         <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Precio Venta</th>
                                         <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Comisión</th>
                                         <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Estado</th>
@@ -157,6 +158,11 @@ const MySales = () => {
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                                                     {sale.lead?.name || 'Cliente Directo'}
                                                 </td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">
+                                                    <div><span className="font-semibold text-slate-700">Venta:</span> {sale.seller?.full_name || sale.external_seller_name || 'Sin asignar'}</div>
+                                                    <div><span className="font-semibold text-slate-700">Compra:</span> {sale.purchase_manager?.full_name || 'Sin asignar'}</div>
+                                                    <div><span className="font-semibold text-slate-700">Crédito:</span> {sale.credit_manager?.full_name || 'No aplica / sin asignar'}</div>
+                                                </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-800">
                                                     ${sale.sale_price.toLocaleString()}
                                                 </td>
@@ -175,7 +181,7 @@ const MySales = () => {
                                         ))
                                     ) : (
                                         <tr>
-                                            <td colSpan="6" className="px-6 py-10 text-center text-gray-500 italic">
+                                            <td colSpan="7" className="px-6 py-10 text-center text-gray-500 italic">
                                                 No se encontraron ventas en este período.
                                             </td>
                                         </tr>

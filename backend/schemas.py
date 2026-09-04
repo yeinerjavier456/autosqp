@@ -1022,11 +1022,15 @@ class Sale(SaleBase):
     net_revenue: int
     sale_date: datetime
     approved_by_id: Optional[int] = None
+    purchase_manager_id: Optional[int] = None
+    credit_manager_id: Optional[int] = None
     
     vehicle: Optional[Vehicle] = None
     lea: Optional[Lead] = None # Typo fixed
     lead: Optional[Lead] = None
     seller: Optional[User] = None
+    purchase_manager: Optional[User] = None
+    credit_manager: Optional[User] = None
     payment_receipts: List["PaymentReceiptMinimal"] = []
     
     model_config = ConfigDict(from_attributes=True)

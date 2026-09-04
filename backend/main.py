@@ -2280,6 +2280,8 @@ def ensure_sales_metadata_columns():
             sales_columns = {
                 "seller_type": "ALTER TABLE sales ADD COLUMN seller_type VARCHAR(20) NOT NULL DEFAULT 'internal'",
                 "external_seller_name": "ALTER TABLE sales ADD COLUMN external_seller_name VARCHAR(150) NULL",
+                "purchase_manager_id": "ALTER TABLE sales ADD COLUMN purchase_manager_id INTEGER NULL",
+                "credit_manager_id": "ALTER TABLE sales ADD COLUMN credit_manager_id INTEGER NULL",
                 "tax_transaction_type": "ALTER TABLE sales ADD COLUMN tax_transaction_type VARCHAR(50) NULL DEFAULT 'intermediacion'",
                 "tax_transfer_to_cars": "ALTER TABLE sales ADD COLUMN tax_transfer_to_cars VARCHAR(20) NULL",
                 "tax_seller_name": "ALTER TABLE sales ADD COLUMN tax_seller_name VARCHAR(180) NULL",
@@ -10984,6 +10986,42 @@ def delete_vehicle(
 
 # --- SALES & COMMISSION ENDPOINTS ---
 
+def _is_purchase_application(record: Optional[models.CreditApplication]) -> bool:
+    notes = (getattr(record, "notes", None) or "").strip().lower()
+    return any(marker in notes for marker in (
+        "[purchase_request]", "solicitud de compra", "busqueda de vehiculo",
+        "búsqueda de vehiculo", "busqueda del vehiculo", "búsqueda del vehículo",
+    ))
+
+
+def _resolve_sale_credit_manager_id(db: Session, company_id: Optional[int], lead_id: Optional[int]) -> Optional[int]:
+    if not company_id or not lead_id:
+        return None
+    records = db.query(models.CreditApplication).filter(
+        models.CreditApplication.company_id == company_id,
+        models.CreditApplication.lead_id == lead_id,
+    ).order_by(
+        models.CreditApplication.updated_at.desc(),
+        models.CreditApplication.created_at.desc(),
+    ).all()
+    credit = next((record for record in records if not _is_purchase_application(record)), None)
+    return getattr(credit, "assigned_to_id", None) if credit else None
+
+
+def _resolve_sale_purchase_manager_id(db: Session, company_id: Optional[int], vehicle: Optional[models.Vehicle]) -> Optional[int]:
+    plate = (getattr(vehicle, "plate", None) or "").strip()
+    if not company_id or not plate:
+        return None
+    records = db.query(models.CreditApplication).filter(
+        models.CreditApplication.company_id == company_id,
+        func.lower(func.trim(models.CreditApplication.purchase_vehicle_plate)) == plate.lower(),
+    ).order_by(
+        models.CreditApplication.updated_at.desc(),
+        models.CreditApplication.created_at.desc(),
+    ).all()
+    purchase = next((record for record in records if _is_purchase_application(record)), None)
+    return getattr(purchase, "assigned_to_id", None) if purchase else None
+
 @app.post("/sales/", response_model=schemas.Sale)
 def create_sale(
     sale: schemas.SaleCreate, 
@@ -11014,6 +11052,9 @@ def create_sale(
     
     # 3. Calculate Commission
     commission_pct, commission_amount, net_revenue = compute_sale_numbers(sale.sale_price, seller)
+    company_id = current_user.company_id or vehicle.company_id
+    credit_manager_id = _resolve_sale_credit_manager_id(db, company_id, sale.lead_id)
+    purchase_manager_id = _resolve_sale_purchase_manager_id(db, company_id, vehicle)
     
     # 4. Create or Update Sale Record
     if existing_sale:
@@ -11022,6 +11063,8 @@ def create_sale(
         existing_sale.seller_type = seller_type
         existing_sale.external_seller_name = external_seller_name
         existing_sale.company_id = current_user.company_id or vehicle.company_id
+        existing_sale.credit_manager_id = credit_manager_id
+        existing_sale.purchase_manager_id = existing_sale.purchase_manager_id or purchase_manager_id
         existing_sale.sale_price = sale.sale_price
         existing_sale.commission_percentage = commission_pct
         existing_sale.commission_amount = commission_amount
@@ -11036,6 +11079,8 @@ def create_sale(
             seller_type=seller_type,
             external_seller_name=external_seller_name,
             company_id=current_user.company_id or vehicle.company_id,
+            credit_manager_id=credit_manager_id,
+            purchase_manager_id=purchase_manager_id,
             sale_price=sale.sale_price,
             commission_percentage=commission_pct,
             commission_amount=commission_amount,
@@ -11105,6 +11150,8 @@ def read_sales(
         joinedload(models.Sale.vehicle),
         joinedload(models.Sale.lead),
         joinedload(models.Sale.seller),
+        joinedload(models.Sale.purchase_manager),
+        joinedload(models.Sale.credit_manager),
         joinedload(models.Sale.payment_receipts)
     )
     
@@ -11145,6 +11192,16 @@ def read_sales(
         
     total = query.count()
     sales = query.order_by(models.Sale.sale_date.desc()).offset(skip).limit(limit).all()
+    responsibles_updated = False
+    for sale in sales:
+        if not sale.purchase_manager_id:
+            sale.purchase_manager_id = _resolve_sale_purchase_manager_id(db, sale.company_id, sale.vehicle)
+            responsibles_updated = responsibles_updated or bool(sale.purchase_manager_id)
+        if not sale.credit_manager_id:
+            sale.credit_manager_id = _resolve_sale_credit_manager_id(db, sale.company_id, sale.lead_id)
+            responsibles_updated = responsibles_updated or bool(sale.credit_manager_id)
+    if responsibles_updated:
+        db.commit()
     return {"items": sales, "total": total}
 
 @app.put("/sales/{sale_id}", response_model=schemas.Sale)
