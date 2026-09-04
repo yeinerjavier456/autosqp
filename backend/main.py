@@ -8146,16 +8146,11 @@ def read_advisor_stats(
     company_scope = role_name in {"admin", "super_admin"}
     ally_user_ids = set(get_company_ally_user_ids(db, current_user.company_id))
     tracked_advisor_ids = get_user_tracked_advisor_ids(current_user)
-    visible_user_ids = [current_user.id] if not company_scope else [current_user.id, *tracked_advisor_ids]
+    visible_user_ids = [current_user.id, *tracked_advisor_ids]
 
     visible_leads_query = db.query(models.Lead).filter(
         models.Lead.company_id == current_user.company_id
     )
-    if not company_scope:
-        visible_leads_query = visible_leads_query.filter(
-            models.Lead.assigned_to_id == current_user.id
-        )
-
     oldest_visible_lead = visible_leads_query.order_by(models.Lead.created_at.asc()).first()
     normalized_period, period_start, period_end, trend_labels, get_trend_bucket = get_dashboard_period_bounds(
         period,
@@ -8601,17 +8596,11 @@ def read_advisor_stats(
 
     credit_status_distribution = {}
     credit_total = 0
+    credits = []
     if "credits" in permissions or not company_scope:
         credits_query = db.query(models.CreditApplication).filter(
             models.CreditApplication.company_id == current_user.company_id
         )
-        if not company_scope:
-            credits_query = credits_query.filter(
-                or_(
-                    models.CreditApplication.assigned_to_id.in_(visible_user_ids),
-                    models.CreditApplication.lead_id.in_(visible_lead_ids or [-1])
-                )
-            )
         credits = [
             credit for credit in credits_query.all()
             if not is_purchase_request_record(credit)
@@ -8630,17 +8619,11 @@ def read_advisor_stats(
 
     purchase_status_distribution = {}
     purchase_total = 0
-    if "purchase_board" in permissions:
+    purchases = []
+    if "purchase_board" in permissions or not company_scope:
         purchases_query = db.query(models.CreditApplication).filter(
             models.CreditApplication.company_id == current_user.company_id
         )
-        if not company_scope:
-            purchases_query = purchases_query.filter(
-                or_(
-                    models.CreditApplication.assigned_to_id.in_(visible_user_ids),
-                    models.CreditApplication.lead_id.in_(visible_lead_ids or [-1])
-                )
-            )
         purchases = [
             purchase for purchase in purchases_query.all()
             if is_purchase_request_record(purchase)
@@ -8661,17 +8644,11 @@ def read_advisor_stats(
     sales_total = 0
     sales_approved = 0
     sales_pending = 0
+    sales = []
     if "sales" in permissions or "my_sales" in permissions or not company_scope:
         sales_query = db.query(models.Sale).filter(
             models.Sale.company_id == current_user.company_id
         )
-        if not company_scope:
-            sales_query = sales_query.filter(
-                or_(
-                    models.Sale.seller_id.in_(visible_user_ids),
-                    models.Sale.lead_id.in_(visible_lead_ids or [-1])
-                )
-            )
         sales = [
             sale for sale in sales_query.all()
             if is_within_dashboard_range(getattr(sale, "sale_date", None) or getattr(sale, "created_at", None))
@@ -8691,7 +8668,7 @@ def read_advisor_stats(
 
     inventory_status_distribution = {}
     inventory_total = 0
-    if "inventory" in permissions:
+    if "inventory" in permissions or not company_scope:
         vehicles = db.query(models.Vehicle).filter(
             models.Vehicle.company_id == current_user.company_id
         ).all()
@@ -8703,6 +8680,9 @@ def read_advisor_stats(
     appointments_total = 0
     appointments_today = 0
     appointments_upcoming = 0
+    appointments = []
+    now_bogota = datetime.datetime.now(BOGOTA_TZ).replace(tzinfo=None)
+    today_bogota = now_bogota.date()
     appointments_by_user_map: Dict[int, Dict[str, Any]] = {}
     if "appointments_calendar" in permissions or not company_scope:
         appointments_query = db.query(models.LeadAppointment).options(
@@ -8715,23 +8695,12 @@ def read_advisor_stats(
             models.Lead.company_id == current_user.company_id
         )
 
-        if not company_scope:
-            appointments_query = appointments_query.filter(
-                or_(
-                    models.LeadAppointment.user_id.in_(visible_user_ids),
-                    models.LeadAppointment.lead_id.in_(visible_lead_ids or [-1])
-                )
-            )
-
         appointments = [
             appointment for appointment in appointments_query.all()
             if is_within_dashboard_range(getattr(appointment, "appointment_date", None))
         ]
 
         appointments_total = len(appointments)
-        now_bogota = datetime.datetime.now(BOGOTA_TZ).replace(tzinfo=None)
-        today_bogota = now_bogota.date()
-
         for appointment in appointments:
             appointment_date = getattr(appointment, "appointment_date", None)
             if not appointment_date:
@@ -8804,6 +8773,30 @@ def read_advisor_stats(
         )
     )
 
+    personal_lead_ids = {lead.id for lead in leads if lead.assigned_to_id == current_user.id}
+    personal_leads_total = len(personal_lead_ids)
+    personal_credit_total = sum(
+        1 for credit in credits
+        if credit.assigned_to_id == current_user.id or credit.lead_id in personal_lead_ids
+    )
+    personal_sales = [sale for sale in sales if sale.seller_id == current_user.id]
+    personal_sales_total = len(personal_sales)
+    personal_sales_approved = sum(1 for sale in personal_sales if sale.status == models.SaleStatus.APPROVED.value)
+    personal_sales_pending = sum(1 for sale in personal_sales if sale.status == models.SaleStatus.PENDING.value)
+    personal_appointments = [appointment for appointment in appointments if appointment.user_id == current_user.id]
+    personal_appointments_total = len(personal_appointments)
+    personal_appointments_today = sum(
+        1 for appointment in personal_appointments
+        if getattr(appointment, "appointment_date", None)
+        and appointment.appointment_date.date() == today_bogota
+    ) if appointments else 0
+    personal_appointments_upcoming = sum(
+        1 for appointment in personal_appointments
+        if getattr(appointment, "appointment_date", None)
+        and appointment.appointment_date >= now_bogota
+        and (appointment.status or "scheduled") != "cancelled"
+    ) if appointments else 0
+
     return {
         "total_leads": total_leads,
         "leads_new": leads_new,
@@ -8853,6 +8846,14 @@ def read_advisor_stats(
         "ally_top_managers": ally_top_managers,
         "appointments_by_user": appointments_by_user,
         "supervised_advisors": supervised_advisors,
+        "personal_leads_total": personal_leads_total,
+        "personal_credit_total": personal_credit_total,
+        "personal_sales_total": personal_sales_total,
+        "personal_sales_approved": personal_sales_approved,
+        "personal_sales_pending": personal_sales_pending,
+        "personal_appointments_total": personal_appointments_total,
+        "personal_appointments_today": personal_appointments_today,
+        "personal_appointments_upcoming": personal_appointments_upcoming,
     }
 
 @app.post("/seed/brands")

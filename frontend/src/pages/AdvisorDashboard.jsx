@@ -318,6 +318,20 @@ const AdvisorDashboard = () => {
     const dashboardUnreadReplies = isAllyDashboard ? stats.ally_unread_replies_count : stats.unread_replies_count;
     const dashboardNewLeadsInRange = isAllyDashboard ? stats.ally_new_leads_in_range : stats.new_leads_in_range;
     const dashboardStatusChanges = isAllyDashboard ? stats.ally_status_changes_in_range : stats.status_changes_in_range;
+    const displayedLeadTotal = isAdministrator ? dashboardLeadTotal : (stats.personal_leads_total || 0);
+    const displayedAppointmentsTotal = isAdministrator ? (stats.appointments_total || 0) : (stats.personal_appointments_total || 0);
+    const displayedAppointmentsToday = isAdministrator ? (stats.appointments_today || 0) : (stats.personal_appointments_today || 0);
+    const displayedAppointmentsUpcoming = isAdministrator ? (stats.appointments_upcoming || 0) : (stats.personal_appointments_upcoming || 0);
+    const displayedCreditTotal = isAdministrator ? (stats.credit_total || 0) : (stats.personal_credit_total || 0);
+    const displayedSalesTotal = isAdministrator ? (stats.sales_total || 0) : (stats.personal_sales_total || 0);
+    const displayedSalesApproved = isAdministrator ? (stats.sales_approved || 0) : (stats.personal_sales_approved || 0);
+    const displayedSalesPending = isAdministrator ? (stats.sales_pending || 0) : (stats.personal_sales_pending || 0);
+    const showLeadsMetrics = isAdministrator ? hasLeadsSection : true;
+    const showCreditsMetrics = isAdministrator ? hasCreditsSection : true;
+    const showPurchasesMetrics = isAdministrator ? hasPurchasesSection : true;
+    const showInventoryMetrics = isAdministrator ? hasInventorySection : true;
+    const showSalesMetrics = isAdministrator ? hasSalesSection : true;
+    const showAppointmentsMetrics = isAdministrator ? hasAppointmentsSection : true;
     const topAdvisorManager = advisorManagers[0] || null;
     const topManager = isAllyDashboard
         ? (allyTopManagers[0] || null)
@@ -382,7 +396,7 @@ const AdvisorDashboard = () => {
         ],
     };
 
-    if (!isAdministrator) {
+    if (!isAdministrator && dashboardView === 'personal-only') {
         return (
             <div className="space-y-6">
                 <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-blue-950 to-cyan-900 px-6 py-7 text-white shadow-xl">
@@ -545,10 +559,10 @@ const AdvisorDashboard = () => {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <DashboardMetric
                     title={isAllyDashboard ? 'Leads de aliados' : 'Leads a cargo'}
-                    value={dashboardLeadTotal}
+                    value={displayedLeadTotal}
                     helper={isAllyDashboard
                         ? `Incluye solo leads que están en gestión de aliados ${rangeLabel}.`
-                        : `Incluye el comportamiento general de leads de AutosQP ${rangeLabel}.`}
+                        : (isAdministrator ? `Incluye el comportamiento general de leads de AutosQP ${rangeLabel}.` : `Leads asignados directamente a ti ${rangeLabel}.`)}
                     onClick={(isAllyDashboard ? hasAllySection : hasLeadsSection) ? () => navigate(isAllyDashboard ? '/aliado/dashboard' : leadBoardPath) : undefined}
                 />
                 <DashboardMetric
@@ -583,7 +597,7 @@ const AdvisorDashboard = () => {
                 />
             </div>
 
-            <div className={`grid grid-cols-1 gap-4 ${hasAppointmentsSection ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+            <div className={`grid grid-cols-1 gap-4 ${showAppointmentsMetrics ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
                 <DashboardMetric
                     title="Nuevos del rango"
                     value={dashboardNewLeadsInRange}
@@ -599,19 +613,19 @@ const AdvisorDashboard = () => {
                     className="border-fuchsia-200 bg-fuchsia-50 text-fuchsia-900"
                     helperClassName="text-fuchsia-700"
                 />
-                {hasAppointmentsSection && (
+                {showAppointmentsMetrics && (
                     <DashboardMetric
                         title="Citas programadas"
-                        value={stats.appointments_total || 0}
-                        helper={`${stats.appointments_today || 0} para hoy y ${stats.appointments_upcoming || 0} pendientes en el rango.`}
-                        onClick={() => navigate('/admin/appointments')}
+                        value={displayedAppointmentsTotal}
+                        helper={`${displayedAppointmentsToday} para hoy y ${displayedAppointmentsUpcoming} pendientes en el rango.`}
+                        onClick={hasAppointmentsSection ? () => navigate('/admin/appointments') : undefined}
                         className="border-cyan-200 bg-cyan-50 text-cyan-900"
                         helperClassName="text-cyan-700"
                     />
                 )}
             </div>
 
-            {(isAllyDashboard ? hasAllySection : hasLeadsSection) && (
+            {(isAllyDashboard ? hasAllySection : showLeadsMetrics) && (
                 <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
                     <div className={`rounded-2xl border p-6 shadow-sm ${isAllyDashboard ? 'border-teal-200 bg-teal-50 text-teal-950' : 'border-rose-200 bg-rose-50 text-rose-950'}`}>
                         <p className={`text-xs font-bold uppercase tracking-[0.24em] ${isAllyDashboard ? 'text-teal-700' : 'text-rose-700'}`}>
@@ -677,42 +691,42 @@ const AdvisorDashboard = () => {
 
             {!isAllyDashboard && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {hasCreditsSection && (
+                {showCreditsMetrics && (
                     <DashboardMetric
                         title="Solicitudes de credito"
-                        value={stats.credit_total}
-                        helper="Solicitudes de crédito generales de la empresa dentro del rango."
-                        onClick={() => navigate('/admin/credits')}
+                        value={displayedCreditTotal}
+                        helper={isAdministrator ? 'Solicitudes de crédito generales de la empresa dentro del rango.' : 'Solicitudes de crédito relacionadas con tus leads dentro del rango.'}
+                        onClick={hasCreditsSection ? () => navigate('/admin/credits') : undefined}
                         className="border-violet-200 bg-violet-50 text-violet-900"
                         helperClassName="text-violet-700"
                     />
                 )}
-                {hasPurchasesSection && (
+                {showPurchasesMetrics && (
                     <DashboardMetric
                         title="Solicitudes de compra"
                         value={stats.purchase_total}
                         helper="Búsquedas de vehículo generales de la empresa dentro del rango."
-                        onClick={() => navigate('/admin/purchases')}
+                        onClick={hasPurchasesSection ? () => navigate('/admin/purchases') : undefined}
                         className="border-pink-200 bg-pink-50 text-pink-900"
                         helperClassName="text-pink-700"
                     />
                 )}
-                {hasSalesSection && (
+                {showSalesMetrics && (
                     <DashboardMetric
                         title="Ventas"
-                        value={stats.sales_total}
-                        helper={`${stats.sales_approved} aprobadas y ${stats.sales_pending} pendientes.`}
-                        onClick={() => navigate(permissions.has('my_sales') && !permissions.has('sales') ? '/admin/my-sales' : '/admin/sales')}
+                        value={displayedSalesTotal}
+                        helper={`${displayedSalesApproved} aprobadas y ${displayedSalesPending} pendientes.`}
+                        onClick={hasSalesSection ? () => navigate(permissions.has('my_sales') && !permissions.has('sales') ? '/admin/my-sales' : '/admin/sales') : undefined}
                         className="border-emerald-200 bg-emerald-50 text-emerald-900"
                         helperClassName="text-emerald-700"
                     />
                 )}
-                {hasInventorySection && (
+                {showInventoryMetrics && (
                     <DashboardMetric
                         title="Inventario"
                         value={stats.inventory_total}
                         helper="Total de vehículos visibles en la empresa."
-                        onClick={() => navigate('/admin/inventory')}
+                        onClick={hasInventorySection ? () => navigate('/admin/inventory') : undefined}
                         className="border-sky-200 bg-sky-50 text-sky-900"
                         helperClassName="text-sky-700"
                     />
@@ -720,7 +734,7 @@ const AdvisorDashboard = () => {
             </div>
             )}
 
-            {!isAllyDashboard && supervisedAdvisors.length > 0 && (
+            {isAdministrator && !isAllyDashboard && supervisedAdvisors.length > 0 && (
                 <div className="rounded-2xl border border-indigo-200 bg-white p-6 shadow-sm">
                     <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                         <div>
@@ -806,7 +820,7 @@ const AdvisorDashboard = () => {
                 </div>
             )}
 
-            {(isAllyDashboard ? hasAllySection : hasLeadsSection) && (
+            {(isAllyDashboard ? hasAllySection : showLeadsMetrics) && (
                 <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
                         <div className="mb-4">
@@ -863,7 +877,7 @@ const AdvisorDashboard = () => {
                 </div>
             )}
 
-            {(isAllyDashboard ? hasAllySection : hasLeadsSection) && (
+            {(isAllyDashboard ? hasAllySection : showLeadsMetrics) && (
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div className="mb-4">
                         <h3 className="text-lg font-bold text-slate-800">{currentSourceTitle}</h3>
@@ -925,7 +939,7 @@ const AdvisorDashboard = () => {
                 )}
             </div>
 
-            {hasAppointmentsSection && !isAllyDashboard && (
+            {showAppointmentsMetrics && !isAllyDashboard && (
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div className="mb-4">
                         <h3 className="text-lg font-bold text-slate-800">Ranking de citas agendadas</h3>
@@ -957,7 +971,7 @@ const AdvisorDashboard = () => {
 
             {!isAllyDashboard && (
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                {hasCreditsSection && (
+                {showCreditsMetrics && (
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                         <div className="mb-4">
                             <h3 className="text-lg font-bold text-slate-800">Estado de creditos</h3>
@@ -983,7 +997,7 @@ const AdvisorDashboard = () => {
                     </div>
                 )}
 
-                {hasPurchasesSection && (
+                {showPurchasesMetrics && (
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                         <div className="mb-4">
                             <h3 className="text-lg font-bold text-slate-800">Estado de compras y busquedas</h3>
@@ -1009,7 +1023,7 @@ const AdvisorDashboard = () => {
                     </div>
                 )}
 
-                {hasPurchasesSection && (
+                {showPurchasesMetrics && (
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                         <div className="mb-4">
                             <h3 className="text-lg font-bold text-slate-800">Decision sobre opciones</h3>
@@ -1033,7 +1047,7 @@ const AdvisorDashboard = () => {
                     </div>
                 )}
 
-                {hasInventorySection && (
+                {showInventoryMetrics && (
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                         <div className="mb-4">
                             <h3 className="text-lg font-bold text-slate-800">Estado del inventario</h3>
@@ -1059,7 +1073,7 @@ const AdvisorDashboard = () => {
                     </div>
                 )}
 
-                {hasSalesSection && (
+                {showSalesMetrics && (
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                         <div className="mb-4">
                             <h3 className="text-lg font-bold text-slate-800">Cierres y ventas</h3>

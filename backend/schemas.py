@@ -1221,6 +1221,14 @@ class RoleDashboardStats(BaseModel):
     ally_top_managers: List[Dict[str, Any]] = []
     appointments_by_user: List[Dict[str, Any]] = []
     supervised_advisors: List[Dict[str, Any]] = []
+    personal_leads_total: int = 0
+    personal_credit_total: int = 0
+    personal_sales_total: int = 0
+    personal_sales_approved: int = 0
+    personal_sales_pending: int = 0
+    personal_appointments_total: int = 0
+    personal_appointments_today: int = 0
+    personal_appointments_upcoming: int = 0
 
 class ReportsStats(BaseModel):
     total_leads: int
