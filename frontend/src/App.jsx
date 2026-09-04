@@ -42,6 +42,7 @@ import PurchaseBoard from './pages/PurchaseBoard';
 import InternalChat from './pages/InternalChat';
 import SystemLogs from './pages/SystemLogs';
 import RolesConfig from './pages/RolesConfig';
+import Goals from './pages/Goals';
 import { hasViewAccess, getOrderedMenuViews } from './config/views';
 
 const configuredBaseName = import.meta.env.BASE_URL === '/' ? '/' : import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -139,6 +140,9 @@ function App() {
               </Route>
               <Route element={<PrivateRoute requiredView="sales" />}>
                 <Route path="/admin/sales" element={<SalesDashboard />} />
+              </Route>
+              <Route element={<PrivateRoute requiredView="goals" />}>
+                <Route path="/admin/goals" element={<Goals />} />
               </Route>
               <Route element={<PrivateRoute requiredView="payment_receipts" />}>
                 <Route path="/admin/receipts/new" element={<SalesDashboard receiptEntryOnly />} />

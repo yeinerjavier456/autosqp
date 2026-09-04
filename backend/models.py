@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, Float, String, ForeignKey, Enum as SqEnum, JSON, DateTime, Text, Date
+from sqlalchemy import Boolean, Column, Integer, Float, String, ForeignKey, Enum as SqEnum, JSON, DateTime, Text, Date, UniqueConstraint
 from sqlalchemy.orm import relationship
 from database import Base
 import enum
@@ -945,3 +945,27 @@ class SystemLog(Base):
 
     user = relationship("User")
     company = relationship("Company")
+
+
+class MonthlyGoal(Base):
+    __tablename__ = "monthly_goals"
+    __table_args__ = (
+        UniqueConstraint("company_id", "user_id", "goal_type", "goal_month", name="uq_monthly_goal_user_period"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    sequence_number = Column(Integer, nullable=False, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    goal_type = Column(String(30), nullable=False, index=True)
+    goal_month = Column(Date, nullable=False, index=True)
+    target_count = Column(Integer, nullable=False, default=0)
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    updated_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
+
+    company = relationship("Company", foreign_keys=[company_id])
+    user = relationship("User", foreign_keys=[user_id])
+    created_by = relationship("User", foreign_keys=[created_by_id])
+    updated_by = relationship("User", foreign_keys=[updated_by_id])

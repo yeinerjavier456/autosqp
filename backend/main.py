@@ -2182,6 +2182,26 @@ def ensure_company_public_domain_columns():
 
 ensure_company_public_domain_columns()
 
+
+def ensure_goals_module_enabled():
+    try:
+        with Session(engine) as db:
+            companies = db.query(models.Company).all()
+            changed = False
+            for company in companies:
+                enabled_modules = get_company_enabled_modules(company)
+                if "goals" not in enabled_modules:
+                    enabled_modules.append("goals")
+                    company.enabled_modules_json = json.dumps(normalize_company_enabled_modules(enabled_modules))
+                    changed = True
+            if changed:
+                db.commit()
+    except Exception as exc:
+        print(f"Warning: could not enable goals module: {exc}", flush=True)
+
+
+ensure_goals_module_enabled()
+
 def ensure_user_status_columns():
     try:
         with engine.begin() as conn:
@@ -7949,6 +7969,174 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
     db.commit()
     db.refresh(new_lead)
     return new_lead
+
+def parse_goal_month(month: str) -> datetime.date:
+    try:
+        parsed = datetime.datetime.strptime((month or "").strip(), "%Y-%m").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="El mes debe tener formato YYYY-MM")
+    return parsed.replace(day=1)
+
+
+def ensure_goals_view_access(current_user: models.User) -> None:
+    if "goals" not in set(get_role_permissions(current_user.role)):
+        raise HTTPException(status_code=403, detail="No tienes acceso al módulo de metas")
+
+
+def ensure_goals_management_access(current_user: models.User) -> None:
+    if get_user_role_name(current_user) not in {"admin", "super_admin"}:
+        raise HTTPException(status_code=403, detail="Solo los administradores pueden asignar metas")
+
+
+@app.get("/goals", response_model=schemas.MonthlyGoalList)
+def read_monthly_goals(
+    goal_type: str = Query(...),
+    month: str = Query(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    ensure_goals_view_access(current_user)
+    normalized_type = (goal_type or "").strip().lower()
+    if normalized_type not in {"purchase", "sales"}:
+        raise HTTPException(status_code=400, detail="Tipo de meta inválido")
+    goal_month = parse_goal_month(month)
+    company_id = current_user.company_id
+    if not company_id:
+        raise HTTPException(status_code=400, detail="Debes seleccionar una empresa")
+
+    users = db.query(models.User).options(joinedload(models.User.role)).filter(
+        models.User.company_id == company_id,
+        models.User.is_active == True,
+    ).all()
+    allowed_roles = {"compras"} if normalized_type == "purchase" else {"asesor", "vendedor"}
+    eligible_users = [user for user in users if get_user_role_name(user) in allowed_roles]
+    goals = db.query(models.MonthlyGoal).filter(
+        models.MonthlyGoal.company_id == company_id,
+        models.MonthlyGoal.goal_type == normalized_type,
+        models.MonthlyGoal.goal_month == goal_month,
+    ).all()
+    goals_by_user = {goal.user_id: goal for goal in goals}
+
+    next_month = (
+        datetime.date(goal_month.year + 1, 1, 1)
+        if goal_month.month == 12
+        else datetime.date(goal_month.year, goal_month.month + 1, 1)
+    )
+    month_start_utc = datetime.datetime.combine(goal_month, datetime.time.min).replace(
+        tzinfo=BOGOTA_TZ
+    ).astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    month_end_utc = datetime.datetime.combine(next_month, datetime.time.min).replace(
+        tzinfo=BOGOTA_TZ
+    ).astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    responsible_field = (
+        models.Sale.purchase_manager_id
+        if normalized_type == "purchase"
+        else models.Sale.seller_id
+    )
+    actual_rows = db.query(
+        responsible_field.label("user_id"),
+        func.count(models.Sale.id).label("actual_count"),
+    ).filter(
+        models.Sale.company_id == company_id,
+        models.Sale.sale_date >= month_start_utc,
+        models.Sale.sale_date < month_end_utc,
+        models.Sale.status != models.SaleStatus.REJECTED.value,
+        responsible_field.isnot(None),
+    ).group_by(responsible_field).all()
+    actual_by_user = {row.user_id: int(row.actual_count or 0) for row in actual_rows}
+
+    items = []
+    for user in sorted(eligible_users, key=lambda item: (item.full_name or item.email or "").lower()):
+        goal = goals_by_user.get(user.id)
+        target_count = int(goal.target_count or 0) if goal else 0
+        actual_count = actual_by_user.get(user.id, 0)
+        items.append({
+            "user_id": user.id,
+            "full_name": user.full_name,
+            "email": user.email,
+            "role_name": get_user_role_name(user),
+            "role_label": getattr(user.role, "label", None),
+            "month": goal_month.strftime("%Y-%m"),
+            "goal_type": normalized_type,
+            "target_count": target_count,
+            "actual_count": actual_count,
+            "completion_percentage": round((actual_count / target_count * 100), 2) if target_count else 0,
+            "goal_id": goal.id if goal else None,
+            "sequence_number": goal.sequence_number if goal else None,
+            "updated_at": goal.updated_at if goal else None,
+        })
+    return {"items": items}
+
+
+@app.put("/goals", response_model=schemas.MonthlyGoalItem)
+def save_monthly_goal(
+    payload: schemas.MonthlyGoalUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    ensure_goals_view_access(current_user)
+    ensure_goals_management_access(current_user)
+    normalized_type = (payload.goal_type or "").strip().lower()
+    if normalized_type not in {"purchase", "sales"}:
+        raise HTTPException(status_code=400, detail="Tipo de meta inválido")
+    goal_month = parse_goal_month(payload.month)
+    target_user = db.query(models.User).options(joinedload(models.User.role)).filter(
+        models.User.id == payload.user_id,
+        models.User.company_id == current_user.company_id,
+        models.User.is_active == True,
+    ).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado en esta empresa")
+    allowed_roles = {"compras"} if normalized_type == "purchase" else {"asesor", "vendedor"}
+    if get_user_role_name(target_user) not in allowed_roles:
+        raise HTTPException(status_code=400, detail="El rol del usuario no corresponde a este tipo de meta")
+
+    goal = db.query(models.MonthlyGoal).filter(
+        models.MonthlyGoal.company_id == current_user.company_id,
+        models.MonthlyGoal.user_id == target_user.id,
+        models.MonthlyGoal.goal_type == normalized_type,
+        models.MonthlyGoal.goal_month == goal_month,
+    ).first()
+    if goal:
+        goal.target_count = payload.target_count
+        goal.updated_by_id = current_user.id
+    else:
+        next_sequence = (db.query(func.max(models.MonthlyGoal.sequence_number)).filter(
+            models.MonthlyGoal.company_id == current_user.company_id
+        ).scalar() or 0) + 1
+        goal = models.MonthlyGoal(
+            sequence_number=next_sequence,
+            company_id=current_user.company_id,
+            user_id=target_user.id,
+            goal_type=normalized_type,
+            goal_month=goal_month,
+            target_count=payload.target_count,
+            created_by_id=current_user.id,
+            updated_by_id=current_user.id,
+        )
+        db.add(goal)
+    db.commit()
+    db.refresh(goal)
+    log_action_to_db(
+        db, current_user.id, "UPDATE", "MonthlyGoal", goal.id,
+        f"Meta {normalized_type} {goal_month:%Y-%m} para {target_user.email}: {payload.target_count}"
+    )
+    return {
+        "user_id": target_user.id,
+        "full_name": target_user.full_name,
+        "email": target_user.email,
+        "role_name": get_user_role_name(target_user),
+        "role_label": getattr(target_user.role, "label", None),
+        "month": goal_month.strftime("%Y-%m"),
+        "goal_type": normalized_type,
+        "target_count": goal.target_count,
+        "actual_count": 0,
+        "completion_percentage": 0,
+        "goal_id": goal.id,
+        "sequence_number": goal.sequence_number,
+        "updated_at": goal.updated_at,
+    }
+
 
 @app.get("/reports/stats", response_model=schemas.ReportsStats)
 def get_reports_stats(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):

@@ -1433,3 +1433,30 @@ class SystemLog(SystemLogBase):
 class SystemLogList(BaseModel):
     items: List[SystemLog]
     total: int
+
+
+class MonthlyGoalUpdate(BaseModel):
+    user_id: int
+    goal_type: str
+    month: str
+    target_count: int = Field(ge=0)
+
+
+class MonthlyGoalItem(BaseModel):
+    user_id: int
+    full_name: Optional[str] = None
+    email: str
+    role_name: Optional[str] = None
+    role_label: Optional[str] = None
+    month: str
+    goal_type: str
+    target_count: int = 0
+    actual_count: int = 0
+    completion_percentage: float = 0
+    goal_id: Optional[int] = None
+    sequence_number: Optional[int] = None
+    updated_at: Optional[datetime] = None
+
+
+class MonthlyGoalList(BaseModel):
+    items: List[MonthlyGoalItem]
