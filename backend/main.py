@@ -11192,8 +11192,27 @@ def read_sales(
         
     total = query.count()
     sales = query.order_by(models.Sale.sale_date.desc()).offset(skip).limit(limit).all()
+    lead_ids = [sale.lead_id for sale in sales if sale.lead_id]
+    submission_by_lead = {}
+    if lead_ids:
+        submissions = db.query(models.PublicCreditSubmission).filter(
+            models.PublicCreditSubmission.lead_id.in_(lead_ids)
+        ).order_by(models.PublicCreditSubmission.id.desc()).all()
+        for submission in submissions:
+            submission_by_lead.setdefault(submission.lead_id, submission)
+
     responsibles_updated = False
     for sale in sales:
+        submission = submission_by_lead.get(sale.lead_id)
+        sale.client_document_number = (
+            getattr(submission, "document_number", None)
+            or getattr(sale, "tax_buyer_document", None)
+        )
+        sale.client_phone = (
+            getattr(getattr(sale, "lead", None), "phone", None)
+            or getattr(submission, "phone", None)
+            or getattr(sale, "tax_buyer_phone", None)
+        )
         if not sale.purchase_manager_id:
             sale.purchase_manager_id = _resolve_sale_purchase_manager_id(db, sale.company_id, sale.vehicle)
             responsibles_updated = responsibles_updated or bool(sale.purchase_manager_id)

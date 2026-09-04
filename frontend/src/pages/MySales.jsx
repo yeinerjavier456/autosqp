@@ -178,7 +178,9 @@ const MySales = () => {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                                                    {sale.lead?.name || 'Cliente Directo'}
+                                                    <div className="font-medium text-slate-800">{sale.lead?.name || sale.tax_buyer_name || 'Cliente Directo'}</div>
+                                                    <div className="text-xs text-slate-500">Doc: {sale.client_document_number || sale.tax_buyer_document || 'Sin registrar'}</div>
+                                                    <div className="text-xs text-slate-500">Cel: {sale.client_phone || sale.lead?.phone || sale.tax_buyer_phone || 'Sin registrar'}</div>
                                                 </td>
                                                 <td className="px-6 py-4 text-sm text-gray-600">
                                                     <div><span className="font-semibold text-slate-700">Venta:</span> {sale.seller?.full_name || sale.external_seller_name || 'Sin asignar'}</div>
@@ -285,9 +287,9 @@ const MySales = () => {
                                         <h3 className="mb-4 text-lg font-bold text-slate-900">Información del cliente</h3>
                                         <div className="grid gap-3 sm:grid-cols-2">
                                             <div><p className="text-xs font-semibold uppercase text-slate-400">Nombre</p><p className="font-medium">{selectedSale.lead?.name || selectedSale.tax_buyer_name || 'Cliente directo'}</p></div>
-                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Documento</p><p className="font-medium">{showValue(selectedSale.tax_buyer_document)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Documento</p><p className="font-medium">{showValue(selectedSale.client_document_number || selectedSale.tax_buyer_document)}</p></div>
                                             <div><p className="text-xs font-semibold uppercase text-slate-400">Correo</p><p className="break-all font-medium">{showValue(selectedSale.lead?.email || selectedSale.tax_buyer_email)}</p></div>
-                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Teléfono</p><p className="font-medium">{showValue(selectedSale.lead?.phone || selectedSale.tax_buyer_phone)}</p></div>
+                                            <div><p className="text-xs font-semibold uppercase text-slate-400">Celular</p><p className="font-medium">{showValue(selectedSale.client_phone || selectedSale.lead?.phone || selectedSale.tax_buyer_phone)}</p></div>
                                             <div><p className="text-xs font-semibold uppercase text-slate-400">Dirección</p><p className="font-medium">{showValue(selectedSale.tax_buyer_address)}</p></div>
                                             <div><p className="text-xs font-semibold uppercase text-slate-400">Medio de pago</p><p className="font-medium">{showValue(selectedSale.tax_buyer_payment_method)}</p></div>
                                         </div>

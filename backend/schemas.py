@@ -1024,6 +1024,8 @@ class Sale(SaleBase):
     approved_by_id: Optional[int] = None
     purchase_manager_id: Optional[int] = None
     credit_manager_id: Optional[int] = None
+    client_document_number: Optional[str] = None
+    client_phone: Optional[str] = None
     
     vehicle: Optional[Vehicle] = None
     lea: Optional[Lead] = None # Typo fixed
