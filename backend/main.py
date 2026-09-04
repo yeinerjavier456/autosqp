@@ -8581,6 +8581,34 @@ def read_advisor_stats(
     for user_id, current_item in ally_manager_activity_map.items():
         current_item["assigned_leads_count"] = len(ally_assigned_leads_by_user.get(user_id, set()))
         current_item["managed_leads_count"] = len(ally_manager_managed_lead_ids.get(user_id, set()))
+
+    active_company_users = db.query(models.User).options(
+        joinedload(models.User.role)
+    ).filter(
+        models.User.company_id == current_user.company_id,
+        models.User.is_active == True,
+    ).all()
+    management_role_names = {"asesor", "vendedor", "aliado"}
+    for user in active_company_users:
+        user_role_name = get_user_role_name(user)
+        if user_role_name not in management_role_names:
+            continue
+        target_map = ally_manager_activity_map if user.id in ally_user_ids else manager_activity_map
+        assigned_map = ally_assigned_leads_by_user if user.id in ally_user_ids else autos_assigned_leads_by_user
+        managed_map = ally_manager_managed_lead_ids if user.id in ally_user_ids else manager_managed_lead_ids
+        current_item = target_map.setdefault(
+            user.id,
+            {
+                "user_id": user.id,
+                "full_name": user.full_name,
+                "email": user.email,
+                "role_name": user_role_name,
+                "role_label": getattr(user.role, "label", None),
+                "count": 0,
+            },
+        )
+        current_item["assigned_leads_count"] = len(assigned_map.get(user.id, set()))
+        current_item["managed_leads_count"] = len(managed_map.get(user.id, set()))
     top_managers = sorted(
         manager_activity_map.values(),
         key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
@@ -8592,6 +8620,14 @@ def read_advisor_stats(
     ally_top_managers = sorted(
         ally_manager_activity_map.values(),
         key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
+    )
+    least_managers = sorted(
+        manager_activity_map.values(),
+        key=lambda item: (item["count"], item.get("full_name") or item.get("email") or "")
+    )
+    ally_least_managers = sorted(
+        ally_manager_activity_map.values(),
+        key=lambda item: (item["count"], item.get("full_name") or item.get("email") or "")
     )
 
     credit_status_distribution = {}
@@ -8844,6 +8880,8 @@ def read_advisor_stats(
         "top_managers": top_managers,
         "top_status_movers": top_status_movers,
         "ally_top_managers": ally_top_managers,
+        "least_managers": least_managers,
+        "ally_least_managers": ally_least_managers,
         "appointments_by_user": appointments_by_user,
         "supervised_advisors": supervised_advisors,
         "personal_leads_total": personal_leads_total,

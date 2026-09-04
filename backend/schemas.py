@@ -1202,6 +1202,8 @@ class RoleDashboardStats(BaseModel):
     ally_unattended_alert_reassignment_distribution: Dict[str, int]
     unattended_alert_reassignment_users: List[Dict[str, Any]] = []
     ally_unattended_alert_reassignment_users: List[Dict[str, Any]] = []
+    least_managers: List[Dict[str, Any]] = []
+    ally_least_managers: List[Dict[str, Any]] = []
     credit_total: int
     credit_status_distribution: Dict[str, int]
     purchase_total: int

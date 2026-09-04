@@ -291,6 +291,8 @@ const AdvisorDashboard = () => {
     const topManagers = Array.isArray(stats.top_managers) ? stats.top_managers : [];
     const topStatusMovers = Array.isArray(stats.top_status_movers) ? stats.top_status_movers : [];
     const allyTopManagers = Array.isArray(stats.ally_top_managers) ? stats.ally_top_managers : [];
+    const leastManagers = Array.isArray(stats.least_managers) ? stats.least_managers : [];
+    const allyLeastManagers = Array.isArray(stats.ally_least_managers) ? stats.ally_least_managers : [];
     const appointmentsByUser = Array.isArray(stats.appointments_by_user) ? stats.appointments_by_user : [];
     const supervisedAdvisors = Array.isArray(stats.supervised_advisors) ? stats.supervised_advisors : [];
     const unattendedAlertReassignmentUsers = Array.isArray(stats.unattended_alert_reassignment_users)
@@ -372,6 +374,7 @@ const AdvisorDashboard = () => {
         ? 'Leads donde un aliado participa dentro del rango seleccionado.'
         : trendDescription;
     const currentRanking = isAllyDashboard ? allyTopManagers : topManagers;
+    const currentLeastManagers = (isAllyDashboard ? allyLeastManagers : leastManagers).slice(0, 8);
     const currentUnattendedAlertReassignmentUsers = isAllyDashboard
         ? allyUnattendedAlertReassignmentUsers
         : unattendedAlertReassignmentUsers
@@ -391,6 +394,17 @@ const AdvisorDashboard = () => {
                 label: 'Reasignaciones sin atencion',
                 data: currentUnattendedAlertReassignmentUsersForChart.map((item) => Number(item?.reassignment_count || 0)),
                 backgroundColor: isAllyDashboard ? '#0f766e' : '#dc2626',
+                borderRadius: 10,
+            },
+        ],
+    };
+    const leastManagementData = {
+        labels: currentLeastManagers.map((item) => item?.full_name || item?.email || 'Sin nombre'),
+        datasets: [
+            {
+                label: 'Gestiones realizadas',
+                data: currentLeastManagers.map((item) => Number(item?.count || 0)),
+                backgroundColor: isAllyDashboard ? '#0f766e' : '#f59e0b',
                 borderRadius: 10,
             },
         ],
@@ -652,13 +666,13 @@ const AdvisorDashboard = () => {
                         <div className="mb-4">
                             <h3 className="text-lg font-bold text-slate-800">Usuarios con menor gestion</h3>
                             <p className="text-sm text-slate-500">
-                                La grafica ordena a los responsables actuales con mas reasignaciones ejecutadas por alerta que siguen sin atencion. No toma como valor las veces que aparecio la alerta.
+                                Usuarios activos con menos acciones de gestion registradas durante el rango seleccionado.
                             </p>
                         </div>
                         <div className="h-72">
-                            {currentUnattendedAlertReassignmentUsersForChart.length > 0 ? (
+                            {currentLeastManagers.length > 0 ? (
                                 <Bar
-                                    data={unattendedAlertReassignmentData}
+                                    data={leastManagementData}
                                     options={{
                                         indexAxis: 'y',
                                         maintainAspectRatio: false,
@@ -668,10 +682,11 @@ const AdvisorDashboard = () => {
                                             tooltip: {
                                                 callbacks: {
                                                     label: (context) => {
-                                                        const item = currentUnattendedAlertReassignmentUsersForChart[context.dataIndex];
-                                                        const reassignments = Number(item?.reassignment_count || 0);
-                                                        const leadsCount = Number(item?.lead_count || 0);
-                                                        return `${reassignments} reasignaciones ejecutadas sin atencion en ${leadsCount} lead(s).`;
+                                                        const item = currentLeastManagers[context.dataIndex];
+                                                        const actions = Number(item?.count || 0);
+                                                        const managedLeads = Number(item?.managed_leads_count || 0);
+                                                        const assignedLeads = Number(item?.assigned_leads_count || 0);
+                                                        return `${actions} gestiones en ${managedLeads} lead(s); ${assignedLeads} asignado(s).`;
                                                     },
                                                 },
                                             },
@@ -681,7 +696,7 @@ const AdvisorDashboard = () => {
                                 />
                             ) : (
                                 <div className="flex h-full items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
-                                    No hay leads con reasignaciones automaticas sin atencion en este rango.
+                                    No hay usuarios activos para mostrar.
                                 </div>
                             )}
                         </div>
