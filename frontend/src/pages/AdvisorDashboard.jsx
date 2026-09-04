@@ -334,6 +334,20 @@ const AdvisorDashboard = () => {
     const showInventoryMetrics = isAdministrator ? hasInventorySection : true;
     const showSalesMetrics = isAdministrator ? hasSalesSection : true;
     const showAppointmentsMetrics = isAdministrator ? hasAppointmentsSection : true;
+    const isPurchaseGoalUser = roleName === 'compras';
+    const personalGoal = isPurchaseGoalUser
+        ? {
+            title: 'Mi meta de compras',
+            target: Number(stats.personal_purchase_goal_target || 0),
+            actual: Number(stats.personal_purchase_goal_actual || 0),
+            percentage: Number(stats.personal_purchase_goal_percentage || 0),
+        }
+        : {
+            title: 'Mi meta de ventas',
+            target: Number(stats.personal_sales_goal_target || 0),
+            actual: Number(stats.personal_sales_goal_actual || 0),
+            percentage: Number(stats.personal_sales_goal_percentage || 0),
+        };
     const topAdvisorManager = advisorManagers[0] || null;
     const topManager = isAllyDashboard
         ? (allyTopManagers[0] || null)
@@ -747,6 +761,57 @@ const AdvisorDashboard = () => {
                     />
                 )}
             </div>
+            )}
+
+            {!isAllyDashboard && (isAdministrator || isPurchaseGoalUser || roleName === 'asesor' || roleName === 'vendedor') && (
+                <div className="rounded-2xl border border-blue-200 bg-white p-6 shadow-sm">
+                    <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-800">Cumplimiento de metas</h3>
+                            <p className="text-sm text-slate-500">Resultados del mes actual: {stats.goal_month || 'sin configurar'}.</p>
+                        </div>
+                        {isAdministrator && (
+                            <button type="button" onClick={() => navigate('/admin/goals')} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700">
+                                Configurar metas
+                            </button>
+                        )}
+                    </div>
+                    <div className={`grid grid-cols-1 gap-4 ${isAdministrator ? 'md:grid-cols-2' : ''}`}>
+                        {(isAdministrator ? [
+                            {
+                                title: 'Meta global de ventas',
+                                target: Number(stats.global_sales_goal_target || 0),
+                                actual: Number(stats.global_sales_goal_actual || 0),
+                                percentage: Number(stats.global_sales_goal_percentage || 0),
+                            },
+                            {
+                                title: 'Meta global de compras',
+                                target: Number(stats.global_purchase_goal_target || 0),
+                                actual: Number(stats.global_purchase_goal_actual || 0),
+                                percentage: Number(stats.global_purchase_goal_percentage || 0),
+                            },
+                        ] : [personalGoal]).map((goal) => (
+                            <div key={goal.title} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                                <div className="flex items-start justify-between gap-4">
+                                    <div>
+                                        <p className="font-bold text-slate-800">{goal.title}</p>
+                                        <p className="mt-1 text-sm text-slate-500">{goal.actual} realizadas de {goal.target} asignadas</p>
+                                    </div>
+                                    <span className={`rounded-full px-3 py-1 text-sm font-extrabold ${goal.percentage >= 100 ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>
+                                        {goal.percentage.toFixed(1)}%
+                                    </span>
+                                </div>
+                                <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-200">
+                                    <div
+                                        className={`h-full rounded-full ${goal.percentage >= 100 ? 'bg-emerald-500' : 'bg-blue-600'}`}
+                                        style={{ width: `${Math.min(goal.percentage, 100)}%` }}
+                                    />
+                                </div>
+                                {goal.target === 0 && <p className="mt-2 text-xs font-semibold text-amber-700">Aún no hay una meta configurada para este mes.</p>}
+                            </div>
+                        ))}
+                    </div>
+                </div>
             )}
 
             {!isAllyDashboard && supervisedAdvisors.length > 0 && (

@@ -125,6 +125,7 @@ export const getRoleMenuOrder = (role) => {
 
 export const hasViewAccess = (user, viewId) => {
     const roleName = getRoleName(user);
+    if (viewId === 'goals' && !['admin', 'super_admin'].includes(roleName)) return false;
     if (roleName === 'super_admin' && !user?.company_id) return true;
     const permissions = getRolePermissions(user?.role || { name: roleName });
     return permissions.includes(viewId);
@@ -149,7 +150,8 @@ export const getOrderedMenuViews = (user) => {
         }
     });
 
-    return ordered;
+    const roleName = getRoleName(user);
+    return ordered.filter((view) => view.id !== 'goals' || ['admin', 'super_admin'].includes(roleName));
 };
 
 export const getGroupedMenuViews = (user) => {

@@ -7979,8 +7979,8 @@ def parse_goal_month(month: str) -> datetime.date:
 
 
 def ensure_goals_view_access(current_user: models.User) -> None:
-    if "goals" not in set(get_role_permissions(current_user.role)):
-        raise HTTPException(status_code=403, detail="No tienes acceso al módulo de metas")
+    if get_user_role_name(current_user) not in {"admin", "super_admin"}:
+        raise HTTPException(status_code=403, detail="Solo los administradores pueden acceder al módulo de metas")
 
 
 def ensure_goals_management_access(current_user: models.User) -> None:
@@ -9200,6 +9200,46 @@ def read_advisor_stats(
         and (appointment.status or "scheduled") != "cancelled"
     ) if appointments else 0
 
+    current_goal_month = today_bogota.replace(day=1)
+    next_goal_month = (
+        datetime.date(current_goal_month.year + 1, 1, 1)
+        if current_goal_month.month == 12
+        else datetime.date(current_goal_month.year, current_goal_month.month + 1, 1)
+    )
+    goal_month_start_utc = datetime.datetime.combine(current_goal_month, datetime.time.min).replace(
+        tzinfo=BOGOTA_TZ
+    ).astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    goal_month_end_utc = datetime.datetime.combine(next_goal_month, datetime.time.min).replace(
+        tzinfo=BOGOTA_TZ
+    ).astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    current_month_goals = db.query(models.MonthlyGoal).filter(
+        models.MonthlyGoal.company_id == current_user.company_id,
+        models.MonthlyGoal.goal_month == current_goal_month,
+    ).all()
+    global_sales_goal_target = sum(goal.target_count or 0 for goal in current_month_goals if goal.goal_type == "sales")
+    global_purchase_goal_target = sum(goal.target_count or 0 for goal in current_month_goals if goal.goal_type == "purchase")
+    personal_sales_goal_target = sum(
+        goal.target_count or 0 for goal in current_month_goals
+        if goal.goal_type == "sales" and goal.user_id == current_user.id
+    )
+    personal_purchase_goal_target = sum(
+        goal.target_count or 0 for goal in current_month_goals
+        if goal.goal_type == "purchase" and goal.user_id == current_user.id
+    )
+    current_month_sales = db.query(models.Sale).filter(
+        models.Sale.company_id == current_user.company_id,
+        models.Sale.sale_date >= goal_month_start_utc,
+        models.Sale.sale_date < goal_month_end_utc,
+        models.Sale.status != models.SaleStatus.REJECTED.value,
+    ).all()
+    global_sales_goal_actual = sum(1 for sale in current_month_sales if sale.seller_id)
+    global_purchase_goal_actual = sum(1 for sale in current_month_sales if sale.purchase_manager_id)
+    personal_sales_goal_actual = sum(1 for sale in current_month_sales if sale.seller_id == current_user.id)
+    personal_purchase_goal_actual = sum(1 for sale in current_month_sales if sale.purchase_manager_id == current_user.id)
+
+    def goal_percentage(actual: int, target: int) -> float:
+        return round((actual / target * 100), 2) if target else 0
+
     return {
         "total_leads": total_leads,
         "leads_new": leads_new,
@@ -9259,6 +9299,19 @@ def read_advisor_stats(
         "personal_appointments_total": personal_appointments_total,
         "personal_appointments_today": personal_appointments_today,
         "personal_appointments_upcoming": personal_appointments_upcoming,
+        "goal_month": current_goal_month.strftime("%Y-%m"),
+        "global_sales_goal_target": global_sales_goal_target,
+        "global_sales_goal_actual": global_sales_goal_actual,
+        "global_sales_goal_percentage": goal_percentage(global_sales_goal_actual, global_sales_goal_target),
+        "global_purchase_goal_target": global_purchase_goal_target,
+        "global_purchase_goal_actual": global_purchase_goal_actual,
+        "global_purchase_goal_percentage": goal_percentage(global_purchase_goal_actual, global_purchase_goal_target),
+        "personal_sales_goal_target": personal_sales_goal_target,
+        "personal_sales_goal_actual": personal_sales_goal_actual,
+        "personal_sales_goal_percentage": goal_percentage(personal_sales_goal_actual, personal_sales_goal_target),
+        "personal_purchase_goal_target": personal_purchase_goal_target,
+        "personal_purchase_goal_actual": personal_purchase_goal_actual,
+        "personal_purchase_goal_percentage": goal_percentage(personal_purchase_goal_actual, personal_purchase_goal_target),
     }
 
 @app.post("/seed/brands")

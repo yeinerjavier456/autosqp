@@ -1238,6 +1238,19 @@ class RoleDashboardStats(BaseModel):
     personal_appointments_total: int = 0
     personal_appointments_today: int = 0
     personal_appointments_upcoming: int = 0
+    goal_month: str = ""
+    global_sales_goal_target: int = 0
+    global_sales_goal_actual: int = 0
+    global_sales_goal_percentage: float = 0
+    global_purchase_goal_target: int = 0
+    global_purchase_goal_actual: int = 0
+    global_purchase_goal_percentage: float = 0
+    personal_sales_goal_target: int = 0
+    personal_sales_goal_actual: int = 0
+    personal_sales_goal_percentage: float = 0
+    personal_purchase_goal_target: int = 0
+    personal_purchase_goal_actual: int = 0
+    personal_purchase_goal_percentage: float = 0
 
 class ReportsStats(BaseModel):
     total_leads: int
