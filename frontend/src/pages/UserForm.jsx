@@ -50,6 +50,7 @@ const createInitialUserState = () => ({
     company_id: '',
     auto_assign_leads: false,
     lead_reassignment_enabled: false,
+    advisor_tracking_enabled: false,
     tracked_advisor_ids: [],
     commission_percentage: 0,
     base_salary: '',
@@ -158,7 +159,7 @@ const UserForm = () => {
     );
     const isInventarioRoleSelected = getRoleName(selectedRole) === 'inventario';
     const isAdvisorRoleSelected = isAdvisorRole(selectedRole);
-    const canTrackAdvisors = Boolean(selectedRole?.advisor_tracking_enabled);
+    const canTrackAdvisors = Boolean(user.advisor_tracking_enabled);
     const selectedCompany = isSuperAdmin
         ? companies.find((company) => String(company.id) === String(user.company_id))
         : currentUser?.company || null;
@@ -275,6 +276,7 @@ const UserForm = () => {
                     role_id: loadedRoleId,
                     auto_assign_leads: Boolean(userData.auto_assign_leads),
                     lead_reassignment_enabled: Boolean(userData.lead_reassignment_enabled),
+                    advisor_tracking_enabled: Boolean(userData.advisor_tracking_enabled),
                     tracked_advisor_ids: Array.isArray(userData.tracked_advisor_ids)
                         ? userData.tracked_advisor_ids.map((item) => Number(item)).filter((item) => Number.isInteger(item))
                         : [],
@@ -342,6 +344,7 @@ const UserForm = () => {
                 role_id: nextValue,
                 auto_assign_leads: isAdvisorRole(nextRole) ? Boolean(current.auto_assign_leads) : false,
                 lead_reassignment_enabled: ['admin', 'super_admin'].includes(getRoleName(nextRole)),
+                advisor_tracking_enabled: Boolean(nextRole?.advisor_tracking_enabled),
                 tracked_advisor_ids: nextCanTrackAdvisors ? current.tracked_advisor_ids : [],
             }));
             return;
@@ -394,6 +397,7 @@ const UserForm = () => {
 
             payload.auto_assign_leads = Boolean(payload.auto_assign_leads);
             payload.lead_reassignment_enabled = Boolean(payload.lead_reassignment_enabled);
+            payload.advisor_tracking_enabled = Boolean(payload.advisor_tracking_enabled);
             payload.commission_percentage = payload.commission_percentage === '' || payload.commission_percentage == null
                 ? 0
                 : Number(payload.commission_percentage);
@@ -406,7 +410,7 @@ const UserForm = () => {
             if (!selectedRoleForSave) {
                 throw new Error('Debes seleccionar un rol válido para guardar el usuario.');
             }
-            payload.tracked_advisor_ids = selectedRoleForSave?.advisor_tracking_enabled
+            payload.tracked_advisor_ids = payload.advisor_tracking_enabled
                 ? (Array.isArray(payload.tracked_advisor_ids) ? payload.tracked_advisor_ids : [])
                     .map((item) => Number(item))
                     .filter((item) => Number.isInteger(item))
@@ -901,6 +905,27 @@ const UserForm = () => {
                             <div>
                                 <span className="block text-sm font-semibold text-slate-700">Permitir que este usuario redistribuya leads</span>
                                 <span className="mt-1 block text-xs text-slate-500">Habilita la acción para repartir los leads de otro usuario entre los asesores disponibles.</span>
+                            </div>
+                        </label>
+                    </section>
+
+                    <section className={SECTION_CLASS}>
+                        <h2 className="text-lg font-extrabold text-slate-800">Permiso de supervisión</h2>
+                        <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-4">
+                            <input
+                                type="checkbox"
+                                name="advisor_tracking_enabled"
+                                checked={Boolean(user.advisor_tracking_enabled)}
+                                onChange={(event) => setUser((current) => ({
+                                    ...current,
+                                    advisor_tracking_enabled: event.target.checked,
+                                    tracked_advisor_ids: event.target.checked ? current.tracked_advisor_ids : [],
+                                }))}
+                                className="mt-1 h-4 w-4 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <div>
+                                <span className="block text-sm font-semibold text-slate-700">Permitir supervisar otros usuarios</span>
+                                <span className="mt-1 block text-xs text-slate-500">Al habilitarlo podrás seleccionar individualmente qué usuarios verá en su dashboard.</span>
                             </div>
                         </label>
                     </section>

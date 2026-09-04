@@ -2189,6 +2189,7 @@ def ensure_user_status_columns():
                 "is_active": "ALTER TABLE users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1",
                 "auto_assign_leads": "ALTER TABLE users ADD COLUMN auto_assign_leads BOOLEAN NOT NULL DEFAULT 0",
                 "lead_reassignment_enabled": "ALTER TABLE users ADD COLUMN lead_reassignment_enabled BOOLEAN NOT NULL DEFAULT 0",
+                "advisor_tracking_enabled": "ALTER TABLE users ADD COLUMN advisor_tracking_enabled BOOLEAN NOT NULL DEFAULT 0",
                 "tracked_advisor_ids_json": "ALTER TABLE users ADD COLUMN tracked_advisor_ids_json TEXT NULL",
             }
             created_columns = set()
@@ -2219,6 +2220,12 @@ def ensure_user_status_columns():
                     LEFT JOIN roles r ON r.id = u.role_id
                     SET u.lead_reassignment_enabled = 1
                     WHERE COALESCE(r.base_role_name, r.name) IN ('admin', 'super_admin')
+                """))
+            if "advisor_tracking_enabled" in created_columns:
+                conn.execute(text("""
+                    UPDATE users u
+                    LEFT JOIN roles r ON r.id = u.role_id
+                    SET u.advisor_tracking_enabled = COALESCE(r.advisor_tracking_enabled, 0)
                 """))
     except Exception as exc:
         print(f"Warning: could not ensure user status columns: {exc}", flush=True)
@@ -3239,8 +3246,7 @@ def get_role_assignable_role_ids(role: Optional[models.Role]) -> List[int]:
 def get_user_tracked_advisor_ids(user: Optional[models.User]) -> List[int]:
     if (
         not user
-        or not getattr(user, "role", None)
-        or not bool(getattr(user.role, "advisor_tracking_enabled", False))
+        or not bool(getattr(user, "advisor_tracking_enabled", False))
     ):
         return []
     return parse_json_int_list(getattr(user, "tracked_advisor_ids_json", None), [])
@@ -4197,6 +4203,7 @@ def serialize_user(user: models.User, is_online: Optional[bool] = None) -> dict:
         payload["company"]["enabled_modules"] = get_company_enabled_modules(company)
     payload["auto_assign_leads"] = bool(getattr(user, "auto_assign_leads", False) and is_advisor_role(getattr(user, "role", None)))
     payload["lead_reassignment_enabled"] = bool(getattr(user, "lead_reassignment_enabled", False))
+    payload["advisor_tracking_enabled"] = bool(getattr(user, "advisor_tracking_enabled", False))
     payload["tracked_advisor_ids"] = get_user_tracked_advisor_ids(user)
     if is_online is not None:
         payload["is_online"] = is_online
@@ -4612,9 +4619,10 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
     auto_assign_leads = bool(user.auto_assign_leads) if is_advisor_role(role_obj) else False
     role_name = getattr(role_obj, "base_role_name", None) or getattr(role_obj, "name", "")
     lead_reassignment_enabled = True if role_name in {"admin", "super_admin"} else bool(user.lead_reassignment_enabled)
+    advisor_tracking_enabled = bool(user.advisor_tracking_enabled)
     tracked_advisor_ids = sanitize_tracked_advisor_ids(
         db,
-        user.tracked_advisor_ids if bool(getattr(role_obj, "advisor_tracking_enabled", False)) else [],
+        user.tracked_advisor_ids if advisor_tracking_enabled else [],
         user.company_id
     )
     ecard_slug = ensure_unique_ecard_slug(db, user.company_id, user.ecard_slug, build_ecard_fallback_text(user))
@@ -4626,6 +4634,7 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
         company_id=user.company_id,
         auto_assign_leads=auto_assign_leads,
         lead_reassignment_enabled=lead_reassignment_enabled,
+        advisor_tracking_enabled=advisor_tracking_enabled,
         tracked_advisor_ids_json=json.dumps(tracked_advisor_ids),
         ecard_enabled=bool(user.ecard_enabled),
         ecard_slug=ecard_slug,
@@ -4760,16 +4769,29 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
         ):
             raise HTTPException(status_code=403, detail="Solo un administrador puede modificar el permiso para redistribuir leads")
         db_user.lead_reassignment_enabled = bool(user_update.lead_reassignment_enabled)
+    if user_update.advisor_tracking_enabled is not None:
+        if (
+            bool(user_update.advisor_tracking_enabled) != bool(db_user.advisor_tracking_enabled)
+            and effective_role_name not in {"admin", "super_admin"}
+        ):
+            raise HTTPException(status_code=403, detail="Solo un administrador puede modificar el permiso de supervisión")
+        db_user.advisor_tracking_enabled = bool(user_update.advisor_tracking_enabled)
     if user_update.tracked_advisor_ids is not None:
-        db_user.tracked_advisor_ids_json = json.dumps(
-            sanitize_tracked_advisor_ids(
-                db,
-                user_update.tracked_advisor_ids if bool(getattr(resolved_role, "advisor_tracking_enabled", False)) else [],
-                db_user.company_id,
-                excluded_user_id=db_user.id
-            )
+        requested_tracked_ids = sanitize_tracked_advisor_ids(
+            db,
+            user_update.tracked_advisor_ids if bool(db_user.advisor_tracking_enabled) else [],
+            db_user.company_id,
+            excluded_user_id=db_user.id
         )
-    elif not bool(getattr(resolved_role, "advisor_tracking_enabled", False)):
+        if (
+            requested_tracked_ids != get_user_tracked_advisor_ids(db_user)
+            and effective_role_name not in {"admin", "super_admin"}
+        ):
+            raise HTTPException(status_code=403, detail="Solo un administrador puede seleccionar usuarios para supervisión")
+        db_user.tracked_advisor_ids_json = json.dumps(
+            requested_tracked_ids
+        )
+    elif not bool(db_user.advisor_tracking_enabled):
         db_user.tracked_advisor_ids_json = json.dumps([])
     if user_update.ecard_enabled is not None:
         db_user.ecard_enabled = bool(user_update.ecard_enabled)

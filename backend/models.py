@@ -393,6 +393,7 @@ class User(Base):
     is_active = Column(Integer, default=1)
     auto_assign_leads = Column(Boolean, default=False, nullable=False)
     lead_reassignment_enabled = Column(Boolean, default=False, nullable=False)
+    advisor_tracking_enabled = Column(Boolean, default=False, nullable=False)
     tracked_advisor_ids_json = Column(Text, nullable=True)
     ecard_enabled = Column(Boolean, default=False, nullable=False)
     ecard_slug = Column(String(120), nullable=True, index=True)

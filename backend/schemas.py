@@ -43,6 +43,7 @@ class UserBase(BaseModel):
     company_id: Optional[int] = None
     auto_assign_leads: Optional[bool] = False
     lead_reassignment_enabled: Optional[bool] = False
+    advisor_tracking_enabled: Optional[bool] = False
     tracked_advisor_ids: List[int] = []
     ecard_enabled: Optional[bool] = False
     ecard_slug: Optional[str] = None
@@ -122,6 +123,7 @@ class UserUpdate(BaseModel):
     is_active: Optional[int] = None
     auto_assign_leads: Optional[bool] = None
     lead_reassignment_enabled: Optional[bool] = None
+    advisor_tracking_enabled: Optional[bool] = None
     tracked_advisor_ids: Optional[List[int]] = None
     ecard_enabled: Optional[bool] = None
     ecard_slug: Optional[str] = None

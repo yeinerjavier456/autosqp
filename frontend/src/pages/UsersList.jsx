@@ -18,6 +18,7 @@ const UsersList = ({ embedded = false, companyId = '' }) => {
     const [loading, setLoading] = useState(false);
     const [redistributingUserId, setRedistributingUserId] = useState(null);
     const [updatingReassignmentUserId, setUpdatingReassignmentUserId] = useState(null);
+    const [updatingSupervisionUserId, setUpdatingSupervisionUserId] = useState(null);
 
     const fetchUsers = async () => {
         setLoading(true);
@@ -157,6 +158,28 @@ const UsersList = ({ embedded = false, companyId = '' }) => {
         }
     };
 
+    const handleSupervisionToggle = async (targetUser, enabled) => {
+        setUpdatingSupervisionUserId(targetUser.id);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.put(
+                `${API_BASE_URL}/users/${targetUser.id}`,
+                {
+                    advisor_tracking_enabled: enabled,
+                    tracked_advisor_ids: enabled ? (targetUser.tracked_advisor_ids || []) : [],
+                },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            setUsers((current) => current.map((item) => (
+                item.id === targetUser.id ? { ...item, ...response.data } : item
+            )));
+        } catch (error) {
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo actualizar la supervisión', 'error');
+        } finally {
+            setUpdatingSupervisionUserId(null);
+        }
+    };
+
     const totalPages = Math.ceil(total / limit);
 
     return (
@@ -203,6 +226,7 @@ const UsersList = ({ embedded = false, companyId = '' }) => {
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rol</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Puede redistribuir</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supervisión</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registro</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Comisión %</th>
@@ -266,6 +290,18 @@ const UsersList = ({ embedded = false, companyId = '' }) => {
                                                         className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                                                     />
                                                     {user.lead_reassignment_enabled ? 'Habilitado' : 'Inhabilitado'}
+                                                </label>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-600">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={Boolean(user.advisor_tracking_enabled)}
+                                                        disabled={!canManageRedistributionPermission || updatingSupervisionUserId === user.id}
+                                                        onChange={(event) => handleSupervisionToggle(user, event.target.checked)}
+                                                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                                                    />
+                                                    {user.advisor_tracking_enabled ? 'Habilitada' : 'Inhabilitada'}
                                                 </label>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
