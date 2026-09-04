@@ -749,13 +749,13 @@ const AdvisorDashboard = () => {
             </div>
             )}
 
-            {isAdministrator && !isAllyDashboard && supervisedAdvisors.length > 0 && (
+            {!isAllyDashboard && supervisedAdvisors.length > 0 && (
                 <div className="rounded-2xl border border-indigo-200 bg-white p-6 shadow-sm">
                     <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                         <div>
                             <h3 className="text-lg font-bold text-slate-800">Usuarios en supervision</h3>
                             <p className="text-sm text-slate-500">
-                                Resumen de los usuarios configurados en tu perfil para supervision dentro del rango seleccionado.
+                                Resumen de tu gestión y de los usuarios configurados en tu perfil para supervisión dentro del rango seleccionado.
                             </p>
                         </div>
                         <button

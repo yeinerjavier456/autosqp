@@ -889,7 +889,7 @@ const UserForm = () => {
                     )}
 
                     <section className={SECTION_CLASS}>
-                        <h2 className="text-lg font-extrabold text-slate-800">Reasignación de leads</h2>
+                        <h2 className="text-lg font-extrabold text-slate-800">Permiso para redistribuir leads</h2>
                         <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50/70 px-4 py-4">
                             <input
                                 type="checkbox"
@@ -899,8 +899,8 @@ const UserForm = () => {
                                 className="mt-1 h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
                             />
                             <div>
-                                <span className="block text-sm font-semibold text-slate-700">Permitir recibir leads reasignados</span>
-                                <span className="mt-1 block text-xs text-slate-500">Este usuario podrá recibir leads provenientes de alertas o redistribuciones.</span>
+                                <span className="block text-sm font-semibold text-slate-700">Permitir que este usuario redistribuya leads</span>
+                                <span className="mt-1 block text-xs text-slate-500">Habilita la acción para repartir los leads de otro usuario entre los asesores disponibles.</span>
                             </div>
                         </label>
                     </section>

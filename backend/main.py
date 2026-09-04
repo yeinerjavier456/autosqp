@@ -3453,8 +3453,8 @@ def can_user_receive_auto_assigned_leads(user: Optional[models.User]) -> bool:
     return lead_assignment.can_user_receive_auto_assigned_leads(user)
 
 
-def can_user_receive_reassigned_leads(user: Optional[models.User]) -> bool:
-    return lead_assignment.can_user_receive_reassigned_leads(user)
+def can_user_redistribute_leads(user: Optional[models.User]) -> bool:
+    return lead_assignment.can_user_redistribute_leads(user)
 
 
 def is_valid_lead_assignee(user: Optional[models.User], company_id: Optional[int] = None) -> bool:
@@ -3618,7 +3618,7 @@ def get_active_reassignment_candidates(
             continue
         if advisor_only and get_user_role_name(user) != "asesor":
             continue
-        if auto_assign_only and not can_user_receive_reassigned_leads(user):
+        if auto_assign_only and not can_user_receive_auto_assigned_leads(user):
             continue
         if not can_assign_lead_to_user(current_user, user):
             continue
@@ -3643,7 +3643,7 @@ def get_active_advisor_users_for_redistribution(
     for user in candidates:
         if exclude_user_id and user.id == exclude_user_id:
             continue
-        if not can_user_receive_reassigned_leads(user):
+        if not can_user_receive_auto_assigned_leads(user):
             continue
         valid_users.append(user)
 
@@ -4754,6 +4754,11 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
     elif not is_advisor_role(resolved_role):
         db_user.auto_assign_leads = False
     if user_update.lead_reassignment_enabled is not None:
+        if (
+            bool(user_update.lead_reassignment_enabled) != bool(db_user.lead_reassignment_enabled)
+            and effective_role_name not in {"admin", "super_admin"}
+        ):
+            raise HTTPException(status_code=403, detail="Solo un administrador puede modificar el permiso para redistribuir leads")
         db_user.lead_reassignment_enabled = bool(user_update.lead_reassignment_enabled)
     if user_update.tracked_advisor_ids is not None:
         db_user.tracked_advisor_ids_json = json.dumps(
@@ -5084,8 +5089,8 @@ def redistribute_user_leads(
 ):
     role_obj = db.query(models.Role).filter(models.Role.id == current_user.role_id).first()
     effective_role_name = get_user_role_name(current_user)
-    if not role_obj or effective_role_name not in ["super_admin", "admin"]:
-        raise HTTPException(status_code=403, detail="Solo administradores pueden redistribuir leads")
+    if not role_obj or not can_user_redistribute_leads(current_user):
+        raise HTTPException(status_code=403, detail="No tienes habilitado el permiso para redistribuir leads")
 
     source_user = db.query(models.User).join(models.Role, isouter=True).filter(
         models.User.id == user_id
@@ -5107,7 +5112,7 @@ def redistribute_user_leads(
     if not recipient_users:
         raise HTTPException(
             status_code=400,
-            detail="No hay usuarios activos habilitados para recibir reasignaciones"
+            detail="No hay asesores o vendedores activos con asignación automática habilitada para recibir estos leads"
         )
 
     leads = db.query(models.Lead).options(
@@ -8294,6 +8299,10 @@ def read_advisor_stats(
     company_scope = role_name in {"admin", "super_admin"}
     ally_user_ids = set(get_company_ally_user_ids(db, current_user.company_id))
     tracked_advisor_ids = get_user_tracked_advisor_ids(current_user)
+    supervised_profile_ids = list(dict.fromkeys([
+        *tracked_advisor_ids,
+        *([current_user.id] if tracked_advisor_ids else []),
+    ]))
     visible_user_ids = [current_user.id, *tracked_advisor_ids]
 
     visible_leads_query = db.query(models.Lead).filter(
@@ -8338,11 +8347,11 @@ def read_advisor_stats(
     recent_leads_by_day = {label: 0 for label in trend_labels}
     ally_recent_leads_by_day = {label: 0 for label in trend_labels}
     tracked_advisor_users = []
-    if tracked_advisor_ids:
+    if supervised_profile_ids:
         tracked_advisor_users = db.query(models.User).options(
             joinedload(models.User.role)
         ).filter(
-            models.User.id.in_(tracked_advisor_ids),
+            models.User.id.in_(supervised_profile_ids),
             models.User.company_id == current_user.company_id
         ).all()
     supervised_advisor_map: Dict[int, Dict[str, Any]] = {
@@ -8383,7 +8392,7 @@ def read_advisor_stats(
 
         supervisor_ids = {supervisor.id for supervisor in (lead.supervisors or []) if supervisor and supervisor.id}
         touched_tracked_advisor_ids = [
-            advisor_id for advisor_id in tracked_advisor_ids
+            advisor_id for advisor_id in supervised_profile_ids
             if advisor_id in supervised_advisor_map
             and (lead.assigned_to_id == advisor_id or advisor_id in supervisor_ids)
         ]

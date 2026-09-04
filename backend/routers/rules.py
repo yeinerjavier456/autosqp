@@ -118,7 +118,7 @@ def ensure_specific_user_scope(rule: schemas.AutomationRuleCreate, db: Session, 
 
 
 def can_receive_alert_reassignment(user: Optional[models.User]) -> bool:
-    return lead_assignment.can_user_receive_reassigned_leads(user)
+    return lead_assignment.can_user_receive_auto_assigned_leads(user)
 
 
 def ensure_reassignment_user_scope(rule: schemas.AutomationRuleCreate, db: Session, current_user: models.User):
@@ -137,7 +137,7 @@ def ensure_reassignment_user_scope(rule: schemas.AutomationRuleCreate, db: Sessi
     if not can_receive_alert_reassignment(target_user):
         raise HTTPException(
             status_code=400,
-            detail="El usuario seleccionado no está habilitado para recibir reasignaciones"
+            detail="Solo puedes reasignar leads a asesores o vendedores con asignación automática habilitada"
         )
 
 

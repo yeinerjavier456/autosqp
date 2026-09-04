@@ -57,7 +57,8 @@ const UsersList = ({ embedded = false, companyId = '' }) => {
     };
 
     const currentRoleName = currentUser?.role?.base_role_name || currentUser?.role?.name || '';
-    const canRedistributeLeads = currentRoleName === 'admin' || currentRoleName === 'super_admin';
+    const canManageRedistributionPermission = currentRoleName === 'admin' || currentRoleName === 'super_admin';
+    const canRedistributeLeads = Boolean(currentUser?.lead_reassignment_enabled);
 
     const handleShowEcardQr = async (targetUser) => {
         const publicUrl = getEcardPublicUrl(targetUser.company || currentUser?.company, targetUser.ecard_slug);
@@ -105,7 +106,7 @@ const UsersList = ({ embedded = false, companyId = '' }) => {
     const handleRedistributeLeads = async (targetUser) => {
         const result = await Swal.fire({
             title: 'Redistribuir leads',
-            text: `Se redistribuirán aleatoriamente todos los leads asignados a ${targetUser.full_name || targetUser.email} entre usuarios habilitados para recibir reasignaciones.`,
+            text: `Se redistribuirán aleatoriamente todos los leads asignados a ${targetUser.full_name || targetUser.email} entre asesores/vendedores con asignación automática habilitada.`,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonText: 'Redistribuir',
@@ -201,7 +202,7 @@ const UsersList = ({ embedded = false, companyId = '' }) => {
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rol</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recibe reasignaciones</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Puede redistribuir</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registro</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Comisión %</th>
@@ -260,7 +261,7 @@ const UsersList = ({ embedded = false, companyId = '' }) => {
                                                     <input
                                                         type="checkbox"
                                                         checked={Boolean(user.lead_reassignment_enabled)}
-                                                        disabled={!canRedistributeLeads || updatingReassignmentUserId === user.id}
+                                                        disabled={!canManageRedistributionPermission || updatingReassignmentUserId === user.id}
                                                         onChange={(event) => handleReassignmentToggle(user, event.target.checked)}
                                                         className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                                                     />

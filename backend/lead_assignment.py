@@ -49,7 +49,7 @@ def can_user_receive_auto_assigned_leads(user: Optional[models.User]) -> bool:
     return bool(getattr(user, "auto_assign_leads", False))
 
 
-def can_user_receive_reassigned_leads(user: Optional[models.User]) -> bool:
+def can_user_redistribute_leads(user: Optional[models.User]) -> bool:
     return bool(
         user
         and is_active_user(user)
