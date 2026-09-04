@@ -2282,6 +2282,13 @@ def ensure_sales_metadata_columns():
                 "external_seller_name": "ALTER TABLE sales ADD COLUMN external_seller_name VARCHAR(150) NULL",
                 "purchase_manager_id": "ALTER TABLE sales ADD COLUMN purchase_manager_id INTEGER NULL",
                 "credit_manager_id": "ALTER TABLE sales ADD COLUMN credit_manager_id INTEGER NULL",
+                "seller_commission_mode": "ALTER TABLE sales ADD COLUMN seller_commission_mode VARCHAR(20) NULL",
+                "purchase_commission_mode": "ALTER TABLE sales ADD COLUMN purchase_commission_mode VARCHAR(20) NULL",
+                "purchase_commission_percentage": "ALTER TABLE sales ADD COLUMN purchase_commission_percentage DECIMAL(8,4) NOT NULL DEFAULT 0",
+                "purchase_commission_amount": "ALTER TABLE sales ADD COLUMN purchase_commission_amount INTEGER NOT NULL DEFAULT 0",
+                "credit_commission_mode": "ALTER TABLE sales ADD COLUMN credit_commission_mode VARCHAR(20) NULL",
+                "credit_commission_percentage": "ALTER TABLE sales ADD COLUMN credit_commission_percentage DECIMAL(8,4) NOT NULL DEFAULT 0",
+                "credit_commission_amount": "ALTER TABLE sales ADD COLUMN credit_commission_amount INTEGER NOT NULL DEFAULT 0",
                 "tax_transaction_type": "ALTER TABLE sales ADD COLUMN tax_transaction_type VARCHAR(50) NULL DEFAULT 'intermediacion'",
                 "tax_transfer_to_cars": "ALTER TABLE sales ADD COLUMN tax_transfer_to_cars VARCHAR(20) NULL",
                 "tax_seller_name": "ALTER TABLE sales ADD COLUMN tax_seller_name VARCHAR(180) NULL",
@@ -2314,6 +2321,13 @@ def ensure_sales_metadata_columns():
             )).scalar()
             if seller_is_nullable == "NO":
                 conn.execute(text("ALTER TABLE sales MODIFY COLUMN seller_id INTEGER NULL"))
+            commission_type = conn.execute(text(
+                "SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sales' "
+                "AND COLUMN_NAME = 'commission_percentage'"
+            )).scalar()
+            if commission_type in {"int", "integer", "bigint", "smallint"}:
+                conn.execute(text("ALTER TABLE sales MODIFY COLUMN commission_percentage DECIMAL(8,4) NOT NULL DEFAULT 0"))
     except Exception as exc:
         print(f"Warning: could not ensure sales metadata columns: {exc}", flush=True)
 
@@ -11022,6 +11036,41 @@ def _resolve_sale_purchase_manager_id(db: Session, company_id: Optional[int], ve
     purchase = next((record for record in records if _is_purchase_application(record)), None)
     return getattr(purchase, "assigned_to_id", None) if purchase else None
 
+
+def _sale_commission(mode: Optional[str], value: Optional[float], sale_price: int) -> tuple[float, int]:
+    normalized_mode = (mode or "").strip().lower()
+    numeric_value = float(value or 0)
+    if normalized_mode not in {"amount", "percentage"}:
+        raise HTTPException(status_code=400, detail="La comisión debe definirse como valor o porcentaje")
+    if numeric_value < 0:
+        raise HTTPException(status_code=400, detail="La comisión no puede ser negativa")
+    if normalized_mode == "percentage":
+        if numeric_value > 100:
+            raise HTTPException(status_code=400, detail="El porcentaje de comisión no puede superar 100%")
+        return numeric_value, int(round((sale_price or 0) * numeric_value / 100))
+    amount = int(round(numeric_value))
+    percentage = (amount * 100 / sale_price) if sale_price else 0
+    return percentage, amount
+
+
+def _sale_commissions_complete(sale: models.Sale) -> bool:
+    required_modes = []
+    if sale.seller_id or (sale.external_seller_name or "").strip():
+        required_modes.append(sale.seller_commission_mode)
+    if sale.purchase_manager_id:
+        required_modes.append(sale.purchase_commission_mode)
+    if sale.credit_manager_id:
+        required_modes.append(sale.credit_commission_mode)
+    return all(mode in {"amount", "percentage"} for mode in required_modes)
+
+
+def _recalculate_sale_net_revenue(sale: models.Sale) -> None:
+    sale.net_revenue = int(sale.sale_price or 0) - sum([
+        int(sale.commission_amount or 0),
+        int(sale.purchase_commission_amount or 0),
+        int(sale.credit_commission_amount or 0),
+    ])
+
 @app.post("/sales/", response_model=schemas.Sale)
 def create_sale(
     sale: schemas.SaleCreate, 
@@ -11222,13 +11271,55 @@ def read_sales(
     if responsibles_updated:
         db.commit()
     for sale in sales:
-        purchase_percentage = float(getattr(getattr(sale, "purchase_manager", None), "commission_percentage", 0) or 0)
-        credit_percentage = float(getattr(getattr(sale, "credit_manager", None), "commission_percentage", 0) or 0)
-        sale.purchase_commission_percentage = purchase_percentage
-        sale.purchase_commission_amount = int(round((sale.sale_price or 0) * purchase_percentage / 100))
-        sale.credit_commission_percentage = credit_percentage
-        sale.credit_commission_amount = int(round((sale.sale_price or 0) * credit_percentage / 100))
+        sale.commissions_complete = _sale_commissions_complete(sale)
     return {"items": sales, "total": total}
+
+
+@app.put("/sales/{sale_id}/commissions", response_model=schemas.Sale)
+def update_sale_commissions(
+    sale_id: int,
+    payload: schemas.SaleCommissionsUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if not is_company_admin_user(current_user):
+        raise HTTPException(status_code=403, detail="Solo un administrador puede definir las comisiones")
+    sale = db.query(models.Sale).options(
+        joinedload(models.Sale.vehicle),
+        joinedload(models.Sale.lead),
+        joinedload(models.Sale.seller),
+        joinedload(models.Sale.purchase_manager),
+        joinedload(models.Sale.credit_manager),
+    ).filter(models.Sale.id == sale_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Venta no encontrada")
+    if current_user.company_id and sale.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    if sale.status != models.SaleStatus.PENDING.value:
+        raise HTTPException(status_code=400, detail="Solo se pueden editar comisiones de ventas pendientes")
+
+    role_fields = [
+        (bool(sale.seller_id or (sale.external_seller_name or "").strip()), "seller", "commission_percentage", "commission_amount"),
+        (bool(sale.purchase_manager_id), "purchase", "purchase_commission_percentage", "purchase_commission_amount"),
+        (bool(sale.credit_manager_id), "credit", "credit_commission_percentage", "credit_commission_amount"),
+    ]
+    for is_involved, prefix, percentage_field, amount_field in role_fields:
+        if not is_involved:
+            continue
+        mode = getattr(payload, f"{prefix}_mode")
+        value = getattr(payload, f"{prefix}_value")
+        if value is None:
+            raise HTTPException(status_code=400, detail=f"Debes indicar la comisión de {prefix}")
+        percentage, amount = _sale_commission(mode, value, int(sale.sale_price or 0))
+        setattr(sale, "seller_commission_mode" if prefix == "seller" else f"{prefix}_commission_mode", mode)
+        setattr(sale, percentage_field, percentage)
+        setattr(sale, amount_field, amount)
+
+    _recalculate_sale_net_revenue(sale)
+    db.commit()
+    db.refresh(sale)
+    sale.commissions_complete = _sale_commissions_complete(sale)
+    return sale
 
 @app.put("/sales/{sale_id}", response_model=schemas.Sale)
 def update_sale(
@@ -11258,9 +11349,16 @@ def update_sale(
 
     commission_pct, commission_amount, net_revenue = compute_sale_numbers(sale_update.sale_price, sale.seller)
     sale.sale_price = int(sale_update.sale_price)
-    sale.commission_percentage = commission_pct
-    sale.commission_amount = commission_amount
-    sale.net_revenue = net_revenue
+    if sale.seller_commission_mode == "percentage":
+        sale.commission_amount = int(round(sale.sale_price * float(sale.commission_percentage or 0) / 100))
+    elif sale.seller_commission_mode != "amount":
+        sale.commission_percentage = commission_pct
+        sale.commission_amount = commission_amount
+    if sale.purchase_commission_mode == "percentage":
+        sale.purchase_commission_amount = int(round(sale.sale_price * float(sale.purchase_commission_percentage or 0) / 100))
+    if sale.credit_commission_mode == "percentage":
+        sale.credit_commission_amount = int(round(sale.sale_price * float(sale.credit_commission_percentage or 0) / 100))
+    _recalculate_sale_net_revenue(sale)
     if sale.vehicle:
         sale.vehicle.price = int(sale_update.sale_price)
 
@@ -11629,12 +11727,23 @@ def approve_sale(
     if not is_company_admin_user(current_user):
          raise HTTPException(status_code=403, detail="Only admins can approve sales")
          
-    sale = db.query(models.Sale).filter(models.Sale.id == sale_id).first()
+    sale = db.query(models.Sale).options(
+        joinedload(models.Sale.vehicle),
+        joinedload(models.Sale.lead),
+        joinedload(models.Sale.seller),
+        joinedload(models.Sale.purchase_manager),
+        joinedload(models.Sale.credit_manager),
+    ).filter(models.Sale.id == sale_id).first()
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
         
     if sale.status == "approved":
         raise HTTPException(status_code=400, detail="Sale already approved")
+    if not _sale_commissions_complete(sale):
+        raise HTTPException(
+            status_code=400,
+            detail="Debes definir la comisión de todas las personas involucradas antes de aprobar la venta"
+        )
         
     # Finalize
     sale.status = "approved"
@@ -11733,7 +11842,12 @@ def get_finance_stats(
     sales = query.all()
     
     total_revenue = sum(s.net_revenue for s in sales)
-    total_commissions = sum(s.commission_amount for s in sales)
+    total_commissions = sum(
+        int(s.commission_amount or 0)
+        + int(s.purchase_commission_amount or 0)
+        + int(s.credit_commission_amount or 0)
+        for s in sales
+    )
     total_sales_count = len(sales)
     
     # 2. Pending Count
@@ -11750,7 +11864,12 @@ def get_finance_stats(
     current_month_sales = sales if (range_start and range_end) else [s for s in sales if s.sale_date and s.sale_date.month == now.month and s.sale_date.year == now.year]
     
     monthly_revenue = sum(s.net_revenue for s in current_month_sales)
-    monthly_commissions = sum(s.commission_amount for s in current_month_sales)
+    monthly_commissions = sum(
+        int(s.commission_amount or 0)
+        + int(s.purchase_commission_amount or 0)
+        + int(s.credit_commission_amount or 0)
+        for s in current_month_sales
+    )
 
     # 4. Payroll Expenses (Sum of base_salary of all users)
     # Filter by company if needed

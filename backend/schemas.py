@@ -936,6 +936,14 @@ class SaleCreate(SaleBase):
 class SaleUpdate(BaseModel):
     sale_price: int
 
+class SaleCommissionsUpdate(BaseModel):
+    seller_mode: Optional[str] = None
+    seller_value: Optional[float] = None
+    purchase_mode: Optional[str] = None
+    purchase_value: Optional[float] = None
+    credit_mode: Optional[str] = None
+    credit_value: Optional[float] = None
+
 class SaleTaxInfoUpdate(BaseModel):
     tax_transaction_type: Optional[str] = None
     tax_transfer_to_cars: Optional[str] = None
@@ -1026,10 +1034,14 @@ class Sale(SaleBase):
     credit_manager_id: Optional[int] = None
     client_document_number: Optional[str] = None
     client_phone: Optional[str] = None
+    seller_commission_mode: Optional[str] = None
+    purchase_commission_mode: Optional[str] = None
     purchase_commission_percentage: float = 0
     purchase_commission_amount: int = 0
+    credit_commission_mode: Optional[str] = None
     credit_commission_percentage: float = 0
     credit_commission_amount: int = 0
+    commissions_complete: bool = False
     
     vehicle: Optional[Vehicle] = None
     lea: Optional[Lead] = None # Typo fixed

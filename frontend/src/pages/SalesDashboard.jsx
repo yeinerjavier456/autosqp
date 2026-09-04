@@ -46,6 +46,147 @@ const sortReceiptsByRecentFirst = (items = []) => {
     });
 };
 
+const SaleRequestModal = ({ sale, saving, requireCommissions, onClose, onSave }) => {
+    const initialValue = (mode, percentage, amount) => mode === 'percentage'
+        ? String(percentage ?? '')
+        : mode === 'amount' ? formatCurrencyInput(amount) : '';
+    const [form, setForm] = useState({
+        seller_mode: sale.seller_commission_mode || '',
+        seller_value: initialValue(sale.seller_commission_mode, sale.commission_percentage, sale.commission_amount),
+        purchase_mode: sale.purchase_commission_mode || '',
+        purchase_value: initialValue(sale.purchase_commission_mode, sale.purchase_commission_percentage, sale.purchase_commission_amount),
+        credit_mode: sale.credit_commission_mode || '',
+        credit_value: initialValue(sale.credit_commission_mode, sale.credit_commission_percentage, sale.credit_commission_amount),
+    });
+
+    const involved = [
+        { key: 'seller', label: 'Asesor vendedor', name: sale.seller?.full_name || sale.external_seller_name, present: Boolean(sale.seller?.id || sale.external_seller_name) },
+        { key: 'purchase', label: 'Encargado de compra', name: sale.purchase_manager?.full_name, present: Boolean(sale.purchase_manager?.id) },
+        { key: 'credit', label: 'Gestor de crédito', name: sale.credit_manager?.full_name, present: Boolean(sale.credit_manager?.id) },
+    ];
+
+    const buildPayload = () => Object.fromEntries(involved.flatMap(({ key, present }) => {
+        if (!present) return [];
+        const mode = form[`${key}_mode`];
+        const rawValue = form[`${key}_value`];
+        return [
+            [`${key}_mode`, mode],
+            [`${key}_value`, mode === 'amount' ? parseCurrencyInput(rawValue) : Number(rawValue)],
+        ];
+    }));
+
+    const submit = (approve) => {
+        const missing = involved.find(({ key, present }) => present && (
+            !form[`${key}_mode`] || form[`${key}_value`] === ''
+        ));
+        if (missing) {
+            Swal.fire('Comisión pendiente', `Debes definir la comisión de ${missing.name || missing.label}.`, 'warning');
+            return;
+        }
+        onSave(buildPayload(), approve);
+    };
+
+    const vehicle = sale.vehicle || {};
+    const client = sale.lead || {};
+    return (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+            <div className="max-h-[94vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-slate-50 shadow-2xl">
+                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+                    <div>
+                        <h2 className="text-2xl font-bold text-slate-900">Solicitud de venta #{sale.id}</h2>
+                        <p className="text-sm text-slate-500">Revisa la información y define las comisiones antes de aprobar.</p>
+                    </div>
+                    <button type="button" onClick={onClose} className="rounded-full p-2 text-2xl text-slate-500 hover:bg-slate-100">×</button>
+                </div>
+
+                <div className="grid gap-5 p-6 lg:grid-cols-2">
+                    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+                        <h3 className="mb-4 text-lg font-bold text-slate-900">Cliente</h3>
+                        <div className="grid gap-3 sm:grid-cols-2 text-sm">
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Nombre</span>{client.name || sale.tax_buyer_name || 'Sin registrar'}</div>
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Documento</span>{sale.client_document_number || sale.tax_buyer_document || 'Sin registrar'}</div>
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Celular</span>{sale.client_phone || client.phone || sale.tax_buyer_phone || 'Sin registrar'}</div>
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Correo</span>{client.email || sale.tax_buyer_email || 'Sin registrar'}</div>
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Forma de pago</span>{sale.tax_buyer_payment_method || 'Sin registrar'}</div>
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Entidad financiera</span>{sale.tax_buyer_financing_entity || 'No aplica'}</div>
+                            <div className="sm:col-span-2"><span className="block text-xs font-semibold uppercase text-slate-400">Dirección</span>{sale.tax_buyer_address || 'Sin registrar'}</div>
+                        </div>
+                    </section>
+
+                    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+                        <h3 className="mb-4 text-lg font-bold text-slate-900">Vehículo y venta</h3>
+                        <div className="grid gap-3 sm:grid-cols-2 text-sm">
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Vehículo</span>{vehicle.make || ''} {vehicle.model || ''}</div>
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Placa</span>{vehicle.plate || 'Sin registrar'}</div>
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Año</span>{vehicle.year || 'Sin registrar'}</div>
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Kilometraje</span>{vehicle.mileage ? `${Number(vehicle.mileage).toLocaleString('es-CO')} km` : 'Sin registrar'}</div>
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Precio de compra</span>${Number(vehicle.purchase_price || 0).toLocaleString('es-CO')}</div>
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Precio de venta</span><strong>${Number(sale.sale_price || 0).toLocaleString('es-CO')}</strong></div>
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Color</span>{vehicle.color || 'Sin registrar'}</div>
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Ubicación</span>{vehicle.location || 'Sin registrar'}</div>
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Combustible</span>{vehicle.fuel_type || 'Sin registrar'}</div>
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Transmisión</span>{vehicle.transmission || 'Sin registrar'}</div>
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Motor</span>{vehicle.engine || 'Sin registrar'}</div>
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Código interno</span>{vehicle.internal_code || 'Sin registrar'}</div>
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">SOAT</span>{vehicle.soat ? new Date(vehicle.soat).toLocaleDateString('es-CO') : 'Sin registrar'}</div>
+                            <div><span className="block text-xs font-semibold uppercase text-slate-400">Técnico-mecánica</span>{vehicle.tecno ? new Date(vehicle.tecno).toLocaleDateString('es-CO') : 'Sin registrar'}</div>
+                            {vehicle.description && <div className="sm:col-span-2"><span className="block text-xs font-semibold uppercase text-slate-400">Descripción</span><p className="whitespace-pre-line">{vehicle.description}</p></div>}
+                        </div>
+                    </section>
+
+                    <section className="rounded-2xl border border-blue-200 bg-white p-5 lg:col-span-2">
+                        <h3 className="text-lg font-bold text-slate-900">Personas involucradas y comisiones</h3>
+                        <p className="mb-4 text-sm text-slate-500">Selecciona si cada comisión se paga como valor fijo o como porcentaje del precio de venta.</p>
+                        {requireCommissions && <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Debes completar las comisiones pendientes para poder aprobar esta venta.</div>}
+                        <div className="space-y-3">
+                            {involved.map(({ key, label, name, present }) => (
+                                <div key={key} className="grid items-end gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-[minmax(220px,1fr)_180px_minmax(180px,1fr)_180px]">
+                                    <div><span className="block text-xs font-semibold uppercase text-slate-400">{label}</span><strong>{name || 'No hubo responsable asignado'}</strong></div>
+                                    {present ? <>
+                                        <div>
+                                            <label className="mb-1 block text-xs font-semibold text-slate-600">Tipo de comisión</label>
+                                            <select value={form[`${key}_mode`]} onChange={(e) => setForm({ ...form, [`${key}_mode`]: e.target.value, [`${key}_value`]: '' })} className="w-full rounded-lg border border-slate-300 px-3 py-2">
+                                                <option value="">Seleccionar</option>
+                                                <option value="amount">Valor fijo</option>
+                                                <option value="percentage">Porcentaje de venta</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="mb-1 block text-xs font-semibold text-slate-600">{form[`${key}_mode`] === 'percentage' ? 'Porcentaje (%)' : 'Valor ($)'}</label>
+                                            <input type="text" inputMode="decimal" value={form[`${key}_value`]} onChange={(e) => setForm({ ...form, [`${key}_value`]: form[`${key}_mode`] === 'amount' ? formatCurrencyInput(e.target.value) : e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.') })} disabled={!form[`${key}_mode`]} className="w-full rounded-lg border border-slate-300 px-3 py-2 disabled:bg-slate-100" />
+                                        </div>
+                                        <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                                            Comisión: <strong>${Number(form[`${key}_mode`] === 'percentage' ? (sale.sale_price || 0) * Number(form[`${key}_value`] || 0) / 100 : parseCurrencyInput(form[`${key}_value`])).toLocaleString('es-CO', { maximumFractionDigits: 0 })}</strong>
+                                        </div>
+                                    </> : <div className="text-sm text-slate-400 md:col-span-3">No se exige comisión para este rol.</div>}
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+
+                    <section className="rounded-2xl border border-slate-200 bg-white p-5 lg:col-span-2">
+                        <h3 className="mb-4 text-lg font-bold text-slate-900">Movimientos y gastos relacionados</h3>
+                        {(sale.payment_receipts || []).length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm">
+                                    <thead><tr className="border-b text-xs uppercase text-slate-500"><th className="p-2">Fecha</th><th className="p-2">Concepto</th><th className="p-2">Tipo</th><th className="p-2 text-right">Valor</th></tr></thead>
+                                    <tbody>{sale.payment_receipts.map((receipt) => <tr key={receipt.id} className="border-b border-slate-100"><td className="p-2">{receipt.payment_date ? new Date(receipt.payment_date).toLocaleDateString('es-CO') : 'Sin fecha'}</td><td className="p-2">{receipt.concept || receipt.category || 'Sin concepto'}</td><td className="p-2">{receipt.movement_type === 'expense' ? 'Egreso' : 'Ingreso'}</td><td className={`p-2 text-right font-semibold ${receipt.movement_type === 'expense' ? 'text-rose-600' : 'text-emerald-600'}`}>${Number(receipt.amount || 0).toLocaleString('es-CO')}</td></tr>)}</tbody>
+                                </table>
+                            </div>
+                        ) : <p className="text-sm text-slate-500">Esta solicitud todavía no tiene movimientos contables relacionados.</p>}
+                    </section>
+                </div>
+
+                <div className="sticky bottom-0 flex flex-wrap justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4">
+                    <button type="button" onClick={onClose} className="rounded-xl border border-slate-300 px-5 py-2.5 font-semibold text-slate-700">Cancelar</button>
+                    <button type="button" disabled={saving} onClick={() => submit(false)} className="rounded-xl bg-blue-100 px-5 py-2.5 font-semibold text-blue-700 disabled:opacity-50">Guardar comisiones</button>
+                    {sale.status === 'pending' && <button type="button" disabled={saving} onClick={() => submit(true)} className="rounded-xl bg-emerald-600 px-5 py-2.5 font-semibold text-white disabled:opacity-50">{saving ? 'Guardando...' : 'Guardar y aprobar'}</button>}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, initialTab = 'sales' }) => {
     const defaultRange = getLastMonthRange();
     const [stats, setStats] = useState({
@@ -92,6 +233,9 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
     const [startDate, setStartDate] = useState(defaultRange.start);
     const [endDate, setEndDate] = useState(defaultRange.end);
     const [creatingReceipt, setCreatingReceipt] = useState(false);
+    const [selectedSaleRequest, setSelectedSaleRequest] = useState(null);
+    const [commissionReviewRequired, setCommissionReviewRequired] = useState(false);
+    const [savingSaleCommissions, setSavingSaleCommissions] = useState(false);
     const [receiptForm, setReceiptForm] = useState({
         sale_id: '',
         display_name: '',
@@ -292,7 +436,37 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         }
     };
 
-    const handleApprove = async (saleId) => {
+    const approveSale = async (saleId, { confirmed = false } = {}) => {
+        if (!confirmed) {
+            const result = await Swal.fire({
+                title: 'Confirmar esta venta',
+                text: "Se registrarán las comisiones y el vehículo pasará a 'Vendido'.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, aprobar venta',
+                cancelButtonText: 'Cancelar',
+                customClass: {
+                    confirmButton: 'bg-blue-600 text-white px-4 py-2 rounded-lg ml-2',
+                    cancelButton: 'bg-red-600 text-white px-4 py-2 rounded-lg'
+                },
+                buttonsStyling: false
+            });
+            if (!result.isConfirmed) return;
+        }
+
+        const token = localStorage.getItem('token');
+        await axios.put(`/api/sales/${saleId}/approve`, {}, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+    };
+
+    const handleApprove = async (sale) => {
+        if (!sale.commissions_complete) {
+            setCommissionReviewRequired(true);
+            setSelectedSaleRequest(sale);
+            return;
+        }
+
         const result = await Swal.fire({
             title: 'Confirmar esta venta',
             text: "Se registrara la comision y el vehiculo pasara a 'Vendido'.",
@@ -310,15 +484,38 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         if (!result.isConfirmed) return;
 
         try {
-            const token = localStorage.getItem('token');
-            await axios.put(`/api/sales/${saleId}/approve`, {}, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            await approveSale(sale.id, { confirmed: true });
             Swal.fire('Exito', 'Venta aprobada exitosamente', 'success');
             fetchData();
         } catch (error) {
             console.error(error);
             Swal.fire('Error', 'Error al aprobar: ' + (error.response?.data?.detail || error.message), 'error');
+        }
+    };
+
+    const handleSaveSaleCommissions = async (payload, approveAfterSave) => {
+        if (!selectedSaleRequest) return;
+        setSavingSaleCommissions(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.put(`/api/sales/${selectedSaleRequest.id}/commissions`, payload, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (approveAfterSave) {
+                await approveSale(selectedSaleRequest.id, { confirmed: true });
+                Swal.fire('Venta aprobada', 'Las comisiones se guardaron y la venta fue aprobada.', 'success');
+                setSelectedSaleRequest(null);
+            } else {
+                setSelectedSaleRequest(response.data);
+                setCommissionReviewRequired(false);
+                Swal.fire('Guardado', 'Las comisiones quedaron registradas.', 'success');
+            }
+            await fetchData({ silent: true });
+        } catch (error) {
+            console.error(error);
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudieron guardar las comisiones.', 'error');
+        } finally {
+            setSavingSaleCommissions(false);
         }
     };
 
@@ -2279,7 +2476,16 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                                 <td className="p-4 text-right">
                                                     <div className="flex justify-end gap-2">
                                                         <button
-                                                            onClick={() => handleApprove(sale.id)}
+                                                            onClick={() => {
+                                                                setCommissionReviewRequired(false);
+                                                                setSelectedSaleRequest(sale);
+                                                            }}
+                                                            className="rounded bg-blue-100 px-3 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-200"
+                                                        >
+                                                            Ver solicitud
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleApprove(sale)}
                                                             className="rounded bg-green-100 px-3 py-1.5 text-sm font-medium text-green-700 transition hover:bg-green-200"
                                                         >
                                                             Aprobar
@@ -3043,6 +3249,20 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             )}
         </div>
         {/* ── MODAL EDITAR REGISTRO CONTABLE (native React) ── */}
+        {selectedSaleRequest && (
+            <SaleRequestModal
+                key={`${selectedSaleRequest.id}-${selectedSaleRequest.commissions_complete ? 'complete' : 'pending'}`}
+                sale={selectedSaleRequest}
+                saving={savingSaleCommissions}
+                requireCommissions={commissionReviewRequired}
+                onClose={() => {
+                    setSelectedSaleRequest(null);
+                    setCommissionReviewRequired(false);
+                }}
+                onSave={handleSaveSaleCommissions}
+            />
+        )}
+
         {editingReceipt && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4">
                 <div className="max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col">

@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String, ForeignKey, Enum as SqEnum, JSON, DateTime, Text, Date
+from sqlalchemy import Boolean, Column, Integer, Float, String, ForeignKey, Enum as SqEnum, JSON, DateTime, Text, Date
 from sqlalchemy.orm import relationship
 from database import Base
 import enum
@@ -476,8 +476,15 @@ class Sale(Base):
     tax_buyer_financing_entity = Column(String(150), nullable=True)
     
     sale_price = Column(Integer) # Final price sold
-    commission_percentage = Column(Integer) # Snapshot of % at time of sale
+    seller_commission_mode = Column(String(20), nullable=True)
+    commission_percentage = Column(Float, default=0) # Snapshot of % at time of sale
     commission_amount = Column(Integer) # Calculated amount
+    purchase_commission_mode = Column(String(20), nullable=True)
+    purchase_commission_percentage = Column(Float, default=0)
+    purchase_commission_amount = Column(Integer, default=0)
+    credit_commission_mode = Column(String(20), nullable=True)
+    credit_commission_percentage = Column(Float, default=0)
+    credit_commission_amount = Column(Integer, default=0)
     net_revenue = Column(Integer) # sale_price - commission_amount
     
     status = Column(String(50), default=SaleStatus.PENDING)
