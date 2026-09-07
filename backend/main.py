@@ -7756,11 +7756,20 @@ def bulk_assign_leads(
 def normalize_lead_duplicate_name(value: Optional[str]) -> str:
     normalized = unicodedata.normalize("NFKD", str(value or "").strip().lower())
     normalized = "".join(char for char in normalized if not unicodedata.combining(char))
-    return " ".join(normalized.split())
+    normalized = " ".join(normalized.split())
+    generic_names = {
+        "pendiente", "cliente", "lead", "nuevo lead", "sin nombre", "desconocido",
+        "no registra", "no registrado", "n/a", "na", "prueba", "test",
+    }
+    if normalized in generic_names or len(normalized) < 4 or normalized.isdigit():
+        return ""
+    return normalized
 
 
 def normalize_lead_duplicate_phone(value: Optional[str]) -> str:
     digits = re.sub(r"\D", "", str(value or ""))
+    if len(digits) < 7:
+        return ""
     return digits[-10:] if len(digits) >= 10 else digits
 
 
@@ -7786,9 +7795,12 @@ def find_duplicate_company_lead(
         for existing_lead in existing_leads:
             if normalize_lead_duplicate_phone(existing_lead.phone) == normalized_phone:
                 return existing_lead
-    if normalized_name:
+    if normalized_name and not normalized_phone:
         for existing_lead in existing_leads:
-            if normalize_lead_duplicate_name(existing_lead.name) == normalized_name:
+            if (
+                not normalize_lead_duplicate_phone(existing_lead.phone)
+                and normalize_lead_duplicate_name(existing_lead.name) == normalized_name
+            ):
                 return existing_lead
     return None
 
@@ -7807,7 +7819,7 @@ def build_company_lead_duplicate_map(db: Session, company_id: Optional[int]) -> 
         normalized_name = normalize_lead_duplicate_name(name)
         if normalized_phone:
             phone_groups.setdefault(normalized_phone, []).append(lead_id)
-        if normalized_name:
+        if normalized_name and not normalized_phone:
             name_groups.setdefault(normalized_name, []).append(lead_id)
 
     duplicate_map: Dict[int, Dict[str, Any]] = {}
@@ -7816,10 +7828,12 @@ def build_company_lead_duplicate_map(db: Session, company_id: Optional[int]) -> 
             if len(lead_ids) < 2:
                 continue
             for lead_id in lead_ids:
-                current = duplicate_map.setdefault(lead_id, {"count": 0, "matches": []})
-                current["count"] = max(current["count"], len(lead_ids))
-                current["matches"].append(match_type)
+                current = duplicate_map.setdefault(lead_id, {"related_ids": set(), "matches": []})
+                current["related_ids"].update(item_id for item_id in lead_ids if item_id != lead_id)
+                if match_type not in current["matches"]:
+                    current["matches"].append(match_type)
     for metadata in duplicate_map.values():
+        metadata["count"] = len(metadata.pop("related_ids"))
         metadata["match"] = " y ".join(metadata.pop("matches"))
     return duplicate_map
 

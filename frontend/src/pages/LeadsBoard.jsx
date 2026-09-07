@@ -1360,7 +1360,7 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
                             className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-900"
                             title={`Coincidencia por ${lead.duplicate_match || 'datos del cliente'}`}
                         >
-                            ⚠️ Duplicado ({lead.duplicate_count})
+                            ⚠️ {lead.duplicate_count} coincidencia{Number(lead.duplicate_count) === 1 ? '' : 's'}
                         </span>
                     )}
                     {isHighlighted && (
