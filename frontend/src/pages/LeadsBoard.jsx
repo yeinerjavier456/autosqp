@@ -1121,7 +1121,7 @@ const getPurchaseOptionDecisionMeta = (decisionStatus) => {
 };
 
 // Draggable Lead Card Component
-const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = false, boardMode = 'general', canDrag = true, boardAlert = null }) => {
+const LeadCard = ({ lead, status, onDragStart, onViewHistory, onShowDuplicates, isHighlighted = false, boardMode = 'general', canDrag = true, boardAlert = null }) => {
     const getLeadAgePalette = (createdAt) => {
         if (!createdAt) {
             return {
@@ -1356,12 +1356,19 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, isHighlighted = fa
                 </span>
                 <div className="flex flex-wrap items-center justify-end gap-2">
                     {lead.is_duplicate && (
-                        <span
-                            className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-900"
-                            title={`Coincidencia por ${lead.duplicate_match || 'datos del cliente'}`}
+                        <button
+                            type="button"
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                onShowDuplicates?.(lead);
+                            }}
+                            disabled={!onShowDuplicates}
+                            className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-900 transition enabled:hover:border-amber-500 enabled:hover:bg-amber-200 enabled:focus:outline-none enabled:focus:ring-2 enabled:focus:ring-amber-400 disabled:cursor-default"
+                            title={onShowDuplicates ? 'Filtrar el tablero para mostrar leads duplicados' : `Coincidencia por ${lead.duplicate_match || 'datos del cliente'}`}
                         >
                             ⚠️ {lead.duplicate_count} coincidencia{Number(lead.duplicate_count) === 1 ? '' : 's'}
-                        </span>
+                        </button>
                     )}
                     {isHighlighted && (
                         <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wide border border-blue-200">
@@ -1747,6 +1754,7 @@ const KanbanColumn = ({
     onDrop,
     onDragStart,
     onViewHistory,
+    onShowDuplicates,
     highlightedLeadId,
     boardMode = 'general',
     currentUserId = null,
@@ -1779,6 +1787,7 @@ const KanbanColumn = ({
                         status={status}
                         onDragStart={onDragStart}
                         onViewHistory={onViewHistory}
+                        onShowDuplicates={onShowDuplicates}
                         isHighlighted={lead.id === highlightedLeadId}
                         boardMode={boardMode}
                         canDrag={!isSupervisorOnlyCreditViewer(lead, currentUserId, currentUserRole)}
@@ -5759,6 +5768,13 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         }));
     };
 
+    const handleShowDuplicateGroup = (lead) => {
+        if (!lead?.is_duplicate || !canManageDuplicates) return;
+        setSearchTerm('');
+        setDuplicatesOnly(true);
+        setShowFiltersMenu(false);
+    };
+
     if (loading) return (
         <div className="flex justify-center items-center h-[calc(100vh-100px)]">
             <div className="text-xl text-blue-600 font-semibold animate-pulse">Cargando Tablero...</div>
@@ -5939,6 +5955,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                         onDragOver={handleDragOver}
                         onDrop={handleDrop}
                         onViewHistory={handleViewHistory}
+                        onShowDuplicates={canManageDuplicates ? handleShowDuplicateGroup : undefined}
                         highlightedLeadId={highlightedLeadId}
                         boardMode={boardMode}
                         currentUserId={currentUserId}
