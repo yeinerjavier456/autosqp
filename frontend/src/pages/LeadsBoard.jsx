@@ -4607,6 +4607,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const [userFilter, setUserFilter] = useState('');
     const [globalStatusFilter, setGlobalStatusFilter] = useState('');
     const [duplicatesOnly, setDuplicatesOnly] = useState(false);
+    const [duplicateLeadId, setDuplicateLeadId] = useState(null);
     const [showFiltersMenu, setShowFiltersMenu] = useState(false);
     const [showMyLeadsOnly, setShowMyLeadsOnly] = useState(false);
     const [visibleLeadsByStatus, setVisibleLeadsByStatus] = useState({});
@@ -4756,7 +4757,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
     useEffect(() => {
         setVisibleLeadsByStatus({});
-    }, [boardMode, searchTerm, dateFilter, assignedFilter, userFilter, globalStatusFilter, showMyLeadsOnly, duplicatesOnly]);
+    }, [boardMode, searchTerm, dateFilter, assignedFilter, userFilter, globalStatusFilter, showMyLeadsOnly, duplicatesOnly, duplicateLeadId]);
 
     useEffect(() => {
         if (!fetchNotifications) return;
@@ -4808,7 +4809,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         }, 250);
 
         return () => clearTimeout(searchTimer);
-    }, [searchTerm, boardMode, dateFilter, assignedFilter, userFilter, globalStatusFilter, showMyLeadsOnly, duplicatesOnly, visibleLeadsByStatus]);
+    }, [searchTerm, boardMode, dateFilter, assignedFilter, userFilter, globalStatusFilter, showMyLeadsOnly, duplicatesOnly, duplicateLeadId, visibleLeadsByStatus]);
 
     useEffect(() => {
         const intervalId = setInterval(() => {
@@ -4816,7 +4817,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         }, 15000);
 
         return () => clearInterval(intervalId);
-    }, [boardMode, searchTerm, dateFilter, assignedFilter, userFilter, globalStatusFilter, showMyLeadsOnly, duplicatesOnly, visibleLeadsByStatus]);
+    }, [boardMode, searchTerm, dateFilter, assignedFilter, userFilter, globalStatusFilter, showMyLeadsOnly, duplicatesOnly, duplicateLeadId, visibleLeadsByStatus]);
 
     useEffect(() => {
         const leadIdFromQuery = parseInt(searchParams.get('leadId') || '', 10);
@@ -4941,7 +4942,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     only_my_leads: showMyLeadsOnly || undefined,
                     load_all_matching: normalizedSearchTerm ? true : undefined,
                     duplicates_only: duplicatesOnly || undefined,
-                    status_limits: (normalizedSearchTerm || duplicatesOnly) ? undefined : JSON.stringify(statusLimitsPayload)
+                    duplicate_of_id: duplicateLeadId || undefined,
+                    status_limits: (normalizedSearchTerm || duplicatesOnly || duplicateLeadId) ? undefined : JSON.stringify(statusLimitsPayload)
                 }
             });
             const columns = Array.isArray(response.data.columns) ? response.data.columns : [];
@@ -5771,7 +5773,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const handleShowDuplicateGroup = (lead) => {
         if (!lead?.is_duplicate || !canManageDuplicates) return;
         setSearchTerm('');
-        setDuplicatesOnly(true);
+        setDuplicatesOnly(false);
+        setDuplicateLeadId(lead.id);
         setShowFiltersMenu(false);
     };
 
@@ -5808,17 +5811,20 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                         placeholder="Buscar por nombre, correo, placa, documento o teléfono..."
                         className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-shadow text-sm"
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            setDuplicateLeadId(null);
+                        }}
                     />
                 </div>
 
                 <div className="relative">
                     <button
                         onClick={() => setShowFiltersMenu(!showFiltersMenu)}
-                        className={`flex items-center gap-2 px-3.5 py-2 border rounded-lg text-sm font-semibold transition-colors ${showFiltersMenu || globalStatusFilter || userFilter || assignedFilter || dateFilter || duplicatesOnly ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+                        className={`flex items-center gap-2 px-3.5 py-2 border rounded-lg text-sm font-semibold transition-colors ${showFiltersMenu || globalStatusFilter || userFilter || assignedFilter || dateFilter || duplicatesOnly || duplicateLeadId ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
-                        Filtros {(globalStatusFilter || userFilter || assignedFilter || dateFilter || duplicatesOnly) && (<span className="w-2 h-2 rounded-full bg-blue-600"></span>)}
+                        Filtros {(globalStatusFilter || userFilter || assignedFilter || dateFilter || duplicatesOnly || duplicateLeadId) && (<span className="w-2 h-2 rounded-full bg-blue-600"></span>)}
                     </button>
 
                     {/* Dropdown Menu */}
@@ -5826,7 +5832,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                         <div className="absolute right-0 top-12 mt-2 w-72 md:w-80 bg-white rounded-2xl shadow-xl border border-gray-100 z-40 p-5 origin-top-right animate-fade-in-down py-6 grid gap-4">
                             <div className="flex items-center justify-between border-b pb-2">
                                 <h3 className="font-bold text-gray-800">Filtros Avanzados</h3>
-                                {(globalStatusFilter || userFilter || assignedFilter || dateFilter || duplicatesOnly) && (
+                                {(globalStatusFilter || userFilter || assignedFilter || dateFilter || duplicatesOnly || duplicateLeadId) && (
                                     <button
                                         onClick={() => {
                                             setGlobalStatusFilter('');
@@ -5834,6 +5840,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                                             setAssignedFilter('');
                                             setDateFilter('');
                                             setDuplicatesOnly(false);
+                                            setDuplicateLeadId(null);
                                         }}
                                         className="text-xs text-red-500 hover:text-red-700 font-semibold"
                                     >Limpiar todo</button>
@@ -5845,7 +5852,10 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                                     <input
                                         type="checkbox"
                                         checked={duplicatesOnly}
-                                        onChange={(event) => setDuplicatesOnly(event.target.checked)}
+                                        onChange={(event) => {
+                                            setDuplicatesOnly(event.target.checked);
+                                            setDuplicateLeadId(null);
+                                        }}
                                         className="h-5 w-5 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
                                     />
                                     <span className="text-sm font-bold text-amber-900">⚠️ Solo leads duplicados</span>
@@ -5940,6 +5950,15 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
                     )}
                 </div>
+                {duplicateLeadId && (
+                    <button
+                        type="button"
+                        onClick={() => setDuplicateLeadId(null)}
+                        className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-900 hover:bg-amber-100"
+                    >
+                        Coincidencias del lead #{duplicateLeadId} ×
+                    </button>
+                )}
             </div>
 
             {/* Kanban Board */}

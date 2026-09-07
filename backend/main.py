@@ -7475,6 +7475,7 @@ def read_leads_board(
     only_my_leads: bool = False,
     load_all_matching: bool = False,
     duplicates_only: bool = False,
+    duplicate_of_id: int = None,
     status_limits: str = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
@@ -7483,6 +7484,13 @@ def read_leads_board(
     if duplicates_only and not is_company_admin(current_user):
         raise HTTPException(status_code=403, detail="Solo los administradores pueden filtrar leads duplicados")
     duplicate_map = build_company_lead_duplicate_map(db, current_user.company_id)
+    duplicate_group_ids = None
+    if duplicate_of_id is not None:
+        duplicate_meta = duplicate_map.get(duplicate_of_id)
+        duplicate_group_ids = {
+            duplicate_of_id,
+            *(duplicate_meta.get("related_ids", []) if duplicate_meta else []),
+        } if duplicate_meta else set()
     parsed_status_limits: Dict[str, int] = {}
     if status_limits:
         try:
@@ -7525,7 +7533,7 @@ def read_leads_board(
         )
 
         total = base_query.count()
-        status_limit = total if (load_all_matching or duplicates_only) else parsed_status_limits.get(normalized_status, 10)
+        status_limit = total if (load_all_matching or duplicates_only or duplicate_of_id is not None) else parsed_status_limits.get(normalized_status, 10)
 
         items_query = apply_lead_access_filters(
             build_lead_summary_query(db),
@@ -7553,6 +7561,9 @@ def read_leads_board(
             item.duplicate_match = duplicate_meta.get("match") if duplicate_meta else None
         if duplicates_only:
             items = [item for item in items if item.is_duplicate]
+            total = len(items)
+        if duplicate_group_ids is not None:
+            items = [item for item in items if item.id in duplicate_group_ids]
             total = len(items)
 
         columns.append(
@@ -7833,7 +7844,8 @@ def build_company_lead_duplicate_map(db: Session, company_id: Optional[int]) -> 
                 if match_type not in current["matches"]:
                     current["matches"].append(match_type)
     for metadata in duplicate_map.values():
-        metadata["count"] = len(metadata.pop("related_ids"))
+        metadata["related_ids"] = sorted(metadata["related_ids"])
+        metadata["count"] = len(metadata["related_ids"])
         metadata["match"] = " y ".join(metadata.pop("matches"))
     return duplicate_map
 
