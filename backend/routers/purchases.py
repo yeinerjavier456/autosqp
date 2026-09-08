@@ -785,6 +785,20 @@ def update_purchase(
 
     _ensure_purchase_has_active_assignee(db, purchase)
 
+    update_payload = purchase_update.dict(exclude_unset=True)
+    if "assigned_to_id" in update_payload and purchase_update.assigned_to_id != purchase.assigned_to_id:
+        if not _can_manage_purchase_board(current_user):
+            raise HTTPException(status_code=403, detail="No tienes permisos para reasignar solicitudes de compra")
+        if purchase_update.assigned_to_id is None:
+            raise HTTPException(status_code=400, detail="Debes seleccionar una persona responsable de compras")
+        target_assignee = db.query(models.User).options(joinedload(models.User.role)).filter(
+            models.User.id == purchase_update.assigned_to_id,
+            models.User.company_id == purchase.company_id,
+            models.User.is_active == True,
+        ).first()
+        if not target_assignee or not _is_purchase_manager_role(getattr(target_assignee, "role", None)):
+            raise HTTPException(status_code=400, detail="El responsable debe ser un usuario activo con perfil de compras de esta empresa")
+
     previous_status = purchase.status
     previous_notes = purchase.notes or ""
     requested_status = (purchase_update.status or "").strip().lower() if purchase_update.status is not None else None
@@ -840,7 +854,7 @@ def update_purchase(
     credit_used_amount_payload = purchase_update.credit_used_amount
     reservation_payment_method_payload = (purchase_update.reservation_payment_method or "").strip().lower() if purchase_update.reservation_payment_method is not None else None
 
-    for field, value in purchase_update.dict(exclude_unset=True).items():
+    for field, value in update_payload.items():
         if field == "status_note":
             continue
         if field in {"reservation_amount", "credit_used_amount", "reservation_payment_method"}:

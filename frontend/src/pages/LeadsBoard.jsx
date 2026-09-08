@@ -4651,6 +4651,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     // Modal State - New Lead
     const [showAddLeadModal, setShowAddLeadModal] = useState(false);
     const [creatingLead, setCreatingLead] = useState(false);
+    const creatingLeadRef = React.useRef(false);
     const [duplicateCheck, setDuplicateCheck] = useState(null);
     const [checkingDuplicate, setCheckingDuplicate] = useState(false);
     const [newLeadForm, setNewLeadForm] = useState({
@@ -4851,11 +4852,12 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
     const handleCreateLead = async (e) => {
         e.preventDefault();
-        if (creatingLead) return;
+        if (creatingLeadRef.current || creatingLead) return;
         if (checkingDuplicate || duplicateCheck?.exists) {
             Swal.fire('Lead duplicado', duplicateCheck?.message || 'Espera a que termine la validación de duplicados.', 'warning');
             return;
         }
+        creatingLeadRef.current = true;
         setCreatingLead(true);
         try {
             const token = localStorage.getItem('token');
@@ -4911,6 +4913,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 confirmButtonColor: '#2563eb'
             });
         } finally {
+            creatingLeadRef.current = false;
             setCreatingLead(false);
         }
     };

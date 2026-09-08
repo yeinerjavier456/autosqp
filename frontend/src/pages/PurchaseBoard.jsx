@@ -192,6 +192,7 @@ const PurchaseBoard = () => {
     const [optionPhotos, setOptionPhotos] = useState([]);
     const [optionPhotoPreviews, setOptionPhotoPreviews] = useState([]);
     const [savingPurchaseNote, setSavingPurchaseNote] = useState(false);
+    const [savingPurchaseAssignee, setSavingPurchaseAssignee] = useState(false);
     const [uploadingPurchaseFiles, setUploadingPurchaseFiles] = useState(false);
     const [savingPurchaseOption, setSavingPurchaseOption] = useState(false);
     const [processingInitialDecision, setProcessingInitialDecision] = useState(false);
@@ -214,6 +215,12 @@ const PurchaseBoard = () => {
     const optionPhotoInputRef = useRef(null);
     const normalizedCurrentUserRole = String(user?.role?.base_role_name || user?.role?.name || user?.role || '').trim().toLowerCase();
     const canManagePurchaseOptions = normalizedCurrentUserRole === 'compras' || normalizedCurrentUserRole === 'super_admin' || normalizedCurrentUserRole === 'super admin' || normalizedCurrentUserRole === 'admin';
+    const eligiblePurchaseUsers = purchaseUsers.filter((person) => {
+        if (person?.is_active === false) return false;
+        const role = person?.role;
+        const roleName = String(role?.base_role_name || role?.name || role || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
+        return roleName === 'compras' || roleName.includes('compra') || roleName === 'comprador';
+    });
 
     useEffect(() => {
         if (!user?.id) return;
@@ -520,6 +527,28 @@ const PurchaseBoard = () => {
             Swal.fire('Error', getApiErrorMessage(error, 'No se pudo actualizar la solicitud de compra'), 'error');
         } finally {
             setProcessingInitialDecision(false);
+        }
+    };
+
+    const handlePurchaseAssigneeChange = async (assignedToId) => {
+        if (!selectedPurchase?.id || !canManagePurchaseOptions || savingPurchaseAssignee || !assignedToId) return;
+        setSavingPurchaseAssignee(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.put(
+                `${API_BASE_URL}/purchases/${selectedPurchase.id}`,
+                { assigned_to_id: Number(assignedToId) },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const updatedPurchase = response.data;
+            setSelectedPurchase((prev) => prev ? { ...prev, ...updatedPurchase } : prev);
+            setPurchases((prev) => prev.map((item) => item.id === updatedPurchase.id ? { ...item, ...updatedPurchase } : item));
+            Swal.fire({ icon: 'success', title: 'Responsable asignado', timer: 1400, showConfirmButton: false });
+        } catch (error) {
+            console.error('Error assigning purchase request', error);
+            Swal.fire('Error', getApiErrorMessage(error, 'No se pudo asignar el responsable'), 'error');
+        } finally {
+            setSavingPurchaseAssignee(false);
         }
     };
 
@@ -1107,9 +1136,27 @@ const PurchaseBoard = () => {
                                     <p className="text-sm text-slate-700">
                                         <span className="font-semibold">Estado:</span> {getPurchaseStatusLabel(selectedPurchase.status)}
                                     </p>
-                                    <p className="mt-1 text-sm text-slate-700">
-                                        <span className="font-semibold">Asignado a:</span> {purchaseUsers.find((person) => person.id === selectedPurchase.assigned_to_id)?.full_name || 'Sin asignar'}
-                                    </p>
+                                    {canManagePurchaseOptions ? (
+                                        <label className="mt-2 block text-sm text-slate-700">
+                                            <span className="mb-1 block font-semibold">Responsable de búsqueda y compra</span>
+                                            <select
+                                                value={selectedPurchase.assigned_to_id || ''}
+                                                onChange={(event) => handlePurchaseAssigneeChange(event.target.value)}
+                                                disabled={savingPurchaseAssignee}
+                                                className="w-full min-w-[260px] rounded-xl border border-slate-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+                                            >
+                                                <option value="">Selecciona un responsable</option>
+                                                {eligiblePurchaseUsers.map((person) => (
+                                                    <option key={person.id} value={person.id}>{person.full_name || person.email}</option>
+                                                ))}
+                                            </select>
+                                            {savingPurchaseAssignee && <span className="mt-1 block text-xs text-blue-600">Guardando asignación...</span>}
+                                        </label>
+                                    ) : (
+                                        <p className="mt-1 text-sm text-slate-700">
+                                            <span className="font-semibold">Asignado a:</span> {purchaseUsers.find((person) => person.id === selectedPurchase.assigned_to_id)?.full_name || 'Sin asignar'}
+                                        </p>
+                                    )}
                                 </div>
                                 {selectedPurchase.status === 'pending' && (
                                     <div className="flex flex-wrap gap-2">

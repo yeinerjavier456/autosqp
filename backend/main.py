@@ -7892,6 +7892,12 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
         else:
              raise HTTPException(status_code=400, detail="Company ID required for assignment")
 
+    # Serialize manual lead creation per company. This closes the race where two
+    # slow or repeated requests both pass the duplicate check before either one commits.
+    company = db.query(models.Company).filter(models.Company.id == company_id).with_for_update().first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Empresa no encontrada")
+
     duplicate_lead = find_duplicate_company_lead(db, company_id, lead.name, lead.phone)
     if duplicate_lead:
         assigned_user = getattr(duplicate_lead, "assigned_to", None)
@@ -7909,7 +7915,6 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
         )
 
     # 2. Assignment Logic
-    company = get_company_by_id(db, company_id)
     assigned_user_id = lead.assigned_to_id
     supervisor_ids = normalize_supervisor_ids(getattr(lead, "supervisor_ids", []))
     if supervisor_ids and not is_company_admin(current_user):
