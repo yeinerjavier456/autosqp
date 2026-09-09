@@ -7588,6 +7588,8 @@ def export_leads_xlsx(
 ):
     if not is_company_admin(current_user):
         raise HTTPException(status_code=403, detail="Solo los administradores de la empresa pueden descargar el Excel de leads")
+    if not current_user.company_id:
+        raise HTTPException(status_code=400, detail="Debes tener una empresa seleccionada para descargar sus leads")
 
     parsed_start = None
     parsed_end = None
@@ -7604,7 +7606,7 @@ def export_leads_xlsx(
         db,
         current_user,
         board_scope=board_scope,
-    )
+    ).filter(models.Lead.company_id == current_user.company_id)
     if parsed_start:
         start_utc = datetime.datetime.combine(parsed_start, datetime.time.min, tzinfo=BOGOTA_TZ).astimezone(datetime.timezone.utc).replace(tzinfo=None)
         query = query.filter(models.Lead.created_at >= start_utc)
