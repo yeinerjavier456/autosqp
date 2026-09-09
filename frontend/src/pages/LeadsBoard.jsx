@@ -4609,6 +4609,11 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const [duplicatesOnly, setDuplicatesOnly] = useState(false);
     const [duplicateLeadId, setDuplicateLeadId] = useState(null);
     const [showFiltersMenu, setShowFiltersMenu] = useState(false);
+    const [showExportModal, setShowExportModal] = useState(false);
+    const [exportMode, setExportMode] = useState('all');
+    const [exportStartDate, setExportStartDate] = useState('');
+    const [exportEndDate, setExportEndDate] = useState('');
+    const [exportingLeads, setExportingLeads] = useState(false);
     const [showMyLeadsOnly, setShowMyLeadsOnly] = useState(false);
     const [visibleLeadsByStatus, setVisibleLeadsByStatus] = useState({});
     const [boardTotalsByStatus, setBoardTotalsByStatus] = useState({});
@@ -5781,6 +5786,48 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         setShowFiltersMenu(false);
     };
 
+    const handleExportLeads = async () => {
+        if (exportingLeads) return;
+        if (exportMode === 'range' && (!exportStartDate || !exportEndDate)) {
+            Swal.fire('Fechas requeridas', 'Selecciona la fecha inicial y la fecha final.', 'warning');
+            return;
+        }
+        if (exportMode === 'range' && exportStartDate > exportEndDate) {
+            Swal.fire('Rango inválido', 'La fecha inicial no puede ser mayor que la fecha final.', 'warning');
+            return;
+        }
+        setExportingLeads(true);
+        try {
+            const token = localStorage.getItem('token');
+            const params = { board_scope: boardMode };
+            if (exportMode === 'range') {
+                params.start_date = exportStartDate;
+                params.end_date = exportEndDate;
+            }
+            const response = await axios.get(`${API_BASE_URL}/leads/export.xlsx`, {
+                headers: { Authorization: `Bearer ${token}` },
+                params,
+                responseType: 'blob',
+            });
+            const objectUrl = URL.createObjectURL(response.data);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = exportMode === 'range'
+                ? `leads_${exportStartDate}_${exportEndDate}.xlsx`
+                : 'leads_todos.xlsx';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(objectUrl);
+            setShowExportModal(false);
+        } catch (error) {
+            console.error('Error exporting leads', error);
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo generar el Excel de leads.', 'error');
+        } finally {
+            setExportingLeads(false);
+        }
+    };
+
     if (loading) return (
         <div className="flex justify-center items-center h-[calc(100vh-100px)]">
             <div className="text-xl text-blue-600 font-semibold animate-pulse">Cargando Tablero...</div>
@@ -5794,14 +5841,61 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">{boardTitle}</h1>
                     <p className="text-slate-500 mt-1 text-sm font-medium">{boardDescription}</p>
                 </div>
-                <button
-                    onClick={() => setShowAddLeadModal(true)}
-                    className={`flex items-center gap-2 text-white px-4 py-2 rounded-xl hover:shadow-md hover:scale-[1.02] transition-all font-bold text-sm ${isAllyBoard ? 'bg-gradient-to-r from-amber-500 to-orange-500' : 'bg-gradient-to-r from-blue-600 to-indigo-600'}`}
-                >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
-                    {createButtonLabel}
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                    <button
+                        onClick={() => setShowExportModal(true)}
+                        className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 transition-all hover:bg-emerald-100 hover:shadow-sm"
+                    >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v12m0 0l-4-4m4 4l4-4M5 19h14" /></svg>
+                        Descargar Excel
+                    </button>
+                    <button
+                        onClick={() => setShowAddLeadModal(true)}
+                        className={`flex items-center gap-2 text-white px-4 py-2 rounded-xl hover:shadow-md hover:scale-[1.02] transition-all font-bold text-sm ${isAllyBoard ? 'bg-gradient-to-r from-amber-500 to-orange-500' : 'bg-gradient-to-r from-blue-600 to-indigo-600'}`}
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+                        {createButtonLabel}
+                    </button>
+                </div>
             </div>
+
+            {showExportModal && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => !exportingLeads && setShowExportModal(false)}>
+                    <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <h2 className="text-xl font-bold text-slate-900">Descargar información de leads</h2>
+                                <p className="mt-1 text-sm text-slate-500">El archivo incluirá los leads que tienes permiso para consultar.</p>
+                            </div>
+                            <button type="button" disabled={exportingLeads} onClick={() => setShowExportModal(false)} className="text-2xl text-slate-400 hover:text-slate-600">&times;</button>
+                        </div>
+                        <div className="mt-6 grid gap-3">
+                            <label className={`cursor-pointer rounded-xl border p-4 ${exportMode === 'all' ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200'}`}>
+                                <span className="flex items-center gap-3">
+                                    <input type="radio" name="exportMode" value="all" checked={exportMode === 'all'} onChange={() => setExportMode('all')} />
+                                    <span><strong className="block text-slate-800">Todos los leads</strong><span className="text-sm text-slate-500">Descarga toda la información disponible.</span></span>
+                                </span>
+                            </label>
+                            <label className={`cursor-pointer rounded-xl border p-4 ${exportMode === 'range' ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200'}`}>
+                                <span className="flex items-center gap-3">
+                                    <input type="radio" name="exportMode" value="range" checked={exportMode === 'range'} onChange={() => setExportMode('range')} />
+                                    <span><strong className="block text-slate-800">Por rango de fechas</strong><span className="text-sm text-slate-500">Usa la fecha de creación del lead en horario de Bogotá.</span></span>
+                                </span>
+                            </label>
+                            {exportMode === 'range' && (
+                                <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
+                                    <label className="text-sm font-semibold text-slate-700">Fecha inicial<input type="date" value={exportStartDate} onChange={(event) => setExportStartDate(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal" /></label>
+                                    <label className="text-sm font-semibold text-slate-700">Fecha final<input type="date" value={exportEndDate} onChange={(event) => setExportEndDate(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal" /></label>
+                                </div>
+                            )}
+                        </div>
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button type="button" disabled={exportingLeads} onClick={() => setShowExportModal(false)} className="rounded-xl border border-slate-300 px-4 py-2 font-semibold text-slate-600">Cancelar</button>
+                            <button type="button" disabled={exportingLeads} onClick={handleExportLeads} className="rounded-xl bg-emerald-600 px-5 py-2 font-bold text-white hover:bg-emerald-700 disabled:opacity-60">{exportingLeads ? 'Generando Excel...' : 'Descargar'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Filters Row */}
             <div className="flex flex-col md:flex-row gap-3 mb-4 bg-white p-3 rounded-xl shadow-sm border border-slate-200 relative">

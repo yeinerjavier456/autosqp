@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import random
 import re
 import threading
 from typing import Any, Dict, Optional
@@ -290,7 +291,7 @@ def choose_purchase_manager(db: Session, company_id: Optional[int]) -> Optional[
     purchase_users = [user for user in candidates if is_purchase_manager_role(getattr(user, "role", None))]
     if not purchase_users:
         return None
-    return purchase_users[0]
+    return random.choice(purchase_users)
 
 
 def ensure_purchase_request_for_lead(
@@ -339,7 +340,7 @@ def ensure_purchase_request_for_lead(
         existing_purchase.email = lead.email or existing_purchase.email
         existing_purchase.desired_vehicle = desired_vehicle or existing_purchase.desired_vehicle
         existing_purchase.notes = notes
-        if assigned_to_id and existing_purchase.assigned_to_id != assigned_to_id:
+        if assigned_to_id and not existing_purchase.assigned_to_id:
             existing_purchase.assigned_to_id = assigned_to_id
         return
 

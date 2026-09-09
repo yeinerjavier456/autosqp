@@ -4351,7 +4351,7 @@ def upsert_purchase_request_from_lead(db: Session, lead: models.Lead):
         existing_purchase.email = lead.email or existing_purchase.email
         existing_purchase.company_id = lead.company_id
         existing_purchase.desired_vehicle = desired_vehicle or existing_purchase.desired_vehicle
-        if assigned_compras_id and existing_purchase.assigned_to_id != assigned_compras_id:
+        if assigned_compras_id and not existing_purchase.assigned_to_id:
             existing_purchase.assigned_to_id = assigned_compras_id
         if not existing_purchase.status:
             existing_purchase.status = models.CreditStatus.PENDING.value
@@ -7576,6 +7576,139 @@ def read_leads_board(
         )
 
     return {"columns": columns}
+
+
+@app.get("/leads/export.xlsx")
+def export_leads_xlsx(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    board_scope: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    parsed_start = None
+    parsed_end = None
+    try:
+        parsed_start = datetime.date.fromisoformat(start_date) if start_date else None
+        parsed_end = datetime.date.fromisoformat(end_date) if end_date else None
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de fecha inválido")
+    if parsed_start and parsed_end and parsed_start > parsed_end:
+        raise HTTPException(status_code=400, detail="La fecha inicial no puede ser mayor que la fecha final")
+
+    query = apply_lead_access_filters(
+        build_lead_summary_query(db),
+        db,
+        current_user,
+        board_scope=board_scope,
+    )
+    if parsed_start:
+        start_utc = datetime.datetime.combine(parsed_start, datetime.time.min, tzinfo=BOGOTA_TZ).astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        query = query.filter(models.Lead.created_at >= start_utc)
+    if parsed_end:
+        end_utc = datetime.datetime.combine(parsed_end + datetime.timedelta(days=1), datetime.time.min, tzinfo=BOGOTA_TZ).astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        query = query.filter(models.Lead.created_at < end_utc)
+
+    leads = query.order_by(models.Lead.created_at.desc(), models.Lead.id.desc()).all()
+    lead_ids = [lead.id for lead in leads]
+    submissions_by_lead = {}
+    credits_by_lead = {}
+    if lead_ids:
+        submissions = db.query(models.PublicCreditSubmission).filter(
+            models.PublicCreditSubmission.lead_id.in_(lead_ids)
+        ).order_by(models.PublicCreditSubmission.created_at.desc()).all()
+        for submission in submissions:
+            submissions_by_lead.setdefault(submission.lead_id, submission)
+        credit_records = db.query(models.CreditApplication).filter(
+            models.CreditApplication.lead_id.in_(lead_ids)
+        ).order_by(models.CreditApplication.updated_at.desc(), models.CreditApplication.created_at.desc()).all()
+        for credit in credit_records:
+            credits_by_lead.setdefault(credit.lead_id, credit)
+
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Font, PatternFill
+        from openpyxl.worksheet.table import Table, TableStyleInfo
+    except ImportError:
+        raise HTTPException(status_code=500, detail="La librería openpyxl no está instalada en el servidor")
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Leads"
+    headers = [
+        "ID", "Fecha de creación", "Nombre", "Documento", "Teléfono", "Correo",
+        "Origen", "Estado", "Responsable", "Supervisores", "Vehículo de interés",
+        "Placa", "Mensaje", "Creado por",
+    ]
+    ws.append(headers)
+    source_labels = {
+        "facebook": "Facebook", "whatsapp": "WhatsApp", "instagram": "Instagram",
+        "tiktok": "TikTok", "web": "Web", "referral": "Referido", "other": "Otro",
+    }
+    for lead in leads:
+        submission = submissions_by_lead.get(lead.id)
+        credit = credits_by_lead.get(lead.id)
+        process_detail = getattr(lead, "process_detail", None)
+        vehicle = getattr(process_detail, "vehicle", None) if process_detail else None
+        created_at = _public_credit_bogota_datetime(lead.created_at)
+        supervisors = ", ".join(
+            (person.full_name or person.email or f"Usuario {person.id}")
+            for person in (lead.supervisors or [])
+        )
+        desired_vehicle = (
+            getattr(process_detail, "desired_vehicle", None)
+            or getattr(credit, "desired_vehicle", None)
+            or getattr(submission, "desired_vehicle", None)
+            or ""
+        )
+        plate = getattr(vehicle, "plate", None) or getattr(credit, "purchase_vehicle_plate", None) or ""
+        ws.append([
+            lead.id,
+            created_at.replace(tzinfo=None) if created_at else None,
+            lead.name or getattr(submission, "applicant_name", None) or "",
+            getattr(submission, "document_number", None) or "",
+            lead.phone or getattr(submission, "phone", None) or "",
+            lead.email or getattr(submission, "email", None) or "",
+            source_labels.get((lead.source or "").lower(), lead.source or ""),
+            LEAD_STATUS_LABELS.get(normalize_lead_status_value(lead.status), lead.status or ""),
+            getattr(getattr(lead, "assigned_to", None), "full_name", None) or getattr(getattr(lead, "assigned_to", None), "email", None) or "Sin asignar",
+            supervisors,
+            desired_vehicle,
+            plate,
+            lead.message or "",
+            getattr(getattr(lead, "created_by", None), "full_name", None) or getattr(getattr(lead, "created_by", None), "email", None) or "",
+        ])
+
+    header_fill = PatternFill("solid", fgColor="1E3A5F")
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = ws.dimensions
+    widths = [10, 21, 28, 18, 18, 30, 16, 20, 28, 34, 34, 14, 52, 28]
+    for index, width in enumerate(widths, start=1):
+        ws.column_dimensions[ws.cell(1, index).column_letter].width = width
+    for row in ws.iter_rows(min_row=2):
+        for cell in row:
+            cell.alignment = Alignment(vertical="top", wrap_text=cell.column in {9, 10, 11, 13, 14})
+        row[1].number_format = "dd/mm/yyyy hh:mm"
+        for text_column in (4, 5, 12):
+            row[text_column - 1].number_format = "@"
+    if leads:
+        table = Table(displayName="TablaLeads", ref=f"A1:N{len(leads) + 1}")
+        table.tableStyleInfo = TableStyleInfo(name="TableStyleMedium2", showRowStripes=True, showFirstColumn=False, showLastColumn=False)
+        ws.add_table(table)
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    period_label = f"_{parsed_start.isoformat()}_{parsed_end.isoformat()}" if parsed_start and parsed_end else "_todos"
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="leads{period_label}.xlsx"'},
+    )
 
 
 @app.get("/leads/{lead_id:int}", response_model=schemas.Lead)

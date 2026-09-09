@@ -193,6 +193,7 @@ const PurchaseBoard = () => {
     const [optionPhotoPreviews, setOptionPhotoPreviews] = useState([]);
     const [savingPurchaseNote, setSavingPurchaseNote] = useState(false);
     const [savingPurchaseAssignee, setSavingPurchaseAssignee] = useState(false);
+    const [showPurchaseAssigneeEditor, setShowPurchaseAssigneeEditor] = useState(false);
     const [uploadingPurchaseFiles, setUploadingPurchaseFiles] = useState(false);
     const [savingPurchaseOption, setSavingPurchaseOption] = useState(false);
     const [processingInitialDecision, setProcessingInitialDecision] = useState(false);
@@ -227,6 +228,10 @@ const PurchaseBoard = () => {
         fetchPurchases();
         fetchPurchaseUsers();
     }, [user?.id]);
+
+    useEffect(() => {
+        setShowPurchaseAssigneeEditor(false);
+    }, [selectedPurchase?.id]);
 
     useEffect(() => {
         if (!selectedPurchase?.lead_id) {
@@ -543,6 +548,7 @@ const PurchaseBoard = () => {
             const updatedPurchase = response.data;
             setSelectedPurchase((prev) => prev ? { ...prev, ...updatedPurchase } : prev);
             setPurchases((prev) => prev.map((item) => item.id === updatedPurchase.id ? { ...item, ...updatedPurchase } : item));
+            setShowPurchaseAssigneeEditor(false);
             Swal.fire({ icon: 'success', title: 'Responsable asignado', timer: 1400, showConfirmButton: false });
         } catch (error) {
             console.error('Error assigning purchase request', error);
@@ -1136,9 +1142,21 @@ const PurchaseBoard = () => {
                                     <p className="text-sm text-slate-700">
                                         <span className="font-semibold">Estado:</span> {getPurchaseStatusLabel(selectedPurchase.status)}
                                     </p>
-                                    {canManagePurchaseOptions ? (
+                                    <p className="mt-1 text-sm text-slate-700">
+                                        <span className="font-semibold">Asignado a:</span> {purchaseUsers.find((person) => person.id === selectedPurchase.assigned_to_id)?.full_name || purchaseUsers.find((person) => person.id === selectedPurchase.assigned_to_id)?.email || 'Sin asignar'}
+                                    </p>
+                                    {canManagePurchaseOptions && !showPurchaseAssigneeEditor && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPurchaseAssigneeEditor(true)}
+                                            className="mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+                                        >
+                                            Reasignar responsable
+                                        </button>
+                                    )}
+                                    {canManagePurchaseOptions && showPurchaseAssigneeEditor ? (
                                         <label className="mt-2 block text-sm text-slate-700">
-                                            <span className="mb-1 block font-semibold">Responsable de búsqueda y compra</span>
+                                            <span className="mb-1 block font-semibold">Nuevo responsable de búsqueda y compra</span>
                                             <select
                                                 value={selectedPurchase.assigned_to_id || ''}
                                                 onChange={(event) => handlePurchaseAssigneeChange(event.target.value)}
@@ -1151,12 +1169,13 @@ const PurchaseBoard = () => {
                                                 ))}
                                             </select>
                                             {savingPurchaseAssignee && <span className="mt-1 block text-xs text-blue-600">Guardando asignación...</span>}
+                                            {!savingPurchaseAssignee && (
+                                                <button type="button" onClick={() => setShowPurchaseAssigneeEditor(false)} className="mt-2 text-xs font-semibold text-slate-500 hover:text-slate-700">
+                                                    Cancelar
+                                                </button>
+                                            )}
                                         </label>
-                                    ) : (
-                                        <p className="mt-1 text-sm text-slate-700">
-                                            <span className="font-semibold">Asignado a:</span> {purchaseUsers.find((person) => person.id === selectedPurchase.assigned_to_id)?.full_name || 'Sin asignar'}
-                                        </p>
-                                    )}
+                                    ) : null}
                                 </div>
                                 {selectedPurchase.status === 'pending' && (
                                     <div className="flex flex-wrap gap-2">

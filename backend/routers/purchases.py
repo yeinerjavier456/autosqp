@@ -383,10 +383,6 @@ def _sync_purchase_requests_for_company(db: Session, company_id: int):
     if not leads:
         return {"processed": 0, "created": 0, "updated": 0}
 
-    compras_users = _get_purchase_manager_users(db, company_id)
-    assigned_purchase_user = _choose_purchase_manager(db, company_id)
-    assigned_compras_id = assigned_purchase_user.id if assigned_purchase_user else None
-
     processed = 0
     created = 0
     updated = 0
@@ -455,8 +451,9 @@ def _sync_purchase_requests_for_company(db: Session, company_id: int):
                 purchase_request.approved_down_payment = approved_down_payment
                 changed = True
                 updated += 1
-            if assigned_compras_id and purchase_request.assigned_to_id != assigned_compras_id:
-                purchase_request.assigned_to_id = assigned_compras_id
+            if not purchase_request.assigned_to_id:
+                assigned_purchase_user = _choose_purchase_manager(db, company_id)
+                purchase_request.assigned_to_id = assigned_purchase_user.id if assigned_purchase_user else None
                 changed = True
                 updated += 1
             if not purchase_request.notes:
@@ -469,6 +466,7 @@ def _sync_purchase_requests_for_company(db: Session, company_id: int):
                 updated += 1
             continue
 
+        assigned_purchase_user = _choose_purchase_manager(db, company_id)
         db.add(models.CreditApplication(
             lead_id=lead.id,
             client_name=lead.name or f"Lead {lead.id}",
@@ -486,7 +484,7 @@ def _sync_purchase_requests_for_company(db: Session, company_id: int):
             status=models.CreditStatus.PENDING.value,
             notes=auto_note,
             company_id=lead.company_id,
-            assigned_to_id=assigned_compras_id
+            assigned_to_id=assigned_purchase_user.id if assigned_purchase_user else None
         ))
         changed = True
         created += 1
@@ -713,6 +711,10 @@ def create_manual_purchase_request(
     if not desired_vehicle:
         raise HTTPException(status_code=400, detail="Debes indicar el vehiculo que se esta buscando")
 
+    assigned_purchase_user = _choose_purchase_manager(db, current_user.company_id)
+    if not assigned_purchase_user:
+        raise HTTPException(status_code=400, detail="No hay usuarios activos con perfil de compras para asignar la solicitud")
+
     lead = models.Lead(
         name=client_name,
         email=email,
@@ -761,7 +763,7 @@ def create_manual_purchase_request(
         status=models.CreditStatus.PENDING.value,
         notes=f"[PURCHASE_REQUEST] {(notes or f'Solicitud manual creada desde compras para buscar: {desired_vehicle}').strip()}",
         company_id=current_user.company_id,
-        assigned_to_id=current_user.id
+        assigned_to_id=assigned_purchase_user.id
     )
     db.add(purchase)
     db.commit()
