@@ -4614,6 +4614,9 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const [exportStartDate, setExportStartDate] = useState('');
     const [exportEndDate, setExportEndDate] = useState('');
     const [exportingLeads, setExportingLeads] = useState(false);
+    const [showLeadUploadModal, setShowLeadUploadModal] = useState(false);
+    const [leadUploadFile, setLeadUploadFile] = useState(null);
+    const [uploadingLeads, setUploadingLeads] = useState(false);
     const [showMyLeadsOnly, setShowMyLeadsOnly] = useState(false);
     const [visibleLeadsByStatus, setVisibleLeadsByStatus] = useState({});
     const [boardTotalsByStatus, setBoardTotalsByStatus] = useState({});
@@ -5829,6 +5832,61 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         }
     };
 
+    const handleDownloadLeadTemplate = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.get(`${API_BASE_URL}/leads/upload/template`, {
+                headers: { Authorization: `Bearer ${token}` },
+                responseType: 'blob',
+            });
+            const objectUrl = URL.createObjectURL(response.data);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = 'plantilla_carga_masiva_leads.xlsx';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(objectUrl);
+        } catch (error) {
+            console.error('Error downloading lead template', error);
+            Swal.fire('Error', 'No se pudo descargar la plantilla de leads.', 'error');
+        }
+    };
+
+    const handleUploadLeads = async () => {
+        if (!leadUploadFile || uploadingLeads) return;
+        setUploadingLeads(true);
+        try {
+            const token = localStorage.getItem('token');
+            const formData = new FormData();
+            formData.append('file', leadUploadFile);
+            const response = await axios.post(`${API_BASE_URL}/leads/upload`, formData, {
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
+            });
+            const result = response.data || {};
+            await fetchBoardLeads(searchTerm);
+            setShowLeadUploadModal(false);
+            setLeadUploadFile(null);
+            const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+            }[character]));
+            const detailText = Array.isArray(result.details) && result.details.length
+                ? `<div style="max-height:180px;overflow:auto;text-align:left;margin-top:12px;font-size:13px;">${result.details.slice(0, 20).map((item) => `<div>Fila ${escapeHtml(item.fila)}: ${escapeHtml(item.error)}</div>`).join('')}</div>`
+                : '';
+            Swal.fire({
+                icon: result.errors ? 'warning' : 'success',
+                title: 'Carga de leads terminada',
+                html: `<strong>${result.created || 0}</strong> creados, <strong>${result.duplicates || 0}</strong> duplicados omitidos y <strong>${result.errors || 0}</strong> errores.${detailText}`,
+                confirmButtonColor: '#2563eb',
+            });
+        } catch (error) {
+            console.error('Error uploading leads', error);
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo procesar el archivo de leads.', 'error');
+        } finally {
+            setUploadingLeads(false);
+        }
+    };
+
     if (loading) return (
         <div className="flex justify-center items-center h-[calc(100vh-100px)]">
             <div className="text-xl text-blue-600 font-semibold animate-pulse">Cargando Tablero...</div>
@@ -5844,13 +5902,22 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     {canExportLeads && (
-                        <button
-                            onClick={() => setShowExportModal(true)}
-                            className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 transition-all hover:bg-emerald-100 hover:shadow-sm"
-                        >
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v12m0 0l-4-4m4 4l4-4M5 19h14" /></svg>
-                            Descargar Excel
-                        </button>
+                        <>
+                            <button
+                                onClick={() => setShowLeadUploadModal(true)}
+                                className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 transition-all hover:bg-blue-100 hover:shadow-sm"
+                            >
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 16V4m0 0L8 8m4-4l4 4M5 20h14" /></svg>
+                                Cargar Leads
+                            </button>
+                            <button
+                                onClick={() => setShowExportModal(true)}
+                                className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 transition-all hover:bg-emerald-100 hover:shadow-sm"
+                            >
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v12m0 0l-4-4m4 4l4-4M5 19h14" /></svg>
+                                Descargar Excel
+                            </button>
+                        </>
                     )}
                     <button
                         onClick={() => setShowAddLeadModal(true)}
@@ -5895,6 +5962,41 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                         <div className="mt-6 flex justify-end gap-3">
                             <button type="button" disabled={exportingLeads} onClick={() => setShowExportModal(false)} className="rounded-xl border border-slate-300 px-4 py-2 font-semibold text-slate-600">Cancelar</button>
                             <button type="button" disabled={exportingLeads} onClick={handleExportLeads} className="rounded-xl bg-emerald-600 px-5 py-2 font-bold text-white hover:bg-emerald-700 disabled:opacity-60">{exportingLeads ? 'Generando Excel...' : 'Descargar'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showLeadUploadModal && canExportLeads && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => !uploadingLeads && setShowLeadUploadModal(false)}>
+                    <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <h2 className="text-xl font-bold text-slate-900">Carga masiva de leads</h2>
+                                <p className="mt-1 text-sm text-slate-500">Importa leads únicamente para la empresa actual.</p>
+                            </div>
+                            <button type="button" disabled={uploadingLeads} onClick={() => setShowLeadUploadModal(false)} className="text-2xl text-slate-400 hover:text-slate-600">&times;</button>
+                        </div>
+                        <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                            <p className="font-bold">Datos mínimos: nombre y teléfono.</p>
+                            <p className="mt-1">Correo, origen, mensaje, estado y responsable son opcionales. Los teléfonos repetidos se omiten.</p>
+                        </div>
+                        <button type="button" onClick={handleDownloadLeadTemplate} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100">
+                            Descargar plantilla
+                        </button>
+                        <label className="mt-5 block text-sm font-semibold text-slate-700">
+                            Archivo Excel completado (.xlsx)
+                            <input
+                                type="file"
+                                accept=".xlsx"
+                                disabled={uploadingLeads}
+                                onChange={(event) => setLeadUploadFile(event.target.files?.[0] || null)}
+                                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-100 file:px-4 file:py-2 file:font-bold file:text-blue-700"
+                            />
+                        </label>
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button type="button" disabled={uploadingLeads} onClick={() => setShowLeadUploadModal(false)} className="rounded-xl border border-slate-300 px-4 py-2 font-semibold text-slate-600">Cancelar</button>
+                            <button type="button" disabled={uploadingLeads || !leadUploadFile} onClick={handleUploadLeads} className="rounded-xl bg-blue-600 px-5 py-2 font-bold text-white hover:bg-blue-700 disabled:opacity-60">{uploadingLeads ? 'Procesando...' : 'Cargar leads'}</button>
                         </div>
                     </div>
                 </div>

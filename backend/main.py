@@ -7716,6 +7716,211 @@ def export_leads_xlsx(
     )
 
 
+@app.get("/leads/upload/template")
+def download_leads_upload_template(
+    current_user: models.User = Depends(get_current_user),
+):
+    if not is_company_admin(current_user) or not current_user.company_id:
+        raise HTTPException(status_code=403, detail="Solo los administradores de la empresa pueden descargar esta plantilla")
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Font, PatternFill
+        from openpyxl.worksheet.datavalidation import DataValidation
+    except ImportError:
+        raise HTTPException(status_code=500, detail="La librería openpyxl no está instalada en el servidor")
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Leads"
+    headers = ["Nombre *", "Teléfono *", "Correo", "Origen", "Mensaje", "Estado", "Correo responsable"]
+    ws.append(headers)
+    header_fill = PatternFill("solid", fgColor="1E3A5F")
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    widths = [30, 20, 32, 18, 52, 22, 34]
+    for index, width in enumerate(widths, start=1):
+        ws.column_dimensions[ws.cell(1, index).column_letter].width = width
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = "A1:G1"
+    for row in range(2, 1002):
+        ws.cell(row, 2).number_format = "@"
+    source_validation = DataValidation(type="list", formula1='"WhatsApp,Facebook,Instagram,TikTok,Web,Referido,Otro"', allow_blank=True)
+    status_validation = DataValidation(type="list", formula1='"Nuevo,Contactado,En proceso,Estudio de crédito,Aprobaciones,Reserva,Alistamiento,Perdido,Vendido"', allow_blank=True)
+    ws.add_data_validation(source_validation)
+    ws.add_data_validation(status_validation)
+    source_validation.add("D2:D1001")
+    status_validation.add("F2:F1001")
+
+    instructions = wb.create_sheet("Instrucciones")
+    instructions.append(["Carga masiva de leads"])
+    instructions.append(["Nombre y teléfono son obligatorios. Los demás campos son opcionales."])
+    instructions.append(["El teléfono se valida dentro de tu empresa. Si ya existe, la fila se omite como duplicada."])
+    instructions.append(["Correo responsable: debe pertenecer a un usuario activo de la misma empresa. Déjalo vacío para usar la asignación automática."])
+    instructions.append(["Ejemplo: Cliente de ejemplo | 3001234567 | cliente@correo.com | WhatsApp | Busca vehículo familiar | Nuevo | asesor@empresa.com"])
+    instructions.append(["No cambies los nombres de las columnas ni agregues datos en la hoja Instrucciones."])
+    instructions.column_dimensions["A"].width = 115
+    instructions["A1"].font = Font(bold=True, size=16, color="FFFFFF")
+    instructions["A1"].fill = header_fill
+    for row in instructions.iter_rows(min_row=1, max_row=6):
+        row[0].alignment = Alignment(wrap_text=True, vertical="top")
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="plantilla_carga_masiva_leads.xlsx"'},
+    )
+
+
+@app.post("/leads/upload")
+async def upload_leads_xlsx(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if not is_company_admin(current_user) or not current_user.company_id:
+        raise HTTPException(status_code=403, detail="Solo los administradores de la empresa pueden cargar leads")
+    if not (file.filename or "").lower().endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="El archivo debe estar en formato .xlsx")
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="El archivo está vacío")
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="El archivo supera el límite de 10 MB")
+    try:
+        from openpyxl import load_workbook
+        workbook = load_workbook(BytesIO(content), read_only=True, data_only=True)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"No se pudo leer el archivo Excel: {exc}")
+    if "Leads" not in workbook.sheetnames:
+        raise HTTPException(status_code=400, detail="El archivo debe contener una hoja llamada Leads")
+
+    sheet = workbook["Leads"]
+    raw_headers = next(sheet.iter_rows(min_row=1, max_row=1, values_only=True), None)
+    if not raw_headers:
+        raise HTTPException(status_code=400, detail="La hoja Leads no contiene encabezados")
+
+    def normalize_header(value):
+        normalized = unicodedata.normalize("NFKD", str(value or "").strip().lower())
+        normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+        return re.sub(r"[^a-z0-9]+", " ", normalized).strip()
+
+    headers = {normalize_header(value).replace(" *", ""): index for index, value in enumerate(raw_headers) if value}
+    required_headers = {"nombre", "telefono"}
+    if not required_headers.issubset(headers):
+        raise HTTPException(status_code=400, detail="La plantilla debe incluir las columnas Nombre * y Teléfono *")
+
+    source_map = {
+        "whatsapp": "whatsapp", "facebook": "facebook", "instagram": "instagram",
+        "tiktok": "tiktok", "web": "web", "referido": "referral", "referral": "referral", "otro": "other", "other": "other",
+    }
+    status_map = {
+        "nuevo": "new", "new": "new", "contactado": "contacted", "contacted": "contacted",
+        "en proceso": "in_process", "in process": "in_process", "estudio de credito": "credit_study",
+        "aprobaciones": "approvals", "reserva": "reserved", "reservado": "reserved",
+        "alistamiento": "preparation", "perdido": "lost", "vendido": "sold",
+    }
+    company = db.query(models.Company).filter(models.Company.id == current_user.company_id).with_for_update().first()
+    allowed_statuses = set(get_company_allowed_lead_statuses(company))
+    created = 0
+    duplicates = 0
+    errors = 0
+    details = []
+
+    def cell_value(row, header_name):
+        index = headers.get(header_name)
+        return row[index] if index is not None and index < len(row) else None
+
+    for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+        if row_number > 10001:
+            errors += 1
+            details.append({"fila": row_number, "error": "La carga admite máximo 10.000 filas"})
+            break
+        if not any(value not in (None, "") for value in row):
+            continue
+        name = str(cell_value(row, "nombre") or "").strip()
+        raw_phone = cell_value(row, "telefono")
+        phone = str(int(raw_phone)) if isinstance(raw_phone, float) and raw_phone.is_integer() else str(raw_phone or "").strip()
+        phone = phone.replace(".0", "") if phone.endswith(".0") else phone
+        if not name or not normalize_lead_duplicate_phone(phone):
+            errors += 1
+            details.append({"fila": row_number, "error": "Nombre y teléfono válido son obligatorios"})
+            continue
+        duplicate = find_duplicate_company_lead(db, current_user.company_id, name, phone)
+        if duplicate:
+            duplicates += 1
+            assigned_name = getattr(getattr(duplicate, "assigned_to", None), "full_name", None) or "Sin asignar"
+            details.append({"fila": row_number, "error": f"Duplicado del lead #{duplicate.id}, asignado a {assigned_name}"})
+            continue
+
+        source_text = normalize_header(cell_value(row, "origen"))
+        status_text = normalize_header(cell_value(row, "estado"))
+        source = source_map.get(source_text, "other")
+        lead_status = status_map.get(status_text, "new")
+        if lead_status not in allowed_statuses:
+            lead_status = "new"
+        assigned_to_id = None
+        responsible_email = str(cell_value(row, "correo responsable") or "").strip().lower()
+        if responsible_email:
+            assigned_user = db.query(models.User).filter(
+                models.User.company_id == current_user.company_id,
+                func.lower(models.User.email) == responsible_email,
+            ).first()
+            if not assigned_user or not is_active_user(assigned_user):
+                errors += 1
+                details.append({"fila": row_number, "error": "El correo responsable no corresponde a un usuario activo de la empresa"})
+                continue
+            assigned_to_id = assigned_user.id
+        else:
+            assigned_user = choose_auto_assign_user(db, current_user.company_id)
+            assigned_to_id = assigned_user.id if assigned_user else None
+
+        try:
+            ensure_company_lead_creation_capacity(db, current_user.company_id)
+        except HTTPException as exc:
+            errors += 1
+            details.append({"fila": row_number, "error": str(exc.detail)})
+            break
+
+        lead = models.Lead(
+            name=name[:100],
+            phone=phone[:50],
+            email=str(cell_value(row, "correo") or "").strip()[:100] or None,
+            source=source,
+            status=lead_status,
+            message=str(cell_value(row, "mensaje") or "").strip()[:1000] or None,
+            company_id=current_user.company_id,
+            assigned_to_id=assigned_to_id,
+            created_by_id=current_user.id,
+            created_at=datetime.datetime.utcnow(),
+        )
+        db.add(lead)
+        db.flush()
+        db.add(models.LeadHistory(
+            lead_id=lead.id,
+            user_id=current_user.id,
+            previous_status=None,
+            new_status=lead_status,
+            comment="Lead creado mediante carga masiva desde Excel",
+        ))
+        created += 1
+
+    db.add(models.SystemLog(
+        company_id=current_user.company_id,
+        user_id=current_user.id,
+        action="IMPORT_EXCEL",
+        entity_type="Lead",
+        details=f"Carga masiva de leads: {created} creados, {duplicates} duplicados y {errors} errores",
+    ))
+    db.commit()
+    workbook.close()
+    return {"created": created, "duplicates": duplicates, "errors": errors, "details": details[:100]}
+
+
 @app.get("/leads/{lead_id:int}", response_model=schemas.Lead)
 def get_lead_detail(
     lead_id: int,
