@@ -7779,6 +7779,8 @@ def download_leads_upload_template(
 @app.post("/leads/upload")
 async def upload_leads_xlsx(
     file: UploadFile = File(...),
+    preview: bool = Form(False),
+    update_existing: bool = Form(False),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -7827,9 +7829,13 @@ async def upload_leads_xlsx(
     company = db.query(models.Company).filter(models.Company.id == current_user.company_id).with_for_update().first()
     allowed_statuses = set(get_company_allowed_lead_statuses(company))
     created = 0
+    updated = 0
     duplicates = 0
+    existing_duplicates = 0
+    file_duplicates = 0
     errors = 0
     details = []
+    seen_file_phones = {}
 
     def cell_value(row, header_name):
         index = headers.get(header_name)
@@ -7846,16 +7852,17 @@ async def upload_leads_xlsx(
         raw_phone = cell_value(row, "telefono")
         phone = str(int(raw_phone)) if isinstance(raw_phone, float) and raw_phone.is_integer() else str(raw_phone or "").strip()
         phone = phone.replace(".0", "") if phone.endswith(".0") else phone
-        if not name or not normalize_lead_duplicate_phone(phone):
+        normalized_phone = normalize_lead_duplicate_phone(phone)
+        if not name or not normalized_phone:
             errors += 1
             details.append({"fila": row_number, "error": "Nombre y teléfono válido son obligatorios"})
             continue
-        duplicate = find_duplicate_company_lead(db, current_user.company_id, name, phone)
-        if duplicate:
+        if normalized_phone in seen_file_phones:
             duplicates += 1
-            assigned_name = getattr(getattr(duplicate, "assigned_to", None), "full_name", None) or "Sin asignar"
-            details.append({"fila": row_number, "error": f"Duplicado del lead #{duplicate.id}, asignado a {assigned_name}"})
+            file_duplicates += 1
+            details.append({"fila": row_number, "error": f"Teléfono repetido dentro del archivo; ya apareció en la fila {seen_file_phones[normalized_phone]}"})
             continue
+        seen_file_phones[normalized_phone] = row_number
 
         source_text = normalize_header(cell_value(row, "origen"))
         status_text = normalize_header(cell_value(row, "estado"))
@@ -7863,6 +7870,8 @@ async def upload_leads_xlsx(
         lead_status = status_map.get(status_text, "new")
         if lead_status not in allowed_statuses:
             lead_status = "new"
+        incoming_email = str(cell_value(row, "correo") or "").strip()[:100]
+        incoming_message = str(cell_value(row, "mensaje") or "").strip()[:1000]
         assigned_to_id = None
         responsible_email = str(cell_value(row, "correo responsable") or "").strip().lower()
         if responsible_email:
@@ -7879,6 +7888,44 @@ async def upload_leads_xlsx(
             assigned_user = choose_auto_assign_user(db, current_user.company_id)
             assigned_to_id = assigned_user.id if assigned_user else None
 
+        duplicate = find_duplicate_company_lead(db, current_user.company_id, name, phone)
+        if duplicate:
+            duplicates += 1
+            existing_duplicates += 1
+            assigned_name = getattr(getattr(duplicate, "assigned_to", None), "full_name", None) or "Sin asignar"
+            if preview:
+                details.append({"fila": row_number, "error": f"Coincide con el lead #{duplicate.id}, asignado a {assigned_name}"})
+            elif update_existing:
+                previous_status = duplicate.status
+                duplicate.name = name[:100]
+                duplicate.phone = phone[:50]
+                if incoming_email:
+                    duplicate.email = incoming_email
+                if source_text:
+                    duplicate.source = source
+                if status_text:
+                    duplicate.status = lead_status
+                if incoming_message:
+                    duplicate.message = incoming_message
+                if responsible_email:
+                    duplicate.assigned_to_id = assigned_to_id
+                duplicate.status_updated_at = datetime.datetime.utcnow()
+                db.add(models.LeadHistory(
+                    lead_id=duplicate.id,
+                    user_id=current_user.id,
+                    previous_status=previous_status,
+                    new_status=duplicate.status,
+                    comment=f"Lead actualizado mediante carga masiva desde Excel (fila {row_number})",
+                ))
+                updated += 1
+            else:
+                details.append({"fila": row_number, "error": f"Duplicado omitido: lead #{duplicate.id}, asignado a {assigned_name}"})
+            continue
+
+        if preview:
+            created += 1
+            continue
+
         try:
             ensure_company_lead_creation_capacity(db, current_user.company_id)
         except HTTPException as exc:
@@ -7889,10 +7936,10 @@ async def upload_leads_xlsx(
         lead = models.Lead(
             name=name[:100],
             phone=phone[:50],
-            email=str(cell_value(row, "correo") or "").strip()[:100] or None,
+            email=incoming_email or None,
             source=source,
             status=lead_status,
-            message=str(cell_value(row, "mensaje") or "").strip()[:1000] or None,
+            message=incoming_message or None,
             company_id=current_user.company_id,
             assigned_to_id=assigned_to_id,
             created_by_id=current_user.id,
@@ -7909,16 +7956,28 @@ async def upload_leads_xlsx(
         ))
         created += 1
 
-    db.add(models.SystemLog(
-        company_id=current_user.company_id,
-        user_id=current_user.id,
-        action="IMPORT_EXCEL",
-        entity_type="Lead",
-        details=f"Carga masiva de leads: {created} creados, {duplicates} duplicados y {errors} errores",
-    ))
-    db.commit()
+    if not preview:
+        db.add(models.SystemLog(
+            company_id=current_user.company_id,
+            user_id=current_user.id,
+            action="IMPORT_EXCEL",
+            entity_type="Lead",
+            details=f"Carga masiva de leads: {created} creados, {updated} actualizados, {duplicates} duplicados detectados y {errors} errores",
+        ))
+        db.commit()
+    else:
+        db.rollback()
     workbook.close()
-    return {"created": created, "duplicates": duplicates, "errors": errors, "details": details[:100]}
+    return {
+        "preview": preview,
+        "created": created,
+        "updated": updated,
+        "duplicates": duplicates,
+        "existing_duplicates": existing_duplicates,
+        "file_duplicates": file_duplicates,
+        "errors": errors,
+        "details": details[:100],
+    }
 
 
 @app.get("/leads/{lead_id:int}", response_model=schemas.Lead)

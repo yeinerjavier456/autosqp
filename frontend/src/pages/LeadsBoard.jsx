@@ -5858,12 +5858,36 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         setUploadingLeads(true);
         try {
             const token = localStorage.getItem('token');
-            const formData = new FormData();
-            formData.append('file', leadUploadFile);
-            const response = await axios.post(`${API_BASE_URL}/leads/upload`, formData, {
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
-            });
+            const sendUpload = async ({ preview, updateExisting = false }) => {
+                const formData = new FormData();
+                formData.append('file', leadUploadFile);
+                formData.append('preview', preview ? 'true' : 'false');
+                formData.append('update_existing', updateExisting ? 'true' : 'false');
+                return axios.post(`${API_BASE_URL}/leads/upload`, formData, {
+                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
+                });
+            };
+            const previewResponse = await sendUpload({ preview: true });
+            const previewResult = previewResponse.data || {};
+            let updateExisting = false;
+            if (Number(previewResult.existing_duplicates || 0) > 0) {
+                const decision = await Swal.fire({
+                    icon: 'question',
+                    title: 'Se encontraron leads existentes',
+                    html: `<strong>${Number(previewResult.existing_duplicates || 0)}</strong> fila(s) coinciden por teléfono con leads de esta empresa.<br><br>¿Deseas actualizar todos los leads existentes con los datos del archivo?`,
+                    showCancelButton: true,
+                    showDenyButton: true,
+                    confirmButtonText: 'Sí, actualizar todos',
+                    denyButtonText: 'No, omitir existentes',
+                    cancelButtonText: 'Cancelar carga',
+                    confirmButtonColor: '#2563eb',
+                });
+                if (decision.isDismissed) return;
+                updateExisting = decision.isConfirmed;
+            }
+            const response = await sendUpload({ preview: false, updateExisting });
             const result = response.data || {};
+            const omittedDuplicates = Math.max(Number(result.duplicates || 0) - Number(result.updated || 0), 0);
             await fetchBoardLeads(searchTerm);
             setShowLeadUploadModal(false);
             setLeadUploadFile(null);
@@ -5876,7 +5900,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             Swal.fire({
                 icon: result.errors ? 'warning' : 'success',
                 title: 'Carga de leads terminada',
-                html: `<strong>${result.created || 0}</strong> creados, <strong>${result.duplicates || 0}</strong> duplicados omitidos y <strong>${result.errors || 0}</strong> errores.${detailText}`,
+                html: `<strong>${result.created || 0}</strong> creados, <strong>${result.updated || 0}</strong> actualizados, <strong>${omittedDuplicates}</strong> duplicados omitidos y <strong>${result.errors || 0}</strong> errores.${detailText}`,
                 confirmButtonColor: '#2563eb',
             });
         } catch (error) {
@@ -5979,7 +6003,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                         </div>
                         <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
                             <p className="font-bold">Datos mínimos: nombre y teléfono.</p>
-                            <p className="mt-1">Correo, origen, mensaje, estado y responsable son opcionales. Los teléfonos repetidos se omiten.</p>
+                            <p className="mt-1">Correo, origen, mensaje, estado y responsable son opcionales. Si hay teléfonos existentes, podrás actualizar todos esos leads u omitirlos.</p>
                         </div>
                         <button type="button" onClick={handleDownloadLeadTemplate} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100">
                             Descargar plantilla
