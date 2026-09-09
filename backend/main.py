@@ -7586,6 +7586,9 @@ def export_leads_xlsx(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    if not is_company_admin(current_user):
+        raise HTTPException(status_code=403, detail="Solo los administradores de la empresa pueden descargar el Excel de leads")
+
     parsed_start = None
     parsed_end = None
     try:

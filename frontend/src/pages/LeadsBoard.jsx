@@ -4674,6 +4674,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const currentUserId = parseUserId(user?.id);
     const currentRoleName = normalizeRoleKey(user?.role);
     const canManageDuplicates = currentRoleName === 'admin' || currentRoleName === 'super_admin';
+    const canExportLeads = currentRoleName === 'admin' || currentRoleName === 'super_admin';
     const leadStatusOptions = React.useMemo(() => getEnabledLeadStatusOptions(user), [user]);
     const enabledModules = React.useMemo(() => new Set(getCompanyEnabledModules(user)), [user]);
     const hasCreditsModule = enabledModules.has('credits');
@@ -5842,13 +5843,15 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     <p className="text-slate-500 mt-1 text-sm font-medium">{boardDescription}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                    <button
-                        onClick={() => setShowExportModal(true)}
-                        className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 transition-all hover:bg-emerald-100 hover:shadow-sm"
-                    >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v12m0 0l-4-4m4 4l4-4M5 19h14" /></svg>
-                        Descargar Excel
-                    </button>
+                    {canExportLeads && (
+                        <button
+                            onClick={() => setShowExportModal(true)}
+                            className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 transition-all hover:bg-emerald-100 hover:shadow-sm"
+                        >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v12m0 0l-4-4m4 4l4-4M5 19h14" /></svg>
+                            Descargar Excel
+                        </button>
+                    )}
                     <button
                         onClick={() => setShowAddLeadModal(true)}
                         className={`flex items-center gap-2 text-white px-4 py-2 rounded-xl hover:shadow-md hover:scale-[1.02] transition-all font-bold text-sm ${isAllyBoard ? 'bg-gradient-to-r from-amber-500 to-orange-500' : 'bg-gradient-to-r from-blue-600 to-indigo-600'}`}
