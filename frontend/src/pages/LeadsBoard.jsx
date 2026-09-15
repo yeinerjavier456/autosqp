@@ -1462,6 +1462,7 @@ const getDisplayRoleName = (role) => {
         case 'admin': return 'Administrador';
         case 'asesor': return 'Asesor';
         case 'aliado': return 'Aliado';
+        case 'reactivacion': return 'Reactivación Financiera';
         case 'inventario': return 'Inventario';
         case 'compras': return 'Compras';
         case 'user': return 'Usuario';
@@ -1489,6 +1490,9 @@ const normalizeRoleKey = (role) => {
     }
     if (normalizedDirectRoleName.includes('aliado')) {
         return 'aliado';
+    }
+    if (normalizedDirectRoleName.includes('reactiv')) {
+        return 'reactivacion';
     }
     if (normalizedDirectRoleName.includes('compra')) {
         return 'compras';
@@ -1563,7 +1567,14 @@ const LEAD_STATUS_OPTIONS = [
     { value: 'lost', label: 'Perdidos', columnColor: 'text-slate-500', borderColor: '#64748b', historyBadgeClass: 'bg-slate-500' },
 ];
 
-const LEAD_STATUS_META = LEAD_STATUS_OPTIONS.reduce((accumulator, statusOption) => {
+const FINANCIAL_SOLUTION_STATUS_OPTIONS = [
+    { value: 'new', label: 'Nuevos', columnColor: 'text-blue-600', borderColor: '#3b82f6', historyBadgeClass: 'bg-blue-500' },
+    { value: 'contacted', label: 'Contactados', columnColor: 'text-amber-600', borderColor: '#eab308', historyBadgeClass: 'bg-amber-500' },
+    { value: 'autofinancing', label: 'Autofinanciamiento', columnColor: 'text-violet-600', borderColor: '#8b5cf6', historyBadgeClass: 'bg-violet-500' },
+    { value: 'financial_reactivation', label: 'Reactivación financiera', columnColor: 'text-emerald-600', borderColor: '#10b981', historyBadgeClass: 'bg-emerald-500' },
+];
+
+const LEAD_STATUS_META = [...LEAD_STATUS_OPTIONS, ...FINANCIAL_SOLUTION_STATUS_OPTIONS].reduce((accumulator, statusOption) => {
     accumulator[statusOption.value] = statusOption;
     return accumulator;
 }, {});
@@ -2371,7 +2382,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
     ];
 
     const normalizedCurrentUserRole = normalizeRoleKey(user?.role) || normalizeRoleKey(currentUserRole);
-    const canAssignToAnyRole = normalizedCurrentUserRole === 'admin' || normalizedCurrentUserRole === 'super_admin' || normalizedCurrentUserRole === 'aliado';
+    const canAssignToAnyRole = ['admin', 'super_admin', 'aliado', 'reactivacion'].includes(normalizedCurrentUserRole);
     const configuredAssignableRoleIds = getAssignableRoleIds(user?.role);
     const hasConfiguredAssignableRoles = configuredAssignableRoleIds.length > 0;
     const isCompanyAdmin = normalizedCurrentUserRole === 'admin' || normalizedCurrentUserRole === 'super_admin';
@@ -2386,7 +2397,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             if (!isUserActive(adv)) return false;
             const roleName = normalizeRoleKey(adv.role);
             if (canAssignToAnyRole && boardMode === 'ally') {
-                return roleName !== 'user';
+                return roleName === 'reactivacion';
             }
             return canAssignToAnyRole || roleName === 'asesor';
         })
@@ -2483,7 +2494,7 @@ const HistoryModal = ({ lead, onClose, onUpdate, onUpdateContact, onSaveSupervis
             Number(purchaseAssignedToId) === Number(currentUser.id)
         )
     );
-    const isAdvisorOrSellerRole = ['asesor', 'vendedor', 'asesor vendedor', 'aliado'].includes(normalizedCurrentUserRole);
+    const isAdvisorOrSellerRole = ['asesor', 'vendedor', 'asesor vendedor', 'aliado', 'reactivacion'].includes(normalizedCurrentUserRole);
     const canResubmitPurchaseRequest = (
         normalizedPurchaseStatus === 'rejected' &&
         (
@@ -4678,18 +4689,17 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const currentRoleName = normalizeRoleKey(user?.role);
     const canManageDuplicates = currentRoleName === 'admin' || currentRoleName === 'super_admin';
     const canExportLeads = currentRoleName === 'admin' || currentRoleName === 'super_admin';
-    const leadStatusOptions = React.useMemo(() => getEnabledLeadStatusOptions(user), [user]);
+    const leadStatusOptions = React.useMemo(
+        () => (isAllyBoard ? FINANCIAL_SOLUTION_STATUS_OPTIONS : getEnabledLeadStatusOptions(user)),
+        [isAllyBoard, user]
+    );
     const enabledModules = React.useMemo(() => new Set(getCompanyEnabledModules(user)), [user]);
     const hasCreditsModule = enabledModules.has('credits');
-    const boardTitle = isAllyBoard ? 'Tablero de Aliados' : 'Tablero de Leads';
+    const boardTitle = isAllyBoard ? 'Soluciones Financieras' : 'Tablero de Leads';
     const boardDescription = isAllyBoard
-        ? 'Gestiona los leads que estan en manos de aliados y transfiere al tablero general cuando corresponda.'
+        ? 'Gestiona de forma independiente los casos perdidos y los creados manualmente para su reactivación.'
         : 'Arrastra y suelta para gestionar el ciclo de vida de tus clientes.';
-    const createButtonLabel = isAllyBoard ? 'Nuevo Lead para Aliado' : 'Nuevo Lead Manual';
-    const allyUsers = advisors.filter((adv) => {
-        const roleName = normalizeRoleKey(adv.role);
-        return roleName === 'aliado';
-    });
+    const createButtonLabel = isAllyBoard ? 'Nuevo caso' : 'Nuevo Lead Manual';
     const supervisionUsers = advisors.filter((adv) => normalizeRoleKey(adv.role) !== 'user');
     const shownBoardCreditNotificationsRef = React.useRef('');
 
@@ -4870,14 +4880,10 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         setCreatingLead(true);
         try {
             const token = localStorage.getItem('token');
-        if (isAllyBoard && currentRoleName !== 'aliado' && !newLeadForm.assigned_to_id) {
-                Swal.fire('Error', 'Debes seleccionar el aliado responsable de este lead.', 'warning');
-                return;
-            }
-
             const payload = {
                 ...newLeadForm,
-                company_id: user?.company_id || 1
+                company_id: user?.company_id || 1,
+                board_scope: boardMode,
             };
 
             if (newLeadForm.assigned_to_id) {
@@ -5345,7 +5351,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             const token = localStorage.getItem('token');
             const payload = {
                 status: newStatus,
-                comment: statusComment
+                comment: statusComment,
+                board_scope: boardMode,
             };
             if (processDetail) {
                 payload.process_detail = processDetail;
@@ -5400,7 +5407,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             const token = localStorage.getItem('token');
             const payload = {
                 status: newStatus,
-                comment: comment
+                comment: comment,
+                board_scope: boardMode,
             };
             if (processDetail) {
                 payload.process_detail = processDetail;
@@ -5458,7 +5466,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             const token = localStorage.getItem('token');
             const response = await axios.put(
                 `${API_BASE_URL}/leads/${leadId}`,
-                contactData,
+                { ...contactData, board_scope: boardMode },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
@@ -5513,7 +5521,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             const response = await axios.put(`${API_BASE_URL}/leads/${leadId}`,
                 {
                     supervisor_ids: sanitizedSupervisorIds,
-                    comment: 'Supervision actualizada'
+                    comment: 'Supervision actualizada',
+                    board_scope: boardMode,
                 },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -5556,7 +5565,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             // If empty string, send null
             const payload = {
                 assigned_to_id: advisorId ? parseInt(advisorId) : null,
-                comment: `Lead asignado a un nuevo responsable`
+                comment: `Lead asignado a un nuevo responsable`,
+                board_scope: boardMode,
             };
             if (Array.isArray(sanitizedSupervisorIds)) {
                 payload.supervisor_ids = sanitizedSupervisorIds;
@@ -6590,7 +6600,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-2xl p-8 w-full max-w-lg shadow-2xl animate-fade-in-up border border-gray-100 max-h-[90vh] overflow-y-auto">
                         <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-bold text-gray-800">{isAllyBoard ? 'Nuevo Lead para Cola de Aliados' : 'Nuevo Lead'}</h2>
+                            <h2 className="text-2xl font-bold text-gray-800">{isAllyBoard ? 'Nuevo caso de Soluciones Financieras' : 'Nuevo Lead'}</h2>
                             <button onClick={closeAddLeadModal} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
                         </div>
 
@@ -6635,21 +6645,9 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                             </div>
                         )}
 
-                        {isAllyBoard && currentRoleName !== 'aliado' && (
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Asignar a aliado</label>
-                                <select
-                                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-amber-500 outline-none bg-white"
-                                    value={newLeadForm.assigned_to_id}
-                                    onChange={e => setNewLeadForm({ ...newLeadForm, assigned_to_id: e.target.value })}
-                                >
-                                    <option value="">Selecciona un aliado</option>
-                                    {allyUsers.map((ally) => (
-                                        <option key={ally.id} value={ally.id}>
-                                            {ally.full_name || ally.email}
-                                        </option>
-                                    ))}
-                                </select>
+                        {isAllyBoard && (
+                            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                                El caso se asignará aleatoriamente a un usuario activo con rol de Reactivación Financiera.
                             </div>
                         )}
 
@@ -6694,7 +6692,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                                     disabled={creatingLead || checkingDuplicate || Boolean(duplicateCheck?.exists)}
                                     className={`flex-1 px-4 py-3 text-white rounded-xl transition font-bold shadow-lg disabled:cursor-not-allowed disabled:opacity-60 ${isAllyBoard ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'}`}
                                 >
-                                    {creatingLead ? 'Guardando...' : (isAllyBoard ? 'Crear y dejar en aliados' : 'Crear Lead')}
+                                    {creatingLead ? 'Guardando...' : (isAllyBoard ? 'Crear caso' : 'Crear Lead')}
                                 </button>
                             </div>
                         </form>

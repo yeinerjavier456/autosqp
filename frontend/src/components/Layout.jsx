@@ -58,7 +58,7 @@ const Layout = () => {
     }
 
     const roleName = getRoleName(user);
-    const isAliado = roleName === 'aliado';
+    const isAliado = roleName === 'aliado' || roleName === 'reactivacion';
     const isInventario = roleName === 'inventario';
     const isCompras = roleName === 'compras';
     const primaryColor = user?.company?.primary_color || '#0f172a';
@@ -182,7 +182,7 @@ const Layout = () => {
                                 {user?.email?.split('@')[0].replace('.', ' ') || 'Usuario'}
                             </span>
                             <span className="text-xs truncate font-normal opacity-80" style={{ color: crmSidebarTextColor }}>
-                                {isAliado ? 'Aliado' : isInventario ? 'Gestor de Inventario' : isCompras ? 'Gestor de Compras' : (user?.company?.name || 'AutosQP')}
+                                {isAliado ? 'Reactivación Financiera' : isInventario ? 'Gestor de Inventario' : isCompras ? 'Gestor de Compras' : (user?.company?.name || 'AutosQP')}
                             </span>
                         </div>
                     </div>

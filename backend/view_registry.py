@@ -9,7 +9,7 @@ SYSTEM_VIEWS = [
     {"id": "leads_board", "label": "Tablero de leads", "path": "/admin/leads", "scope": "company"},
     {"id": "appointments_calendar", "label": "Calendario de citas", "path": "/admin/appointments", "scope": "company"},
     {"id": "deleted_leads", "label": "Leads eliminados", "path": "/admin/leads/deleted", "scope": "company"},
-    {"id": "ally_board", "label": "Tablero de aliados", "path": "/aliado/dashboard", "scope": "company"},
+    {"id": "ally_board", "label": "Soluciones financieras", "path": "/aliado/dashboard", "scope": "company"},
     {"id": "alerts", "label": "Alertas automaticas", "path": "/admin/alerts", "scope": "company"},
     {"id": "sales", "label": "Finanzas y ventas", "path": "/admin/sales", "scope": "company"},
     {"id": "goals", "label": "Metas", "path": "/admin/goals", "scope": "company"},
@@ -48,6 +48,9 @@ DEFAULT_ROLE_VIEW_ACCESS = {
         "dashboard", "leads_board", "appointments_calendar", "credits", "public_credit_submissions", "gmail_credit_audit", "internal_chat"
     ],
     "aliado": [
+        "dashboard", "ally_board", "appointments_calendar", "credits", "gmail_credit_audit", "internal_chat", "inventory"
+    ],
+    "reactivacion": [
         "dashboard", "ally_board", "appointments_calendar", "credits", "gmail_credit_audit", "internal_chat", "inventory"
     ],
     "inventario": ["inventory", "internal_chat"],

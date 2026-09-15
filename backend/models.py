@@ -17,6 +17,7 @@ class UserRole(str, enum.Enum):
     VENDEDOR = "vendedor"
     COORDINADOR = "coordinador"
     ALIADO = "aliado"
+    REACTIVACION = "reactivacion"
     COMPRAS = "compras"
 
 class Company(Base):

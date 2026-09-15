@@ -73,7 +73,11 @@ LEAD_STATUS_LABELS = {
     "preparation": "Alistamientos",
     "sold": "Vendidos",
     "lost": "Perdidos",
+    "autofinancing": "Autofinanciamiento",
+    "financial_reactivation": "Reactivación financiera",
 }
+
+FINANCIAL_SOLUTION_STATUSES = ["new", "contacted", "autofinancing", "financial_reactivation"]
 
 DEFAULT_PUBLIC_COMPANY_CONTEXT = {
     "id": None,
@@ -124,6 +128,7 @@ ROLE_REQUIRED_MODULES = {
     "compras": {"purchase_board"},
     "gestion_creditos": {"credits"},
     "aliado": {"ally_board"},
+    "reactivacion": {"ally_board"},
 }
 MODULE_ROLE_FALLBACK_NAME = "user"
 
@@ -1752,9 +1757,13 @@ def apply_lead_access_filters(
     if current_user.company_id and role_name != "super_admin":
         query = query.filter(models.Lead.company_id == current_user.company_id)
 
-    aliado_user_ids = get_company_ally_user_ids(db, current_user.company_id)
+    solution_user_ids = get_company_ally_user_ids(db, current_user.company_id)
 
     if board_scope == "ally":
+        if not solution_user_ids:
+            query = query.filter(false())
+        else:
+            query = query.filter(models.Lead.assigned_to_id.in_(solution_user_ids))
         if not can_view_all_company_leads:
             query = query.filter(
                 or_(
@@ -1762,22 +1771,12 @@ def apply_lead_access_filters(
                     models.Lead.supervisors.any(models.User.id == current_user.id)
                 )
             )
-        elif aliado_user_ids:
+    else:
+        query = query.filter(~models.Lead.status.in_(FINANCIAL_SOLUTION_STATUSES[2:]))
+        if solution_user_ids:
             query = query.filter(
-                or_(
-                    models.Lead.assigned_to_id.in_(aliado_user_ids),
-                    models.Lead.supervisors.any(models.User.id.in_(aliado_user_ids))
-                )
+                or_(models.Lead.assigned_to_id.is_(None), ~models.Lead.assigned_to_id.in_(solution_user_ids))
             )
-        else:
-            query = query.filter(false())
-    elif aliado_user_ids and not can_view_all_company_leads:
-        query = query.filter(
-            or_(
-                models.Lead.assigned_to_id.is_(None),
-                ~models.Lead.assigned_to_id.in_(aliado_user_ids)
-            )
-        )
 
     if not can_view_all_company_leads:
         tracked_advisor_ids = get_user_tracked_advisor_ids(current_user)
@@ -2107,7 +2106,7 @@ def ensure_payment_receipts_columns():
 
         conn.execute(text(
             "UPDATE roles SET is_system = 1 WHERE name IN "
-            "('super_admin', 'admin', 'asesor', 'gestion_creditos', 'aliado', 'inventario', 'compras', 'user')"
+            "('super_admin', 'admin', 'asesor', 'gestion_creditos', 'aliado', 'reactivacion', 'inventario', 'compras', 'user')"
         ))
 
 ensure_role_configuration_columns()
@@ -2262,6 +2261,7 @@ def ensure_system_roles_exist():
             "asesor": "Asesor / Vendedor",
             "gestion_creditos": "Gestion de Creditos",
             "aliado": "Aliado Estrategico",
+            "reactivacion": "Reactivación Financiera",
             "compras": "Gestor de Compras",
             "user": "Usuario Basico",
         }
@@ -3105,7 +3105,7 @@ def enforce_ally_managed_status(
 
 
 def can_manually_assign_to_any_role(current_user: models.User) -> bool:
-    return bool(get_user_role_name(current_user) in {"admin", "super_admin", "aliado"})
+    return bool(get_user_role_name(current_user) in {"admin", "super_admin", "aliado", "reactivacion"})
 
 
 def get_user_role_name(user: Optional[models.User]) -> Optional[str]:
@@ -3133,6 +3133,12 @@ def get_user_role_name(user: Optional[models.User]) -> Optional[str]:
         or any("administrador" in role_name for role_name in role_names)
     ):
         return "admin"
+    if (
+        "reactivacion" in role_names
+        or "reactivacion financiera" in role_names
+        or any("reactiv" in role_name for role_name in role_names)
+    ):
+        return "reactivacion"
     if "aliado" in role_names or "aliado estrategico" in role_names:
         return "aliado"
     if "asesor" in role_names or "vendedor" in role_names or "asesor vendedor" in role_names:
@@ -3191,6 +3197,21 @@ def is_ally_role(role: Optional[models.Role]) -> bool:
         return True
 
     return any("aliad" in role_name for role_name in role_names)
+
+
+def is_reactivation_role(role: Optional[models.Role]) -> bool:
+    if not role:
+        return False
+    role_names = {
+        normalize_role_text(getattr(role, "name", None)),
+        normalize_role_text(getattr(role, "base_role_name", None)),
+        normalize_role_text(getattr(role, "label", None)),
+    }
+    role_names.discard("")
+    return bool(
+        role_names & {"reactivacion", "reactivacion financiera"}
+        or any("reactiv" in role_name for role_name in role_names)
+    )
 
 
 def get_role_permissions(role: Optional[models.Role]) -> List[str]:
@@ -3330,8 +3351,15 @@ def get_company_ally_user_ids(db: Session, company_id: Optional[int]) -> List[in
     return [
         user.id
         for user in company_users
-        if is_ally_role(getattr(user, "role", None))
+        if is_active_user(user) and is_reactivation_role(getattr(user, "role", None))
     ]
+
+
+def choose_financial_reactivation_user(db: Session, company_id: Optional[int]) -> Optional[models.User]:
+    user_ids = get_company_ally_user_ids(db, company_id)
+    if not user_ids:
+        return None
+    return db.query(models.User).filter(models.User.id == random.choice(user_ids)).first()
 
 
 def normalize_role_text(value: Optional[str]) -> str:
@@ -3372,6 +3400,8 @@ def get_effective_role_key(role: Optional[models.Role]) -> str:
         return "super_admin"
     if any("admin" in role_name or "administrador" in role_name for role_name in role_names):
         return "admin"
+    if "reactivacion" in role_names or "reactivacion financiera" in role_names or any("reactiv" in value for value in role_names):
+        return "reactivacion"
     if "aliado" in role_names or "aliado estrategico" in role_names:
         return "aliado"
     if "asesor" in role_names or "vendedor" in role_names or "asesor vendedor" in role_names:
@@ -3498,7 +3528,7 @@ def is_recoverable_lead_owner(user: Optional[models.User], company_id: Optional[
         return False
 
     role_name = get_user_role_name(user)
-    return role_name in {"asesor", "compras", "gestion_creditos", "aliado"}
+    return role_name in {"asesor", "compras", "gestion_creditos", "aliado", "reactivacion"}
 
 
 def find_fallback_lead_assignee(
@@ -3891,7 +3921,8 @@ def should_supervise_manual_lead(
 
 
 def should_reset_status_for_board_transfer(previous_role_name: Optional[str], target_role_name: Optional[str]) -> bool:
-    return (previous_role_name == "aliado") != (target_role_name == "aliado")
+    solution_roles = {"aliado", "reactivacion"}
+    return (previous_role_name in solution_roles) != (target_role_name in solution_roles)
 
 
 def validate_interested_process_detail(
@@ -3980,7 +4011,7 @@ def normalize_interested_process_detail(
 
 def build_lead_board_link(target_user: Optional[models.User], lead_id: int) -> str:
     target_role_name = get_user_role_name(target_user)
-    base_path = "/aliado/dashboard" if target_role_name == "aliado" else "/admin/leads"
+    base_path = "/aliado/dashboard" if target_role_name in {"aliado", "reactivacion"} else "/admin/leads"
     return f"{base_path}?leadId={lead_id}"
 
 
@@ -4022,7 +4053,7 @@ def ensure_role_view_defaults_synced():
 
             for role in roles:
                 effective_role_name = getattr(role, "base_role_name", None) or getattr(role, "name", None)
-                if effective_role_name not in {"admin", "super_admin", "asesor", "gestion_creditos", "aliado", "compras", "inventario", "user"}:
+                if effective_role_name not in {"admin", "super_admin", "asesor", "gestion_creditos", "aliado", "reactivacion", "compras", "inventario", "user"}:
                     continue
 
                 default_permissions = DEFAULT_ROLE_VIEW_ACCESS.get(effective_role_name, [])
@@ -7464,6 +7495,43 @@ def read_leads(
     return {"items": leads, "total": total}
 
 
+def migrate_lost_leads_to_financial_solutions(
+    db: Session,
+    company_id: Optional[int],
+    actor_user_id: Optional[int] = None,
+) -> int:
+    """Moves legacy lost leads once reactivation staff are available."""
+    reactivation_ids = get_company_ally_user_ids(db, company_id)
+    if not company_id or not reactivation_ids:
+        return 0
+    lost_leads = db.query(models.Lead).filter(
+        models.Lead.company_id == company_id,
+        models.Lead.deleted_at.is_(None),
+        models.Lead.status == models.LeadStatus.LOST.value,
+    ).with_for_update().all()
+    for lead in lost_leads:
+        previous_assignee_id = lead.assigned_to_id
+        target_user_id = random.choice(reactivation_ids)
+        lead.status = "new"
+        lead.status_updated_at = datetime.datetime.utcnow()
+        lead.assigned_to_id = target_user_id
+        supervisor_ids = normalize_supervisor_ids([user.id for user in getattr(lead, "supervisors", [])])
+        if previous_assignee_id and previous_assignee_id != target_user_id:
+            supervisor_ids = ensure_user_in_supervisors(supervisor_ids, previous_assignee_id)
+        sync_lead_supervisors(db, lead, supervisor_ids, actor_user_id)
+        target_user = db.query(models.User).filter(models.User.id == target_user_id).first()
+        db.add(models.LeadHistory(
+            lead_id=lead.id,
+            user_id=actor_user_id,
+            previous_status="lost",
+            new_status="new",
+            comment=f"Transferido automáticamente a Soluciones Financieras y asignado a {target_user.full_name or target_user.email}.",
+        ))
+    if lost_leads:
+        db.commit()
+    return len(lost_leads)
+
+
 @app.get("/leads/board", response_model=schemas.LeadBoardResponse)
 def read_leads_board(
     board_scope: str = None,
@@ -7481,6 +7549,7 @@ def read_leads_board(
     current_user: models.User = Depends(get_current_user)
 ):
     company = get_company_by_id(db, current_user.company_id)
+    migrate_lost_leads_to_financial_solutions(db, current_user.company_id, current_user.id)
     if duplicates_only and not is_company_admin(current_user):
         raise HTTPException(status_code=403, detail="Solo los administradores pueden filtrar leads duplicados")
     duplicate_map = build_company_lead_duplicate_map(db, current_user.company_id)
@@ -7506,7 +7575,8 @@ def read_leads_board(
 
     columns: List[schemas.LeadBoardColumn] = []
 
-    for status_key in get_company_allowed_lead_statuses(company):
+    board_statuses = FINANCIAL_SOLUTION_STATUSES if board_scope == "ally" else get_company_allowed_lead_statuses(company)
+    for status_key in board_statuses:
         normalized_status = normalize_lead_status_value(status_key)
         if global_status and normalize_lead_status_value(global_status) != normalized_status:
             columns.append(
@@ -8317,6 +8387,7 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
         )
 
     # 2. Assignment Logic
+    is_financial_solution = getattr(lead, "board_scope", None) == "ally"
     assigned_user_id = lead.assigned_to_id
     supervisor_ids = normalize_supervisor_ids(getattr(lead, "supervisor_ids", []))
     if supervisor_ids and not is_company_admin(current_user):
@@ -8324,7 +8395,14 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
     
     # Manual leads created by advisors stay assigned to themselves. Random
     # assignment here is only for super admin-created leads.
-    if not assigned_user_id:
+    if is_financial_solution:
+        if get_user_role_name(current_user) not in {"admin", "super_admin", "reactivacion"}:
+            raise HTTPException(status_code=403, detail="No tienes permiso para crear casos en Soluciones Financieras")
+        reactivation_user = choose_financial_reactivation_user(db, company_id)
+        if not reactivation_user:
+            raise HTTPException(status_code=400, detail="No hay usuarios activos con rol de Reactivación Financiera en esta empresa")
+        assigned_user_id = reactivation_user.id
+    elif not assigned_user_id:
         if should_self_assign_manual_lead(current_user):
             assigned_user_id = current_user.id
         elif should_auto_assign_manual_lead(current_user):
@@ -8356,6 +8434,8 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
         company,
         models.LeadStatus.NEW.value
     )
+    if is_financial_solution:
+        effective_status = "new"
     assigned_user_id, supervisor_ids, credit_coordinator = maybe_assign_credit_coordinator(
         db=db,
         lead_company_id=company_id,
@@ -8395,7 +8475,7 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
             f"{new_lead.message or 'Lead creado manualmente'} "
             f"(Coordinador de credito añadido como supervisor: {credit_coordinator.full_name or credit_coordinator.email})"
             if credit_coordinator else
-            (new_lead.message or "Lead creado manualmente")
+            (new_lead.message or ("Caso creado manualmente en Soluciones Financieras" if is_financial_solution else "Lead creado manualmente"))
         )
     )
     db.add(initial_history)
@@ -11171,14 +11251,95 @@ def update_lead(
     update_data = lead_update.dict(exclude_unset=True)
     requested_fields = set(update_data.keys())
     contact_edit_fields = {"name", "email", "phone"}
-    is_contact_only_update = bool(requested_fields) and requested_fields.issubset(contact_edit_fields)
+    permission_fields = requested_fields - {"board_scope"}
+    is_contact_only_update = bool(permission_fields) and permission_fields.issubset(contact_edit_fields)
 
     if not is_contact_only_update:
         ensure_can_modify_lead(current_user, lead)
     if lead_update.supervisor_ids is not None:
         ensure_can_manage_lead_supervision(current_user, lead)
 
-    payload_update = lead_update.dict(exclude={'comment', 'process_detail', 'supervisor_ids'}, exclude_unset=True)
+    is_financial_solution = lead_update.board_scope == "ally"
+    if is_financial_solution:
+        solution_user_ids = get_company_ally_user_ids(db, lead.company_id)
+        if lead.assigned_to_id not in solution_user_ids and get_user_role_name(current_user) not in {"admin", "super_admin"}:
+            raise HTTPException(status_code=403, detail="Este caso no pertenece a Soluciones Financieras")
+        requested_status = normalize_lead_status_value(lead_update.status, lead.status)
+        if requested_status not in FINANCIAL_SOLUTION_STATUSES:
+            raise HTTPException(status_code=400, detail="Estado inválido para Soluciones Financieras")
+        target_user_id = lead.assigned_to_id
+        if lead_update.assigned_to_id is not None:
+            target_user = db.query(models.User).options(joinedload(models.User.role)).filter(
+                models.User.id == lead_update.assigned_to_id,
+                models.User.company_id == lead.company_id,
+            ).first()
+            if not target_user or not is_active_user(target_user) or not is_reactivation_role(target_user.role):
+                raise HTTPException(status_code=400, detail="Solo puedes asignar casos a usuarios activos de Reactivación Financiera")
+            target_user_id = target_user.id
+        previous_status = lead.status
+        for field in ("name", "email", "phone", "message"):
+            if field in update_data:
+                setattr(lead, field, update_data[field])
+        lead.status = requested_status
+        lead.assigned_to_id = target_user_id
+        if previous_status != requested_status:
+            lead.status_updated_at = datetime.datetime.utcnow()
+        if previous_status != requested_status or (lead_update.comment or "").strip():
+            db.add(models.LeadHistory(
+                lead_id=lead.id,
+                user_id=current_user.id,
+                previous_status=previous_status,
+                new_status=requested_status,
+                comment=(lead_update.comment or "").strip() or None,
+            ))
+        if lead_update.supervisor_ids is not None:
+            sync_lead_supervisors(db, lead, normalize_supervisor_ids(lead_update.supervisor_ids), current_user.id)
+        db.commit()
+        db.refresh(lead)
+        log_action_to_db(db, current_user.id, "UPDATE", "Lead", lead.id, f"Caso de Soluciones Financieras actualizado: {lead.name}")
+        return lead
+
+    if normalize_lead_status_value(lead_update.status, lead.status) == models.LeadStatus.LOST.value and lead.status != models.LeadStatus.LOST.value:
+        target_user = choose_financial_reactivation_user(db, lead.company_id)
+        if not target_user:
+            raise HTTPException(status_code=400, detail="No se puede marcar como perdido: no hay usuarios activos con rol de Reactivación Financiera")
+        previous_status = lead.status
+        previous_assignee_id = lead.assigned_to_id
+        lead.status = "new"
+        lead.status_updated_at = datetime.datetime.utcnow()
+        lead.assigned_to_id = target_user.id
+        supervisor_ids = normalize_supervisor_ids([user.id for user in getattr(lead, "supervisors", [])])
+        if previous_assignee_id and previous_assignee_id != target_user.id:
+            supervisor_ids = ensure_user_in_supervisors(supervisor_ids, previous_assignee_id)
+        sync_lead_supervisors(db, lead, supervisor_ids, current_user.id)
+        db.add(models.LeadHistory(
+            lead_id=lead.id,
+            user_id=current_user.id,
+            previous_status=previous_status,
+            new_status="lost",
+            comment=(lead_update.comment or "").strip() or "Lead marcado como perdido.",
+        ))
+        db.add(models.LeadHistory(
+            lead_id=lead.id,
+            user_id=current_user.id,
+            previous_status="lost",
+            new_status="new",
+            comment=f"Transferido automáticamente a Soluciones Financieras y asignado a {target_user.full_name or target_user.email}.",
+        ))
+        db.commit()
+        db.refresh(lead)
+        db.add(models.Notification(
+            user_id=target_user.id,
+            title="Nuevo caso de reactivación",
+            message=f"Se te ha asignado el caso de {lead.name}.",
+            type="info",
+            link=build_lead_board_link(target_user, lead.id),
+        ))
+        db.commit()
+        log_action_to_db(db, current_user.id, "TRANSFER", "Lead", lead.id, "Lead perdido transferido a Soluciones Financieras")
+        return lead
+
+    payload_update = lead_update.dict(exclude={'comment', 'process_detail', 'supervisor_ids', 'board_scope'}, exclude_unset=True)
     assignment_context = get_effective_lead_assignment_for_update(
         db=db,
         lead=lead,

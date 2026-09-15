@@ -9,7 +9,7 @@ export const SYSTEM_VIEWS = [
     { id: 'leads_board', label: 'Tablero de leads', path: '/admin/leads', menuLabel: 'Tablero de Leads', section: 'crm', scope: 'company' },
     { id: 'appointments_calendar', label: 'Calendario de citas', path: '/admin/appointments', menuLabel: 'Calendario de Citas', section: 'crm', scope: 'company' },
     { id: 'deleted_leads', label: 'Leads eliminados', path: '/admin/leads/deleted', menuLabel: 'Leads Eliminados', section: 'crm', scope: 'company' },
-    { id: 'ally_board', label: 'Tablero de aliados', path: '/aliado/dashboard', menuLabel: 'Tablero Aliados', section: 'crm', scope: 'company' },
+    { id: 'ally_board', label: 'Soluciones financieras', path: '/aliado/dashboard', menuLabel: 'Soluciones Financieras', section: 'crm', scope: 'company' },
     { id: 'alerts', label: 'Alertas automaticas', path: '/admin/alerts', menuLabel: 'Alertas Auto', section: 'crm', scope: 'company' },
     { id: 'sales', label: 'Finanzas y ventas', path: '/admin/sales', menuLabel: 'Finanzas y Ventas', section: 'crm', scope: 'company' },
     { id: 'goals', label: 'Metas', path: '/admin/goals', menuLabel: 'Metas', section: 'crm', scope: 'company' },
@@ -79,6 +79,9 @@ export const DEFAULT_ROLE_VIEW_ACCESS = {
     aliado: [
         'dashboard', 'ally_board', 'appointments_calendar', 'credits', 'gmail_credit_audit', 'internal_chat', 'inventory'
     ],
+    reactivacion: [
+        'dashboard', 'ally_board', 'appointments_calendar', 'credits', 'gmail_credit_audit', 'internal_chat', 'inventory'
+    ],
     inventario: [
         'inventory', 'internal_chat'
     ],
@@ -94,6 +97,7 @@ export const DEFAULT_ROLE_MENU_ORDER = {
     asesor: DEFAULT_ROLE_VIEW_ACCESS.asesor,
     gestion_creditos: DEFAULT_ROLE_VIEW_ACCESS.gestion_creditos,
     aliado: DEFAULT_ROLE_VIEW_ACCESS.aliado,
+    reactivacion: DEFAULT_ROLE_VIEW_ACCESS.reactivacion,
     inventario: DEFAULT_ROLE_VIEW_ACCESS.inventario,
     compras: DEFAULT_ROLE_VIEW_ACCESS.compras,
     user: []
@@ -104,6 +108,7 @@ export const ROLE_REQUIRED_MODULES = {
     compras: ['purchase_board'],
     gestion_creditos: ['credits'],
     aliado: ['ally_board'],
+    reactivacion: ['ally_board'],
 };
 
 export const getRoleName = (user) =>

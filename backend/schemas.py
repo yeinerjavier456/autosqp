@@ -762,9 +762,10 @@ class LeadBase(BaseModel):
     last_reply_at: Optional[datetime] = None
 
 class LeadCreate(LeadBase):
-    pass
+    board_scope: Optional[str] = None
 
 class LeadUpdate(BaseModel):
+    board_scope: Optional[str] = None
     name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
