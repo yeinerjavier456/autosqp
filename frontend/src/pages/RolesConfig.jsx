@@ -253,7 +253,7 @@ const RolesConfig = () => {
         if (!selectedRoleId || selectedRole?.is_system) return;
         const result = await Swal.fire({
             title: 'Eliminar rol',
-            text: 'Esta accion no se puede deshacer.',
+            text: 'Los usuarios inactivos que tengan este rol pasarán al rol básico. Esta acción no se puede deshacer.',
             icon: 'warning',
             showCancelButton: true,
             confirmButtonText: 'Eliminar',

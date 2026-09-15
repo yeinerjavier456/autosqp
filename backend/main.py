@@ -7357,9 +7357,35 @@ def delete_role(
     if current_user.company_id and db_role.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    in_use = db.query(models.User).filter(models.User.role_id == role_id).count()
-    if in_use:
-        raise HTTPException(status_code=400, detail="No se puede eliminar un rol que tiene usuarios asignados")
+    assigned_users = db.query(models.User).filter(models.User.role_id == role_id).all()
+    active_users = [user for user in assigned_users if getattr(user, "is_active", 1) != 0]
+    if active_users:
+        active_names = ", ".join(
+            (user.full_name or user.email or f"Usuario #{user.id}")
+            for user in active_users[:5]
+        )
+        extra_count = len(active_users) - 5
+        if extra_count > 0:
+            active_names = f"{active_names} y {extra_count} más"
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede eliminar el rol porque aún está asignado a usuarios activos: {active_names}",
+        )
+
+    inactive_users = [user for user in assigned_users if getattr(user, "is_active", 1) == 0]
+    if inactive_users:
+        fallback_role = db.query(models.Role).filter(
+            models.Role.name == MODULE_ROLE_FALLBACK_NAME,
+            models.Role.is_system == True,
+        ).first()
+        if not fallback_role:
+            fallback_role = get_module_role_fallback(db, None)
+        for inactive_user in inactive_users:
+            inactive_user.role_id = fallback_role.id
+            inactive_user.auto_assign_leads = False
+            inactive_user.lead_reassignment_enabled = False
+            inactive_user.advisor_tracking_enabled = False
+            inactive_user.tracked_advisor_ids_json = json.dumps([])
 
     db.delete(db_role)
     db.commit()
