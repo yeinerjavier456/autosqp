@@ -48,6 +48,8 @@ LEGACY_LEAD_STATUS_MAP = {
     "credit_application": "credit_study",
     "qualified": "approvals",
     "ally_managed": "new",
+    "perdido": "lost",
+    "perdidos": "lost",
 }
 
 LEAD_STATUS_SEQUENCE = [
@@ -7533,7 +7535,7 @@ def migrate_lost_leads_to_financial_solutions(
     lost_leads = db.query(models.Lead).filter(
         models.Lead.company_id == company_id,
         models.Lead.deleted_at.is_(None),
-        models.Lead.status == models.LeadStatus.LOST.value,
+        func.lower(func.trim(models.Lead.status)).in_(["lost", "perdido", "perdidos"]),
     ).with_for_update().all()
     for lead in lost_leads:
         previous_assignee_id = lead.assigned_to_id
@@ -7556,6 +7558,35 @@ def migrate_lost_leads_to_financial_solutions(
     if lost_leads:
         db.commit()
     return len(lost_leads)
+
+
+@app.post("/leads/financial-solutions/migrate-lost")
+def migrate_existing_lost_leads(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if not is_company_admin(current_user):
+        raise HTTPException(status_code=403, detail="Solo los administradores pueden trasladar los leads perdidos")
+    if not current_user.company_id:
+        raise HTTPException(status_code=400, detail="Debes tener una empresa seleccionada")
+    reactivation_users = get_company_ally_user_ids(db, current_user.company_id)
+    if not reactivation_users:
+        raise HTTPException(
+            status_code=400,
+            detail="No se encontró ningún usuario activo con rol de Reactivación Financiera en esta empresa",
+        )
+    found = db.query(models.Lead).filter(
+        models.Lead.company_id == current_user.company_id,
+        models.Lead.deleted_at.is_(None),
+        func.lower(func.trim(models.Lead.status)).in_(["lost", "perdido", "perdidos"]),
+    ).count()
+    moved = migrate_lost_leads_to_financial_solutions(db, current_user.company_id, current_user.id)
+    return {
+        "found": found,
+        "moved": moved,
+        "reactivation_users": len(reactivation_users),
+        "message": f"Se trasladaron {moved} de {found} leads perdidos a Soluciones Financieras.",
+    }
 
 
 @app.get("/leads/board", response_model=schemas.LeadBoardResponse)

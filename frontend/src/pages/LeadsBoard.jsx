@@ -1553,6 +1553,8 @@ const LEGACY_LEAD_STATUS_MAP = {
     credit_application: 'credit_study',
     qualified: 'approvals',
     ally_managed: 'new',
+    perdido: 'lost',
+    perdidos: 'lost',
 };
 
 const LEAD_STATUS_OPTIONS = [
@@ -4628,6 +4630,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const [showLeadUploadModal, setShowLeadUploadModal] = useState(false);
     const [leadUploadFile, setLeadUploadFile] = useState(null);
     const [uploadingLeads, setUploadingLeads] = useState(false);
+    const [migratingLostLeads, setMigratingLostLeads] = useState(false);
     const [showMyLeadsOnly, setShowMyLeadsOnly] = useState(false);
     const [visibleLeadsByStatus, setVisibleLeadsByStatus] = useState({});
     const [boardTotalsByStatus, setBoardTotalsByStatus] = useState({});
@@ -5921,6 +5924,32 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         }
     };
 
+    const handleMigrateLostLeads = async () => {
+        if (migratingLostLeads) return;
+        setMigratingLostLeads(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post(
+                `${API_BASE_URL}/leads/financial-solutions/migrate-lost`,
+                {},
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const result = response.data || {};
+            await fetchBoardLeads(searchTerm);
+            Swal.fire({
+                icon: Number(result.moved || 0) > 0 ? 'success' : 'info',
+                title: Number(result.moved || 0) > 0 ? 'Traslado completado' : 'No había leads pendientes',
+                text: result.message || `Se trasladaron ${result.moved || 0} leads perdidos.`,
+                confirmButtonColor: '#2563eb',
+            });
+        } catch (error) {
+            console.error('Error migrating lost leads', error);
+            Swal.fire('No se pudo realizar el traslado', error.response?.data?.detail || 'Ocurrió un error al buscar los leads perdidos.', 'error');
+        } finally {
+            setMigratingLostLeads(false);
+        }
+    };
+
     if (loading) return (
         <div className="flex justify-center items-center h-[calc(100vh-100px)]">
             <div className="text-xl text-blue-600 font-semibold animate-pulse">Cargando Tablero...</div>
@@ -5935,6 +5964,16 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                     <p className="text-slate-500 mt-1 text-sm font-medium">{boardDescription}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                    {isAllyBoard && canExportLeads && (
+                        <button
+                            type="button"
+                            onClick={handleMigrateLostLeads}
+                            disabled={migratingLostLeads}
+                            className="flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-bold text-violet-700 transition-all hover:bg-violet-100 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {migratingLostLeads ? 'Trasladando...' : 'Pasar perdidos'}
+                        </button>
+                    )}
                     {canExportLeads && (
                         <>
                             <button
