@@ -7539,15 +7539,13 @@ def migrate_lost_leads_to_financial_solutions(
         or_(models.Lead.assigned_to_id.is_(None), ~models.Lead.assigned_to_id.in_(reactivation_ids)),
     ).with_for_update().all()
     for lead in lost_leads:
-        previous_assignee_id = lead.assigned_to_id
         target_user_id = random.choice(reactivation_ids)
         lead.status = "new"
         lead.status_updated_at = datetime.datetime.utcnow()
         lead.assigned_to_id = target_user_id
-        supervisor_ids = normalize_supervisor_ids([user.id for user in getattr(lead, "supervisors", [])])
-        if previous_assignee_id and previous_assignee_id != target_user_id:
-            supervisor_ids = ensure_user_in_supervisors(supervisor_ids, previous_assignee_id)
-        sync_lead_supervisors(db, lead, supervisor_ids, actor_user_id)
+        # The financial-solutions lifecycle is independent. Previous owners remain
+        # visible in history, but they are not carried over as supervisors.
+        sync_lead_supervisors(db, lead, [], actor_user_id)
         target_user = db.query(models.User).filter(models.User.id == target_user_id).first()
         db.add(models.LeadHistory(
             lead_id=lead.id,
@@ -11363,14 +11361,10 @@ def update_lead(
         if not target_user:
             raise HTTPException(status_code=400, detail="No se puede marcar como perdido: no hay usuarios activos con rol de Reactivación Financiera")
         previous_status = lead.status
-        previous_assignee_id = lead.assigned_to_id
         lead.status = "new"
         lead.status_updated_at = datetime.datetime.utcnow()
         lead.assigned_to_id = target_user.id
-        supervisor_ids = normalize_supervisor_ids([user.id for user in getattr(lead, "supervisors", [])])
-        if previous_assignee_id and previous_assignee_id != target_user.id:
-            supervisor_ids = ensure_user_in_supervisors(supervisor_ids, previous_assignee_id)
-        sync_lead_supervisors(db, lead, supervisor_ids, current_user.id)
+        sync_lead_supervisors(db, lead, [], current_user.id)
         db.add(models.LeadHistory(
             lead_id=lead.id,
             user_id=current_user.id,
