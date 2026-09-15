@@ -79,7 +79,7 @@ LEAD_STATUS_LABELS = {
     "financial_reactivation": "Reactivación financiera",
 }
 
-FINANCIAL_SOLUTION_STATUSES = ["new", "contacted", "autofinancing", "financial_reactivation"]
+FINANCIAL_SOLUTION_STATUSES = ["new", "contacted", "autofinancing", "financial_reactivation", "lost"]
 
 DEFAULT_PUBLIC_COMPANY_CONTEXT = {
     "id": None,
@@ -1774,7 +1774,7 @@ def apply_lead_access_filters(
                 )
             )
     else:
-        query = query.filter(~models.Lead.status.in_(FINANCIAL_SOLUTION_STATUSES[2:]))
+        query = query.filter(~models.Lead.status.in_(["autofinancing", "financial_reactivation"]))
         if solution_user_ids:
             query = query.filter(
                 or_(models.Lead.assigned_to_id.is_(None), ~models.Lead.assigned_to_id.in_(solution_user_ids))
@@ -7536,6 +7536,7 @@ def migrate_lost_leads_to_financial_solutions(
         models.Lead.company_id == company_id,
         models.Lead.deleted_at.is_(None),
         func.lower(func.trim(models.Lead.status)).in_(["lost", "perdido", "perdidos"]),
+        or_(models.Lead.assigned_to_id.is_(None), ~models.Lead.assigned_to_id.in_(reactivation_ids)),
     ).with_for_update().all()
     for lead in lost_leads:
         previous_assignee_id = lead.assigned_to_id
@@ -7579,6 +7580,7 @@ def migrate_existing_lost_leads(
         models.Lead.company_id == current_user.company_id,
         models.Lead.deleted_at.is_(None),
         func.lower(func.trim(models.Lead.status)).in_(["lost", "perdido", "perdidos"]),
+        or_(models.Lead.assigned_to_id.is_(None), ~models.Lead.assigned_to_id.in_(reactivation_users)),
     ).count()
     moved = migrate_lost_leads_to_financial_solutions(db, current_user.company_id, current_user.id)
     return {

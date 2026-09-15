@@ -1574,6 +1574,7 @@ const FINANCIAL_SOLUTION_STATUS_OPTIONS = [
     { value: 'contacted', label: 'Contactados', columnColor: 'text-amber-600', borderColor: '#eab308', historyBadgeClass: 'bg-amber-500' },
     { value: 'autofinancing', label: 'Autofinanciamiento', columnColor: 'text-violet-600', borderColor: '#8b5cf6', historyBadgeClass: 'bg-violet-500' },
     { value: 'financial_reactivation', label: 'Reactivación financiera', columnColor: 'text-emerald-600', borderColor: '#10b981', historyBadgeClass: 'bg-emerald-500' },
+    { value: 'lost', label: 'Perdidos', columnColor: 'text-slate-500', borderColor: '#64748b', historyBadgeClass: 'bg-slate-500' },
 ];
 
 const LEAD_STATUS_META = [...LEAD_STATUS_OPTIONS, ...FINANCIAL_SOLUTION_STATUS_OPTIONS].reduce((accumulator, statusOption) => {
