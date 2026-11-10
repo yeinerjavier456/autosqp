@@ -261,6 +261,10 @@ const SaleRequestModal = ({ sale, users = [], saving, requireCommissions, onClos
 
 const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, initialTab = 'sales' }) => {
     const defaultRange = getLastMonthRange();
+    const [financeAccessToken, setFinanceAccessToken] = useState(() => sessionStorage.getItem('financeAccessToken') || '');
+    const [financePassword, setFinancePassword] = useState('');
+    const [financeUnlocking, setFinanceUnlocking] = useState(false);
+    const [financeUnlockError, setFinanceUnlockError] = useState('');
     const [stats, setStats] = useState({
         total_revenue: 0,
         total_commissions: 0,
@@ -386,8 +390,23 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
     };
 
     useEffect(() => {
+        const interceptorId = axios.interceptors.request.use((config) => {
+            if (financeAccessToken && String(config.url || '').startsWith('/api/finance/')) {
+                config.headers = config.headers || {};
+                config.headers['X-Finance-Access-Token'] = financeAccessToken;
+            }
+            return config;
+        });
+        return () => axios.interceptors.request.eject(interceptorId);
+    }, [financeAccessToken]);
+
+    useEffect(() => {
+        if (!financeAccessToken) {
+            setLoading(false);
+            return;
+        }
         fetchData({ silent: sales.length > 0 || receipts.length > 0 });
-    }, [filterStatus, salesSearch, receiptSearch, receiptCategory, receiptMovementType, periodPreset, startDate, endDate]);
+    }, [financeAccessToken, filterStatus, salesSearch, receiptSearch, receiptCategory, receiptMovementType, periodPreset, startDate, endDate]);
 
     useEffect(() => {
         const timeoutId = window.setTimeout(() => {
@@ -507,10 +526,37 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             setCompanyUsers(Array.isArray(usersRes.data?.items) ? usersRes.data.items : []);
         } catch (error) {
             console.error('Error fetching sales data', error);
+            if ([401, 403, 423].includes(error.response?.status) && String(error.response?.data?.detail || '').toLowerCase().includes('finanz')) {
+                sessionStorage.removeItem('financeAccessToken');
+                setFinanceAccessToken('');
+                setFinanceUnlockError(error.response?.data?.detail || 'Debes volver a ingresar la contraseña de Finanzas.');
+            }
         } finally {
             if (!silent) {
                 setLoading(false);
             }
+        }
+    };
+
+    const handleFinanceUnlock = async (event) => {
+        event.preventDefault();
+        if (!financePassword) return;
+        setFinanceUnlocking(true);
+        setFinanceUnlockError('');
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post('/api/finance/access/unlock', { password: financePassword }, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const accessToken = response.data?.access_token || '';
+            sessionStorage.setItem('financeAccessToken', accessToken);
+            setFinanceAccessToken(accessToken);
+            setFinancePassword('');
+            setLoading(true);
+        } catch (error) {
+            setFinanceUnlockError(error.response?.data?.detail || 'No se pudo validar la contraseña de Finanzas.');
+        } finally {
+            setFinanceUnlocking(false);
         }
     };
 
@@ -915,13 +961,14 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
     const handleDownloadTaxReport = () => {
         const token = localStorage.getItem('token');
         const activeYear = startDate ? Number(startDate.slice(0, 4)) : new Date().getFullYear();
-        window.open(`/api/finance/tax-report.xlsx?year=${activeYear}&token=${token}`, '_blank');
+        window.open(`/api/finance/tax-report.xlsx?year=${activeYear}&token=${token}&finance_token=${encodeURIComponent(financeAccessToken)}`, '_blank');
     };
 
     const handleDownloadReceiptsReport = () => {
         const token = localStorage.getItem('token');
         const params = new URLSearchParams();
         params.set('token', token);
+        params.set('finance_token', financeAccessToken);
         window.open(`/api/finance/receipts.xlsx?${params.toString()}`, '_blank');
     };
 
@@ -1783,6 +1830,36 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             Swal.fire('Error', error.response?.data?.detail || 'No se pudo eliminar la venta.', 'error');
         }
     };
+
+    if (!financeAccessToken) {
+        return (
+            <div className="flex min-h-[70vh] items-center justify-center px-4">
+                <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-xl">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-2xl text-white">🔒</div>
+                    <h1 className="mt-5 text-center text-2xl font-extrabold text-slate-900">Finanzas y Ventas protegidas</h1>
+                    <p className="mt-2 text-center text-sm text-slate-500">Ingresa la contraseña financiera de tu empresa. No se cargará información hasta validarla.</p>
+                    <form onSubmit={handleFinanceUnlock} className="mt-6 space-y-4">
+                        <div>
+                            <label className="mb-1 block text-sm font-semibold text-slate-700">Contraseña</label>
+                            <input
+                                type="password"
+                                value={financePassword}
+                                onChange={(event) => setFinancePassword(event.target.value)}
+                                autoFocus
+                                autoComplete="current-password"
+                                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                placeholder="Contraseña de Finanzas"
+                            />
+                        </div>
+                        {financeUnlockError && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{financeUnlockError}</p>}
+                        <button type="submit" disabled={financeUnlocking || !financePassword} className="w-full rounded-xl bg-blue-600 px-4 py-3 font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
+                            {financeUnlocking ? 'Validando...' : 'Ingresar a Finanzas'}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        );
+    }
 
     if (loading && !receiptSearchOnly) {
         return <div className="p-10 text-center">Cargando finanzas...</div>;
@@ -2936,7 +3013,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                                         </button>
                                                         {group.sale?.id && (
                                                             <a
-                                                                href={`/api/finance/sales/${group.sale.id}/invoice.pdf?token=${localStorage.getItem('token')}`}
+                                                                href={`/api/finance/sales/${group.sale.id}/invoice.pdf?token=${localStorage.getItem('token')}&finance_token=${encodeURIComponent(financeAccessToken)}`}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
                                                                 className="inline-flex items-center rounded-lg bg-emerald-50 px-3 py-1.5 font-medium text-emerald-700 hover:bg-emerald-100"
@@ -3131,7 +3208,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                             <div className="flex items-center gap-2">
                                 {isSaleGroup && (
                                     <a
-                                        href={`/api/finance/sales/${selectedReceiptGroup.sale?.id}/invoice.pdf?token=${localStorage.getItem('token')}`}
+                                        href={`/api/finance/sales/${selectedReceiptGroup.sale?.id}/invoice.pdf?token=${localStorage.getItem('token')}&finance_token=${encodeURIComponent(financeAccessToken)}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
@@ -3295,7 +3372,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                                         Editar
                                                     </button>
                                                     <a
-                                                        href={`/api/finance/receipts/${receipt.id}/pdf?token=${localStorage.getItem('token')}`}
+                                                        href={`/api/finance/receipts/${receipt.id}/pdf?token=${localStorage.getItem('token')}&finance_token=${encodeURIComponent(financeAccessToken)}`}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
                                                         className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100"

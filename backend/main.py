@@ -4,7 +4,7 @@ from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session, joinedload, selectinload, noload
 from sqlalchemy import or_, and_, func, text, false, select
 from fastapi.middleware.cors import CORSMiddleware
-from database import engine, Base, get_db
+from database import engine, Base, get_db, SessionLocal
 import models, schemas, auth_utils
 import lead_assignment
 from models import LeadNote, LeadFile # Explicitly for create_all to see them
@@ -26,6 +26,7 @@ import smtplib
 import ssl
 import uuid
 import unicodedata
+import hashlib
 from html import escape
 from io import BytesIO
 from email.message import EmailMessage
@@ -3025,6 +3026,88 @@ from dependencies import (
     is_company_admin,
 )
 
+
+def _finance_password_marker(password_hash: str) -> str:
+    return hashlib.sha256(str(password_hash or "").encode("utf-8")).hexdigest()
+
+
+@app.middleware("http")
+async def protect_finance_routes(request: Request, call_next):
+    path = request.url.path.rstrip("/")
+    if not path.startswith("/finance/") or path == "/finance/access/unlock":
+        return await call_next(request)
+
+    auth_header = request.headers.get("Authorization", "")
+    auth_token = auth_header[7:] if auth_header.startswith("Bearer ") else request.query_params.get("token")
+    finance_token = request.headers.get("X-Finance-Access-Token") or request.query_params.get("finance_token")
+    if not auth_token:
+        return JSONResponse(status_code=401, content={"detail": "No autenticado"})
+    if not finance_token:
+        return JSONResponse(status_code=403, content={"detail": "Debes ingresar la contraseña de Finanzas y Ventas"})
+
+    try:
+        auth_payload = jwt.decode(auth_token, auth_utils.SECRET_KEY, algorithms=[auth_utils.ALGORITHM])
+        user_id = int(auth_payload.get("sub"))
+    except (JWTError, TypeError, ValueError):
+        return JSONResponse(status_code=401, content={"detail": "La sesión principal venció"})
+
+    db = SessionLocal()
+    try:
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not user or not getattr(user, "is_active", True) or not user.company_id:
+            return JSONResponse(status_code=403, content={"detail": "No tienes una empresa activa para consultar Finanzas"})
+
+        company = db.query(models.Company).filter(models.Company.id == user.company_id).first()
+        password_hash = getattr(company, "finance_password_hash", None) if company else None
+        if not password_hash:
+            return JSONResponse(status_code=423, content={"detail": "La contraseña de Finanzas aún no ha sido configurada por el administrador global"})
+
+        finance_payload = jwt.decode(finance_token, auth_utils.SECRET_KEY, algorithms=[auth_utils.ALGORITHM])
+        if finance_payload.get("type") != "finance_access":
+            raise JWTError("Invalid finance token type")
+        if int(finance_payload.get("sub")) != user.id or int(finance_payload.get("company_id")) != user.company_id:
+            raise JWTError("Finance token scope mismatch")
+        if finance_payload.get("password_marker") != _finance_password_marker(password_hash):
+            raise JWTError("Finance password changed")
+    except (JWTError, TypeError, ValueError):
+        return JSONResponse(status_code=403, content={"detail": "La sesión de Finanzas venció o la contraseña cambió"})
+    finally:
+        db.close()
+
+    return await call_next(request)
+
+
+@app.post("/finance/access/unlock")
+def unlock_finance_access(
+    payload: schemas.FinanceUnlockRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if not current_user.company_id:
+        raise HTTPException(status_code=403, detail="No tienes una empresa asignada")
+    company = db.query(models.Company).filter(models.Company.id == current_user.company_id).first()
+    password_hash = getattr(company, "finance_password_hash", None) if company else None
+    if not password_hash:
+        raise HTTPException(status_code=423, detail="La contraseña de Finanzas aún no ha sido configurada por el administrador global")
+    if not auth_utils.verify_password(payload.password, password_hash):
+        raise HTTPException(status_code=403, detail="Contraseña de Finanzas incorrecta")
+
+    finance_token = auth_utils.create_access_token(
+        data={
+            "sub": str(current_user.id),
+            "company_id": current_user.company_id,
+            "type": "finance_access",
+            "password_marker": _finance_password_marker(password_hash),
+        },
+        expires_delta=datetime.timedelta(hours=8),
+    )
+    return {"access_token": finance_token, "expires_in_hours": 8}
+
+
+@app.get("/finance/access/status")
+def finance_access_status(current_user: models.User = Depends(get_current_user)):
+    return {"unlocked": True, "company_id": current_user.company_id}
+
 @app.post("/token", response_model=schemas.Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == form_data.username).first()
@@ -4309,6 +4392,7 @@ def ensure_user_management_scope(current_user: models.User, target_user: models.
 def serialize_company(company: models.Company) -> dict:
     payload = schemas.Company.model_validate(company, from_attributes=True).model_dump()
     payload["enabled_modules"] = get_company_enabled_modules(company)
+    payload["finance_password_configured"] = bool(getattr(company, "finance_password_hash", None))
     return payload
 
 def upsert_purchase_request_from_lead(db: Session, lead: models.Lead):
@@ -5447,6 +5531,27 @@ def update_company(company_id: int, company_update: schemas.CompanyCreate, db: S
         )
 
     return serialize_company(db_company)
+
+
+@app.put("/companies/{company_id}/finance-password")
+def update_company_finance_password(
+    company_id: int,
+    payload: schemas.FinancePasswordUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if get_user_role_name(current_user) != "super_admin":
+        raise HTTPException(status_code=403, detail="Solo un administrador global puede cambiar esta contraseña")
+    company = db.query(models.Company).filter(models.Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Empresa no encontrada")
+
+    password = payload.password.strip()
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres")
+    company.finance_password_hash = auth_utils.get_password_hash(password)
+    db.commit()
+    return {"message": "Contraseña de Finanzas actualizada", "finance_password_configured": True}
 
 @app.get("/public/company-context", response_model=schemas.PublicCompanyContext)
 def read_public_company_context(request: Request, db: Session = Depends(get_db)):

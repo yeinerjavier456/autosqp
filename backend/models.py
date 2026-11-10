@@ -53,6 +53,7 @@ class Company(Base):
     license_end_date = Column(Date, nullable=True)
     enabled_modules_json = Column(Text, nullable=True)
     public_credit_requires_email_validation = Column(Boolean, default=True)
+    finance_password_hash = Column(String(255), nullable=True)
     
     users = relationship("User", back_populates="company")
     integration_settings = relationship("IntegrationSettings", uselist=False, back_populates="company")
@@ -105,6 +106,10 @@ class Company(Base):
                 continue
             normalized.append(module_id)
         return normalized
+
+    @property
+    def finance_password_configured(self):
+        return bool(self.finance_password_hash)
 
 
 class PublicCreditEmailVerification(Base):

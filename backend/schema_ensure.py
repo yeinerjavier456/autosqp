@@ -85,6 +85,14 @@ def ensure_mysql_schema(engine: Engine) -> None:
     if engine.url.get_backend_name() != "mysql":
         return
 
+    if _mysql_table_exists(engine, "companies"):
+        _ensure_column(
+            engine,
+            "companies",
+            "finance_password_hash",
+            "ALTER TABLE companies ADD COLUMN finance_password_hash VARCHAR(255) NULL",
+        )
+
     if _mysql_table_exists(engine, "users"):
         _ensure_column(
             engine,

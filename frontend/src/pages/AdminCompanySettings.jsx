@@ -24,6 +24,7 @@ const SETTINGS_TABS = [
     { id: 'license', label: 'Licencia', description: 'Límites de uso y vigencia.' },
     { id: 'integrations', label: 'Integraciones', description: 'Meta, WhatsApp, IA y Gmail.' },
     { id: 'email', label: 'Correo', description: 'Validación, SMTP y destinatarios.' },
+    { id: 'finance-security', label: 'Seguridad financiera', description: 'Contraseña de Finanzas y Ventas.' },
     { id: 'users', label: 'Usuarios', description: 'Usuarios, roles y estado en esta empresa.' },
     { id: 'modules', label: 'Módulos', description: 'Vistas habilitadas para la empresa.' },
 ];
@@ -136,6 +137,9 @@ const AdminCompanySettings = () => {
     const [activeIntegrationTab, setActiveIntegrationTab] = useState('meta');
     const [smtpTestEmail, setSmtpTestEmail] = useState('');
     const [testingSmtp, setTestingSmtp] = useState(false);
+    const [financePassword, setFinancePassword] = useState('');
+    const [financePasswordConfirmation, setFinancePasswordConfirmation] = useState('');
+    const [savingFinancePassword, setSavingFinancePassword] = useState(false);
     const [integrationSettingsLoaded, setIntegrationSettingsLoaded] = useState(!id);
     const groupedViews = useMemo(() => COMPANY_VIEW_GROUPS, []);
     const activeTabMeta = SETTINGS_TABS.find((tab) => tab.id === activeTab) || SETTINGS_TABS[0];
@@ -531,6 +535,37 @@ const AdminCompanySettings = () => {
             setStatus({ type: 'error', message: `Error: ${errorMsg}` });
         } finally {
             setTestingSmtp(false);
+        }
+    };
+
+    const handleFinancePasswordSave = async () => {
+        if (!isEditing || !id) {
+            setStatus({ type: 'error', message: 'Primero debes guardar la empresa.' });
+            return;
+        }
+        if (financePassword.length < 8) {
+            setStatus({ type: 'error', message: 'La contraseña financiera debe tener al menos 8 caracteres.' });
+            return;
+        }
+        if (financePassword !== financePasswordConfirmation) {
+            setStatus({ type: 'error', message: 'Las contraseñas no coinciden.' });
+            return;
+        }
+        setSavingFinancePassword(true);
+        setStatus({ type: 'loading', message: 'Actualizando contraseña financiera...' });
+        try {
+            const token = localStorage.getItem('token');
+            await axios.put(`/api/companies/${id}/finance-password`, { password: financePassword }, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            setFinancePassword('');
+            setFinancePasswordConfirmation('');
+            setCompany((prev) => ({ ...prev, finance_password_configured: true }));
+            setStatus({ type: 'success', message: 'Contraseña de Finanzas y Ventas actualizada. Los accesos anteriores fueron cerrados.' });
+        } catch (error) {
+            setStatus({ type: 'error', message: error.response?.data?.detail || 'No se pudo actualizar la contraseña financiera.' });
+        } finally {
+            setSavingFinancePassword(false);
         }
     };
 
@@ -1502,19 +1537,50 @@ const AdminCompanySettings = () => {
                         </div>
                         )}
 
+                        {activeTab === 'finance-security' && (
+                            <div className="space-y-5">
+                                <div className={`rounded-xl border p-4 ${company.finance_password_configured ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+                                    <p className="font-bold text-slate-800">
+                                        {company.finance_password_configured ? 'Contraseña configurada' : 'Contraseña pendiente de configurar'}
+                                    </p>
+                                    <p className="mt-1 text-sm text-slate-600">
+                                        Los usuarios de esta empresa deberán escribirla antes de consultar cualquier información de Finanzas y Ventas.
+                                    </p>
+                                </div>
+                                {!isEditing ? (
+                                    <p className="text-sm font-medium text-amber-700">Guarda primero la empresa para establecer su contraseña financiera.</p>
+                                ) : (
+                                    <div className="max-w-xl space-y-4">
+                                        <div>
+                                            <label className="mb-1 block text-sm font-medium text-slate-700">Nueva contraseña</label>
+                                            <input type="password" value={financePassword} onChange={(event) => setFinancePassword(event.target.value)} autoComplete="new-password" className="w-full rounded-lg border border-blue-200 bg-white px-4 py-2 text-black outline-none focus:ring-2 focus:ring-blue-500" />
+                                            <p className="mt-1 text-xs text-slate-500">Mínimo 8 caracteres. No se mostrará ni se guardará en texto visible.</p>
+                                        </div>
+                                        <div>
+                                            <label className="mb-1 block text-sm font-medium text-slate-700">Confirmar contraseña</label>
+                                            <input type="password" value={financePasswordConfirmation} onChange={(event) => setFinancePasswordConfirmation(event.target.value)} autoComplete="new-password" className="w-full rounded-lg border border-blue-200 bg-white px-4 py-2 text-black outline-none focus:ring-2 focus:ring-blue-500" />
+                                        </div>
+                                        <button type="button" onClick={handleFinancePasswordSave} disabled={savingFinancePassword} className="rounded-lg bg-slate-900 px-5 py-2.5 font-bold text-white transition hover:bg-slate-700 disabled:opacity-60">
+                                            {savingFinancePassword ? 'Actualizando...' : company.finance_password_configured ? 'Cambiar contraseña' : 'Configurar contraseña'}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {activeTab === 'users' && isEditing && (
                             <UsersList embedded companyId={id} />
                         )}
 
                         {activeTab !== 'users' && <div className="pt-4">
-                            <button
+                        {activeTab !== 'finance-security' && <button
                                 onClick={handleSave}
                                 disabled={status.type === 'loading'}
                                 className="w-full py-3 px-6 text-white font-bold rounded-lg shadow-lg hover:shadow-xl transition transform hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed"
                                 style={{ backgroundColor: company.primary_color }}
                             >
                                 {status.type === 'loading' ? 'Guardando...' : 'Guardar Cambios'}
-                            </button>
+                        </button>}
                         </div>}
                     </div>
                 </div>

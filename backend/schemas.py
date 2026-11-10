@@ -300,12 +300,21 @@ class CompanyCreate(CompanyBase):
 
 class Company(CompanyBase):
     id: int
+    finance_password_configured: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
 class CompanyList(BaseModel):
     items: List[Company]
     total: int
+
+
+class FinancePasswordUpdate(BaseModel):
+    password: str = Field(min_length=8, max_length=128)
+
+
+class FinanceUnlockRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
 
 
 class PublicCompanyContext(BaseModel):
