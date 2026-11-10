@@ -104,6 +104,8 @@ find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d ! -name '.*.tmp' \
   -mtime "+$LOCAL_RETENTION_DAYS" -exec rm -rf -- {} +
 
 mkdir -p "$(dirname "$CATALOG_FILE")"
+chown root:"$APP_GROUP" "$(dirname "$CATALOG_FILE")"
+chmod 0750 "$(dirname "$CATALOG_FILE")"
 export BACKUP_ROOT CATALOG_FILE LOCAL_RETENTION_DAYS
 python3 - <<'PY'
 import datetime
