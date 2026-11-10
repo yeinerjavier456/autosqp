@@ -13982,6 +13982,43 @@ def adjust_financial_account_balance(
     return receipt
 
 
+@app.post("/finance/accounts/{account_id}/link-receipts")
+def link_existing_receipts_to_account(
+    account_id: int,
+    payload: schemas.FinancialAccountLinkReceipts,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    account = _financial_account_query(db, current_user).filter(
+        models.FinancialAccount.id == account_id,
+        models.FinancialAccount.is_active.is_(True),
+    ).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Cuenta no encontrada o inactiva")
+
+    receipt_ids = list(dict.fromkeys(int(receipt_id) for receipt_id in payload.receipt_ids))
+    receipts = db.query(models.PaymentReceipt).filter(
+        models.PaymentReceipt.company_id == account.company_id,
+        models.PaymentReceipt.id.in_(receipt_ids),
+    ).all()
+    if len(receipts) != len(receipt_ids):
+        raise HTTPException(status_code=400, detail="Uno o más movimientos no pertenecen a esta empresa")
+
+    for receipt in receipts:
+        receipt.account_id = account.id
+        receipt.bank = account.institution or account.name
+        if not receipt.payment_method:
+            receipt.payment_method = "efectivo" if account.account_type == "cash" else "transferencia"
+    db.commit()
+    return {
+        "message": "Movimientos relacionados correctamente",
+        "linked_count": len(receipts),
+        "account": _serialize_financial_account(db, account),
+    }
+
+
 def _normalize_receipt_payment_method(payment_method: Optional[str]) -> Optional[str]:
     payment_method_value = (payment_method or "").strip().lower() or None
     if payment_method_value and payment_method_value not in {"efectivo", "transferencia"}:

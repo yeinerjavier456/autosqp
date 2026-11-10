@@ -26,6 +26,13 @@ const parseCurrencyInput = (value) => {
     return digits ? Number(digits) : 0;
 };
 
+const escapeHtml = (value) => String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+
 const attachCurrencyFormatter = (input) => {
     if (!input) return;
     input.addEventListener('input', () => {
@@ -631,6 +638,71 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             Swal.fire('Saldo actualizado', 'El ajuste quedó registrado también en contabilidad.', 'success');
         } catch (error) {
             Swal.fire('Error', error.response?.data?.detail || 'No se pudo ajustar el saldo.', 'error');
+        }
+    };
+
+    const handleLinkExistingMovements = async (account) => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.get('/api/finance/receipts', {
+                headers: { Authorization: `Bearer ${token}` },
+                params: { limit: 1000 },
+            });
+            const unassigned = (response.data?.items || []).filter((receipt) => !receipt.account_id);
+            if (unassigned.length === 0) {
+                Swal.fire('Todo organizado', 'No hay movimientos pendientes de relacionar con una cuenta.', 'info');
+                return;
+            }
+
+            const result = await Swal.fire({
+                title: `Relacionar con ${account.name}`,
+                width: 760,
+                html: `
+                    <div style="text-align:left">
+                        <p style="color:#64748b;margin-bottom:12px">Selecciona los movimientos anteriores que pertenecen a esta cuenta.</p>
+                        <button id="select-all-existing-movements" type="button" style="margin-bottom:12px;border:1px solid #cbd5e1;border-radius:8px;padding:7px 12px;font-weight:700;background:#fff">Seleccionar todos</button>
+                        <div style="max-height:380px;overflow:auto;border:1px solid #e2e8f0;border-radius:12px">
+                            ${unassigned.map((receipt) => `
+                                <label style="display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px;border-bottom:1px solid #f1f5f9;cursor:pointer">
+                                    <input class="existing-movement-checkbox" type="checkbox" value="${receipt.id}" />
+                                    <span>
+                                        <strong style="display:block;color:#0f172a">${escapeHtml(receipt.concept || receipt.display_name || `Movimiento #${receipt.id}`)}</strong>
+                                        <small style="color:#64748b">${escapeHtml(receipt.payment_date ? new Date(receipt.payment_date).toLocaleDateString('es-CO') : 'Sin fecha')} · ${receipt.movement_type === 'expense' ? 'Egreso' : 'Ingreso'}</small>
+                                    </span>
+                                    <strong style="color:${receipt.movement_type === 'expense' ? '#e11d48' : '#059669'}">$${Number(receipt.amount || 0).toLocaleString('es-CO')}</strong>
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Relacionar seleccionados',
+                cancelButtonText: 'Cancelar',
+                didOpen: () => {
+                    document.getElementById('select-all-existing-movements')?.addEventListener('click', () => {
+                        const checkboxes = [...document.querySelectorAll('.existing-movement-checkbox')];
+                        const shouldSelect = checkboxes.some((checkbox) => !checkbox.checked);
+                        checkboxes.forEach((checkbox) => { checkbox.checked = shouldSelect; });
+                    });
+                },
+                preConfirm: () => {
+                    const receiptIds = [...document.querySelectorAll('.existing-movement-checkbox:checked')].map((checkbox) => Number(checkbox.value));
+                    if (receiptIds.length === 0) {
+                        Swal.showValidationMessage('Selecciona al menos un movimiento');
+                        return false;
+                    }
+                    return receiptIds;
+                },
+            });
+            if (!result.isConfirmed) return;
+
+            const linkResponse = await axios.post(`/api/finance/accounts/${account.id}/link-receipts`, {
+                receipt_ids: result.value,
+            }, { headers: { Authorization: `Bearer ${token}` } });
+            await Promise.all([refreshFinancialAccounts(), fetchData({ silent: true })]);
+            Swal.fire('Movimientos relacionados', `${linkResponse.data?.linked_count || result.value.length} movimientos fueron asignados a ${account.name}.`, 'success');
+        } catch (error) {
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudieron relacionar los movimientos.', 'error');
         }
     };
 
@@ -3226,6 +3298,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                         </div>
                                         <div className="mt-4 flex flex-wrap gap-2">
                                             {account.is_active && <button type="button" onClick={() => handleAdjustFinancialAccount(account)} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-700">Agregar o restar saldo</button>}
+                                            {account.is_active && <button type="button" onClick={() => handleLinkExistingMovements(account)} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700">Relacionar movimientos existentes</button>}
                                             <button type="button" onClick={() => handleToggleFinancialAccount(account)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">{account.is_active ? 'Desactivar' : 'Activar'}</button>
                                         </div>
                                     </article>

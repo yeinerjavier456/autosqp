@@ -1231,6 +1231,10 @@ class FinancialAccountAdjustment(BaseModel):
     movement_type: str
     notes: Optional[str] = None
 
+
+class FinancialAccountLinkReceipts(BaseModel):
+    receipt_ids: List[int] = Field(min_length=1, max_length=1000)
+
 # --- STATS ---
 
 class DashboardStats(BaseModel):
