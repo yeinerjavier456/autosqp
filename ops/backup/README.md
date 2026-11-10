@@ -8,7 +8,7 @@ Configura `S3_URI=""` en `/etc/autosqp-backup.conf`. En esta modalidad los archi
 
 Recomendamos adjuntar un segundo volumen EBS a la instancia, montarlo permanentemente en `/mnt/autosqp-backups` y configurar ese directorio como `BACKUP_ROOT`. Así, una falla del volumen principal no destruye al mismo tiempo la aplicación y sus copias.
 
-Si usas `/var/backups/autosqp` en el mismo volumen raíz, podrás recuperarte de eliminaciones accidentales o daños lógicos de la base, pero no de la pérdida de la instancia o del volumen. Conserva al menos 30 días y vigila el espacio disponible con `df -h`.
+Si usas `/var/backups/autosqp` en el mismo volumen raíz, podrás recuperarte de eliminaciones accidentales o daños lógicos de la base, pero no de la pérdida de la instancia o del volumen. La configuración actual conserva los últimos 7 días; vigila el espacio disponible con `df -h`.
 
 Para listar las copias locales:
 

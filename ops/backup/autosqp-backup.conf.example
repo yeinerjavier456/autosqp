@@ -6,7 +6,7 @@ STATIC_DIR="/home/autosqp/apps/autosqp/backend/static"
 BACKUP_ROOT="/mnt/autosqp-backups"
 # Déjalo vacío para conservar los respaldos solo en el servidor.
 S3_URI=""
-LOCAL_RETENTION_DAYS="30"
+LOCAL_RETENTION_DAYS="7"
 BACKUP_TIMEZONE="America/Bogota"
 APP_SERVICE="autosqp"
 APP_USER="www-data"
