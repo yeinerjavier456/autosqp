@@ -1,0 +1,13 @@
+DB_NAME="autosqp"
+MYSQL_DEFAULTS_FILE="/root/.autosqp-backup.cnf"
+RESTORE_MYSQL_DEFAULTS_FILE="/root/.autosqp-restore.cnf"
+APP_ROOT="/home/autosqp/apps/autosqp"
+STATIC_DIR="/home/autosqp/apps/autosqp/backend/static"
+BACKUP_ROOT="/var/backups/autosqp"
+S3_URI="s3://REEMPLAZAR-BUCKET/autosqp-production"
+LOCAL_RETENTION_DAYS="7"
+BACKUP_TIMEZONE="America/Bogota"
+APP_SERVICE="autosqp"
+APP_USER="www-data"
+APP_GROUP="www-data"
+

@@ -1,0 +1,11 @@
+{
+  "Rules": [
+    {
+      "ID": "AutosqpDailyBackupRetention",
+      "Status": "Enabled",
+      "Filter": {"Prefix": "autosqp-production/"},
+      "NoncurrentVersionExpiration": {"NoncurrentDays": 90},
+      "Expiration": {"Days": 90}
+    }
+  ]
+}

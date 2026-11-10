@@ -1,0 +1,12 @@
+[Unit]
+Description=Ejecuta el respaldo diario de AutosQP
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 America/Bogota
+Persistent=true
+RandomizedDelaySec=10m
+Unit=autosqp-backup.service
+
+[Install]
+WantedBy=timers.target
+

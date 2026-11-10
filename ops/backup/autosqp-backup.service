@@ -1,0 +1,16 @@
+[Unit]
+Description=Respaldo diario verificado de AutosQP
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Environment=AUTOSQP_BACKUP_CONFIG=/etc/autosqp-backup.conf
+ExecStart=/usr/local/sbin/autosqp-backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=true
+NoNewPrivileges=true
+
