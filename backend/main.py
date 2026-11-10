@@ -13634,6 +13634,7 @@ def download_finance_projection_xlsx(
 @app.get("/finance/receipts", response_model=schemas.PaymentReceiptList)
 def read_payment_receipts(
     sale_id: Optional[int] = None,
+    account_id: Optional[int] = None,
     receipt_number: Optional[str] = None,
     category: Optional[str] = None,
     movement_type: Optional[str] = None,
@@ -13659,6 +13660,8 @@ def read_payment_receipts(
         query = query.filter(models.PaymentReceipt.company_id == current_user.company_id)
     if sale_id:
         query = query.filter(models.PaymentReceipt.sale_id == sale_id)
+    if account_id:
+        query = query.filter(models.PaymentReceipt.account_id == account_id)
     if receipt_number:
         query = query.filter(models.PaymentReceipt.receipt_number == receipt_number.strip())
     if category:
@@ -13829,14 +13832,14 @@ def _financial_account_query(db: Session, current_user: models.User):
 
 
 def _serialize_financial_account(db: Session, account: models.FinancialAccount) -> dict:
-    movement_balance = db.query(
-        func.coalesce(func.sum(
-            case(
-                (models.PaymentReceipt.movement_type == "expense", -models.PaymentReceipt.amount),
-                else_=models.PaymentReceipt.amount,
-            )
-        ), 0)
-    ).filter(models.PaymentReceipt.account_id == account.id).scalar() or 0
+    totals = db.query(
+        func.coalesce(func.sum(case((models.PaymentReceipt.movement_type == "income", models.PaymentReceipt.amount), else_=0)), 0),
+        func.coalesce(func.sum(case((models.PaymentReceipt.movement_type == "expense", models.PaymentReceipt.amount), else_=0)), 0),
+        func.count(models.PaymentReceipt.id),
+        func.max(func.coalesce(models.PaymentReceipt.payment_date, models.PaymentReceipt.created_at)),
+    ).filter(models.PaymentReceipt.account_id == account.id).first()
+    income_total = int(totals[0] or 0)
+    expense_total = int(totals[1] or 0)
     return {
         "id": account.id,
         "company_id": account.company_id,
@@ -13845,7 +13848,11 @@ def _serialize_financial_account(db: Session, account: models.FinancialAccount) 
         "institution": account.institution,
         "last_four": account.last_four,
         "opening_balance": int(account.opening_balance or 0),
-        "current_balance": int(account.opening_balance or 0) + int(movement_balance),
+        "current_balance": int(account.opening_balance or 0) + income_total - expense_total,
+        "income_total": income_total,
+        "expense_total": expense_total,
+        "movement_count": int(totals[2] or 0),
+        "last_movement_at": totals[3],
         "is_active": bool(account.is_active),
         "created_at": account.created_at,
     }
@@ -14017,6 +14024,128 @@ def link_existing_receipts_to_account(
         "linked_count": len(receipts),
         "account": _serialize_financial_account(db, account),
     }
+
+
+@app.post("/finance/accounts/{account_id}/transactions", response_model=schemas.PaymentReceipt)
+def create_financial_account_transaction(
+    account_id: int,
+    payload: schemas.FinancialAccountTransactionCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    account = _financial_account_query(db, current_user).filter(
+        models.FinancialAccount.id == account_id,
+        models.FinancialAccount.is_active.is_(True),
+    ).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Cuenta no encontrada o inactiva")
+    movement_type = (payload.movement_type or "").strip().lower()
+    if movement_type not in {"income", "expense"}:
+        raise HTTPException(status_code=400, detail="El movimiento debe ser ingreso o deducción")
+
+    payment_datetime = payload.payment_date or datetime.datetime.utcnow()
+    if payment_datetime.tzinfo is not None:
+        payment_datetime = payment_datetime.astimezone(BOGOTA_TZ).replace(tzinfo=None)
+    receipt = models.PaymentReceipt(
+        company_id=account.company_id,
+        account_id=account.id,
+        user_id=current_user.id,
+        display_name=account.name,
+        concept=payload.concept.strip(),
+        movement_type=movement_type,
+        receipt_number=_generate_accounting_receipt_number(db, account.company_id),
+        payment_date=payment_datetime,
+        amount=int(payload.amount),
+        category=(payload.category or "otros").strip() or "otros",
+        notes=(payload.notes or "").strip() or None,
+        payment_method="efectivo" if account.account_type == "cash" else "transferencia",
+        bank=account.institution or account.name,
+    )
+    db.add(receipt)
+    db.commit()
+    db.refresh(receipt)
+    return receipt
+
+
+@app.get("/finance/accounts/{account_id}/movements.xlsx")
+def download_financial_account_movements(
+    account_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_user_from_anywhere),
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    account = _financial_account_query(db, current_user).filter(models.FinancialAccount.id == account_id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Cuenta no encontrada")
+    movements = db.query(models.PaymentReceipt).options(joinedload(models.PaymentReceipt.user)).filter(
+        models.PaymentReceipt.company_id == account.company_id,
+        models.PaymentReceipt.account_id == account.id,
+    ).order_by(models.PaymentReceipt.payment_date.asc(), models.PaymentReceipt.id.asc()).all()
+
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+    except ImportError:
+        raise HTTPException(status_code=500, detail="La librería openpyxl no está instalada")
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Movimientos"
+    sheet.append(["CUENTA", account.name])
+    sheet.append(["TIPO", account.account_type])
+    sheet.append(["ENTIDAD", account.institution or ""])
+    sheet.append(["SALDO INICIAL", int(account.opening_balance or 0)])
+    sheet.append([])
+    sheet.append(["FECHA Y HORA (BOGOTÁ)", "CONCEPTO", "TIPO", "CATEGORÍA", "INGRESO", "DEDUCCIÓN", "SALDO", "RESPONSABLE", "NOTAS"])
+    header_fill = PatternFill("solid", fgColor="1E293B")
+    for cell in sheet[6]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    running_balance = int(account.opening_balance or 0)
+    for movement in movements:
+        amount = int(movement.amount or 0)
+        is_expense = (movement.movement_type or "income") == "expense"
+        running_balance += -amount if is_expense else amount
+        movement_datetime = movement.payment_date
+        if not movement_datetime and movement.created_at:
+            aware_datetime = movement.created_at.replace(tzinfo=datetime.timezone.utc) if movement.created_at.tzinfo is None else movement.created_at
+            movement_datetime = aware_datetime.astimezone(BOGOTA_TZ).replace(tzinfo=None)
+        sheet.append([
+            movement_datetime,
+            movement.concept or movement.display_name or "Movimiento",
+            "Deducción" if is_expense else "Ingreso",
+            _accounting_category_label(movement.category),
+            0 if is_expense else amount,
+            amount if is_expense else 0,
+            running_balance,
+            getattr(movement.user, "full_name", None) or getattr(movement.user, "email", None) or "",
+            movement.notes or "",
+        ])
+
+    for row in sheet.iter_rows(min_row=7):
+        row[0].number_format = "dd/mm/yyyy hh:mm"
+        for cell in row[4:7]:
+            cell.number_format = '"$"#,##0'
+    sheet["B4"].number_format = '"$"#,##0'
+    widths = [24, 30, 14, 24, 16, 16, 16, 24, 40]
+    for index, width in enumerate(widths, start=1):
+        sheet.column_dimensions[sheet.cell(6, index).column_letter].width = width
+    sheet.freeze_panes = "A7"
+
+    buffer = BytesIO()
+    workbook.save(buffer)
+    buffer.seek(0)
+    safe_name = re.sub(r"[^a-zA-Z0-9_-]+", "_", account.name).strip("_") or f"cuenta_{account.id}"
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="movimientos_{safe_name}.xlsx"'},
+    )
 
 
 def _normalize_receipt_payment_method(payment_method: Optional[str]) -> Optional[str]:

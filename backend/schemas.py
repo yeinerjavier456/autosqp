@@ -1221,6 +1221,10 @@ class FinancialAccount(FinancialAccountBase):
     id: int
     company_id: int
     current_balance: int = 0
+    income_total: int = 0
+    expense_total: int = 0
+    movement_count: int = 0
+    last_movement_at: Optional[datetime] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -1234,6 +1238,15 @@ class FinancialAccountAdjustment(BaseModel):
 
 class FinancialAccountLinkReceipts(BaseModel):
     receipt_ids: List[int] = Field(min_length=1, max_length=1000)
+
+
+class FinancialAccountTransactionCreate(BaseModel):
+    concept: str = Field(min_length=1, max_length=200)
+    movement_type: str
+    amount: int = Field(gt=0)
+    payment_date: Optional[datetime] = None
+    category: Optional[str] = "otros"
+    notes: Optional[str] = None
 
 # --- STATS ---
 

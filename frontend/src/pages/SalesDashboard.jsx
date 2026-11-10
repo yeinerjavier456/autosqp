@@ -33,6 +33,23 @@ const escapeHtml = (value) => String(value ?? '')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
 
+const getBogotaDateTimeLocal = () => {
+    const parts = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(new Date());
+    return parts.replace(' ', 'T');
+};
+
+const formatBogotaDateTime = (value) => {
+    if (!value) return 'Sin fecha';
+    const text = String(value);
+    const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/.test(text) ? text : `${text}-05:00`;
+    const date = new Date(normalized);
+    if (Number.isNaN(date.getTime())) return text;
+    return date.toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'medium', timeStyle: 'short' });
+};
+
 const attachCurrencyFormatter = (input) => {
     if (!input) return;
     input.addEventListener('input', () => {
@@ -298,6 +315,11 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
     const [financialAccounts, setFinancialAccounts] = useState([]);
     const [accountForm, setAccountForm] = useState({ name: '', account_type: 'bank', institution: '', last_four: '', opening_balance: '' });
     const [savingAccount, setSavingAccount] = useState(false);
+    const [selectedFinancialAccount, setSelectedFinancialAccount] = useState(null);
+    const [accountMovements, setAccountMovements] = useState([]);
+    const [loadingAccountMovements, setLoadingAccountMovements] = useState(false);
+    const [savingAccountTransaction, setSavingAccountTransaction] = useState(false);
+    const [accountTransactionForm, setAccountTransactionForm] = useState({ concept: 'Venta de Vehiculo', movement_type: 'income', amount: '', payment_date: getBogotaDateTimeLocal(), category: 'ingreso_venta', notes: '' });
     const [loading, setLoading] = useState(!receiptSearchOnly);
     const [filterStatus, setFilterStatus] = useState('pending');
     const [activeTab, setActiveTab] = useState(receiptEntryOnly || receiptSearchOnly ? 'accounting' : initialTab);
@@ -577,7 +599,58 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             headers: { Authorization: `Bearer ${token}` },
             params: { include_inactive: true },
         });
-        setFinancialAccounts(Array.isArray(response.data?.items) ? response.data.items : []);
+        const items = Array.isArray(response.data?.items) ? response.data.items : [];
+        setFinancialAccounts(items);
+        return items;
+    };
+
+    const openFinancialAccount = async (account) => {
+        setSelectedFinancialAccount(account);
+        setLoadingAccountMovements(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.get('/api/finance/receipts', {
+                headers: { Authorization: `Bearer ${token}` },
+                params: { account_id: account.id, limit: 1000 },
+            });
+            setAccountMovements(Array.isArray(response.data?.items) ? response.data.items : []);
+        } catch (error) {
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudieron cargar los movimientos.', 'error');
+        } finally {
+            setLoadingAccountMovements(false);
+        }
+    };
+
+    const handleCreateAccountTransaction = async (event) => {
+        event.preventDefault();
+        if (!selectedFinancialAccount) return;
+        const amount = parseCurrencyInput(accountTransactionForm.amount);
+        if (!amount) return;
+        setSavingAccountTransaction(true);
+        try {
+            const token = localStorage.getItem('token');
+            await axios.post(`/api/finance/accounts/${selectedFinancialAccount.id}/transactions`, {
+                ...accountTransactionForm,
+                amount,
+                payment_date: accountTransactionForm.payment_date ? `${accountTransactionForm.payment_date}:00-05:00` : null,
+            }, { headers: { Authorization: `Bearer ${token}` } });
+            const accounts = await refreshFinancialAccounts();
+            const updatedAccount = accounts.find((account) => account.id === selectedFinancialAccount.id) || selectedFinancialAccount;
+            setSelectedFinancialAccount(updatedAccount);
+            setAccountTransactionForm({ concept: 'Venta de Vehiculo', movement_type: 'income', amount: '', payment_date: getBogotaDateTimeLocal(), category: 'ingreso_venta', notes: '' });
+            await openFinancialAccount(updatedAccount);
+            await fetchData({ silent: true });
+            Swal.fire('Movimiento registrado', 'El saldo y el historial fueron actualizados.', 'success');
+        } catch (error) {
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo registrar el movimiento.', 'error');
+        } finally {
+            setSavingAccountTransaction(false);
+        }
+    };
+
+    const downloadFinancialAccountExcel = (account) => {
+        const token = localStorage.getItem('token') || '';
+        window.open(`/api/finance/accounts/${account.id}/movements.xlsx?token=${encodeURIComponent(token)}&finance_token=${encodeURIComponent(financeAccessToken)}`, '_blank');
     };
 
     const handleCreateFinancialAccount = async (event) => {
@@ -3266,18 +3339,23 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                         </form>
 
                         <div className="space-y-4">
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                                 <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
                                     <p className="text-xs font-bold uppercase text-blue-700">Saldo total</p>
                                     <p className="mt-2 text-2xl font-extrabold text-blue-900">${financialAccounts.filter((account) => account.is_active).reduce((sum, account) => sum + Number(account.current_balance || 0), 0).toLocaleString('es-CO')}</p>
                                 </div>
                                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
-                                    <p className="text-xs font-bold uppercase text-emerald-700">Cuentas activas</p>
-                                    <p className="mt-2 text-2xl font-extrabold text-emerald-900">{financialAccounts.filter((account) => account.is_active).length}</p>
+                                    <p className="text-xs font-bold uppercase text-emerald-700">Ingresos</p>
+                                    <p className="mt-2 text-2xl font-extrabold text-emerald-900">${financialAccounts.reduce((sum, account) => sum + Number(account.income_total || 0), 0).toLocaleString('es-CO')}</p>
+                                </div>
+                                <div className="rounded-2xl border border-rose-100 bg-rose-50 p-5">
+                                    <p className="text-xs font-bold uppercase text-rose-700">Deducciones</p>
+                                    <p className="mt-2 text-2xl font-extrabold text-rose-900">${financialAccounts.reduce((sum, account) => sum + Number(account.expense_total || 0), 0).toLocaleString('es-CO')}</p>
                                 </div>
                                 <div className="rounded-2xl border border-slate-200 bg-white p-5">
-                                    <p className="text-xs font-bold uppercase text-slate-500">Registradas</p>
-                                    <p className="mt-2 text-2xl font-extrabold text-slate-900">{financialAccounts.length}</p>
+                                    <p className="text-xs font-bold uppercase text-slate-500">Movimientos</p>
+                                    <p className="mt-2 text-2xl font-extrabold text-slate-900">{financialAccounts.reduce((sum, account) => sum + Number(account.movement_count || 0), 0).toLocaleString('es-CO')}</p>
+                                    <p className="mt-1 text-xs text-slate-400">{financialAccounts.filter((account) => account.is_active).length} cuentas activas</p>
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -3296,7 +3374,14 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                             <p className={`mt-1 text-2xl font-extrabold ${Number(account.current_balance || 0) >= 0 ? 'text-slate-900' : 'text-red-600'}`}>${Number(account.current_balance || 0).toLocaleString('es-CO')}</p>
                                             <p className="mt-1 text-xs text-slate-400">Inicial: ${Number(account.opening_balance || 0).toLocaleString('es-CO')}</p>
                                         </div>
+                                        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                                            <div className="rounded-lg bg-emerald-50 p-2"><p className="text-[10px] font-bold uppercase text-emerald-700">Ingresos</p><p className="text-sm font-bold text-emerald-800">${Number(account.income_total || 0).toLocaleString('es-CO')}</p></div>
+                                            <div className="rounded-lg bg-rose-50 p-2"><p className="text-[10px] font-bold uppercase text-rose-700">Deducciones</p><p className="text-sm font-bold text-rose-800">${Number(account.expense_total || 0).toLocaleString('es-CO')}</p></div>
+                                            <div className="rounded-lg bg-blue-50 p-2"><p className="text-[10px] font-bold uppercase text-blue-700">Movimientos</p><p className="text-sm font-bold text-blue-800">{account.movement_count || 0}</p></div>
+                                        </div>
                                         <div className="mt-4 flex flex-wrap gap-2">
+                                            <button type="button" onClick={() => openFinancialAccount(account)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white hover:bg-slate-700">Abrir cuenta</button>
+                                            <button type="button" onClick={() => downloadFinancialAccountExcel(account)} className="rounded-lg border border-emerald-300 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50">Descargar Excel</button>
                                             {account.is_active && <button type="button" onClick={() => handleAdjustFinancialAccount(account)} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-700">Agregar o restar saldo</button>}
                                             {account.is_active && <button type="button" onClick={() => handleLinkExistingMovements(account)} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700">Relacionar movimientos existentes</button>}
                                             <button type="button" onClick={() => handleToggleFinancialAccount(account)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">{account.is_active ? 'Desactivar' : 'Activar'}</button>
@@ -3674,6 +3759,67 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             )}
         </div>
         {/* ── MODAL EDITAR REGISTRO CONTABLE (native React) ── */}
+        {selectedFinancialAccount && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-3 md:p-6">
+                <div className="flex max-h-[95vh] w-full max-w-7xl flex-col overflow-hidden rounded-3xl bg-slate-50 shadow-2xl">
+                    <div className="flex items-start justify-between border-b border-slate-200 bg-white px-6 py-5">
+                        <div>
+                            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">{accountTypeLabels[selectedFinancialAccount.account_type] || 'Cuenta financiera'}</p>
+                            <h2 className="mt-1 text-2xl font-extrabold text-slate-900">{selectedFinancialAccount.name}</h2>
+                            <p className="text-sm text-slate-500">{[selectedFinancialAccount.institution, selectedFinancialAccount.last_four ? `•••• ${selectedFinancialAccount.last_four}` : ''].filter(Boolean).join(' · ')}</p>
+                        </div>
+                        <button type="button" onClick={() => setSelectedFinancialAccount(null)} className="rounded-full bg-slate-100 px-3 py-2 text-xl font-bold text-slate-600 hover:bg-slate-200">×</button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 border-b border-slate-200 bg-white px-6 pb-5 md:grid-cols-4">
+                        <div className="rounded-xl bg-blue-50 p-4"><p className="text-xs font-bold uppercase text-blue-700">Saldo</p><p className="mt-1 text-xl font-extrabold text-blue-900">${Number(selectedFinancialAccount.current_balance || 0).toLocaleString('es-CO')}</p></div>
+                        <div className="rounded-xl bg-emerald-50 p-4"><p className="text-xs font-bold uppercase text-emerald-700">Ingresos</p><p className="mt-1 text-xl font-extrabold text-emerald-900">${Number(selectedFinancialAccount.income_total || 0).toLocaleString('es-CO')}</p></div>
+                        <div className="rounded-xl bg-rose-50 p-4"><p className="text-xs font-bold uppercase text-rose-700">Deducciones</p><p className="mt-1 text-xl font-extrabold text-rose-900">${Number(selectedFinancialAccount.expense_total || 0).toLocaleString('es-CO')}</p></div>
+                        <div className="rounded-xl bg-slate-100 p-4"><p className="text-xs font-bold uppercase text-slate-600">Movimientos</p><p className="mt-1 text-xl font-extrabold text-slate-900">{selectedFinancialAccount.movement_count || 0}</p></div>
+                    </div>
+
+                    <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[360px_minmax(0,1fr)] lg:overflow-hidden">
+                        <form onSubmit={handleCreateAccountTransaction} className="space-y-4 border-b border-slate-200 bg-white p-6 lg:overflow-y-auto lg:border-b-0 lg:border-r">
+                            <div>
+                                <h3 className="font-bold text-slate-900">Nuevo movimiento</h3>
+                                <p className="text-sm text-slate-500">Registra una compra, venta, ingreso o deducción.</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button type="button" onClick={() => setAccountTransactionForm({ ...accountTransactionForm, movement_type: 'income', concept: 'Venta de Vehiculo', category: 'ingreso_venta' })} className={`rounded-xl border px-3 py-3 text-sm font-bold ${accountTransactionForm.movement_type === 'income' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-500'}`}>Ingreso / venta</button>
+                                <button type="button" onClick={() => setAccountTransactionForm({ ...accountTransactionForm, movement_type: 'expense', concept: 'Compra de Vehiculo', category: 'costo_vehiculo' })} className={`rounded-xl border px-3 py-3 text-sm font-bold ${accountTransactionForm.movement_type === 'expense' ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-slate-200 text-slate-500'}`}>Deducción / compra</button>
+                            </div>
+                            <div><label className="mb-1 block text-sm font-semibold text-slate-700">Concepto</label><input required value={accountTransactionForm.concept} onChange={(event) => setAccountTransactionForm({ ...accountTransactionForm, concept: event.target.value })} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500" /></div>
+                            <div><label className="mb-1 block text-sm font-semibold text-slate-700">Valor</label><input required inputMode="numeric" value={accountTransactionForm.amount} onChange={(event) => setAccountTransactionForm({ ...accountTransactionForm, amount: formatCurrencyInput(event.target.value) })} placeholder="$ 0" className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500" /></div>
+                            <div><label className="mb-1 block text-sm font-semibold text-slate-700">Fecha y hora</label><input required type="datetime-local" value={accountTransactionForm.payment_date} onChange={(event) => setAccountTransactionForm({ ...accountTransactionForm, payment_date: event.target.value })} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500" /></div>
+                            <div><label className="mb-1 block text-sm font-semibold text-slate-700">Categoría</label><select value={accountTransactionForm.category} onChange={(event) => setAccountTransactionForm({ ...accountTransactionForm, category: event.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500">{receiptCategoryOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+                            <div><label className="mb-1 block text-sm font-semibold text-slate-700">Detalle</label><textarea rows={3} value={accountTransactionForm.notes} onChange={(event) => setAccountTransactionForm({ ...accountTransactionForm, notes: event.target.value })} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500" /></div>
+                            <button disabled={savingAccountTransaction} className={`w-full rounded-xl px-4 py-3 font-bold text-white ${accountTransactionForm.movement_type === 'expense' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'} disabled:opacity-60`}>{savingAccountTransaction ? 'Guardando...' : accountTransactionForm.movement_type === 'expense' ? 'Registrar deducción' : 'Registrar ingreso'}</button>
+                        </form>
+
+                        <div className="min-h-0 bg-slate-50 p-6 lg:overflow-y-auto">
+                            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                <div><h3 className="font-bold text-slate-900">Historial de movimientos</h3><p className="text-sm text-slate-500">Fechas y horas mostradas en Bogotá, Colombia.</p></div>
+                                <button type="button" onClick={() => downloadFinancialAccountExcel(selectedFinancialAccount)} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700">Descargar Excel</button>
+                            </div>
+                            {loadingAccountMovements ? <p className="py-12 text-center text-slate-500">Cargando movimientos...</p> : (
+                                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full min-w-[760px] text-left">
+                                            <thead><tr className="bg-slate-100 text-xs uppercase text-slate-500"><th className="p-3">Fecha y hora</th><th className="p-3">Concepto</th><th className="p-3">Tipo</th><th className="p-3">Categoría</th><th className="p-3 text-right">Valor</th><th className="p-3">Detalle</th></tr></thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {accountMovements.map((movement) => <tr key={movement.id} className="hover:bg-slate-50"><td className="p-3 text-sm text-slate-600">{formatBogotaDateTime(movement.payment_date || movement.created_at)}</td><td className="p-3 text-sm font-semibold text-slate-800">{movement.concept || movement.display_name || 'Movimiento'}</td><td className="p-3"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${movement.movement_type === 'expense' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>{movement.movement_type === 'expense' ? 'Deducción' : 'Ingreso'}</span></td><td className="p-3 text-sm text-slate-600">{getCategoryLabel(movement.category)}</td><td className={`p-3 text-right font-bold ${movement.movement_type === 'expense' ? 'text-rose-600' : 'text-emerald-600'}`}>{movement.movement_type === 'expense' ? '-' : '+'}${Number(movement.amount || 0).toLocaleString('es-CO')}</td><td className="max-w-[260px] truncate p-3 text-sm text-slate-500">{movement.notes || movement.receipt_number || '-'}</td></tr>)}
+                                                {accountMovements.length === 0 && <tr><td colSpan={6} className="p-10 text-center text-slate-400">Esta cuenta todavía no tiene movimientos.</td></tr>}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {selectedSaleRequest && (
             <SaleRequestModal
                 key={`${selectedSaleRequest.id}-${selectedSaleRequest.commissions_complete ? 'complete' : 'pending'}`}
