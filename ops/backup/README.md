@@ -4,7 +4,9 @@ La solución respalda diariamente la base MySQL y `backend/static` y valida ambo
 
 ## Modalidad local, sin S3
 
-Configura `S3_URI=""` en `/etc/autosqp-backup.conf`. Recomendamos adjuntar un segundo volumen EBS a la instancia, montarlo permanentemente en `/mnt/autosqp-backups` y configurar ese directorio como `BACKUP_ROOT`. Así, una falla del volumen principal no destruye al mismo tiempo la aplicación y sus copias.
+Configura `S3_URI=""` en `/etc/autosqp-backup.conf`. En esta modalidad los archivos estáticos se guardan como instantáneas incrementales con enlaces duros: la primera copia ocupa el tamaño completo y las siguientes solo agregan el espacio de archivos nuevos o modificados. La base MySQL siempre se exporta completa.
+
+Recomendamos adjuntar un segundo volumen EBS a la instancia, montarlo permanentemente en `/mnt/autosqp-backups` y configurar ese directorio como `BACKUP_ROOT`. Así, una falla del volumen principal no destruye al mismo tiempo la aplicación y sus copias.
 
 Si usas `/var/backups/autosqp` en el mismo volumen raíz, podrás recuperarte de eliminaciones accidentales o daños lógicos de la base, pero no de la pérdida de la instancia o del volumen. Conserva al menos 30 días y vigila el espacio disponible con `df -h`.
 
@@ -31,7 +33,7 @@ Instala las herramientas y los archivos:
 
 ```bash
 sudo apt update
-sudo apt install -y mysql-client
+sudo apt install -y mysql-client rsync
 cd /home/autosqp/apps/autosqp/ops/backup
 sudo bash install.sh
 sudo nano /etc/autosqp-backup.conf

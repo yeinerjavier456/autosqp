@@ -41,7 +41,15 @@ fi
   sha256sum -c SHA256SUMS
 )
 gzip -t "$backup_dir/database.sql.gz"
-tar -tzf "$backup_dir/uploads.tar.gz" >/dev/null
+if [[ -f "$backup_dir/uploads.tar.gz" ]]; then
+  tar -tzf "$backup_dir/uploads.tar.gz" >/dev/null
+elif [[ -d "$backup_dir/static" && -f "$backup_dir/STATIC_SHA256SUMS" ]]; then
+  command -v rsync >/dev/null || { echo "Falta rsync" >&2; exit 1; }
+  (cd "$backup_dir" && sha256sum -c STATIC_SHA256SUMS)
+else
+  echo "El respaldo no contiene archivos estáticos válidos" >&2
+  exit 1
+fi
 
 pre_restore="$BACKUP_ROOT/pre-restore_$(date +'%Y-%m-%d_%H-%M-%S')"
 mkdir -p "$pre_restore"
@@ -58,7 +66,12 @@ trap restart_app EXIT
 gunzip -c "$backup_dir/database.sql.gz" | mysql --defaults-extra-file="$RESTORE_MYSQL_DEFAULTS_FILE"
 rm -rf -- "$STATIC_DIR"
 mkdir -p "$(dirname "$STATIC_DIR")"
-tar -C "$(dirname "$STATIC_DIR")" -xzf "$backup_dir/uploads.tar.gz"
+if [[ -f "$backup_dir/uploads.tar.gz" ]]; then
+  tar -C "$(dirname "$STATIC_DIR")" -xzf "$backup_dir/uploads.tar.gz"
+else
+  mkdir -p "$STATIC_DIR"
+  rsync -a --delete "$backup_dir/static/" "$STATIC_DIR/"
+fi
 mkdir -p "$STATIC_DIR"
 chown -R "${APP_USER:-www-data}:${APP_GROUP:-www-data}" "$STATIC_DIR"
 

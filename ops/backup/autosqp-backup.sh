@@ -23,6 +23,8 @@ for command_name in mysqldump mysql gzip tar sha256sum flock; do
 done
 if [[ -n "$S3_URI" ]]; then
   command -v aws >/dev/null || { echo "Falta el comando aws para enviar el respaldo a S3" >&2; exit 1; }
+else
+  command -v rsync >/dev/null || { echo "Falta rsync para crear respaldos locales incrementales" >&2; exit 1; }
 fi
 [[ -r "$MYSQL_DEFAULTS_FILE" ]] || { echo "No se puede leer $MYSQL_DEFAULTS_FILE" >&2; exit 1; }
 
@@ -45,10 +47,19 @@ mysqldump \
   --no-tablespaces \
   --databases "$DB_NAME" | gzip -9 > "$stage_dir/database.sql.gz"
 
-if [[ -d "$STATIC_DIR" ]]; then
+if [[ -n "$S3_URI" && -d "$STATIC_DIR" ]]; then
   tar -C "$(dirname "$STATIC_DIR")" -czf "$stage_dir/uploads.tar.gz" "$(basename "$STATIC_DIR")"
-else
+elif [[ -n "$S3_URI" ]]; then
   tar -czf "$stage_dir/uploads.tar.gz" --files-from /dev/null
+else
+  mkdir -p "$stage_dir/static"
+  previous_dir="$(find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d \
+    -name '20??-??-??_??-??-??' -print | sort | tail -n 1)"
+  if [[ -n "$previous_dir" && -d "$previous_dir/static" ]]; then
+    rsync -a --delete --link-dest="$previous_dir/static" "$STATIC_DIR/" "$stage_dir/static/"
+  elif [[ -d "$STATIC_DIR" ]]; then
+    rsync -a "$STATIC_DIR/" "$stage_dir/static/"
+  fi
 fi
 
 cat > "$stage_dir/metadata.txt" <<EOF
@@ -61,10 +72,17 @@ git_commit=$(git -C "$APP_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)
 EOF
 
 gzip -t "$stage_dir/database.sql.gz"
-tar -tzf "$stage_dir/uploads.tar.gz" >/dev/null
+if [[ -f "$stage_dir/uploads.tar.gz" ]]; then
+  tar -tzf "$stage_dir/uploads.tar.gz" >/dev/null
+fi
 (
   cd "$stage_dir"
-  sha256sum database.sql.gz uploads.tar.gz metadata.txt > SHA256SUMS
+  if [[ -f uploads.tar.gz ]]; then
+    sha256sum database.sql.gz uploads.tar.gz metadata.txt > SHA256SUMS
+  else
+    find static -type f -print0 | sort -z | xargs -0 -r sha256sum > STATIC_SHA256SUMS
+    sha256sum database.sql.gz metadata.txt STATIC_SHA256SUMS > SHA256SUMS
+  fi
   sha256sum -c SHA256SUMS
 )
 
