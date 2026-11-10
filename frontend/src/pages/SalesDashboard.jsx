@@ -791,6 +791,62 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         }
     };
 
+    const handleEditFinancialAccount = async (account) => {
+        const result = await Swal.fire({
+            title: 'Editar cuenta',
+            width: 560,
+            html: `
+                <div style="display:grid;gap:14px;text-align:left">
+                    <label style="font-size:13px;font-weight:700;color:#334155">Nombre
+                        <input id="edit-account-name" class="swal2-input" style="width:100%;margin:6px 0 0" value="${escapeHtml(account.name)}" />
+                    </label>
+                    <label style="font-size:13px;font-weight:700;color:#334155">Tipo
+                        <select id="edit-account-type" class="swal2-select" style="width:100%;margin:6px 0 0">
+                            ${Object.entries(accountTypeLabels).map(([value, label]) => `<option value="${value}" ${account.account_type === value ? 'selected' : ''}>${label}</option>`).join('')}
+                        </select>
+                    </label>
+                    <label style="font-size:13px;font-weight:700;color:#334155">Banco o entidad
+                        <input id="edit-account-institution" class="swal2-input" style="width:100%;margin:6px 0 0" value="${escapeHtml(account.institution || '')}" />
+                    </label>
+                    <label style="font-size:13px;font-weight:700;color:#334155">Últimos 4 dígitos
+                        <input id="edit-account-last-four" class="swal2-input" style="width:100%;margin:6px 0 0" maxlength="4" inputmode="numeric" value="${escapeHtml(account.last_four || '')}" />
+                    </label>
+                    <p style="font-size:12px;color:#64748b">Para modificar el saldo usa “Agregar o restar saldo”; así queda registrado en el historial.</p>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Guardar cambios',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const name = (document.getElementById('edit-account-name')?.value || '').trim();
+                if (!name) {
+                    Swal.showValidationMessage('El nombre es obligatorio');
+                    return false;
+                }
+                return {
+                    name,
+                    account_type: document.getElementById('edit-account-type')?.value || 'bank',
+                    institution: (document.getElementById('edit-account-institution')?.value || '').trim(),
+                    last_four: (document.getElementById('edit-account-last-four')?.value || '').replace(/\D/g, '').slice(-4),
+                };
+            },
+        });
+        if (!result.isConfirmed) return;
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.put(`/api/finance/accounts/${account.id}`, result.value, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            await refreshFinancialAccounts();
+            if (selectedFinancialAccount?.id === account.id) {
+                setSelectedFinancialAccount(response.data);
+            }
+            Swal.fire('Cuenta actualizada', 'La información fue guardada correctamente.', 'success');
+        } catch (error) {
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo actualizar la cuenta.', 'error');
+        }
+    };
+
     const approveSale = async (saleId, { confirmed = false } = {}) => {
         if (!confirmed) {
             const result = await Swal.fire({
@@ -3381,6 +3437,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                         </div>
                                         <div className="mt-4 flex flex-wrap gap-2">
                                             <button type="button" onClick={() => openFinancialAccount(account)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white hover:bg-slate-700">Abrir cuenta</button>
+                                            <button type="button" onClick={() => handleEditFinancialAccount(account)} className="rounded-lg border border-blue-300 px-3 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50">Editar cuenta</button>
                                             <button type="button" onClick={() => downloadFinancialAccountExcel(account)} className="rounded-lg border border-emerald-300 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50">Descargar Excel</button>
                                             {account.is_active && <button type="button" onClick={() => handleAdjustFinancialAccount(account)} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-700">Agregar o restar saldo</button>}
                                             {account.is_active && <button type="button" onClick={() => handleLinkExistingMovements(account)} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700">Relacionar movimientos existentes</button>}

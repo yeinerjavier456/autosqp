@@ -13936,7 +13936,16 @@ def update_financial_account(
         raise HTTPException(status_code=404, detail="Cuenta no encontrada")
     values = payload.model_dump(exclude_unset=True)
     if "name" in values:
-        account.name = (values["name"] or "").strip()
+        normalized_name = (values["name"] or "").strip()
+        if not normalized_name:
+            raise HTTPException(status_code=400, detail="El nombre de la cuenta es obligatorio")
+        duplicate = _financial_account_query(db, current_user).filter(
+            models.FinancialAccount.id != account.id,
+            func.lower(models.FinancialAccount.name) == normalized_name.lower(),
+        ).first()
+        if duplicate:
+            raise HTTPException(status_code=409, detail="Ya existe otra cuenta con ese nombre")
+        account.name = normalized_name
     if "account_type" in values:
         account.account_type = _validate_financial_account_type(values["account_type"])
     if "institution" in values:
