@@ -5,6 +5,7 @@ APP_ROOT="/home/autosqp/apps/autosqp"
 STATIC_DIR="/home/autosqp/apps/autosqp/backend/static"
 BACKUP_ROOT="/mnt/autosqp-backups"
 CATALOG_FILE="/var/lib/autosqp-backup/catalog.json"
+CATALOG_GROUP="www-data"
 # Déjalo vacío para conservar los respaldos solo en el servidor.
 S3_URI=""
 LOCAL_RETENTION_DAYS="7"

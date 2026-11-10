@@ -19,6 +19,7 @@ STATIC_DIR="${STATIC_DIR:-$APP_ROOT/backend/static}"
 LOCK_FILE="${LOCK_FILE:-/run/lock/autosqp-backup.lock}"
 CATALOG_FILE="${CATALOG_FILE:-/var/lib/autosqp-backup/catalog.json}"
 APP_GROUP="${APP_GROUP:-www-data}"
+CATALOG_GROUP="${CATALOG_GROUP:-www-data}"
 
 for command_name in mysqldump mysql gzip tar sha256sum flock python3; do
   command -v "$command_name" >/dev/null || { echo "Falta el comando $command_name" >&2; exit 1; }
@@ -104,7 +105,7 @@ find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d ! -name '.*.tmp' \
   -mtime "+$LOCAL_RETENTION_DAYS" -exec rm -rf -- {} +
 
 mkdir -p "$(dirname "$CATALOG_FILE")"
-chown root:"$APP_GROUP" "$(dirname "$CATALOG_FILE")"
+chown root:"$CATALOG_GROUP" "$(dirname "$CATALOG_FILE")"
 chmod 0750 "$(dirname "$CATALOG_FILE")"
 export BACKUP_ROOT CATALOG_FILE LOCAL_RETENTION_DAYS
 python3 - <<'PY'
@@ -169,7 +170,7 @@ with open(temporary_file, "w", encoding="utf-8") as handle:
     json.dump(payload, handle, ensure_ascii=False, indent=2)
 os.replace(temporary_file, catalog_file)
 PY
-chown root:"$APP_GROUP" "$CATALOG_FILE"
+chown root:"$CATALOG_GROUP" "$CATALOG_FILE"
 chmod 0640 "$CATALOG_FILE"
 
 echo "[$(date --iso-8601=seconds)] Respaldo verificado: $destination"
