@@ -675,7 +675,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         const result = await Swal.fire({
             title: movementType === 'expense' ? 'Cuenta de la deducción' : 'Cuenta del ingreso',
             input: 'select',
-            inputOptions: Object.fromEntries(activeAccounts.map((account) => [account.id, `${account.name} · $${Number(account.current_balance || 0).toLocaleString('es-CO')}`])),
+            inputOptions: Object.fromEntries(activeAccounts.map((account) => [account.id, account.name])),
             inputPlaceholder: 'Seleccionar cuenta',
             showCancelButton: true,
             confirmButtonText: 'Continuar',
@@ -875,7 +875,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                 input: 'select',
                 inputOptions: Object.fromEntries(activeAccounts.map((account) => [
                     account.id,
-                    `${account.name} · Saldo $${Number(account.current_balance || 0).toLocaleString('es-CO')}`,
+                    account.name,
                 ])),
                 inputPlaceholder: 'Seleccionar cuenta',
                 showCancelButton: true,
@@ -1868,7 +1868,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                     Cuenta de origen / destino
                                     <select id="new-receipt-account">
                                         <option value="">Seleccionar cuenta</option>
-                                        ${financialAccounts.filter((item) => item.is_active).map((item) => `<option value="${item.id}">${String(item.name).replace(/[<>&"]/g, '')} · $${Number(item.current_balance || 0).toLocaleString('es-CO')}</option>`).join('')}
+                                        ${financialAccounts.filter((item) => item.is_active).map((item) => `<option value="${item.id}">${String(item.name).replace(/[<>&"]/g, '')}</option>`).join('')}
                                     </select>
                                 </label>
                             </div>
@@ -2604,7 +2604,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                         >
                             <option value="">Seleccione cuenta...</option>
                             {financialAccounts.filter((account) => account.is_active).map((account) => (
-                                <option key={account.id} value={account.id}>{account.name} · ${Number(account.current_balance || 0).toLocaleString('es-CO')}</option>
+                                <option key={account.id} value={account.id}>{account.name}</option>
                             ))}
                         </select>
                     </div>
@@ -3152,7 +3152,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                         >
                                             <option value="">Seleccione cuenta...</option>
                                             {financialAccounts.filter((account) => account.is_active).map((account) => (
-                                                <option key={account.id} value={account.id}>{account.name} · ${Number(account.current_balance || 0).toLocaleString('es-CO')}</option>
+                                                <option key={account.id} value={account.id}>{account.name}</option>
                                             ))}
                                         </select>
                                     </div>
@@ -4057,7 +4057,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                             >
                                 <option value="">Sin cuenta</option>
                                 {financialAccounts.filter((account) => account.is_active || String(account.id) === String(editReceiptForm.account_id)).map((account) => (
-                                    <option key={account.id} value={account.id}>{account.name} · ${Number(account.current_balance || 0).toLocaleString('es-CO')}</option>
+                                    <option key={account.id} value={account.id}>{account.name}</option>
                                 ))}
                             </select>
                         </div>
