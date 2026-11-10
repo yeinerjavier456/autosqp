@@ -510,12 +510,30 @@ class Sale(Base):
     attachments = relationship("SaleAttachment", back_populates="sale", cascade="all, delete-orphan")
 
 
+class FinancialAccount(Base):
+    __tablename__ = "financial_accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), index=True, nullable=False)
+    name = Column(String(120), nullable=False)
+    account_type = Column(String(30), nullable=False, default="bank")
+    institution = Column(String(120), nullable=True)
+    last_four = Column(String(4), nullable=True)
+    opening_balance = Column(Integer, nullable=False, default=0)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+    company = relationship("Company")
+    receipts = relationship("PaymentReceipt", back_populates="account")
+
+
 class PaymentReceipt(Base):
     __tablename__ = "payment_receipts"
 
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), index=True, nullable=False)
     sale_id = Column(Integer, ForeignKey("sales.id"), index=True, nullable=True)
+    account_id = Column(Integer, ForeignKey("financial_accounts.id"), index=True, nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     display_name = Column(String(180), nullable=True)
     customer_name = Column(String(180), nullable=True)
@@ -537,6 +555,7 @@ class PaymentReceipt(Base):
     sale = relationship("Sale", back_populates="payment_receipts")
     company = relationship("Company")
     user = relationship("User")
+    account = relationship("FinancialAccount", back_populates="receipts")
 
 
 class SaleAttachment(Base):

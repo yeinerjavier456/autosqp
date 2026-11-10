@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Query, Query, Body,
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session, joinedload, selectinload, noload
-from sqlalchemy import or_, and_, func, text, false, select
+from sqlalchemy import or_, and_, func, text, false, select, case
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, get_db, SessionLocal
 import models, schemas, auth_utils
@@ -13132,6 +13132,7 @@ def download_tax_report_xlsx(
 @app.put("/sales/{sale_id}/approve", response_model=schemas.Sale)
 def approve_sale(
     sale_id: int, 
+    payload: Optional[schemas.SaleApprovalRequest] = Body(default=None),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -13156,6 +13157,15 @@ def approve_sale(
             status_code=400,
             detail="Debes definir la comisión de todas las personas involucradas antes de aprobar la venta"
         )
+
+    account_id = payload.account_id if payload else None
+    account = _get_financial_account_for_company(db, account_id, sale.company_id)
+    active_account_count = db.query(func.count(models.FinancialAccount.id)).filter(
+        models.FinancialAccount.company_id == sale.company_id,
+        models.FinancialAccount.is_active.is_(True),
+    ).scalar() or 0
+    if active_account_count and not account:
+        raise HTTPException(status_code=400, detail="Debes seleccionar la cuenta donde ingresará el dinero de la venta")
         
     # Finalize
     sale.status = "approved"
@@ -13166,6 +13176,7 @@ def approve_sale(
         automatic_receipt = models.PaymentReceipt(
             company_id=sale.company_id,
             sale_id=sale.id,
+            account_id=account.id if account else None,
             user_id=current_user.id,
             concept=f"Venta de vehiculo #{sale.id}",
             movement_type="income",
@@ -13173,7 +13184,9 @@ def approve_sale(
             payment_date=datetime.datetime.utcnow(),
             amount=sale.sale_price,
             category="ingreso_venta",
-            notes=f"Recibo generado automaticamente al aprobar la venta #{sale.id}"
+            notes=f"Recibo generado automaticamente al aprobar la venta #{sale.id}",
+            payment_method="transferencia" if account and account.account_type != "cash" else ("efectivo" if account else None),
+            bank=(account.institution or account.name) if account else None,
         )
         db.add(automatic_receipt)
     except Exception as e:
@@ -13639,7 +13652,8 @@ def read_payment_receipts(
         joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.vehicle),
         joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.seller),
         joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.lead),
-        joinedload(models.PaymentReceipt.user)
+        joinedload(models.PaymentReceipt.user),
+        joinedload(models.PaymentReceipt.account)
     )
     if current_user.company_id:
         query = query.filter(models.PaymentReceipt.company_id == current_user.company_id)
@@ -13802,6 +13816,172 @@ def _get_sale_with_finance_access(
     return sale
 
 
+FINANCIAL_ACCOUNT_TYPES = {"bank", "cash", "card", "digital_wallet", "other"}
+
+
+def _financial_account_query(db: Session, current_user: models.User):
+    query = db.query(models.FinancialAccount)
+    if current_user.company_id:
+        query = query.filter(models.FinancialAccount.company_id == current_user.company_id)
+    else:
+        query = query.filter(false())
+    return query
+
+
+def _serialize_financial_account(db: Session, account: models.FinancialAccount) -> dict:
+    movement_balance = db.query(
+        func.coalesce(func.sum(
+            case(
+                (models.PaymentReceipt.movement_type == "expense", -models.PaymentReceipt.amount),
+                else_=models.PaymentReceipt.amount,
+            )
+        ), 0)
+    ).filter(models.PaymentReceipt.account_id == account.id).scalar() or 0
+    return {
+        "id": account.id,
+        "company_id": account.company_id,
+        "name": account.name,
+        "account_type": account.account_type,
+        "institution": account.institution,
+        "last_four": account.last_four,
+        "opening_balance": int(account.opening_balance or 0),
+        "current_balance": int(account.opening_balance or 0) + int(movement_balance),
+        "is_active": bool(account.is_active),
+        "created_at": account.created_at,
+    }
+
+
+def _validate_financial_account_type(value: Optional[str]) -> str:
+    normalized = (value or "bank").strip().lower()
+    if normalized not in FINANCIAL_ACCOUNT_TYPES:
+        raise HTTPException(status_code=400, detail="Tipo de cuenta financiera no válido")
+    return normalized
+
+
+def _get_financial_account_for_company(db: Session, account_id: Optional[int], company_id: Optional[int], allow_inactive: bool = False):
+    if not account_id:
+        return None
+    account = db.query(models.FinancialAccount).filter(models.FinancialAccount.id == account_id).first()
+    if not account or account.company_id != company_id:
+        raise HTTPException(status_code=400, detail="La cuenta seleccionada no pertenece a esta empresa")
+    if not account.is_active and not allow_inactive:
+        raise HTTPException(status_code=400, detail="La cuenta seleccionada está inactiva")
+    return account
+
+
+@app.get("/finance/accounts")
+def read_financial_accounts(
+    include_inactive: bool = False,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    query = _financial_account_query(db, current_user)
+    if not include_inactive:
+        query = query.filter(models.FinancialAccount.is_active.is_(True))
+    accounts = query.order_by(models.FinancialAccount.is_active.desc(), models.FinancialAccount.name.asc()).all()
+    return {"items": [_serialize_financial_account(db, account) for account in accounts], "total": len(accounts)}
+
+
+@app.post("/finance/accounts", response_model=schemas.FinancialAccount)
+def create_financial_account(
+    payload: schemas.FinancialAccountCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"] or not current_user.company_id:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    name = payload.name.strip()
+    duplicate = db.query(models.FinancialAccount).filter(
+        models.FinancialAccount.company_id == current_user.company_id,
+        func.lower(models.FinancialAccount.name) == name.lower(),
+    ).first()
+    if duplicate:
+        raise HTTPException(status_code=409, detail="Ya existe una cuenta con ese nombre")
+    last_four = re.sub(r"\D", "", payload.last_four or "")[-4:] or None
+    account = models.FinancialAccount(
+        company_id=current_user.company_id,
+        name=name,
+        account_type=_validate_financial_account_type(payload.account_type),
+        institution=(payload.institution or "").strip() or None,
+        last_four=last_four,
+        opening_balance=int(payload.opening_balance or 0),
+        is_active=bool(payload.is_active),
+    )
+    db.add(account)
+    db.commit()
+    db.refresh(account)
+    return _serialize_financial_account(db, account)
+
+
+@app.put("/finance/accounts/{account_id}", response_model=schemas.FinancialAccount)
+def update_financial_account(
+    account_id: int,
+    payload: schemas.FinancialAccountUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    account = _financial_account_query(db, current_user).filter(models.FinancialAccount.id == account_id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Cuenta no encontrada")
+    values = payload.model_dump(exclude_unset=True)
+    if "name" in values:
+        account.name = (values["name"] or "").strip()
+    if "account_type" in values:
+        account.account_type = _validate_financial_account_type(values["account_type"])
+    if "institution" in values:
+        account.institution = (values["institution"] or "").strip() or None
+    if "last_four" in values:
+        account.last_four = re.sub(r"\D", "", values["last_four"] or "")[-4:] or None
+    if "is_active" in values:
+        account.is_active = bool(values["is_active"])
+    db.commit()
+    db.refresh(account)
+    return _serialize_financial_account(db, account)
+
+
+@app.post("/finance/accounts/{account_id}/adjustments", response_model=schemas.PaymentReceipt)
+def adjust_financial_account_balance(
+    account_id: int,
+    payload: schemas.FinancialAccountAdjustment,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    account = _financial_account_query(db, current_user).filter(
+        models.FinancialAccount.id == account_id,
+        models.FinancialAccount.is_active.is_(True),
+    ).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Cuenta no encontrada")
+    movement_type = (payload.movement_type or "").strip().lower()
+    if movement_type not in {"income", "expense"}:
+        raise HTTPException(status_code=400, detail="El ajuste debe ser ingreso o egreso")
+    receipt = models.PaymentReceipt(
+        company_id=account.company_id,
+        account_id=account.id,
+        user_id=current_user.id,
+        display_name=account.name,
+        concept="Ajuste de saldo",
+        movement_type=movement_type,
+        receipt_number=_generate_accounting_receipt_number(db, account.company_id),
+        payment_date=datetime.datetime.utcnow(),
+        amount=int(payload.amount),
+        category="otros",
+        notes=(payload.notes or "").strip() or "Ajuste manual de saldo",
+        payment_method="transferencia" if account.account_type != "cash" else "efectivo",
+        bank=account.institution or account.name,
+    )
+    db.add(receipt)
+    db.commit()
+    db.refresh(receipt)
+    return receipt
+
+
 def _normalize_receipt_payment_method(payment_method: Optional[str]) -> Optional[str]:
     payment_method_value = (payment_method or "").strip().lower() or None
     if payment_method_value and payment_method_value not in {"efectivo", "transferencia"}:
@@ -13868,13 +14048,19 @@ def update_payment_receipt(
     receipt.notes = (receipt_update.notes or "").strip() or None
     receipt.payment_method = payment_method_value
     receipt.bank = (receipt_update.bank or "").strip() or None
+    account = _get_financial_account_for_company(db, receipt_update.account_id, company_id, allow_inactive=True) if receipt_update.account_id else None
+    if account:
+        receipt.account_id = account.id
+    if account and not receipt.bank:
+        receipt.bank = account.institution or account.name
 
     db.commit()
     db.refresh(receipt)
     return db.query(models.PaymentReceipt).options(
         joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.vehicle),
         joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.seller),
-        joinedload(models.PaymentReceipt.user)
+        joinedload(models.PaymentReceipt.user),
+        joinedload(models.PaymentReceipt.account)
     ).filter(models.PaymentReceipt.id == receipt.id).first()
 
 
@@ -13935,6 +14121,7 @@ async def create_payment_receipt(
     notes: Optional[str] = Form(None),
     payment_method: Optional[str] = Form(None),
     bank: Optional[str] = Form(None),
+    account_id: Optional[int] = Form(None),
     file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
@@ -13961,6 +14148,14 @@ async def create_payment_receipt(
         company_id = sale.company_id
     elif not concept_value:
         raise HTTPException(status_code=400, detail="Debes indicar una venta o un concepto contable")
+
+    account = _get_financial_account_for_company(db, account_id, company_id)
+    active_account_count = db.query(func.count(models.FinancialAccount.id)).filter(
+        models.FinancialAccount.company_id == company_id,
+        models.FinancialAccount.is_active.is_(True),
+    ).scalar() or 0
+    if active_account_count and not account:
+        raise HTTPException(status_code=400, detail="Debes seleccionar la cuenta de origen o destino")
 
     receipt_number_value = (receipt_number or "").strip() or None
     if not sale and not receipt_number_value:
@@ -13995,6 +14190,7 @@ async def create_payment_receipt(
     receipt = models.PaymentReceipt(
         company_id=company_id,
         sale_id=sale.id if sale else None,
+        account_id=account.id if account else None,
         user_id=current_user.id,
         display_name=(display_name or "").strip() or None,
         customer_name=(customer_name or "").strip() or None,
@@ -14007,7 +14203,7 @@ async def create_payment_receipt(
         category=(category or "sale_payment").strip() or "sale_payment",
         notes=(notes or "").strip() or None,
         payment_method=payment_method_value,
-        bank=(bank or "").strip() or None,
+        bank=(bank or "").strip() or (account.institution or account.name if account else None),
         file_name=stored_file_name,
         file_path=stored_file_path,
         file_type=stored_file_type
@@ -14018,7 +14214,8 @@ async def create_payment_receipt(
     return db.query(models.PaymentReceipt).options(
         joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.vehicle),
         joinedload(models.PaymentReceipt.sale).joinedload(models.Sale.seller),
-        joinedload(models.PaymentReceipt.user)
+        joinedload(models.PaymentReceipt.user),
+        joinedload(models.PaymentReceipt.account)
     ).filter(models.PaymentReceipt.id == receipt.id).first()
 
 

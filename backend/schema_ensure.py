@@ -93,6 +93,17 @@ def ensure_mysql_schema(engine: Engine) -> None:
             "ALTER TABLE companies ADD COLUMN finance_password_hash VARCHAR(255) NULL",
         )
 
+    if _mysql_table_exists(engine, "payment_receipts"):
+        _ensure_column(
+            engine,
+            "payment_receipts",
+            "account_id",
+            "ALTER TABLE payment_receipts ADD COLUMN account_id INT NULL",
+        )
+        if not _mysql_index_exists(engine, "payment_receipts", "ix_payment_receipts_account_id"):
+            with engine.begin() as conn:
+                conn.execute(text("CREATE INDEX ix_payment_receipts_account_id ON payment_receipts (account_id)"))
+
     if _mysql_table_exists(engine, "users"):
         _ensure_column(
             engine,

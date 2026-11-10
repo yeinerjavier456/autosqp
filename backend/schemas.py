@@ -958,6 +958,10 @@ class SaleCreate(SaleBase):
 class SaleUpdate(BaseModel):
     sale_price: int
 
+
+class SaleApprovalRequest(BaseModel):
+    account_id: Optional[int] = None
+
 class SaleCommissionsUpdate(BaseModel):
     seller_mode: Optional[str] = None
     seller_value: Optional[float] = None
@@ -1128,6 +1132,7 @@ class SaleAttachmentList(BaseModel):
 
 class PaymentReceiptBase(BaseModel):
     sale_id: Optional[int] = None
+    account_id: Optional[int] = None
     display_name: Optional[str] = None
     customer_name: Optional[str] = None
     customer_document: Optional[str] = None
@@ -1159,6 +1164,7 @@ class PaymentReceiptCreate(PaymentReceiptBase):
 
 class PaymentReceiptUpdate(BaseModel):
     sale_id: Optional[int] = None
+    account_id: Optional[int] = None
     display_name: Optional[str] = None
     customer_name: Optional[str] = None
     customer_document: Optional[str] = None
@@ -1180,6 +1186,7 @@ class PaymentReceipt(PaymentReceiptMinimal):
     resolved_customer_document: Optional[str] = None
     resolved_customer_email: Optional[str] = None
     resolved_customer_phone: Optional[str] = None
+    account: Optional["FinancialAccount"] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1187,6 +1194,42 @@ class PaymentReceipt(PaymentReceiptMinimal):
 class PaymentReceiptList(BaseModel):
     items: List[PaymentReceipt]
     total: int
+
+
+class FinancialAccountBase(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    account_type: str = "bank"
+    institution: Optional[str] = None
+    last_four: Optional[str] = None
+    opening_balance: int = 0
+    is_active: bool = True
+
+
+class FinancialAccountCreate(FinancialAccountBase):
+    pass
+
+
+class FinancialAccountUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    account_type: Optional[str] = None
+    institution: Optional[str] = None
+    last_four: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class FinancialAccount(FinancialAccountBase):
+    id: int
+    company_id: int
+    current_balance: int = 0
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FinancialAccountAdjustment(BaseModel):
+    amount: int = Field(gt=0)
+    movement_type: str
+    notes: Optional[str] = None
 
 # --- STATS ---
 

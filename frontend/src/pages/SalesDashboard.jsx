@@ -288,6 +288,9 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
     const [companyUsers, setCompanyUsers] = useState([]);
     const [receipts, setReceipts] = useState([]);
     const [taxRows, setTaxRows] = useState([]);
+    const [financialAccounts, setFinancialAccounts] = useState([]);
+    const [accountForm, setAccountForm] = useState({ name: '', account_type: 'bank', institution: '', last_four: '', opening_balance: '' });
+    const [savingAccount, setSavingAccount] = useState(false);
     const [loading, setLoading] = useState(!receiptSearchOnly);
     const [filterStatus, setFilterStatus] = useState('pending');
     const [activeTab, setActiveTab] = useState(receiptEntryOnly || receiptSearchOnly ? 'accounting' : initialTab);
@@ -326,6 +329,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         notes: '',
         payment_method: '',
         bank: '',
+        account_id: '',
         file: null
     });
 
@@ -364,15 +368,13 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         ['efectivo', 'Efectivo'],
         ['transferencia', 'Transferencia']
     ];
-    const bankOptions = [
-        'BANCOLOMBIA',
-        'BBVA',
-        'NEQUI JENN',
-        'NEQUI DIEGO',
-        'DAVIVIENDA',
-        'COLPATRIA',
-        'CUENTA DE BOLD'
-    ];
+    const accountTypeLabels = {
+        bank: 'Cuenta bancaria',
+        cash: 'Caja / efectivo',
+        card: 'Tarjeta',
+        digital_wallet: 'Billetera digital',
+        other: 'Otra',
+    };
 
     const getReceiptDefaultsForConcept = (concept) => {
         if (concept === 'Venta de Vehiculo') return { category: 'ingreso_venta', movement_type: 'income' };
@@ -476,7 +478,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
 
             const activeYear = startDate ? Number(startDate.slice(0, 4)) : new Date().getFullYear();
             const generalSearch = receiptSearch || undefined;
-            const [statsRes, salesRes, approvedSalesRes, receiptsRes, taxRes, usersRes] = await Promise.all([
+            const [statsRes, salesRes, approvedSalesRes, receiptsRes, taxRes, usersRes, accountsRes] = await Promise.all([
                 axios.get('/api/finance/stats', {
                     headers,
                     params: { ...rangeParams, q: generalSearch }
@@ -515,7 +517,8 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                 axios.get('/api/users/', {
                     headers,
                     params: { limit: 500 }
-                })
+                }),
+                axios.get('/api/finance/accounts', { headers, params: { include_inactive: true } })
             ]);
 
             setStats(statsRes.data || {});
@@ -524,6 +527,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             setReceipts(Array.isArray(receiptsRes.data?.items) ? receiptsRes.data.items : []);
             setTaxRows(Array.isArray(taxRes.data?.items) ? taxRes.data.items : []);
             setCompanyUsers(Array.isArray(usersRes.data?.items) ? usersRes.data.items : []);
+            setFinancialAccounts(Array.isArray(accountsRes.data?.items) ? accountsRes.data.items : []);
         } catch (error) {
             console.error('Error fetching sales data', error);
             if ([401, 403, 423].includes(error.response?.status) && String(error.response?.data?.detail || '').toLowerCase().includes('finanz')) {
@@ -560,6 +564,88 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         }
     };
 
+    const refreshFinancialAccounts = async () => {
+        const token = localStorage.getItem('token');
+        const response = await axios.get('/api/finance/accounts', {
+            headers: { Authorization: `Bearer ${token}` },
+            params: { include_inactive: true },
+        });
+        setFinancialAccounts(Array.isArray(response.data?.items) ? response.data.items : []);
+    };
+
+    const handleCreateFinancialAccount = async (event) => {
+        event.preventDefault();
+        if (!accountForm.name.trim()) return;
+        setSavingAccount(true);
+        try {
+            const token = localStorage.getItem('token');
+            await axios.post('/api/finance/accounts', {
+                ...accountForm,
+                opening_balance: parseCurrencyInput(accountForm.opening_balance),
+            }, { headers: { Authorization: `Bearer ${token}` } });
+            setAccountForm({ name: '', account_type: 'bank', institution: '', last_four: '', opening_balance: '' });
+            await refreshFinancialAccounts();
+            Swal.fire('Cuenta creada', 'Ya puede seleccionarse en los ingresos y egresos.', 'success');
+        } catch (error) {
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo crear la cuenta.', 'error');
+        } finally {
+            setSavingAccount(false);
+        }
+    };
+
+    const handleAdjustFinancialAccount = async (account) => {
+        const result = await Swal.fire({
+            title: `Ajustar saldo: ${account.name}`,
+            html: `
+                <select id="account-adjustment-type" class="swal2-input">
+                    <option value="income">Agregar saldo</option>
+                    <option value="expense">Restar saldo</option>
+                </select>
+                <input id="account-adjustment-amount" class="swal2-input" inputmode="numeric" placeholder="Valor" />
+                <input id="account-adjustment-notes" class="swal2-input" placeholder="Motivo del ajuste" />
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Guardar ajuste',
+            cancelButtonText: 'Cancelar',
+            didOpen: () => attachCurrencyFormatter(document.getElementById('account-adjustment-amount')),
+            preConfirm: () => {
+                const amount = parseCurrencyInput(document.getElementById('account-adjustment-amount')?.value || '');
+                if (!amount) {
+                    Swal.showValidationMessage('Ingresa un valor válido');
+                    return false;
+                }
+                return {
+                    movement_type: document.getElementById('account-adjustment-type')?.value || 'income',
+                    amount,
+                    notes: document.getElementById('account-adjustment-notes')?.value || '',
+                };
+            },
+        });
+        if (!result.isConfirmed) return;
+        try {
+            const token = localStorage.getItem('token');
+            await axios.post(`/api/finance/accounts/${account.id}/adjustments`, result.value, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            await Promise.all([refreshFinancialAccounts(), fetchData({ silent: true })]);
+            Swal.fire('Saldo actualizado', 'El ajuste quedó registrado también en contabilidad.', 'success');
+        } catch (error) {
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo ajustar el saldo.', 'error');
+        }
+    };
+
+    const handleToggleFinancialAccount = async (account) => {
+        try {
+            const token = localStorage.getItem('token');
+            await axios.put(`/api/finance/accounts/${account.id}`, { is_active: !account.is_active }, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            await refreshFinancialAccounts();
+        } catch (error) {
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo actualizar la cuenta.', 'error');
+        }
+    };
+
     const approveSale = async (saleId, { confirmed = false } = {}) => {
         if (!confirmed) {
             const result = await Swal.fire({
@@ -578,8 +664,29 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             if (!result.isConfirmed) return;
         }
 
+        let accountId = null;
+        const activeAccounts = financialAccounts.filter((account) => account.is_active);
+        if (activeAccounts.length > 0) {
+            const accountResult = await Swal.fire({
+                title: 'Cuenta que recibe el dinero',
+                text: 'Selecciona dónde ingresará el valor de esta venta.',
+                input: 'select',
+                inputOptions: Object.fromEntries(activeAccounts.map((account) => [
+                    account.id,
+                    `${account.name} · Saldo $${Number(account.current_balance || 0).toLocaleString('es-CO')}`,
+                ])),
+                inputPlaceholder: 'Seleccionar cuenta',
+                showCancelButton: true,
+                confirmButtonText: 'Continuar',
+                cancelButtonText: 'Cancelar',
+                inputValidator: (value) => (!value ? 'Debes seleccionar una cuenta' : undefined),
+            });
+            if (!accountResult.isConfirmed) return;
+            accountId = Number(accountResult.value);
+        }
+
         const token = localStorage.getItem('token');
-        await axios.put(`/api/sales/${saleId}/approve`, {}, {
+        await axios.put(`/api/sales/${saleId}/approve`, { account_id: accountId }, {
             headers: { Authorization: `Bearer ${token}` }
         });
     };
@@ -838,6 +945,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         notes: receipt.notes || null,
         payment_method: receipt.payment_method || null,
         bank: receipt.bank || null,
+        account_id: receipt.account_id || null,
         ...overrides
     });
 
@@ -1294,6 +1402,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             formData.append('notes', receiptForm.notes);
             formData.append('payment_method', receiptForm.payment_method || '');
             formData.append('bank', receiptForm.bank || '');
+            formData.append('account_id', receiptForm.account_id || '');
             if (receiptForm.file) {
                 formData.append('file', receiptForm.file);
             }
@@ -1318,6 +1427,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                 notes: '',
                 payment_method: '',
                 bank: '',
+                account_id: '',
                 file: null
             });
             await fetchData();
@@ -1523,10 +1633,10 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                     </select>
                                 </label>
                                 <label class="sale-item-field">
-                                    Banco / cuenta
-                                    <select id="new-receipt-bank">
-                                        <option value="">Seleccionar banco</option>
-                                        ${bankOptions.map((option) => `<option value="${option}">${option}</option>`).join('')}
+                                    Cuenta de origen / destino
+                                    <select id="new-receipt-account">
+                                        <option value="">Seleccionar cuenta</option>
+                                        ${financialAccounts.filter((item) => item.is_active).map((item) => `<option value="${item.id}">${String(item.name).replace(/[<>&"]/g, '')} · $${Number(item.current_balance || 0).toLocaleString('es-CO')}</option>`).join('')}
                                     </select>
                                 </label>
                             </div>
@@ -1574,7 +1684,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                         (document.getElementById('new-receipt-notes')?.value || '').trim()
                     ].filter(Boolean).join('\n'),
                     payment_method: document.getElementById('new-receipt-payment-method')?.value || '',
-                    bank: document.getElementById('new-receipt-bank')?.value || ''
+                    account_id: document.getElementById('new-receipt-account')?.value || ''
                 };
             },
             didOpen: () => {
@@ -1621,7 +1731,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             formData.append('category', value.category);
             formData.append('notes', value.notes || '');
             formData.append('payment_method', value.payment_method || '');
-            formData.append('bank', value.bank || '');
+            formData.append('account_id', value.account_id || '');
             const response = await axios.post('/api/finance/receipts', formData, {
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -1691,6 +1801,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             notes: receipt.notes || '',
             payment_method: receipt.payment_method || '',
             bank: receipt.bank || '',
+            account_id: receipt.account_id ? String(receipt.account_id) : '',
         });
         setEditReceiptFile(null);
         setEditingReceipt(receipt);
@@ -1721,7 +1832,8 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                 category: editReceiptForm.category,
                 notes: editReceiptForm.notes.trim() || null,
                 payment_method: editReceiptForm.payment_method || null,
-                bank: editReceiptForm.bank || null,
+                bank: editReceiptForm.account_id ? null : (editReceiptForm.bank || null),
+                account_id: editReceiptForm.account_id ? Number(editReceiptForm.account_id) : null,
             };
             await axios.put(`/api/finance/receipts/${editingReceipt.id}`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -2118,9 +2230,9 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                                             <td className="p-3">
                                                                 <div className="font-medium text-slate-800">{receipt.concept || 'Movimiento contable'}</div>
                                                                 <div className="text-xs text-slate-500">{receipt.notes || receipt.receipt_number || 'Sin nota'}</div>
-                                                                {(receipt.payment_method || receipt.bank) && (
+                                                                {(receipt.payment_method || receipt.bank || receipt.account?.name) && (
                                                                     <div className="mt-1 text-xs font-medium text-slate-500">
-                                                                        {[receipt.payment_method === 'efectivo' ? 'Efectivo' : receipt.payment_method === 'transferencia' ? 'Transferencia' : receipt.payment_method, receipt.bank].filter(Boolean).join(' · ')}
+                                                                        {[receipt.payment_method === 'efectivo' ? 'Efectivo' : receipt.payment_method === 'transferencia' ? 'Transferencia' : receipt.payment_method, receipt.account?.name || receipt.bank].filter(Boolean).join(' · ')}
                                                                     </div>
                                                                 )}
                                                             </td>
@@ -2252,15 +2364,15 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                         </select>
                     </div>
                     <div>
-                        <label className="mb-1 block text-sm font-semibold text-gray-700">Banco / cuenta</label>
+                        <label className="mb-1 block text-sm font-semibold text-gray-700">Cuenta de origen / destino</label>
                         <select
-                            value={receiptForm.bank}
-                            onChange={(e) => setReceiptForm({ ...receiptForm, bank: e.target.value })}
+                            value={receiptForm.account_id}
+                            onChange={(e) => setReceiptForm({ ...receiptForm, account_id: e.target.value })}
                             className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
                         >
-                            <option value="">Seleccione banco...</option>
-                            {bankOptions.map((bank) => (
-                                <option key={bank} value={bank}>{bank}</option>
+                            <option value="">Seleccione cuenta...</option>
+                            {financialAccounts.filter((account) => account.is_active).map((account) => (
+                                <option key={account.id} value={account.id}>{account.name} · ${Number(account.current_balance || 0).toLocaleString('es-CO')}</option>
                             ))}
                         </select>
                     </div>
@@ -2471,6 +2583,12 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                     className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === 'tax' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                     Tributación
+                </button>
+                <button
+                    onClick={() => setActiveTab('accounts')}
+                    className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === 'accounts' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
+                >
+                    Cuentas
                 </button>
             </div>
 
@@ -2794,15 +2912,15 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="mb-1 block text-sm font-semibold text-gray-700">Banco / cuenta</label>
+                                        <label className="mb-1 block text-sm font-semibold text-gray-700">Cuenta de origen / destino</label>
                                         <select
-                                            value={receiptForm.bank}
-                                            onChange={(e) => setReceiptForm({ ...receiptForm, bank: e.target.value })}
+                                            value={receiptForm.account_id}
+                                            onChange={(e) => setReceiptForm({ ...receiptForm, account_id: e.target.value })}
                                             className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
                                         >
-                                            <option value="">Seleccione banco...</option>
-                                            {bankOptions.map((bank) => (
-                                                <option key={bank} value={bank}>{bank}</option>
+                                            <option value="">Seleccione cuenta...</option>
+                                            {financialAccounts.filter((account) => account.is_active).map((account) => (
+                                                <option key={account.id} value={account.id}>{account.name} · ${Number(account.current_balance || 0).toLocaleString('es-CO')}</option>
                                             ))}
                                         </select>
                                     </div>
@@ -2989,7 +3107,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                                     </span>
                                                 </td>
                                                 <td className="p-4 text-sm font-medium text-gray-600">
-                                                    {group.sale?.id ? 'Venta consolidada' : 'Soporte consolidado'}
+                                                    {[...new Set(group.receipts.map((item) => item.account?.name || item.bank).filter(Boolean))].join(', ') || (group.sale?.id ? 'Venta consolidada' : 'Sin cuenta asignada')}
                                                 </td>
                                                 <td className="p-4 text-sm">
                                                     <div className="space-y-1">
@@ -3034,6 +3152,85 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                         )}
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : activeTab === 'accounts' ? (
+                <div className="space-y-6">
+                    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
+                        <form onSubmit={handleCreateFinancialAccount} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900">Agregar cuenta o tarjeta</h3>
+                                <p className="mt-1 text-sm text-slate-500">Esta cuenta solo será visible dentro de la empresa actual.</p>
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-sm font-semibold text-slate-700">Nombre</label>
+                                <input required value={accountForm.name} onChange={(event) => setAccountForm({ ...accountForm, name: event.target.value })} placeholder="Ej: Bancolombia principal" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500" />
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-sm font-semibold text-slate-700">Tipo</label>
+                                <select value={accountForm.account_type} onChange={(event) => setAccountForm({ ...accountForm, account_type: event.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500">
+                                    {Object.entries(accountTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-sm font-semibold text-slate-700">Banco o entidad</label>
+                                <input value={accountForm.institution} onChange={(event) => setAccountForm({ ...accountForm, institution: event.target.value })} placeholder="Ej: Bancolombia, Nequi, caja sede norte" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="mb-1 block text-sm font-semibold text-slate-700">Últimos 4 dígitos</label>
+                                    <input maxLength={4} value={accountForm.last_four} onChange={(event) => setAccountForm({ ...accountForm, last_four: event.target.value.replace(/\D/g, '').slice(0, 4) })} placeholder="1234" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500" />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-sm font-semibold text-slate-700">Saldo inicial</label>
+                                    <input inputMode="numeric" value={accountForm.opening_balance} onChange={(event) => setAccountForm({ ...accountForm, opening_balance: formatCurrencyInput(event.target.value) })} placeholder="$ 0" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500" />
+                                </div>
+                            </div>
+                            <button disabled={savingAccount} className="w-full rounded-xl bg-blue-600 px-4 py-3 font-bold text-white transition hover:bg-blue-700 disabled:opacity-60">
+                                {savingAccount ? 'Guardando...' : 'Crear cuenta'}
+                            </button>
+                        </form>
+
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                                <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
+                                    <p className="text-xs font-bold uppercase text-blue-700">Saldo total</p>
+                                    <p className="mt-2 text-2xl font-extrabold text-blue-900">${financialAccounts.filter((account) => account.is_active).reduce((sum, account) => sum + Number(account.current_balance || 0), 0).toLocaleString('es-CO')}</p>
+                                </div>
+                                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
+                                    <p className="text-xs font-bold uppercase text-emerald-700">Cuentas activas</p>
+                                    <p className="mt-2 text-2xl font-extrabold text-emerald-900">{financialAccounts.filter((account) => account.is_active).length}</p>
+                                </div>
+                                <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                                    <p className="text-xs font-bold uppercase text-slate-500">Registradas</p>
+                                    <p className="mt-2 text-2xl font-extrabold text-slate-900">{financialAccounts.length}</p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                {financialAccounts.map((account) => (
+                                    <article key={account.id} className={`rounded-2xl border bg-white p-5 shadow-sm ${account.is_active ? 'border-slate-200' : 'border-slate-200 opacity-60'}`}>
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div>
+                                                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{accountTypeLabels[account.account_type] || 'Cuenta'}</span>
+                                                <h4 className="mt-3 text-lg font-bold text-slate-900">{account.name}</h4>
+                                                <p className="text-sm text-slate-500">{[account.institution, account.last_four ? `•••• ${account.last_four}` : ''].filter(Boolean).join(' · ') || 'Sin entidad asociada'}</p>
+                                            </div>
+                                            <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${account.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{account.is_active ? 'Activa' : 'Inactiva'}</span>
+                                        </div>
+                                        <div className="mt-5 rounded-xl bg-slate-50 p-4">
+                                            <p className="text-xs font-semibold uppercase text-slate-500">Saldo actual</p>
+                                            <p className={`mt-1 text-2xl font-extrabold ${Number(account.current_balance || 0) >= 0 ? 'text-slate-900' : 'text-red-600'}`}>${Number(account.current_balance || 0).toLocaleString('es-CO')}</p>
+                                            <p className="mt-1 text-xs text-slate-400">Inicial: ${Number(account.opening_balance || 0).toLocaleString('es-CO')}</p>
+                                        </div>
+                                        <div className="mt-4 flex flex-wrap gap-2">
+                                            {account.is_active && <button type="button" onClick={() => handleAdjustFinancialAccount(account)} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-700">Agregar o restar saldo</button>}
+                                            <button type="button" onClick={() => handleToggleFinancialAccount(account)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">{account.is_active ? 'Desactivar' : 'Activar'}</button>
+                                        </div>
+                                    </article>
+                                ))}
+                                {financialAccounts.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500 lg:col-span-2">Aún no hay cuentas registradas. Crea la primera para comenzar a controlar los saldos.</div>}
                             </div>
                         </div>
                     </div>
@@ -3330,9 +3527,9 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                             <td className="p-3">
                                                 <div className="font-medium text-slate-800">{receipt.concept || 'Movimiento contable'}</div>
                                                 <div className="text-xs text-slate-500">{receipt.notes || receipt.receipt_number || 'Sin nota'}</div>
-                                                {(receipt.payment_method || receipt.bank) && (
+                                                {(receipt.payment_method || receipt.bank || receipt.account?.name) && (
                                                     <div className="mt-1 text-xs font-medium text-slate-500">
-                                                        {[receipt.payment_method === 'efectivo' ? 'Efectivo' : receipt.payment_method === 'transferencia' ? 'Transferencia' : receipt.payment_method, receipt.bank].filter(Boolean).join(' · ')}
+                                                        {[receipt.payment_method === 'efectivo' ? 'Efectivo' : receipt.payment_method === 'transferencia' ? 'Transferencia' : receipt.payment_method, receipt.account?.name || receipt.bank].filter(Boolean).join(' · ')}
                                                     </div>
                                                 )}
                                             </td>
@@ -3595,17 +3792,17 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                             </div>
                         </div>
 
-                        {/* Banco */}
+                        {/* Cuenta financiera */}
                         <div>
-                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Banco / cuenta</label>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Cuenta de origen / destino</label>
                             <select
-                                value={editReceiptForm.bank || ''}
-                                onChange={(e) => setEditReceiptForm({ ...editReceiptForm, bank: e.target.value })}
+                                value={editReceiptForm.account_id || ''}
+                                onChange={(e) => setEditReceiptForm({ ...editReceiptForm, account_id: e.target.value })}
                                 className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                             >
-                                <option value="">Sin banco</option>
-                                {bankOptions.map((b) => (
-                                    <option key={b} value={b}>{b}</option>
+                                <option value="">Sin cuenta</option>
+                                {financialAccounts.filter((account) => account.is_active || String(account.id) === String(editReceiptForm.account_id)).map((account) => (
+                                    <option key={account.id} value={account.id}>{account.name} · ${Number(account.current_balance || 0).toLocaleString('es-CO')}</option>
                                 ))}
                             </select>
                         </div>
