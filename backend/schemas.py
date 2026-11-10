@@ -781,6 +781,11 @@ class LeadUpdate(BaseModel):
 
 class LeadDeleteRequest(BaseModel):
     reason: str
+
+class BackupRestoreRequest(BaseModel):
+    backup_id: str
+    password: str
+    confirmation: str
     
 class LeadBulkAssign(BaseModel):
     lead_ids: List[int]

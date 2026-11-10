@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import Swal from 'sweetalert2';
 import { useAuth } from '../context/AuthContext';
 
 const IntegrationTab = ({ active, label, onClick, icon }) => (
@@ -49,6 +50,9 @@ const IntegrationsConfig = () => {
     const [backupCatalog, setBackupCatalog] = useState({ items: [], retention_days: 7, available: false });
     const [backupLoading, setBackupLoading] = useState(false);
     const [backupError, setBackupError] = useState('');
+    const [restoringBackupId, setRestoringBackupId] = useState('');
+    const effectiveRoleName = user?.role?.base_role_name || user?.role?.name || '';
+    const canRestoreBackups = effectiveRoleName === 'super_admin';
 
     // Initial state matching backend schema
     const [settings, setSettings] = useState({
@@ -126,6 +130,61 @@ const IntegrationsConfig = () => {
             setBackupError(error.response?.data?.detail || 'No se pudo consultar el catálogo de respaldos.');
         } finally {
             setBackupLoading(false);
+        }
+    };
+
+    const handleRestoreBackup = async (backup) => {
+        const decision = await Swal.fire({
+            icon: 'warning',
+            title: 'Restaurar todo el sistema',
+            html: `
+                <div style="text-align:left;font-size:14px;line-height:1.5">
+                    <p>Se reemplazarán <strong>toda la base de datos y todos los archivos</strong> con la copia <strong>${backup.id}</strong>.</p>
+                    <p style="margin-top:8px">El CRM quedará desconectado temporalmente. Antes de restaurar se generará una copia preventiva del estado actual.</p>
+                    <label style="display:block;margin-top:16px;font-weight:700">Escribe RESTAURAR TODO</label>
+                    <input id="backup-confirmation" class="swal2-input" style="margin:8px 0 0;width:100%" autocomplete="off">
+                    <label style="display:block;margin-top:12px;font-weight:700">Contraseña actual</label>
+                    <input id="backup-password" type="password" class="swal2-input" style="margin:8px 0 0;width:100%" autocomplete="current-password">
+                </div>`,
+            showCancelButton: true,
+            confirmButtonText: 'Restaurar todo',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#dc2626',
+            focusCancel: true,
+            preConfirm: () => {
+                const confirmation = document.getElementById('backup-confirmation')?.value || '';
+                const password = document.getElementById('backup-password')?.value || '';
+                if (confirmation !== 'RESTAURAR TODO') {
+                    Swal.showValidationMessage('Debes escribir exactamente RESTAURAR TODO');
+                    return false;
+                }
+                if (!password) {
+                    Swal.showValidationMessage('Ingresa tu contraseña actual');
+                    return false;
+                }
+                return { confirmation, password };
+            },
+        });
+        if (!decision.isConfirmed) return;
+
+        setRestoringBackupId(backup.id);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post('/api/admin/backups/restore', {
+                backup_id: backup.id,
+                confirmation: decision.value.confirmation,
+                password: decision.value.password,
+            }, { headers: { Authorization: `Bearer ${token}` }, timeout: 15000 });
+            await Swal.fire({
+                icon: 'success',
+                title: 'Restauración iniciada',
+                text: response.data?.message || 'El CRM se desconectará y volverá automáticamente.',
+                confirmButtonColor: '#2563eb',
+            });
+        } catch (error) {
+            Swal.fire('No se pudo iniciar', error.response?.data?.detail || 'No se pudo solicitar la restauración.', 'error');
+        } finally {
+            setRestoringBackupId('');
         }
     };
 
@@ -821,6 +880,16 @@ const IntegrationsConfig = () => {
                                                 <div><p className="text-xs text-slate-400">Archivos</p><p className="font-bold text-slate-700">{formatBackupBytes(backup.static_bytes)}</p></div>
                                                 <div><p className="text-xs text-slate-400">Cantidad</p><p className="font-bold text-slate-700">{Number(backup.static_files || 0).toLocaleString('es-CO')}</p></div>
                                             </div>
+                                            {canRestoreBackups && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRestoreBackup(backup)}
+                                                    disabled={!backup.verified || Boolean(restoringBackupId)}
+                                                    className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                                >
+                                                    {restoringBackupId === backup.id ? 'Iniciando...' : 'Restaurar todo'}
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 ))}

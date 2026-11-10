@@ -1,0 +1,10 @@
+[Unit]
+Description=Procesa una restauración de AutosQP solicitada desde el CRM
+After=mysql.service
+
+[Service]
+Type=oneshot
+User=root
+Environment=AUTOSQP_BACKUP_CONFIG=/etc/autosqp-backup.conf
+ExecStart=/usr/local/sbin/autosqp-process-restore-request
+

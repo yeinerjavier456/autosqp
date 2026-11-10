@@ -1,0 +1,10 @@
+[Unit]
+Description=Detecta solicitudes seguras de restauración de AutosQP
+
+[Path]
+PathExists=/var/lib/autosqp-backup/requests/restore-request.json
+Unit=autosqp-restore-request.service
+
+[Install]
+WantedBy=multi-user.target
+

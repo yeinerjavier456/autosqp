@@ -7451,6 +7451,66 @@ def read_server_backups(current_user: models.User = Depends(get_current_user)):
     }
 
 
+@app.post("/admin/backups/restore", status_code=202)
+def request_server_backup_restore(
+    payload: schemas.BackupRestoreRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if get_user_role_name(current_user) != "super_admin":
+        raise HTTPException(status_code=403, detail="Solo el superadministrador puede restaurar una copia completa")
+    if payload.confirmation.strip() != "RESTAURAR TODO":
+        raise HTTPException(status_code=400, detail="Escribe RESTAURAR TODO para confirmar")
+    if not auth_utils.verify_password(payload.password, current_user.hashed_password):
+        raise HTTPException(status_code=403, detail="La contraseña actual no es correcta")
+    backup_id = (payload.backup_id or "").strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}", backup_id):
+        raise HTTPException(status_code=400, detail="Identificador de copia inválido")
+
+    catalog_path = os.getenv("AUTOSQP_BACKUP_CATALOG", "/var/lib/autosqp-backup/catalog.json")
+    try:
+        with open(catalog_path, "r", encoding="utf-8") as catalog_file:
+            catalog = json.load(catalog_file)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail=f"No se pudo validar el catálogo: {exc}")
+    selected = next((item for item in catalog.get("items", []) if item.get("id") == backup_id), None)
+    if not selected or not selected.get("verified"):
+        raise HTTPException(status_code=400, detail="La copia seleccionada no existe o no está verificada")
+
+    request_dir = os.getenv("AUTOSQP_RESTORE_REQUEST_DIR", "/var/lib/autosqp-backup/requests")
+    request_path = os.path.join(request_dir, "restore-request.json")
+    if not os.path.isdir(request_dir):
+        raise HTTPException(status_code=503, detail="El servicio de restauración no está instalado")
+    request_data = json.dumps({
+        "backup_id": backup_id,
+        "requested_by": current_user.id,
+        "requested_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }, ensure_ascii=True).encode("utf-8")
+    try:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(request_path, flags, 0o640)
+        with os.fdopen(descriptor, "wb") as request_file:
+            request_file.write(request_data)
+            request_file.flush()
+            os.fsync(request_file.fileno())
+    except FileExistsError:
+        raise HTTPException(status_code=409, detail="Ya hay una restauración solicitada o en proceso")
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail=f"No se pudo solicitar la restauración: {exc}")
+
+    log_action_to_db(
+        db, current_user.id, "RESTORE_REQUEST", "Backup", 0,
+        f"Restauración completa solicitada desde la copia {backup_id}",
+    )
+    return {
+        "status": "queued",
+        "backup_id": backup_id,
+        "message": "Restauración iniciada. El CRM se desconectará temporalmente y volverá automáticamente.",
+    }
+
+
 @app.post("/companies/{company_id}/integrations/test-smtp")
 def test_company_smtp_settings(
     company_id: int,
