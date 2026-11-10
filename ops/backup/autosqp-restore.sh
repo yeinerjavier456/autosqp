@@ -12,11 +12,11 @@ source "$CONFIG_FILE"
 : "${RESTORE_MYSQL_DEFAULTS_FILE:?Falta RESTORE_MYSQL_DEFAULTS_FILE}"
 : "${APP_ROOT:?Falta APP_ROOT}"
 : "${BACKUP_ROOT:?Falta BACKUP_ROOT}"
-: "${S3_URI:?Falta S3_URI}"
 
+S3_URI="${S3_URI:-}"
 STATIC_DIR="${STATIC_DIR:-$APP_ROOT/backend/static}"
 APP_SERVICE="${APP_SERVICE:-autosqp}"
-for command_name in mysql mysqldump gunzip gzip tar sha256sum aws systemctl; do
+for command_name in mysql mysqldump gunzip gzip tar sha256sum systemctl; do
   command -v "$command_name" >/dev/null || { echo "Falta el comando $command_name" >&2; exit 1; }
 done
 [[ -r "$RESTORE_MYSQL_DEFAULTS_FILE" ]] || { echo "No se puede leer $RESTORE_MYSQL_DEFAULTS_FILE" >&2; exit 1; }
@@ -29,6 +29,11 @@ confirmation="${2:-}"
 backup_dir="$BACKUP_ROOT/$backup_id"
 mkdir -p "$backup_dir"
 if [[ ! -f "$backup_dir/SHA256SUMS" ]]; then
+  if [[ -z "$S3_URI" ]]; then
+    echo "El respaldo $backup_id no existe en $BACKUP_ROOT y S3 no está configurado" >&2
+    exit 1
+  fi
+  command -v aws >/dev/null || { echo "Falta el comando aws" >&2; exit 1; }
   aws s3 cp "${S3_URI%/}/$backup_id/" "$backup_dir/" --recursive --only-show-errors
 fi
 (

@@ -11,16 +11,19 @@ source "$CONFIG_FILE"
 : "${MYSQL_DEFAULTS_FILE:?Falta MYSQL_DEFAULTS_FILE}"
 : "${APP_ROOT:?Falta APP_ROOT}"
 : "${BACKUP_ROOT:?Falta BACKUP_ROOT}"
-: "${S3_URI:?Falta S3_URI; el respaldo externo en S3 es obligatorio}"
 
-LOCAL_RETENTION_DAYS="${LOCAL_RETENTION_DAYS:-7}"
+S3_URI="${S3_URI:-}"
+LOCAL_RETENTION_DAYS="${LOCAL_RETENTION_DAYS:-30}"
 BACKUP_TIMEZONE="${BACKUP_TIMEZONE:-America/Bogota}"
 STATIC_DIR="${STATIC_DIR:-$APP_ROOT/backend/static}"
 LOCK_FILE="${LOCK_FILE:-/run/lock/autosqp-backup.lock}"
 
-for command_name in mysqldump mysql gzip tar sha256sum aws flock; do
+for command_name in mysqldump mysql gzip tar sha256sum flock; do
   command -v "$command_name" >/dev/null || { echo "Falta el comando $command_name" >&2; exit 1; }
 done
+if [[ -n "$S3_URI" ]]; then
+  command -v aws >/dev/null || { echo "Falta el comando aws para enviar el respaldo a S3" >&2; exit 1; }
+fi
 [[ -r "$MYSQL_DEFAULTS_FILE" ]] || { echo "No se puede leer $MYSQL_DEFAULTS_FILE" >&2; exit 1; }
 
 mkdir -p "$BACKUP_ROOT"
@@ -68,12 +71,17 @@ tar -tzf "$stage_dir/uploads.tar.gz" >/dev/null
 mv -- "$stage_dir" "$final_dir"
 trap - EXIT
 
-aws s3 cp "$final_dir/" "${S3_URI%/}/$backup_id/" \
-  --recursive --only-show-errors --sse AES256
-aws s3 ls "${S3_URI%/}/$backup_id/SHA256SUMS" >/dev/null
+if [[ -n "$S3_URI" ]]; then
+  aws s3 cp "$final_dir/" "${S3_URI%/}/$backup_id/" \
+    --recursive --only-show-errors --sse AES256
+  aws s3 ls "${S3_URI%/}/$backup_id/SHA256SUMS" >/dev/null
+  destination="${S3_URI%/}/$backup_id/"
+else
+  destination="$final_dir"
+fi
 
 find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d ! -name '.*.tmp' \
   -mtime "+$LOCAL_RETENTION_DAYS" -exec rm -rf -- {} +
 
-echo "[$(date --iso-8601=seconds)] Respaldo verificado y enviado: ${S3_URI%/}/$backup_id/"
+echo "[$(date --iso-8601=seconds)] Respaldo verificado: $destination"
 
