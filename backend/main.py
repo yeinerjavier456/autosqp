@@ -7420,6 +7420,37 @@ def update_integration_settings(company_id: int, settings_update: schemas.Integr
     return serialize_integration_settings(settings)
 
 
+@app.get("/admin/backups")
+def read_server_backups(current_user: models.User = Depends(get_current_user)):
+    if get_user_role_name(current_user) not in {"admin", "super_admin"}:
+        raise HTTPException(status_code=403, detail="Solo los administradores pueden consultar los respaldos")
+    catalog_path = os.getenv("AUTOSQP_BACKUP_CATALOG", "/var/lib/autosqp-backup/catalog.json")
+    if not os.path.isfile(catalog_path):
+        return {"generated_at": None, "retention_days": 7, "items": [], "available": False}
+    try:
+        with open(catalog_path, "r", encoding="utf-8") as catalog_file:
+            payload = json.load(catalog_file)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail=f"No se pudo leer el catálogo de respaldos: {exc}")
+    safe_items = []
+    for item in payload.get("items", []):
+        if not isinstance(item, dict):
+            continue
+        safe_items.append({
+            key: item.get(key)
+            for key in (
+                "id", "created_at", "database", "git_commit", "database_bytes",
+                "static_bytes", "total_bytes", "static_files", "verified",
+            )
+        })
+    return {
+        "generated_at": payload.get("generated_at"),
+        "retention_days": payload.get("retention_days", 7),
+        "items": safe_items,
+        "available": True,
+    }
+
+
 @app.post("/companies/{company_id}/integrations/test-smtp")
 def test_company_smtp_settings(
     company_id: int,

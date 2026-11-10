@@ -17,8 +17,10 @@ LOCAL_RETENTION_DAYS="${LOCAL_RETENTION_DAYS:-7}"
 BACKUP_TIMEZONE="${BACKUP_TIMEZONE:-America/Bogota}"
 STATIC_DIR="${STATIC_DIR:-$APP_ROOT/backend/static}"
 LOCK_FILE="${LOCK_FILE:-/run/lock/autosqp-backup.lock}"
+CATALOG_FILE="${CATALOG_FILE:-/var/lib/autosqp-backup/catalog.json}"
+APP_GROUP="${APP_GROUP:-www-data}"
 
-for command_name in mysqldump mysql gzip tar sha256sum flock; do
+for command_name in mysqldump mysql gzip tar sha256sum flock python3; do
   command -v "$command_name" >/dev/null || { echo "Falta el comando $command_name" >&2; exit 1; }
 done
 if [[ -n "$S3_URI" ]]; then
@@ -100,6 +102,73 @@ fi
 
 find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d ! -name '.*.tmp' \
   -mtime "+$LOCAL_RETENTION_DAYS" -exec rm -rf -- {} +
+
+mkdir -p "$(dirname "$CATALOG_FILE")"
+export BACKUP_ROOT CATALOG_FILE LOCAL_RETENTION_DAYS
+python3 - <<'PY'
+import datetime
+import json
+import os
+import re
+
+root = os.environ["BACKUP_ROOT"]
+catalog_file = os.environ["CATALOG_FILE"]
+pattern = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$")
+items = []
+for backup_id in sorted(os.listdir(root), reverse=True):
+    directory = os.path.join(root, backup_id)
+    if not pattern.match(backup_id) or not os.path.isdir(directory):
+        continue
+    metadata = {}
+    metadata_path = os.path.join(directory, "metadata.txt")
+    if os.path.isfile(metadata_path):
+        with open(metadata_path, encoding="utf-8") as handle:
+            for raw_line in handle:
+                key, separator, value = raw_line.strip().partition("=")
+                if separator:
+                    metadata[key] = value
+    static_files = 0
+    static_bytes = 0
+    static_root = os.path.join(directory, "static")
+    if os.path.isdir(static_root):
+        for current_root, _, filenames in os.walk(static_root):
+            for filename in filenames:
+                try:
+                    file_stat = os.stat(os.path.join(current_root, filename))
+                except OSError:
+                    continue
+                static_files += 1
+                static_bytes += file_stat.st_size
+    uploads_archive = os.path.join(directory, "uploads.tar.gz")
+    if os.path.isfile(uploads_archive):
+        static_bytes = os.path.getsize(uploads_archive)
+    database_path = os.path.join(directory, "database.sql.gz")
+    database_bytes = os.path.getsize(database_path) if os.path.isfile(database_path) else 0
+    verified = all(os.path.isfile(os.path.join(directory, filename)) for filename in ("database.sql.gz", "SHA256SUMS"))
+    items.append({
+        "id": backup_id,
+        "created_at": metadata.get("created_at"),
+        "database": metadata.get("database"),
+        "git_commit": metadata.get("git_commit"),
+        "database_bytes": database_bytes,
+        "static_bytes": static_bytes,
+        "total_bytes": database_bytes + static_bytes,
+        "static_files": static_files,
+        "verified": verified,
+    })
+
+payload = {
+    "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    "retention_days": int(os.environ.get("LOCAL_RETENTION_DAYS", "7")),
+    "items": items,
+}
+temporary_file = f"{catalog_file}.tmp"
+with open(temporary_file, "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, ensure_ascii=False, indent=2)
+os.replace(temporary_file, catalog_file)
+PY
+chown root:"$APP_GROUP" "$CATALOG_FILE"
+chmod 0640 "$CATALOG_FILE"
 
 echo "[$(date --iso-8601=seconds)] Respaldo verificado: $destination"
 
