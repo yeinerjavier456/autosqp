@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import Swal from 'sweetalert2';
+import { Line } from 'react-chartjs-2';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler } from 'chart.js';
+import { useAuth } from '../context/AuthContext';
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
 const getLastMonthRange = () => {
     const end = new Date();
@@ -26,13 +31,6 @@ const parseCurrencyInput = (value) => {
     return digits ? Number(digits) : 0;
 };
 
-const escapeHtml = (value) => String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-
 const getBogotaDateTimeLocal = () => {
     const parts = new Intl.DateTimeFormat('sv-SE', {
         timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -48,6 +46,14 @@ const formatBogotaDateTime = (value) => {
     const date = new Date(normalized);
     if (Number.isNaN(date.getTime())) return text;
     return date.toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'medium', timeStyle: 'short' });
+};
+
+const getVisibleAccent = (color, fallback = '#10b981') => {
+    const match = /^#([0-9a-f]{6})$/i.exec(String(color || ''));
+    if (!match) return color || fallback;
+    const value = Number.parseInt(match[1], 16);
+    const brightness = (((value >> 16) & 255) * 299 + ((value >> 8) & 255) * 587 + (value & 255) * 114) / 1000;
+    return brightness < 55 ? fallback : color;
 };
 
 const attachCurrencyFormatter = (input) => {
@@ -284,6 +290,11 @@ const SaleRequestModal = ({ sale, users = [], saving, requireCommissions, onClos
 };
 
 const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, initialTab = 'sales' }) => {
+    const { user } = useAuth();
+    const companyPrimaryColor = user?.company?.primary_color || '#2563eb';
+    const companySecondaryColor = user?.company?.secondary_color || '#10b981';
+    const companyPositiveColor = getVisibleAccent(companySecondaryColor);
+    const companyNegativeColor = getVisibleAccent(companyPrimaryColor, '#fb7185');
     const defaultRange = getLastMonthRange();
     const [financeAccessToken, setFinanceAccessToken] = useState(() => sessionStorage.getItem('financeAccessToken') || '');
     const [financePassword, setFinancePassword] = useState('');
@@ -315,6 +326,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
     const [financialAccounts, setFinancialAccounts] = useState([]);
     const [accountForm, setAccountForm] = useState({ name: '', account_type: 'bank', institution: '', last_four: '', opening_balance: '' });
     const [savingAccount, setSavingAccount] = useState(false);
+    const [showAccountCreateForm, setShowAccountCreateForm] = useState(false);
     const [selectedFinancialAccount, setSelectedFinancialAccount] = useState(null);
     const [accountMovements, setAccountMovements] = useState([]);
     const [loadingAccountMovements, setLoadingAccountMovements] = useState(false);
@@ -653,6 +665,36 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         window.open(`/api/finance/accounts/${account.id}/movements.xlsx?token=${encodeURIComponent(token)}&finance_token=${encodeURIComponent(financeAccessToken)}`, '_blank');
     };
 
+    const handleQuickAccountMovement = async (movementType) => {
+        const activeAccounts = financialAccounts.filter((account) => account.is_active);
+        if (activeAccounts.length === 0) {
+            setShowAccountCreateForm(true);
+            Swal.fire('Primero crea una cuenta', 'Necesitas una cuenta activa para registrar movimientos.', 'info');
+            return;
+        }
+        const result = await Swal.fire({
+            title: movementType === 'expense' ? 'Cuenta de la deducción' : 'Cuenta del ingreso',
+            input: 'select',
+            inputOptions: Object.fromEntries(activeAccounts.map((account) => [account.id, `${account.name} · $${Number(account.current_balance || 0).toLocaleString('es-CO')}`])),
+            inputPlaceholder: 'Seleccionar cuenta',
+            showCancelButton: true,
+            confirmButtonText: 'Continuar',
+            cancelButtonText: 'Cancelar',
+            inputValidator: (value) => (!value ? 'Selecciona una cuenta' : undefined),
+        });
+        if (!result.isConfirmed) return;
+        const account = activeAccounts.find((item) => String(item.id) === String(result.value));
+        setAccountTransactionForm({
+            concept: movementType === 'expense' ? 'Compra de Vehiculo' : 'Venta de Vehiculo',
+            movement_type: movementType,
+            amount: '',
+            payment_date: getBogotaDateTimeLocal(),
+            category: movementType === 'expense' ? 'costo_vehiculo' : 'ingreso_venta',
+            notes: '',
+        });
+        await openFinancialAccount(account);
+    };
+
     const handleCreateFinancialAccount = async (event) => {
         event.preventDefault();
         if (!accountForm.name.trim()) return;
@@ -670,47 +712,6 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             Swal.fire('Error', error.response?.data?.detail || 'No se pudo crear la cuenta.', 'error');
         } finally {
             setSavingAccount(false);
-        }
-    };
-
-    const handleAdjustFinancialAccount = async (account) => {
-        const result = await Swal.fire({
-            title: `Ajustar saldo: ${account.name}`,
-            html: `
-                <select id="account-adjustment-type" class="swal2-input">
-                    <option value="income">Agregar saldo</option>
-                    <option value="expense">Restar saldo</option>
-                </select>
-                <input id="account-adjustment-amount" class="swal2-input" inputmode="numeric" placeholder="Valor" />
-                <input id="account-adjustment-notes" class="swal2-input" placeholder="Motivo del ajuste" />
-            `,
-            showCancelButton: true,
-            confirmButtonText: 'Guardar ajuste',
-            cancelButtonText: 'Cancelar',
-            didOpen: () => attachCurrencyFormatter(document.getElementById('account-adjustment-amount')),
-            preConfirm: () => {
-                const amount = parseCurrencyInput(document.getElementById('account-adjustment-amount')?.value || '');
-                if (!amount) {
-                    Swal.showValidationMessage('Ingresa un valor válido');
-                    return false;
-                }
-                return {
-                    movement_type: document.getElementById('account-adjustment-type')?.value || 'income',
-                    amount,
-                    notes: document.getElementById('account-adjustment-notes')?.value || '',
-                };
-            },
-        });
-        if (!result.isConfirmed) return;
-        try {
-            const token = localStorage.getItem('token');
-            await axios.post(`/api/finance/accounts/${account.id}/adjustments`, result.value, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            await Promise.all([refreshFinancialAccounts(), fetchData({ silent: true })]);
-            Swal.fire('Saldo actualizado', 'El ajuste quedó registrado también en contabilidad.', 'success');
-        } catch (error) {
-            Swal.fire('Error', error.response?.data?.detail || 'No se pudo ajustar el saldo.', 'error');
         }
     };
 
@@ -1255,6 +1256,36 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
     };
 
     const receiptGroups = buildReceiptGroups(receipts);
+    const accountDashboardMovements = receipts
+        .filter((receipt) => receipt.account_id)
+        .sort((left, right) => new Date(right.payment_date || right.created_at || 0) - new Date(left.payment_date || left.created_at || 0));
+    const accountDailyTotals = accountDashboardMovements.reduce((accumulator, movement) => {
+        const dateKey = String(movement.payment_date || movement.created_at || '').slice(0, 10);
+        if (!dateKey) return accumulator;
+        if (!accumulator[dateKey]) accumulator[dateKey] = { income: 0, expense: 0 };
+        accumulator[dateKey][movement.movement_type === 'expense' ? 'expense' : 'income'] += Number(movement.amount || 0);
+        return accumulator;
+    }, {});
+    const accountChartLabels = Object.keys(accountDailyTotals).sort();
+    const accountChartData = {
+        labels: accountChartLabels.map((date) => new Date(`${date}T12:00:00-05:00`).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', timeZone: 'America/Bogota' })),
+        datasets: [
+            { label: 'Ingresos', data: accountChartLabels.map((date) => accountDailyTotals[date].income), borderColor: companyPositiveColor, backgroundColor: `${companyPositiveColor}22`, fill: true, tension: 0.35, pointRadius: 3 },
+            { label: 'Deducciones', data: accountChartLabels.map((date) => accountDailyTotals[date].expense), borderColor: companyNegativeColor, backgroundColor: `${companyNegativeColor}18`, fill: true, tension: 0.35, pointRadius: 3 },
+        ],
+    };
+    const accountChartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { labels: { color: '#cbd5e1', usePointStyle: true } },
+            tooltip: { callbacks: { label: (context) => `${context.dataset.label}: $${Number(context.raw || 0).toLocaleString('es-CO')}` } },
+        },
+        scales: {
+            x: { ticks: { color: '#64748b' }, grid: { color: '#1e293b' } },
+            y: { ticks: { color: '#64748b', callback: (value) => `$${Number(value).toLocaleString('es-CO')}` }, grid: { color: '#1e293b' } },
+        },
+    };
     const selectedReceiptGroupTotals = selectedReceiptGroup ? {
         incomeTotal: selectedReceiptGroup.receipts
             .filter((receipt) => (receipt.movement_type || 'income') === 'income')
@@ -3358,96 +3389,44 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                     </div>
                 </div>
             ) : activeTab === 'accounts' ? (
-                <div className="space-y-6">
-                    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
-                        <form onSubmit={handleCreateFinancialAccount} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                            <div>
-                                <h3 className="text-lg font-bold text-slate-900">Agregar cuenta o tarjeta</h3>
-                                <p className="mt-1 text-sm text-slate-500">Esta cuenta solo será visible dentro de la empresa actual.</p>
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-sm font-semibold text-slate-700">Nombre</label>
-                                <input required value={accountForm.name} onChange={(event) => setAccountForm({ ...accountForm, name: event.target.value })} placeholder="Ej: Bancolombia principal" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-sm font-semibold text-slate-700">Tipo</label>
-                                <select value={accountForm.account_type} onChange={(event) => setAccountForm({ ...accountForm, account_type: event.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500">
-                                    {Object.entries(accountTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-sm font-semibold text-slate-700">Banco o entidad</label>
-                                <input value={accountForm.institution} onChange={(event) => setAccountForm({ ...accountForm, institution: event.target.value })} placeholder="Ej: Bancolombia, Nequi, caja sede norte" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="mb-1 block text-sm font-semibold text-slate-700">Últimos 4 dígitos</label>
-                                    <input maxLength={4} value={accountForm.last_four} onChange={(event) => setAccountForm({ ...accountForm, last_four: event.target.value.replace(/\D/g, '').slice(0, 4) })} placeholder="1234" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500" />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-sm font-semibold text-slate-700">Saldo inicial</label>
-                                    <input inputMode="numeric" value={accountForm.opening_balance} onChange={(event) => setAccountForm({ ...accountForm, opening_balance: formatCurrencyInput(event.target.value) })} placeholder="$ 0" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500" />
+                <div className="overflow-hidden rounded-3xl border border-slate-800 bg-[#070d1a] text-white shadow-2xl" style={{ '--wallet-primary': companyPrimaryColor, '--wallet-secondary': companySecondaryColor }}>
+                    <div className="h-1.5" style={{ background: `linear-gradient(90deg, ${companyPrimaryColor}, ${companySecondaryColor})` }} />
+                    <div className="space-y-6 p-4 md:p-6">
+                        <section className="relative overflow-hidden rounded-2xl border border-slate-700 bg-[#0c1424] p-6">
+                            <div className="absolute inset-0 opacity-20" style={{ background: `radial-gradient(circle at 80% 0%, ${companySecondaryColor}, transparent 42%), radial-gradient(circle at 10% 100%, ${companyPrimaryColor}, transparent 38%)` }} />
+                            <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                                <div><p className="text-xs font-bold uppercase tracking-[0.25em] text-slate-400">Finanzas de {user?.company?.name || 'la empresa'}</p><h2 className="mt-2 text-3xl font-black">Billetera empresarial</h2><p className="mt-2 max-w-2xl text-sm text-slate-400">Controla cuentas, ingresos, deducciones y conciliación de movimientos en tiempo real.</p></div>
+                                <div className="flex flex-wrap gap-3">
+                                    <button type="button" onClick={() => handleQuickAccountMovement('expense')} className="rounded-xl px-4 py-3 text-sm font-extrabold text-white shadow-lg" style={{ backgroundColor: companyNegativeColor }}>− Registrar deducción</button>
+                                    <button type="button" onClick={() => handleQuickAccountMovement('income')} className="rounded-xl px-4 py-3 text-sm font-extrabold text-white shadow-lg" style={{ backgroundColor: companyPositiveColor }}>＋ Registrar ingreso</button>
+                                    <button type="button" onClick={() => setShowAccountCreateForm((value) => !value)} className="rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 text-sm font-bold hover:bg-slate-800">＋ Nueva cuenta</button>
                                 </div>
                             </div>
-                            <button disabled={savingAccount} className="w-full rounded-xl bg-blue-600 px-4 py-3 font-bold text-white transition hover:bg-blue-700 disabled:opacity-60">
-                                {savingAccount ? 'Guardando...' : 'Crear cuenta'}
-                            </button>
-                        </form>
+                        </section>
 
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                                <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
-                                    <p className="text-xs font-bold uppercase text-blue-700">Saldo total</p>
-                                    <p className="mt-2 text-2xl font-extrabold text-blue-900">${financialAccounts.filter((account) => account.is_active).reduce((sum, account) => sum + Number(account.current_balance || 0), 0).toLocaleString('es-CO')}</p>
-                                </div>
-                                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
-                                    <p className="text-xs font-bold uppercase text-emerald-700">Ingresos</p>
-                                    <p className="mt-2 text-2xl font-extrabold text-emerald-900">${financialAccounts.reduce((sum, account) => sum + Number(account.income_total || 0), 0).toLocaleString('es-CO')}</p>
-                                </div>
-                                <div className="rounded-2xl border border-rose-100 bg-rose-50 p-5">
-                                    <p className="text-xs font-bold uppercase text-rose-700">Deducciones</p>
-                                    <p className="mt-2 text-2xl font-extrabold text-rose-900">${financialAccounts.reduce((sum, account) => sum + Number(account.expense_total || 0), 0).toLocaleString('es-CO')}</p>
-                                </div>
-                                <div className="rounded-2xl border border-slate-200 bg-white p-5">
-                                    <p className="text-xs font-bold uppercase text-slate-500">Movimientos</p>
-                                    <p className="mt-2 text-2xl font-extrabold text-slate-900">{financialAccounts.reduce((sum, account) => sum + Number(account.movement_count || 0), 0).toLocaleString('es-CO')}</p>
-                                    <p className="mt-1 text-xs text-slate-400">{financialAccounts.filter((account) => account.is_active).length} cuentas activas</p>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                                {financialAccounts.map((account) => (
-                                    <article key={account.id} className={`rounded-2xl border bg-white p-5 shadow-sm ${account.is_active ? 'border-slate-200' : 'border-slate-200 opacity-60'}`}>
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div>
-                                                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{accountTypeLabels[account.account_type] || 'Cuenta'}</span>
-                                                <h4 className="mt-3 text-lg font-bold text-slate-900">{account.name}</h4>
-                                                <p className="text-sm text-slate-500">{[account.institution, account.last_four ? `•••• ${account.last_four}` : ''].filter(Boolean).join(' · ') || 'Sin entidad asociada'}</p>
-                                            </div>
-                                            <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${account.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{account.is_active ? 'Activa' : 'Inactiva'}</span>
-                                        </div>
-                                        <div className="mt-5 rounded-xl bg-slate-50 p-4">
-                                            <p className="text-xs font-semibold uppercase text-slate-500">Saldo actual</p>
-                                            <p className={`mt-1 text-2xl font-extrabold ${Number(account.current_balance || 0) >= 0 ? 'text-slate-900' : 'text-red-600'}`}>${Number(account.current_balance || 0).toLocaleString('es-CO')}</p>
-                                            <p className="mt-1 text-xs text-slate-400">Inicial: ${Number(account.opening_balance || 0).toLocaleString('es-CO')}</p>
-                                        </div>
-                                        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                                            <div className="rounded-lg bg-emerald-50 p-2"><p className="text-[10px] font-bold uppercase text-emerald-700">Ingresos</p><p className="text-sm font-bold text-emerald-800">${Number(account.income_total || 0).toLocaleString('es-CO')}</p></div>
-                                            <div className="rounded-lg bg-rose-50 p-2"><p className="text-[10px] font-bold uppercase text-rose-700">Deducciones</p><p className="text-sm font-bold text-rose-800">${Number(account.expense_total || 0).toLocaleString('es-CO')}</p></div>
-                                            <div className="rounded-lg bg-blue-50 p-2"><p className="text-[10px] font-bold uppercase text-blue-700">Movimientos</p><p className="text-sm font-bold text-blue-800">{account.movement_count || 0}</p></div>
-                                        </div>
-                                        <div className="mt-4 flex flex-wrap gap-2">
-                                            <button type="button" onClick={() => openFinancialAccount(account)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white hover:bg-slate-700">Abrir cuenta</button>
-                                            <button type="button" onClick={() => handleEditFinancialAccount(account)} className="rounded-lg border border-blue-300 px-3 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50">Editar cuenta</button>
-                                            <button type="button" onClick={() => downloadFinancialAccountExcel(account)} className="rounded-lg border border-emerald-300 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50">Descargar Excel</button>
-                                            {account.is_active && <button type="button" onClick={() => handleAdjustFinancialAccount(account)} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-700">Agregar o restar saldo</button>}
-                                            {account.is_active && <button type="button" onClick={() => handleLinkExistingMovements(account)} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700">Relacionar movimientos existentes</button>}
-                                            <button type="button" onClick={() => handleToggleFinancialAccount(account)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">{account.is_active ? 'Desactivar' : 'Activar'}</button>
-                                        </div>
-                                    </article>
-                                ))}
-                                {financialAccounts.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500 lg:col-span-2">Aún no hay cuentas registradas. Crea la primera para comenzar a controlar los saldos.</div>}
-                            </div>
-                        </div>
+                        {showAccountCreateForm && <form onSubmit={handleCreateFinancialAccount} className="grid grid-cols-1 gap-4 rounded-2xl border border-slate-700 bg-[#0c1424] p-5 md:grid-cols-2 xl:grid-cols-6">
+                            <div className="xl:col-span-2"><label className="mb-1 block text-xs font-bold uppercase text-slate-400">Nombre</label><input required value={accountForm.name} onChange={(event) => setAccountForm({ ...accountForm, name: event.target.value })} placeholder="Bancolombia principal" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white outline-none" /></div>
+                            <div><label className="mb-1 block text-xs font-bold uppercase text-slate-400">Tipo</label><select value={accountForm.account_type} onChange={(event) => setAccountForm({ ...accountForm, account_type: event.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white">{Object.entries(accountTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+                            <div><label className="mb-1 block text-xs font-bold uppercase text-slate-400">Entidad</label><input value={accountForm.institution} onChange={(event) => setAccountForm({ ...accountForm, institution: event.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" /></div>
+                            <div><label className="mb-1 block text-xs font-bold uppercase text-slate-400">Últimos 4</label><input maxLength={4} value={accountForm.last_four} onChange={(event) => setAccountForm({ ...accountForm, last_four: event.target.value.replace(/\D/g, '').slice(0, 4) })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" /></div>
+                            <div><label className="mb-1 block text-xs font-bold uppercase text-slate-400">Saldo inicial</label><input inputMode="numeric" value={accountForm.opening_balance} onChange={(event) => setAccountForm({ ...accountForm, opening_balance: formatCurrencyInput(event.target.value) })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" /></div>
+                            <button disabled={savingAccount} className="rounded-xl px-4 py-3 font-bold text-white md:col-span-2 xl:col-span-6" style={{ backgroundColor: companyPrimaryColor }}>{savingAccount ? 'Guardando...' : 'Guardar nueva cuenta'}</button>
+                        </form>}
+
+                        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                            {[
+                                ['Saldo disponible', financialAccounts.filter((account) => account.is_active).reduce((sum, account) => sum + Number(account.current_balance || 0), 0), companyPositiveColor, 'Saldo consolidado'],
+                                ['Ingresos', financialAccounts.reduce((sum, account) => sum + Number(account.income_total || 0), 0), '#10b981', 'Entradas acumuladas'],
+                                ['Deducciones', financialAccounts.reduce((sum, account) => sum + Number(account.expense_total || 0), 0), companyNegativeColor, 'Salidas acumuladas'],
+                                ['Movimientos', financialAccounts.reduce((sum, account) => sum + Number(account.movement_count || 0), 0), '#38bdf8', `${financialAccounts.filter((account) => account.is_active).length} cuentas activas`],
+                            ].map(([label, value, color, note], index) => <div key={label} className="rounded-2xl border border-slate-700 bg-[#0c1424] p-5"><div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-wider text-slate-400">{label}</p><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color, boxShadow: `0 0 16px ${color}` }} /></div><p className="mt-5 text-2xl font-black" style={{ color }}>{index === 3 ? Number(value).toLocaleString('es-CO') : `$${Number(value).toLocaleString('es-CO')}`}</p><p className="mt-2 text-xs text-slate-500">{note}</p></div>)}
+                        </section>
+
+                        <section className="rounded-2xl border border-slate-700 bg-[#0c1424] p-5"><div className="mb-4 flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-extrabold">Evolución de ingresos y deducciones</h3><p className="text-xs text-slate-500">Movimientos del periodo seleccionado</p></div><span className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-400">{accountChartLabels.length} días con actividad</span></div><div className="h-72">{accountChartLabels.length ? <Line data={accountChartData} options={accountChartOptions} /> : <div className="flex h-full items-center justify-center text-sm text-slate-500">Registra o relaciona movimientos para visualizar la gráfica.</div>}</div></section>
+
+                        <section><div className="mb-4 flex items-center justify-between"><div><h3 className="text-lg font-extrabold">Mis cuentas y tarjetas</h3><p className="text-xs text-slate-500">Selecciona una cuenta para consultar su billetera y movimientos.</p></div></div><div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">{financialAccounts.map((account) => <article key={account.id} className={`rounded-2xl border bg-[#0c1424] p-5 ${account.is_active ? 'border-slate-700' : 'border-slate-800 opacity-60'}`}><div className="flex items-start justify-between"><div><span className="text-xs font-bold uppercase tracking-wider" style={{ color: companyPositiveColor }}>{accountTypeLabels[account.account_type] || 'Cuenta'}</span><h4 className="mt-2 text-lg font-extrabold">{account.name}</h4><p className="text-xs text-slate-500">{[account.institution, account.last_four ? `•••• ${account.last_four}` : ''].filter(Boolean).join(' · ') || 'Sin entidad'}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${account.is_active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>{account.is_active ? 'ACTIVA' : 'INACTIVA'}</span></div><p className="mt-6 text-xs font-bold uppercase text-slate-500">Saldo disponible</p><p className="mt-1 text-3xl font-black" style={{ color: Number(account.current_balance || 0) >= 0 ? companyPositiveColor : '#fb7185' }}>${Number(account.current_balance || 0).toLocaleString('es-CO')}</p><div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-lg bg-slate-950 p-2"><p className="text-slate-500">Ingresos</p><p className="font-bold text-emerald-400">${Number(account.income_total || 0).toLocaleString('es-CO')}</p></div><div className="rounded-lg bg-slate-950 p-2"><p className="text-slate-500">Salidas</p><p className="font-bold text-rose-400">${Number(account.expense_total || 0).toLocaleString('es-CO')}</p></div><div className="rounded-lg bg-slate-950 p-2"><p className="text-slate-500">Mov.</p><p className="font-bold text-sky-400">{account.movement_count || 0}</p></div></div><div className="mt-4 flex flex-wrap gap-2"><button onClick={() => openFinancialAccount(account)} className="rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ backgroundColor: companyPrimaryColor }}>Abrir</button><button onClick={() => handleEditFinancialAccount(account)} className="rounded-lg border border-slate-600 px-3 py-2 text-xs font-bold text-slate-300">Editar</button><button onClick={() => downloadFinancialAccountExcel(account)} className="rounded-lg border border-slate-600 px-3 py-2 text-xs font-bold text-slate-300">Excel</button>{account.is_active && <button onClick={() => handleLinkExistingMovements(account)} className="rounded-lg border border-slate-600 px-3 py-2 text-xs font-bold text-slate-300">Relacionar</button>}<button onClick={() => handleToggleFinancialAccount(account)} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-500">{account.is_active ? 'Desactivar' : 'Activar'}</button></div></article>)}{financialAccounts.length === 0 && <div className="rounded-2xl border border-dashed border-slate-700 p-10 text-center text-slate-500 lg:col-span-2 2xl:col-span-3">Crea la primera cuenta para comenzar.</div>}</div></section>
+
+                        <section className="rounded-2xl border border-slate-700 bg-[#0c1424] p-5"><div className="mb-4"><h3 className="font-extrabold">Últimos movimientos</h3><p className="text-xs text-slate-500">Actividad reciente de todas las cuentas.</p></div><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left"><thead><tr className="border-b border-slate-700 text-xs uppercase text-slate-500"><th className="p-3">Concepto</th><th className="p-3">Cuenta</th><th className="p-3">Fecha y hora</th><th className="p-3">Tipo</th><th className="p-3 text-right">Valor</th></tr></thead><tbody className="divide-y divide-slate-800">{accountDashboardMovements.slice(0, 8).map((movement) => <tr key={movement.id}><td className="p-3 text-sm font-semibold">{movement.concept || 'Movimiento'}</td><td className="p-3 text-sm text-slate-400">{movement.account?.name || movement.bank || 'Sin cuenta'}</td><td className="p-3 text-sm text-slate-400">{formatBogotaDateTime(movement.payment_date || movement.created_at)}</td><td className="p-3"><span className={`rounded-full px-2 py-1 text-xs font-bold ${movement.movement_type === 'expense' ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}`}>{movement.movement_type === 'expense' ? 'Deducción' : 'Ingreso'}</span></td><td className={`p-3 text-right font-extrabold ${movement.movement_type === 'expense' ? 'text-rose-400' : 'text-emerald-400'}`}>{movement.movement_type === 'expense' ? '-' : '+'}${Number(movement.amount || 0).toLocaleString('es-CO')}</td></tr>)}{accountDashboardMovements.length === 0 && <tr><td colSpan={5} className="p-10 text-center text-slate-500">No hay movimientos relacionados todavía.</td></tr>}</tbody></table></div></section>
                     </div>
                 </div>
             ) : activeTab === 'tax' ? (
