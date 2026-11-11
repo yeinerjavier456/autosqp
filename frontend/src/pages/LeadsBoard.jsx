@@ -5926,13 +5926,14 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 const decision = await Swal.fire({
                     icon: 'question',
                     title: 'Se encontraron leads existentes',
-                    html: `<strong>${Number(previewResult.existing_duplicates || 0)}</strong> fila(s) coinciden por teléfono con leads de esta empresa.<br><br>¿Deseas actualizar todos los leads existentes con los datos del archivo?`,
+                    html: `<strong>${Number(previewResult.existing_duplicates || 0)}</strong> fila(s) coinciden con leads de esta empresa.<br><strong>${Number(previewResult.created || 0)}</strong> lead(s) nuevos para cargar.<br><br>¿Deseas actualizar los existentes o cargar solamente los nuevos?${confirmDelete ? '<br><br><strong style="color:#dc2626">Las eliminaciones que confirmaste antes también se ejecutarán al continuar. Para evitarlas, cancela toda la carga.</strong>' : ''}`,
                     showCancelButton: true,
                     showDenyButton: true,
                     confirmButtonText: 'Sí, actualizar todos',
-                    denyButtonText: 'No, omitir existentes',
+                    denyButtonText: confirmDelete ? 'Omitir existentes y continuar' : 'Cargar solo nuevos',
                     cancelButtonText: 'Cancelar carga',
                     confirmButtonColor: '#2563eb',
+                    denyButtonColor: '#dc2626',
                 });
                 if (decision.isDismissed) return;
                 updateExisting = decision.isConfirmed;

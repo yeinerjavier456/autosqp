@@ -63,6 +63,25 @@
   background: #334155 !important;
 }
 
+/* Keep the third action visible without overriding SweetAlert's hidden state. */
+.swal2-popup .swal2-deny {
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  opacity: 1 !important;
+  min-width: 8.5rem !important;
+  border: 0 !important;
+  border-radius: 0.75rem !important;
+  padding: 0.75rem 1.25rem !important;
+  font-weight: 700 !important;
+  line-height: 1.25 !important;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18) !important;
+}
+
+.swal2-popup .swal2-deny:hover,
+.swal2-popup .swal2-deny:focus-visible {
+  background: #b91c1c !important;
+}
+
 .crm-theme-scope :is(
   .text-slate-950,
   .text-slate-900,
