@@ -500,7 +500,7 @@ const AdvisorDashboard = () => {
                     <DashboardMetric
                         title="Citas programadas"
                         value={stats.appointments_total || 0}
-                        helper={`${stats.appointments_today || 0} para hoy y ${stats.appointments_upcoming || 0} próximas.`}
+                        helper={`Agendadas en el rango: ${stats.appointments_today || 0} con reunión hoy y ${stats.appointments_upcoming || 0} próximas.`}
                         onClick={hasAppointmentsSection ? () => navigate('/admin/appointments') : undefined}
                         className="border-cyan-200 bg-cyan-50 text-cyan-900"
                         helperClassName="text-cyan-700"
@@ -680,7 +680,7 @@ const AdvisorDashboard = () => {
                     <DashboardMetric
                         title="Citas programadas"
                         value={displayedAppointmentsTotal}
-                        helper={`${displayedAppointmentsToday} para hoy y ${displayedAppointmentsUpcoming} pendientes en el rango.`}
+                        helper={`Creadas ${rangeLabel}. ${displayedAppointmentsToday} con reunión hoy y ${displayedAppointmentsUpcoming} próximas.`}
                         onClick={hasAppointmentsSection ? () => navigate('/admin/appointments') : undefined}
                         className="border-cyan-200 bg-cyan-50 text-cyan-900"
                         helperClassName="text-cyan-700"
@@ -1059,7 +1059,7 @@ const AdvisorDashboard = () => {
                     <div className="mb-4">
                         <h3 className="text-lg font-bold text-slate-800">Ranking de citas agendadas</h3>
                         <p className="text-sm text-slate-500">
-                            Muestra quién generó las citas en el rango seleccionado. Los administradores ven toda la empresa; cada asesor o aliado ve solo sus propias citas.
+                            Cuenta las citas creadas en el rango seleccionado, aunque la reunión esté programada para otra fecha. Agrupa por la persona que las agendó.
                         </p>
                     </div>
                     {appointmentsByUser.length > 0 ? (

@@ -9894,7 +9894,7 @@ def read_advisor_stats(
 
         appointments = [
             appointment for appointment in appointments_query.all()
-            if is_within_dashboard_range(getattr(appointment, "appointment_date", None))
+            if is_within_dashboard_range(getattr(appointment, "created_at", None))
             and (not employee_id or appointment.user_id == employee_id)
         ]
 
