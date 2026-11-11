@@ -3,6 +3,7 @@ import datetime as dt
 import threading
 import time
 import uuid
+import traceback
 
 from sqlalchemy import or_, and_
 import models
@@ -10,6 +11,15 @@ import company_backup as backups
 from database import SessionLocal, Base
 
 LEASE_SECONDS = 180
+
+
+def log_error(context, error):
+    """Keep driver codes and code locations, never SQL parameters or credentials."""
+    original = getattr(error, 'orig', None)
+    args = getattr(original, 'args', ())
+    code = args[0] if args and isinstance(args[0], int) else None
+    frames = ''.join(traceback.format_tb(error.__traceback__))
+    print(f'{context}: {type(error).__name__}; database_code={code}\n{frames}', flush=True)
 
 
 def serialize(job):
@@ -73,7 +83,7 @@ def heartbeat(job_id, token, stopped):
                 return
         except Exception as error:
             db.rollback()
-            print(f'Backup heartbeat {job_id}: {type(error).__name__}', flush=True)
+            log_error(f'Backup heartbeat {job_id}', error)
         finally:
             db.close()
 
@@ -129,7 +139,7 @@ def run_claimed(job_id, token):
             finish(job_id, token, 'complete', message, result_id)
     except Exception as error:
         db.rollback()
-        if not entered:
+        if not entered and isinstance(error, ValueError) and str(error).startswith('Ya hay una copia'):
             # Another process (e.g. the daily backup) owns the file lock. Wait,
             # rather than marking a valid request as failed/restarted.
             db.query(models.CompanyBackupJob).filter(models.CompanyBackupJob.id == job_id, models.CompanyBackupJob.worker_token == token).update({
@@ -138,7 +148,7 @@ def run_claimed(job_id, token):
             }, synchronize_session=False)
             db.commit()
         else:
-            print(f'Backup job {job_id} failed: {type(error).__name__}', flush=True)
+            log_error(f'Backup job {job_id} failed', error)
             finish(job_id, token, 'failed', str(error) if isinstance(error, ValueError) else 'La operación falló. Revisa el registro del proceso de copias antes de reintentar.')
     finally:
         stopped.set(); thread.join(); db.close()
@@ -177,7 +187,7 @@ def serve():
                 time.sleep(3)
         except Exception as error:
             db.rollback()
-            print(f'Backup worker: {type(error).__name__}', flush=True)
+            log_error('Backup worker', error)
             time.sleep(5)
         finally:
             db.close()

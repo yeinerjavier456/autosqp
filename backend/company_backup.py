@@ -15,9 +15,11 @@ import shutil
 import tempfile
 import uuid
 import zipfile
+import sqlite3
+import time
 from urllib.parse import urlsplit
 
-from sqlalchemy import select, delete, and_, or_, DateTime, Date, Numeric, LargeBinary, cast, String
+from sqlalchemy import select, delete, and_, or_, tuple_, DateTime, Date, Numeric, LargeBinary, cast, String
 
 ID_PATTERN = re.compile(r'^\d{8}T\d{6}-[a-f0-9]{8}$')
 FILE_FIELDS = {'file_path', 'business_sheet_url', 'attachments', 'photos', 'media_url', 'form_payload', 'logo_url'}
@@ -53,34 +55,73 @@ def key(table, row):
 
 
 def scope_rows(db, metadata, company_id):
-    """Company-owned rows plus children of those rows, never referenced parents."""
+    """Compatibility reader used during restore; creation uses bounded batches."""
+    predicates = scope_predicates(metadata, company_id)
     selected = {}
+    for name, predicate in predicates.items():
+        selected[name] = [row for batch in table_batches(db, metadata.tables[name], predicate) for row in batch]
+    return selected
+
+
+def scope_predicates(metadata, company_id):
+    """Use indexed subqueries instead of collecting millions of IDs in Python."""
+    scopes = {}
     for table in metadata.sorted_tables:
         if table.name in EXCLUDED_TABLES or 'company_id' not in table.c:
             continue
-        rows = db.execute(select(table).where(table.c.company_id == company_id)).mappings().all()
-        selected[table.name] = {key(table, row): dict(row) for row in rows}
-    changed = True
-    while changed:
-        changed = False
-        for table in metadata.sorted_tables:
-            if table.name in EXCLUDED_TABLES or 'company_id' in table.c:
+        scopes[table.name] = table.c.company_id == company_id
+    for table in metadata.sorted_tables:
+        if table.name in EXCLUDED_TABLES or table.name in scopes:
+            continue
+        choices = [table.c[fk.parent.name].in_(select(fk.column).where(scopes[fk.column.table.name]))
+            for fk in table.foreign_keys if fk.column.table.name in scopes]
+        if choices:
+            scopes[table.name] = or_(*choices)
+    return scopes
+
+
+def table_batches(db, table, predicate, size=250):
+    columns = list(table.primary_key.columns)
+    if not columns:
+        raise ValueError(f'No se puede paginar de forma segura la tabla {table.name}')
+    last = None
+    while True:
+        query = select(table).where(predicate).order_by(*columns).limit(size)
+        if last is not None:
+            query = query.where(columns[0] > last[0] if len(columns) == 1 else tuple_(*columns) > tuple_(*last))
+        result = db.execute(query)
+        try:
+            batch = [dict(row) for row in result.mappings()]
+        finally:
+            result.close()
+        if not batch:
+            return
+        last = key(table, batch[-1])
+        yield batch
+        if len(batch) < size:
+            return
+
+
+def validate_scopes(db, metadata, company_id, scopes):
+    """One bounded existence query per relation, never one query per record."""
+    for name, predicate in scopes.items():
+        table = metadata.tables[name]
+        for fk in table.foreign_keys:
+            parent = fk.column.table
+            if parent.name == 'companies':
+                invalid = select(table.c[fk.parent.name]).where(predicate, table.c[fk.parent.name] != company_id).limit(1)
+            elif 'company_id' in parent.c:
+                owner = parent.alias()
+                invalid = select(table.c[fk.parent.name]).select_from(table.join(owner, table.c[fk.parent.name] == owner.c[fk.column.name])).where(predicate, owner.c.company_id.is_not(None), owner.c.company_id != company_id).limit(1)
+            else:
                 continue
-            predicates = []
-            for fk in table.foreign_keys:
-                parents = selected.get(fk.column.table.name, {})
-                values = {row[fk.column.name] for row in parents.values()}
-                if values:
-                    predicates.append(table.c[fk.parent.name].in_(values))
-            if not predicates:
-                continue
-            target = selected.setdefault(table.name, {})
-            for row in db.execute(select(table).where(or_(*predicates))).mappings():
-                row_key = key(table, row)
-                if row_key not in target:
-                    target[row_key] = dict(row)
-                    changed = True
-    return {name: list(rows.values()) for name, rows in selected.items()}
+            if db.execute(invalid).first():
+                raise ValueError(f'La empresa tiene referencias cruzadas en {name}; requiere revisión antes de respaldar/restaurar')
+
+
+def ensure_free_space(directory, required=0):
+    if shutil.disk_usage(directory).free < required + 2 * 1024 ** 3:
+        raise ValueError('No hay espacio suficiente para la copia y el margen de seguridad de 2 GB')
 
 
 def _file_paths(value):
@@ -142,60 +183,88 @@ def schema_signature(metadata):
 
 
 def create_archive(db, metadata, company_id, static_root, reason='daily', job_id=None):
+    """Stream database and files to disk; memory is bounded by one row batch."""
     directory = tenant_dir(company_id)
+    ensure_free_space(directory)
+    scopes = scope_predicates(metadata, company_id)
+    validate_scopes(db, metadata, company_id, scopes)
     backup_id = dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%S-') + uuid.uuid4().hex[:8]
-    rows = scope_rows(db, metadata, company_id)
-    # Validate ownership before even making an archive available for download.
-    validate_ownership(db, metadata, company_id, rows)
     root = Path(static_root).resolve()
-    references = set()
-    for table_rows in rows.values():
-        for row in table_rows:
-            for field, value in row.items():
-                if field in FILE_FIELDS:
-                    references.update(_file_paths(value))
-    data = json.dumps({'format': 1, 'company_id': company_id, 'schema': schema_signature(metadata), 'tables': rows}, default=_encode, ensure_ascii=False).encode()
-    required_space = len(data)
-    for relative in references:
-        candidate = local_file(root, relative)
-        if candidate.is_file():
-            required_space += candidate.stat().st_size
-    if shutil.disk_usage(directory).free < required_space + 2 * 1024 ** 3:
-        raise ValueError('No hay espacio suficiente para la copia y el margen de seguridad de 2 GB')
-    hashes = {'data.json': hashlib.sha256(data).hexdigest()}
-    file_bytes = 0
-    missing_files = []
     temp = directory / f'.{backup_id}.tmp'
     destination = directory / f'{backup_id}.zip'
+    row_count = file_bytes = missing = file_count = 0
     try:
-        with zipfile.ZipFile(temp, 'w', zipfile.ZIP_DEFLATED, compresslevel=3) as archive:
-            archive.writestr('data.json', data)
-            for relative in sorted(references):
-                path = local_file(root, relative)
-                if not path.is_file():
-                    missing_files.append(relative)
-                    continue
-                entry = f'files/{relative}'
+        with tempfile.TemporaryDirectory(prefix='.spool-', dir=directory) as spool:
+            data_path = Path(spool) / 'data.json'
+            with contextlib.closing(sqlite3.connect(str(Path(spool) / 'references.sqlite'))) as refs:
+                refs.execute('CREATE TABLE files (path TEXT PRIMARY KEY, digest TEXT)')
                 digest = hashlib.sha256()
-                with path.open('rb') as source, archive.open(entry, 'w', force_zip64=True) as output:
-                    while block := source.read(1024 * 1024):
+                with data_path.open('wb') as output:
+                    def write(value):
+                        block = value.encode('utf-8')
                         digest.update(block)
-                        file_bytes += len(block)
                         output.write(block)
-                hashes[entry] = digest.hexdigest()
-            archive.writestr('checksums.json', json.dumps(hashes))
-        manifest = dict(id=backup_id, company_id=company_id, created_at=dt.datetime.now(dt.timezone.utc).isoformat(),
-            job_id=job_id,
-            reason=reason, database_bytes=len(data), static_bytes=file_bytes, static_files=len(hashes) - 1,
-            total_bytes=temp.stat().st_size, verified=not missing_files, missing_files=len(missing_files),
-            rows=sum(len(items) for items in rows.values()))
-        os.replace(temp, destination)
-        temp_manifest = directory / f'.{backup_id}.json.tmp'
-        temp_manifest.write_text(json.dumps(manifest), encoding='utf-8')
-        os.replace(temp_manifest, directory / f'{backup_id}.json')
-        return manifest
+                    header = {'format': 1, 'company_id': company_id, 'schema': schema_signature(metadata)}
+                    write(json.dumps(header)[:-1] + ',"tables":{')
+                    for index, (name, predicate) in enumerate(scopes.items()):
+                        write((',' if index else '') + json.dumps(name) + ':[')
+                        first = True
+                        for batch in table_batches(db, metadata.tables[name], predicate):
+                            ensure_free_space(directory)
+                            for row in batch:
+                                write(('' if first else ',') + json.dumps(row, default=_encode, ensure_ascii=False))
+                                first = False
+                                row_count += 1
+                                for field, value in row.items():
+                                    if field in FILE_FIELDS:
+                                        refs.executemany('INSERT OR IGNORE INTO files(path) VALUES (?)', ((relative,) for relative in _file_paths(value)))
+                            refs.commit()
+                            time.sleep(0.01)
+                        write(']')
+                    write('}}')
+                required = data_path.stat().st_size
+                for (relative,) in refs.execute('SELECT path FROM files'):
+                    candidate = local_file(root, relative)
+                    if candidate.is_file():
+                        required += candidate.stat().st_size
+                ensure_free_space(directory, required)
+                with zipfile.ZipFile(temp, 'w', zipfile.ZIP_DEFLATED, compresslevel=1) as archive:
+                    archive.write(data_path, 'data.json')
+                    for (relative,) in refs.execute('SELECT path FROM files ORDER BY path'):
+                        ensure_free_space(directory)
+                        path = local_file(root, relative)
+                        if not path.is_file():
+                            missing += 1
+                            continue
+                        entry = zipfile.ZipInfo(f'files/{relative}')
+                        entry.compress_type = zipfile.ZIP_STORED if path.suffix.lower() in {'.jpg', '.jpeg', '.png', '.webp', '.mp4', '.zip', '.gz', '.xlsx', '.pdf'} else zipfile.ZIP_DEFLATED
+                        file_digest = hashlib.sha256()
+                        with path.open('rb') as source, archive.open(entry, 'w', force_zip64=True) as output:
+                            while block := source.read(1024 * 1024):
+                                file_digest.update(block)
+                                file_bytes += len(block)
+                                output.write(block)
+                        refs.execute('UPDATE files SET digest=? WHERE path=?', (file_digest.hexdigest(), relative))
+                        file_count += 1
+                    refs.commit()
+                    with archive.open('checksums.json', 'w') as output:
+                        output.write(('{"data.json":' + json.dumps(digest.hexdigest())).encode())
+                        for relative, checksum in refs.execute('SELECT path, digest FROM files WHERE digest IS NOT NULL ORDER BY path'):
+                            output.write((',' + json.dumps('files/' + relative) + ':' + json.dumps(checksum)).encode())
+                        output.write(b'}')
+                manifest = dict(id=backup_id, company_id=company_id, created_at=dt.datetime.now(dt.timezone.utc).isoformat(),
+                    job_id=job_id, reason=reason, database_bytes=data_path.stat().st_size, static_bytes=file_bytes,
+                    static_files=file_count, total_bytes=temp.stat().st_size, verified=not missing,
+                    missing_files=missing, rows=row_count)
+            os.replace(temp, destination)
+            temp_manifest = directory / f'.{backup_id}.json.tmp'
+            temp_manifest.write_text(json.dumps(manifest), encoding='utf-8')
+            os.replace(temp_manifest, directory / f'{backup_id}.json')
+            return manifest
     finally:
         temp.unlink(missing_ok=True)
+
+
 
 
 def validate_ownership(db, metadata, company_id, rows):
@@ -204,16 +273,15 @@ def validate_ownership(db, metadata, company_id, rows):
         for row in items:
             if name in EXCLUDED_TABLES or ('company_id' in row and row['company_id'] != company_id):
                 raise ValueError('La copia contiene información fuera de esta empresa')
-            for fk in table.foreign_keys:
-                parent = fk.column.table
-                value = row.get(fk.parent.name)
-                if value is None:
-                    continue
-                if parent.name == 'companies' and value != company_id:
+        for fk in table.foreign_keys:
+            parent = fk.column.table
+            for start in range(0, len(items), 250):
+                values = {row[fk.parent.name] for row in items[start:start + 250] if row.get(fk.parent.name) is not None}
+                if parent.name == 'companies' and any(value != company_id for value in values):
                     raise ValueError('Referencia a otra empresa')
-                if 'company_id' in parent.c:
-                    owner = db.execute(select(parent.c.company_id).where(parent.c[fk.column.name] == value)).first()
-                    if owner and owner[0] not in (None, company_id):
+                if values and 'company_id' in parent.c:
+                    invalid = select(parent.c.company_id).where(parent.c[fk.column.name].in_(values), parent.c.company_id.is_not(None), parent.c.company_id != company_id).limit(1)
+                    if db.execute(invalid).first():
                         raise ValueError(f'La empresa tiene referencias cruzadas en {name}; requiere revisión antes de respaldar/restaurar')
 
 

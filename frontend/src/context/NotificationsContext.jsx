@@ -19,6 +19,7 @@ export const NotificationsProvider = ({ children }) => {
     const isInitialFetch = React.useRef(true);
     const maxNotifId = React.useRef(0);
     const toastShownIds = React.useRef(new Set());
+    const pendingFetch = React.useRef(null);
 
     const getToastIcon = (type) => {
         if (type === 'warning') return 'warning';
@@ -81,20 +82,27 @@ export const NotificationsProvider = ({ children }) => {
     };
 
     useEffect(() => {
+        pendingFetch.current?.abort();
+        pendingFetch.current = null;
         isInitialFetch.current = true;
         maxNotifId.current = 0;
         toastShownIds.current = new Set();
         setNotifications([]);
         setUnreadCount(0);
+        return () => pendingFetch.current?.abort();
     }, [user?.id]);
 
     // Fetch Notifications
     const fetchNotifications = async ({ silentToast = false } = {}) => {
-        if (!user) return;
+        if (!user || pendingFetch.current) return;
+        const controller = new AbortController();
+        pendingFetch.current = controller;
         try {
             const response = await axios.get(`${API_BASE_URL}/notifications/`, {
+                signal: controller.signal,
                 headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
             });
+            if (controller.signal.aborted) return;
             const data = response.data;
             setNotifications(data);
             setUnreadCount(data.filter(n => n.is_read === 0).length);
@@ -117,7 +125,9 @@ export const NotificationsProvider = ({ children }) => {
                 isInitialFetch.current = false;
             }
         } catch (error) {
-            console.error("Error fetching notifications:", error);
+            if (!controller.signal.aborted) console.error("Error fetching notifications:", error);
+        } finally {
+            if (pendingFetch.current === controller) pendingFetch.current = null;
         }
     };
 

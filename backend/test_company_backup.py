@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import zipfile
+import tracemalloc
 
 from sqlalchemy import create_engine, event, MetaData, Table, Column, Integer, String, ForeignKey, DateTime, select, update
 from sqlalchemy.orm import Session
@@ -52,6 +53,32 @@ class CompanyBackupTests(unittest.TestCase):
             self.assertIn('files/one.txt', archive.namelist())
             self.assertNotIn('files/two.txt', archive.namelist())
             self.assertNotIn('companies', payload['tables'])
+
+    def test_large_archive_is_batched_without_loading_all_company_rows(self):
+        self.db.execute(self.leads.insert(), [
+            {'id': index, 'company_id': 1, 'name': 'x' * 8192}
+            for index in range(3, 2003)
+        ])
+        self.db.commit()
+        queries = []
+        listener = lambda conn, cursor, statement, parameters, context, many: queries.append(statement)
+        event.listen(self.engine, 'before_cursor_execute', listener)
+        try:
+            tracemalloc.start()
+            with patch.object(backups, 'scope_rows', side_effect=AssertionError('unbounded reader used')):
+                result = self.snapshot()
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+            event.remove(self.engine, 'before_cursor_execute', listener)
+        self.assertEqual(result['rows'], 2002)
+        self.assertGreater(result['database_bytes'], 16_000_000)
+        self.assertLess(peak, 12 * 1024 ** 2)
+        self.assertLess(len(queries), 30)
+        with zipfile.ZipFile(backups.archive_path(1, result['id'])) as archive:
+            payload = json.loads(archive.read('data.json'))
+            self.assertEqual(len(payload['tables']['leads']), 2001)
+            self.assertNotIn(2, [row['id'] for row in payload['tables']['leads']])
 
     def test_restore_changes_only_target_company_and_creates_preventive(self):
         saved = self.snapshot()

@@ -8,6 +8,7 @@ import datetime
 import os
 from zoneinfo import ZoneInfo
 from routers.rules import check_and_trigger_rules
+from db_work_lock import optional_work_lock
 
 router = APIRouter(
     prefix="/notifications",
@@ -31,9 +32,11 @@ def maybe_run_automation_rules(db: Session, company_id: Optional[int]):
     LAST_RULES_CHECK_BY_COMPANY[company_id] = now_local
     
     try:
-        check_and_trigger_rules(db, company_id)
+        with optional_work_lock(database.engine, f'autosqp-rules-{company_id}') as acquired:
+            if acquired:
+                check_and_trigger_rules(db, company_id)
     except Exception as e:
-        LAST_RULES_CHECK_BY_COMPANY[company_id] = None
+        db.rollback()
         raise e
 
 @router.get("/", response_model=List[schemas.Notification])

@@ -77,6 +77,20 @@ contraseña; la descarga no carga todo el archivo en memoria del navegador.
 
 ## Capacidad y recuperación
 
+La creación de copias lee hasta 250 filas por consulta con paginación por clave
+primaria. Serializa el JSON en disco y deduplica referencias de archivos en una
+base temporal SQLite, sin acumular toda la empresa en memoria. La validación de
+propiedad se hace por relación, no por cada registro. El formato ZIP sigue siendo
+compatible con las copias anteriores.
+
+El worker tiene CPUQuota=50% (medio núcleo), MemoryHigh=512M, MemoryMax=1G y
+MemorySwapMax=128M. Estos límites protegen al CRM; no garantizan una duración fija.
+La restauración aún necesita cargar los datos del JSON en memoria; no se debe
+interpretar la paginación de creación como restauración ilimitada. Si alcanza el
+límite durante una restauración, se exige revisión manual, sin reintento automático.
+Los errores registran el código numérico del motor y ubicación del fallo, sin SQL
+ni parámetros que puedan contener datos personales o credenciales.
+
 Los archivos ZIP por empresa son copias completas. Conviven con las copias globales
 y pueden consumir bastante disco. Se exige un margen libre de 2 GB, además del
 espacio estimado; la restauración exige espacio adicional para temporales y la copia

@@ -2889,6 +2889,11 @@ def ensure_lead_query_indexes():
                     "CREATE INDEX ix_notifications_user_read_created "
                     "ON notifications (user_id, is_read, created_at)"
                 ),
+                (
+                    "notifications",
+                    "ix_notifications_user_created",
+                    "CREATE INDEX ix_notifications_user_created ON notifications (user_id, created_at, id)"
+                ),
             ]
 
             for table_name, index_name, ddl in desired_indexes:
@@ -7816,7 +7821,8 @@ def read_leads_board(
     current_user: models.User = Depends(get_current_user)
 ):
     company = get_company_by_id(db, current_user.company_id)
-    migrate_lost_leads_to_financial_solutions(db, current_user.company_id, current_user.id)
+    # Reading a board must not trigger a full migration with row locks. Legacy
+    # transfers remain available through the explicit administrator action.
     if duplicates_only and not is_company_admin(current_user):
         raise HTTPException(status_code=403, detail="Solo los administradores pueden filtrar leads duplicados")
     duplicate_map = build_company_lead_duplicate_map(db, current_user.company_id)
