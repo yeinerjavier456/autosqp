@@ -1,0 +1,29 @@
+Para servir el sitio de preview en /preview/ sin afectar WordPress ni el CRM:
+
+1. Copia los archivos estáticos a /var/www/html/autosqp-preview/:
+   bash public-site/deploy-preview.sh
+
+2. Agrega este bloque en /etc/nginx/sites-available/autosqp
+   DENTRO del server block existente, ANTES de los location del CRM:
+
+   # --- Preview del nuevo sitio estatico ---
+   location /preview/ {
+       alias /var/www/html/autosqp-preview/;
+       index index.html;
+       try_files $uri $uri/ /preview/index.html;
+   }
+
+3. Los location existentes NO se tocan:
+   /crm/api/  -> backend FastAPI
+   /api/      -> backend FastAPI
+   /crm/      -> frontend React
+   /          -> WordPress (sigue funcionando como antes)
+
+4. Valida y recarga:
+   sudo nginx -t
+   sudo systemctl reload nginx
+
+5. Accede al preview en:
+   https://autosqp.com/preview/
+
+6. Cuando estés conforme, ejecuta deploy-static-site.sh para reemplazar WordPress.

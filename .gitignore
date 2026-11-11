@@ -21,3 +21,6 @@ static/
 
 frontend/nohup.out
 tatus
+
+# Outputs generados
+outputs/

@@ -1,0 +1,27 @@
+Para servir esta web sin WordPress, en /etc/nginx/sites-available/autosqp cambia el bloque principal de autosqp.com:
+
+1. Cambia:
+   root /var/www/html/web;
+   index index.php index.html index.htm;
+
+   Por:
+   root /var/www/html/autosqp-site;
+   index index.html;
+
+2. Mantén sin cambios los location de:
+   /crm/api/
+   /api/
+   /crm/
+   /crm/assets/
+
+3. Cambia el location principal:
+   location / {
+       try_files $uri $uri/ /index.html;
+   }
+
+4. El bloque PHP de WordPress ya no es necesario para la web estatica. Puedes comentarlo si no usaras WordPress:
+   location ~ \.php$ { ... }
+
+5. Valida y recarga:
+   sudo nginx -t
+   sudo systemctl reload nginx
