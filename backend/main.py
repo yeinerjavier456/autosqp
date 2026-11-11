@@ -7901,6 +7901,35 @@ def read_leads_board(
     return {"columns": columns}
 
 
+def _lead_excel_responsible_label(user):
+    return f"{user.full_name or user.email} <{user.email}>"
+
+
+def _add_lead_excel_selectors(wb, ws, users, statuses, status_column, responsible_column, last_row):
+    from openpyxl.worksheet.datavalidation import DataValidation
+    from openpyxl.workbook.defined_name import DefinedName
+
+    options = wb.create_sheet("Opciones")
+    for index, status in enumerate(statuses, start=1):
+        options.cell(index, 1, LEAD_STATUS_LABELS.get(status, status))
+    responsible_labels = ["Sin asignar", *[_lead_excel_responsible_label(user) for user in users]]
+    for index, label in enumerate(responsible_labels, start=1):
+        options.cell(index, 2, label)
+    for name, column, count, target in [
+        ("EstadosLead", "A", len(statuses), status_column),
+        ("ResponsablesLead", "B", len(responsible_labels), responsible_column),
+    ]:
+        wb.defined_names.add(DefinedName(name, attr_text=f"'Opciones'!${column}$1:${column}${count}"))
+        validation = DataValidation(type="list", formula1=f"={name}", allow_blank=True)
+        validation.showDropDown = False
+        validation.showErrorMessage = True
+        validation.errorTitle = "Selecciona una opción válida"
+        validation.error = "Usa una de las opciones disponibles en la lista."
+        ws.add_data_validation(validation)
+        validation.add(f"{target}2:{target}{max(last_row, 1001)}")
+    options.sheet_state = "hidden"
+
+
 @app.get("/leads/export.xlsx")
 def export_leads_xlsx(
     start_date: Optional[str] = None,
@@ -7973,6 +8002,11 @@ def export_leads_xlsx(
         "facebook": "Facebook", "whatsapp": "WhatsApp", "instagram": "Instagram",
         "tiktok": "TikTok", "web": "Web", "referral": "Referido", "other": "Otro",
     }
+    company = db.query(models.Company).filter(models.Company.id == current_user.company_id).first()
+    responsible_users = db.query(models.User).filter(
+        models.User.company_id == current_user.company_id,
+        models.User.is_active.is_(True),
+    ).order_by(models.User.full_name, models.User.email).all()
     for lead in leads:
         submission = submissions_by_lead.get(lead.id)
         credit = credits_by_lead.get(lead.id)
@@ -7999,7 +8033,7 @@ def export_leads_xlsx(
             lead.email or getattr(submission, "email", None) or "",
             source_labels.get((lead.source or "").lower(), lead.source or ""),
             LEAD_STATUS_LABELS.get(normalize_lead_status_value(lead.status), lead.status or ""),
-            getattr(getattr(lead, "assigned_to", None), "full_name", None) or getattr(getattr(lead, "assigned_to", None), "email", None) or "Sin asignar",
+            _lead_excel_responsible_label(lead.assigned_to) if lead.assigned_to else "Sin asignar",
             supervisors,
             desired_vehicle,
             plate,
@@ -8028,6 +8062,9 @@ def export_leads_xlsx(
         table.tableStyleInfo = TableStyleInfo(name="TableStyleMedium2", showRowStripes=True, showFirstColumn=False, showLastColumn=False)
         ws.add_table(table)
 
+    _add_lead_excel_selectors(wb, ws, responsible_users,
+        FINANCIAL_SOLUTION_STATUSES if board_scope == "ally" else get_company_allowed_lead_statuses(company),
+        "H", "I", len(leads) + 1)
     buffer = BytesIO()
     wb.save(buffer)
     buffer.seek(0)
@@ -8041,6 +8078,7 @@ def export_leads_xlsx(
 
 @app.get("/leads/upload/template")
 def download_leads_upload_template(
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
     if not is_company_admin(current_user) or not current_user.company_id:
@@ -8070,17 +8108,20 @@ def download_leads_upload_template(
     for row in range(2, 1002):
         ws.cell(row, 2).number_format = "@"
     source_validation = DataValidation(type="list", formula1='"WhatsApp,Facebook,Instagram,TikTok,Web,Referido,Otro"', allow_blank=True)
-    status_validation = DataValidation(type="list", formula1='"Nuevo,Contactado,En proceso,Estudio de crédito,Aprobaciones,Reserva,Alistamiento,Perdido,Vendido"', allow_blank=True)
     ws.add_data_validation(source_validation)
-    ws.add_data_validation(status_validation)
     source_validation.add("D2:D1001")
-    status_validation.add("F2:F1001")
+    company = db.query(models.Company).filter(models.Company.id == current_user.company_id).first()
+    responsible_users = db.query(models.User).filter(
+        models.User.company_id == current_user.company_id,
+        models.User.is_active.is_(True),
+    ).order_by(models.User.full_name, models.User.email).all()
+    _add_lead_excel_selectors(wb, ws, responsible_users, get_company_allowed_lead_statuses(company), "F", "G", 1001)
 
     instructions = wb.create_sheet("Instrucciones")
     instructions.append(["Carga masiva de leads"])
     instructions.append(["Nombre y teléfono son obligatorios. Los demás campos son opcionales."])
-    instructions.append(["El teléfono se valida dentro de tu empresa. Si ya existe, la fila se omite como duplicada."])
-    instructions.append(["Correo responsable: debe pertenecer a un usuario activo de la misma empresa. Déjalo vacío para usar la asignación automática."])
+    instructions.append(["El teléfono se valida dentro de tu empresa. Si el lead ya existe, puedes confirmar la actualización durante la carga. En archivos exportados se utiliza el ID para identificarlo."])
+    instructions.append(["Estado y responsable tienen listas desplegables. Elige un usuario activo de tu empresa. En leads existentes, dejar responsable vacío conserva la asignación; Sin asignar la elimina."])
     instructions.append(["Ejemplo: Cliente de ejemplo | 3001234567 | cliente@correo.com | WhatsApp | Busca vehículo familiar | Nuevo | asesor@empresa.com"])
     instructions.append(["No cambies los nombres de las columnas ni agregues datos en la hoja Instrucciones."])
     instructions.column_dimensions["A"].width = 115
@@ -8149,6 +8190,9 @@ async def upload_leads_xlsx(
         "aprobaciones": "approvals", "reserva": "reserved", "reservado": "reserved",
         "alistamiento": "preparation", "perdido": "lost", "vendido": "sold",
     }
+    for status, label in LEAD_STATUS_LABELS.items():
+        status_map[normalize_header(status)] = status
+        status_map[normalize_header(label)] = status
     company = db.query(models.Company).filter(models.Company.id == current_user.company_id).with_for_update().first()
     allowed_statuses = set(get_company_allowed_lead_statuses(company))
     created = 0
@@ -8190,28 +8234,56 @@ async def upload_leads_xlsx(
         source_text = normalize_header(cell_value(row, "origen"))
         status_text = normalize_header(cell_value(row, "estado"))
         source = source_map.get(source_text, "other")
-        lead_status = status_map.get(status_text, "new")
+        lead_status = status_map.get(status_text, "new" if not status_text else None)
         if lead_status not in allowed_statuses:
-            lead_status = "new"
+            errors += 1
+            details.append({"fila": row_number, "error": "Estado no válido para el tablero de leads de esta empresa"})
+            continue
         incoming_email = str(cell_value(row, "correo") or "").strip()[:100]
         incoming_message = str(cell_value(row, "mensaje") or "").strip()[:1000]
         assigned_to_id = None
-        responsible_email = str(cell_value(row, "correo responsable") or "").strip().lower()
-        if responsible_email:
-            assigned_user = db.query(models.User).filter(
+        responsible_value = str(cell_value(row, "responsable") or cell_value(row, "correo responsable") or "").strip()
+        responsible_email = responsible_value.lower()
+        if responsible_value and normalize_header(responsible_value) != "sin asignar":
+            email_match = re.search(r"<([^<>]+)>$", responsible_value)
+            if email_match:
+                responsible_email = email_match.group(1).strip().lower()
+            assigned_users = db.query(models.User).filter(
                 models.User.company_id == current_user.company_id,
-                func.lower(models.User.email) == responsible_email,
-            ).first()
+                or_(func.lower(models.User.email) == responsible_email,
+                    func.lower(models.User.full_name) == responsible_value.lower()),
+            ).all()
+            assigned_user = assigned_users[0] if len(assigned_users) == 1 else None
             if not assigned_user or not is_active_user(assigned_user):
                 errors += 1
-                details.append({"fila": row_number, "error": "El correo responsable no corresponde a un usuario activo de la empresa"})
+                details.append({"fila": row_number, "error": "Responsable inválido, inactivo o ambiguo. Selecciona un usuario de la empresa con su correo"})
                 continue
             assigned_to_id = assigned_user.id
+        elif responsible_value:
+            assigned_to_id = None
         else:
             assigned_user = choose_auto_assign_user(db, current_user.company_id)
             assigned_to_id = assigned_user.id if assigned_user else None
 
-        duplicate = find_duplicate_company_lead(db, current_user.company_id, name, phone)
+        incoming_id = cell_value(row, "id")
+        if incoming_id not in (None, ""):
+            try:
+                lead_id = int(str(incoming_id).removesuffix(".0"))
+            except (ValueError, TypeError):
+                errors += 1
+                details.append({"fila": row_number, "error": "El ID del lead no es válido"})
+                continue
+            duplicate = db.query(models.Lead).filter(
+                models.Lead.id == lead_id,
+                models.Lead.company_id == current_user.company_id,
+                models.Lead.deleted_at.is_(None),
+            ).first()
+            if not duplicate:
+                errors += 1
+                details.append({"fila": row_number, "error": "El ID no corresponde a un lead activo de esta empresa"})
+                continue
+        else:
+            duplicate = find_duplicate_company_lead(db, current_user.company_id, name, phone)
         if duplicate:
             duplicates += 1
             existing_duplicates += 1
@@ -8220,6 +8292,7 @@ async def upload_leads_xlsx(
                 details.append({"fila": row_number, "error": f"Coincide con el lead #{duplicate.id}, asignado a {assigned_name}"})
             elif update_existing:
                 previous_status = duplicate.status
+                previous_responsible = getattr(duplicate.assigned_to, "full_name", None) or getattr(duplicate.assigned_to, "email", None) or "Sin asignar"
                 duplicate.name = name[:100]
                 duplicate.phone = phone[:50]
                 if incoming_email:
@@ -8230,7 +8303,7 @@ async def upload_leads_xlsx(
                     duplicate.status = lead_status
                 if incoming_message:
                     duplicate.message = incoming_message
-                if responsible_email:
+                if responsible_value:
                     duplicate.assigned_to_id = assigned_to_id
                 duplicate.status_updated_at = datetime.datetime.utcnow()
                 db.add(models.LeadHistory(
@@ -8238,7 +8311,7 @@ async def upload_leads_xlsx(
                     user_id=current_user.id,
                     previous_status=previous_status,
                     new_status=duplicate.status,
-                    comment=f"Lead actualizado mediante carga masiva desde Excel (fila {row_number})",
+                    comment=f"Lead actualizado mediante carga masiva desde Excel (fila {row_number}). Estado: {previous_status} → {duplicate.status}. Responsable: {previous_responsible} → {responsible_value or previous_responsible}",
                 ))
                 updated += 1
             else:
