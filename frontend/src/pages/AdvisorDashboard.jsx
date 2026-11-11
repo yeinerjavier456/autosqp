@@ -350,6 +350,7 @@ const AdvisorDashboard = () => {
     const displayedSalesApproved = isAdministrator ? (stats.sales_approved || 0) : (stats.personal_sales_approved || 0);
     const displayedSalesPending = isAdministrator ? (stats.sales_pending || 0) : (stats.personal_sales_pending || 0);
     const showLeadsMetrics = isAdministrator ? hasLeadsSection : true;
+    const isEmployeeFiltered = isAdministrator && Boolean(appliedFilters.employee);
     const showCreditsMetrics = isAdministrator ? hasCreditsSection : true;
     const showPurchasesMetrics = isAdministrator ? hasPurchasesSection : true;
     const showInventoryMetrics = isAdministrator ? hasInventorySection : true;
@@ -618,7 +619,7 @@ const AdvisorDashboard = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className={`grid grid-cols-1 gap-4 md:grid-cols-2 ${isEmployeeFiltered ? 'xl:grid-cols-3' : 'xl:grid-cols-4'}`}>
                 <DashboardMetric
                     title={isAllyDashboard ? 'Leads de aliados' : 'Leads a cargo'}
                     value={displayedLeadTotal}
@@ -649,14 +650,14 @@ const AdvisorDashboard = () => {
                     className="border-amber-200 bg-amber-50 text-amber-900"
                     helperClassName="text-amber-700"
                 />
-                <DashboardMetric
+                {!isEmployeeFiltered && <DashboardMetric
                     title="Chats por responder"
                     value={dashboardUnreadReplies}
                     helper={`Conversaciones con respuestas pendientes ${rangeLabel}.`}
                     onClick={(isAllyDashboard ? hasAllySection : hasLeadsSection) ? () => navigate(isAllyDashboard ? '/aliado/dashboard' : leadBoardPath) : undefined}
                     className="border-orange-200 bg-orange-50 text-orange-900"
                     helperClassName="text-orange-700"
-                />
+                />}
             </div>
 
             <div className={`grid grid-cols-1 gap-4 ${showAppointmentsMetrics ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
@@ -688,8 +689,8 @@ const AdvisorDashboard = () => {
             </div>
 
             {(isAllyDashboard ? hasAllySection : showLeadsMetrics) && (
-                <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-                    <div className={`rounded-2xl border p-6 shadow-sm ${isAllyDashboard ? 'border-teal-200 bg-teal-50 text-teal-950' : 'border-rose-200 bg-rose-50 text-rose-950'}`}>
+                <div className={`grid grid-cols-1 gap-6 ${isEmployeeFiltered ? '' : 'xl:grid-cols-3'}`}>
+                    {!isEmployeeFiltered && <div className={`rounded-2xl border p-6 shadow-sm ${isAllyDashboard ? 'border-teal-200 bg-teal-50 text-teal-950' : 'border-rose-200 bg-rose-50 text-rose-950'}`}>
                         <p className={`text-xs font-bold uppercase tracking-[0.24em] ${isAllyDashboard ? 'text-teal-700' : 'text-rose-700'}`}>
                             Reasignacion por alerta
                         </p>
@@ -708,9 +709,9 @@ const AdvisorDashboard = () => {
                         >
                             Ver tablero
                         </button>
-                    </div>
+                    </div>}
 
-                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
+                    <div className={`rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ${isEmployeeFiltered ? '' : 'xl:col-span-2'}`}>
                         <div className="mb-4">
                             <h3 className="text-lg font-bold text-slate-800">Usuarios con menor gestion</h3>
                             <p className="text-sm text-slate-500">
@@ -1053,7 +1054,7 @@ const AdvisorDashboard = () => {
                 )}
             </div>
 
-            {showAppointmentsMetrics && !isAllyDashboard && (
+            {showAppointmentsMetrics && !isAllyDashboard && !isEmployeeFiltered && (
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div className="mb-4">
                         <h3 className="text-lg font-bold text-slate-800">Ranking de citas agendadas</h3>
