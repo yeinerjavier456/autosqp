@@ -5872,17 +5872,41 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
         setUploadingLeads(true);
         try {
             const token = localStorage.getItem('token');
+            let deletePassword = '';
+            let confirmDelete = false;
             const sendUpload = async ({ preview, updateExisting = false }) => {
                 const formData = new FormData();
                 formData.append('file', leadUploadFile);
                 formData.append('preview', preview ? 'true' : 'false');
                 formData.append('update_existing', updateExisting ? 'true' : 'false');
+                formData.append('confirm_delete', confirmDelete ? 'true' : 'false');
+                if (!preview && confirmDelete) formData.append('delete_password', deletePassword);
                 return axios.post(`${API_BASE_URL}/leads/upload`, formData, {
                     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
                 });
             };
             const previewResponse = await sendUpload({ preview: true });
             const previewResult = previewResponse.data || {};
+            if (Number(previewResult.deletable || 0) > 0) {
+                const escapeText = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
+                const decision = await Swal.fire({
+                    icon: 'warning',
+                    title: 'Eliminación definitiva de leads',
+                    html: `<strong>Se eliminarán ${Number(previewResult.deletable)} leads y toda su información vinculada:</strong> historial, notas, citas, conversaciones, archivos, solicitudes de crédito y compra, ventas no cerradas y sus recibos.<br><br><strong style="color:#dc2626">Esta acción no se puede deshacer desde la aplicación.</strong><br>Los leads con ventas cerradas o aprobadas están protegidos (${Number(previewResult.protected || 0)}).<br><div style="max-height:150px;overflow:auto;text-align:left;margin-top:12px">${(previewResult.delete_candidates || []).map((lead) => `<div>#${Number(lead.id)} — ${escapeText(lead.nombre)}</div>`).join('')}</div><br>Ingresa la contraseña de Cuentas de tu empresa para confirmar.`,
+                    input: 'password',
+                    inputPlaceholder: 'Contraseña de Cuentas',
+                    inputAttributes: { autocomplete: 'off' },
+                    inputValidator: (value) => !value ? 'Debes ingresar la contraseña de Cuentas' : undefined,
+                    showCancelButton: true,
+                    confirmButtonText: 'Eliminar definitivamente y continuar',
+                    cancelButtonText: 'Cancelar toda la carga',
+                    confirmButtonColor: '#dc2626',
+                    allowOutsideClick: false,
+                });
+                if (!decision.isConfirmed) return;
+                deletePassword = decision.value;
+                confirmDelete = true;
+            }
             let updateExisting = false;
             if (Number(previewResult.existing_duplicates || 0) > 0) {
                 const decision = await Swal.fire({
@@ -5914,7 +5938,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             Swal.fire({
                 icon: result.errors ? 'warning' : 'success',
                 title: 'Carga de leads terminada',
-                html: `<strong>${result.created || 0}</strong> creados, <strong>${result.updated || 0}</strong> actualizados, <strong>${omittedDuplicates}</strong> duplicados omitidos y <strong>${result.errors || 0}</strong> errores.${detailText}`,
+                html: `<strong>${result.created || 0}</strong> creados, <strong>${result.updated || 0}</strong> actualizados, <strong>${result.deleted || 0}</strong> eliminados definitivamente, <strong>${result.protected || 0}</strong> protegidos por venta cerrada, <strong>${omittedDuplicates}</strong> duplicados omitidos y <strong>${result.errors || 0}</strong> errores.${detailText}`,
                 confirmButtonColor: '#2563eb',
             });
         } catch (error) {

@@ -7912,11 +7912,12 @@ def _add_lead_excel_selectors(wb, ws, users, statuses, status_column, responsibl
     options = wb.create_sheet("Opciones")
     for index, status in enumerate(statuses, start=1):
         options.cell(index, 1, LEAD_STATUS_LABELS.get(status, status))
+    options.cell(len(statuses) + 1, 1, "Eliminar")
     responsible_labels = ["Sin asignar", *[_lead_excel_responsible_label(user) for user in users]]
     for index, label in enumerate(responsible_labels, start=1):
         options.cell(index, 2, label)
     for name, column, count, target in [
-        ("EstadosLead", "A", len(statuses), status_column),
+        ("EstadosLead", "A", len(statuses) + 1, status_column),
         ("ResponsablesLead", "B", len(responsible_labels), responsible_column),
     ]:
         wb.defined_names.add(DefinedName(name, attr_text=f"'Opciones'!${column}$1:${column}${count}"))
@@ -8145,6 +8146,8 @@ async def upload_leads_xlsx(
     file: UploadFile = File(...),
     preview: bool = Form(False),
     update_existing: bool = Form(False),
+    confirm_delete: bool = Form(False),
+    delete_password: str = Form(""),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -8176,6 +8179,19 @@ async def upload_leads_xlsx(
         return re.sub(r"[^a-z0-9]+", " ", normalized).strip()
 
     headers = {normalize_header(value).replace(" *", ""): index for index, value in enumerate(raw_headers) if value}
+    status_index = headers.get("estado")
+    has_deletions = status_index is not None and any(
+        normalize_header(row[status_index]) == "eliminar"
+        for row in sheet.iter_rows(min_row=2, values_only=True)
+        if status_index < len(row)
+    )
+    deletion_authorized = False
+    if has_deletions and not preview and confirm_delete:
+        company = db.query(models.Company).filter(models.Company.id == current_user.company_id).first()
+        password_hash = getattr(company, "finance_password_hash", None)
+        if not confirm_delete or not password_hash or not auth_utils.verify_password(delete_password, password_hash):
+            raise HTTPException(status_code=403, detail="El borrado definitivo requiere confirmación y la contraseña correcta de Cuentas")
+        deletion_authorized = True
     required_headers = {"nombre", "telefono"}
     if not required_headers.issubset(headers):
         raise HTTPException(status_code=400, detail="La plantilla debe incluir las columnas Nombre * y Teléfono *")
@@ -8203,6 +8219,13 @@ async def upload_leads_xlsx(
     errors = 0
     details = []
     seen_file_phones = {}
+    deleted = 0
+    deletable = 0
+    protected = 0
+    delete_candidates = []
+    files_to_delete = set()
+    seen_delete_ids = set()
+    seen_lead_ids = set()
 
     def cell_value(row, header_name):
         index = headers.get(header_name)
@@ -8214,6 +8237,52 @@ async def upload_leads_xlsx(
             details.append({"fila": row_number, "error": "La carga admite máximo 10.000 filas"})
             break
         if not any(value not in (None, "") for value in row):
+            continue
+        if normalize_header(cell_value(row, "estado")) == "eliminar":
+            raw_id = cell_value(row, "id")
+            try:
+                lead_id = int(str(raw_id).removesuffix(".0"))
+            except (ValueError, TypeError):
+                errors += 1
+                details.append({"fila": row_number, "error": "Para eliminar debes usar el ID del Excel exportado"})
+                continue
+            if lead_id in seen_delete_ids:
+                continue
+            seen_delete_ids.add(lead_id)
+            if lead_id in seen_lead_ids:
+                errors += 1
+                details.append({"fila": row_number, "error": "El mismo ID no puede actualizarse y eliminarse en la misma carga"})
+                continue
+            seen_lead_ids.add(lead_id)
+            lead = db.query(models.Lead).filter(
+                models.Lead.id == lead_id,
+                models.Lead.company_id == current_user.company_id,
+            ).with_for_update().first()
+            if not lead:
+                errors += 1
+                details.append({"fila": row_number, "error": "El lead a eliminar no pertenece a esta empresa o ya no existe"})
+                continue
+            linked_sales = db.query(models.Sale).filter(
+                models.Sale.lead_id == lead_id,
+                models.Sale.company_id == current_user.company_id,
+            ).with_for_update().all()
+            closed_sale = any(sale.status == models.SaleStatus.APPROVED.value for sale in linked_sales)
+            if normalize_lead_status_value(lead.status) == "sold" or closed_sale:
+                protected += 1
+                details.append({"fila": row_number, "error": f"Lead #{lead_id} protegido: tiene una venta cerrada o aprobada. No se eliminará"})
+                continue
+            deletable += 1
+            delete_candidates.append({"id": lead.id, "nombre": lead.name})
+            if not preview:
+                if not deletion_authorized:
+                    raise HTTPException(status_code=403, detail="El borrado definitivo requiere confirmación y la contraseña correcta de Cuentas")
+                from lead_purge import purge_lead_records
+                paths, counts = purge_lead_records(db, models.Base.metadata, lead_id)
+                files_to_delete.update(paths)
+                db.add(models.SystemLog(company_id=current_user.company_id, user_id=current_user.id,
+                    action="PURGE_LEAD", entity_type="Lead", entity_id=lead_id,
+                    details=f"Borrado definitivo confirmado con contraseña de Cuentas. Registros eliminados: {json.dumps(counts)}"))
+                deleted += 1
             continue
         name = str(cell_value(row, "nombre") or "").strip()
         raw_phone = cell_value(row, "telefono")
@@ -8282,6 +8351,11 @@ async def upload_leads_xlsx(
                 errors += 1
                 details.append({"fila": row_number, "error": "El ID no corresponde a un lead activo de esta empresa"})
                 continue
+            if lead_id in seen_lead_ids:
+                errors += 1
+                details.append({"fila": row_number, "error": "ID de lead repetido dentro del archivo"})
+                continue
+            seen_lead_ids.add(lead_id)
         else:
             duplicate = find_duplicate_company_lead(db, current_user.company_id, name, phone)
         if duplicate:
@@ -8358,9 +8432,17 @@ async def upload_leads_xlsx(
             user_id=current_user.id,
             action="IMPORT_EXCEL",
             entity_type="Lead",
-            details=f"Carga masiva de leads: {created} creados, {updated} actualizados, {duplicates} duplicados detectados y {errors} errores",
+            details=f"Carga masiva de leads: {created} creados, {updated} actualizados, {deleted} eliminados definitivamente, {protected} protegidos, {duplicates} duplicados y {errors} errores",
         ))
         db.commit()
+        if files_to_delete:
+            from lead_purge import remove_unreferenced_lead_files
+            try:
+                cleanup_failures = remove_unreferenced_lead_files(db, models.Base.metadata, files_to_delete, "static")
+            except Exception:
+                cleanup_failures = list(files_to_delete)
+            if cleanup_failures:
+                details.append({"fila": "Archivos", "error": f"{len(cleanup_failures)} archivos no pudieron eliminarse del disco"})
     else:
         db.rollback()
     workbook.close()
@@ -8368,6 +8450,10 @@ async def upload_leads_xlsx(
         "preview": preview,
         "created": created,
         "updated": updated,
+        "deleted": deleted,
+        "deletable": deletable,
+        "protected": protected,
+        "delete_candidates": delete_candidates[:100],
         "duplicates": duplicates,
         "existing_duplicates": existing_duplicates,
         "file_duplicates": file_duplicates,

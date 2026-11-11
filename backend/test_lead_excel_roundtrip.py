@@ -23,6 +23,12 @@ class Query:
     def all(self): return [self.value] if self.value else []
 
 
+class UploadError(Exception):
+    def __init__(self, status_code, detail):
+        self.status_code = status_code
+        super().__init__(detail)
+
+
 class LeadExcelRoundtripTests(unittest.TestCase):
     def setUp(self):
         tree = ast.parse(Path(__file__).with_name('main.py').read_text(encoding='utf-8'))
@@ -51,10 +57,11 @@ class LeadExcelRoundtripTests(unittest.TestCase):
             normalize_lead_duplicate_phone=lambda phone: re.sub(r'\D', '', phone),
             find_duplicate_company_lead=lambda *args: self.lead,
             LEAD_STATUS_LABELS={'new': 'Nuevos', 'contacted': 'Contactados', 'reserved': 'Reservas'},
+            HTTPException=UploadError,
         )
         exec(compile(ast.fix_missing_locations(ast.Module(body=nodes, type_ignores=[])), '<lead excel>', 'exec'), self.context)
 
-    def upload(self, status='Contactados', responsible='Asesora Nueva <nueva@empresa.com>'):
+    def upload(self, status='Contactados', responsible='Asesora Nueva <nueva@empresa.com>', preview=False, confirm_delete=False, password=''):
         workbook = Workbook()
         sheet = workbook.active
         sheet.title = 'Leads'
@@ -63,7 +70,47 @@ class LeadExcelRoundtripTests(unittest.TestCase):
         buffer = BytesIO()
         workbook.save(buffer)
         async def read(): return buffer.getvalue()
-        return asyncio.run(self.context['upload_leads_xlsx'](NS(filename='leads.xlsx', read=read), False, True, self.db, NS(id=1, company_id=3)))
+        return asyncio.run(self.context['upload_leads_xlsx'](NS(filename='leads.xlsx', read=read), preview, True, confirm_delete, password, self.db, NS(id=1, company_id=3)))
+
+    def configure_deletion(self, closed_sale=False):
+        sale_model = type('Sale', (), {'lead_id': Field(), 'company_id': Field(), 'status': Field()})
+        self.context['models'].Sale = sale_model
+        self.context['models'].SaleStatus = NS(APPROVED=NS(value='approved'))
+        self.context['normalize_lead_status_value'] = lambda value: value
+        original_query = self.db.query
+        self.db.query = lambda model: Query(NS(status='approved') if closed_sale else None) if model is sale_model else original_query(model)
+
+    def test_deletion_requires_password_and_confirmation(self):
+        self.configure_deletion()
+        with self.assertRaises(UploadError) as error:
+            self.upload(status='Eliminar')
+        self.assertEqual(error.exception.status_code, 403)
+
+    def test_preview_lists_deletion_without_mutation(self):
+        self.configure_deletion()
+        result = self.upload(status='Eliminar', preview=True)
+        self.assertEqual(result['deletable'], 1)
+        self.assertEqual(result['deleted'], 0)
+
+    def test_approved_sale_is_protected(self):
+        self.configure_deletion(closed_sale=True)
+        result = self.upload(status='Eliminar', preview=True)
+        self.assertEqual(result['protected'], 1)
+        self.assertEqual(result['deletable'], 0)
+
+    def test_sold_lead_is_protected_without_sale_record(self):
+        self.configure_deletion()
+        self.lead.status = 'sold'
+        result = self.upload(status='Eliminar', preview=True)
+        self.assertEqual(result['protected'], 1)
+
+    def test_wrong_accounts_password_is_rejected(self):
+        self.context['auth_utils'] = NS(verify_password=lambda password, hashed: False)
+        original_query = self.db.query
+        self.db.query = lambda model: Query(NS(finance_password_hash='hashed')) if model is self.context['models'].Company else original_query(model)
+        with self.assertRaises(UploadError) as error:
+            self.upload(status='Eliminar', confirm_delete=True, password='wrong')
+        self.assertEqual(error.exception.status_code, 403)
 
     def test_updates_status_and_responsible_from_export_columns(self):
         result = self.upload()
@@ -98,7 +145,8 @@ class LeadExcelRoundtripTests(unittest.TestCase):
         self.assertEqual(saved['Opciones'].sheet_state, 'hidden')
         self.assertEqual(saved['Opciones']['B2'].value, 'Asesora Nueva <nueva@empresa.com>')
         self.assertEqual(len(saved.active.data_validations.dataValidation), 2)
-        self.assertEqual(saved.defined_names['EstadosLead'].attr_text, "'Opciones'!$A$1:$A$2")
+        self.assertEqual(saved.defined_names['EstadosLead'].attr_text, "'Opciones'!$A$1:$A$3")
+        self.assertEqual(saved['Opciones']['A3'].value, 'Eliminar')
 
 
 if __name__ == '__main__':
