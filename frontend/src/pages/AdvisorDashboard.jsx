@@ -191,6 +191,7 @@ const AdvisorDashboard = () => {
     }, [isAdministrator, user?.company_id]);
 
     useEffect(() => {
+        const controller = new AbortController();
         const fetchStats = async () => {
             setLoadingStats(true);
             setStatsError('');
@@ -208,18 +209,21 @@ const AdvisorDashboard = () => {
                     };
                 const response = await axios.get('/api/stats/advisor', {
                     headers: { Authorization: `Bearer ${token}` },
-                    params
+                    params,
+                    signal: controller.signal,
                 });
                 setStats(response.data);
             } catch (error) {
+                if (controller.signal.aborted) return;
                 setStatsError(error?.response?.data?.detail || 'No se pudo cargar el dashboard. Intenta recargar la página.');
                 console.error('Error fetching role dashboard stats', error);
             } finally {
-                setLoadingStats(false);
+                if (!controller.signal.aborted) setLoadingStats(false);
             }
         };
 
         if (user?.company_id && (rangePreset === 'all' || (startDate && endDate))) fetchStats();
+        return () => controller.abort();
     }, [user, isAdministrator ? appliedFilters : startDate, isAdministrator ? null : endDate, isAdministrator ? null : rangePreset]);
 
     if (loadingStats && !stats) {
@@ -648,7 +652,7 @@ const AdvisorDashboard = () => {
                 <DashboardMetric
                     title="Chats por responder"
                     value={dashboardUnreadReplies}
-                    helper={`Tiempo medio de respuesta visible: ${stats.response_time_min} min.`}
+                    helper={`Conversaciones con respuestas pendientes ${rangeLabel}.`}
                     onClick={(isAllyDashboard ? hasAllySection : hasLeadsSection) ? () => navigate(isAllyDashboard ? '/aliado/dashboard' : leadBoardPath) : undefined}
                     className="border-orange-200 bg-orange-50 text-orange-900"
                     helperClassName="text-orange-700"
@@ -784,7 +788,7 @@ const AdvisorDashboard = () => {
                     <DashboardMetric
                         title="Inventario"
                         value={stats.inventory_total}
-                        helper="Total de vehículos visibles en la empresa."
+                        helper={appliedFilters.employee ? 'Vehículos vinculados a las ventas del empleado en el rango seleccionado.' : 'Total de vehículos visibles en la empresa.'}
                         onClick={hasInventorySection ? () => navigate('/admin/inventory') : undefined}
                         className="border-sky-200 bg-sky-50 text-sky-900"
                         helperClassName="text-sky-700"
@@ -798,7 +802,7 @@ const AdvisorDashboard = () => {
                     <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                         <div>
                             <h3 className="text-lg font-bold text-slate-800">Cumplimiento de metas</h3>
-                            <p className="text-sm text-slate-500">Resultados del mes actual: {stats.goal_month || 'sin configurar'}.</p>
+                            <p className="text-sm text-slate-500">{isAdministrator ? `Resultados ${rangeLabel}, frente a las metas de los meses incluidos (${stats.goal_month || 'sin configurar'}).` : `Resultados del mes actual: ${stats.goal_month || 'sin configurar'}.`}</p>
                         </div>
                         {isAdministrator && (
                             <button type="button" onClick={() => navigate('/admin/goals')} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700">

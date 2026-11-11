@@ -9301,6 +9301,13 @@ def read_advisor_stats(
         end_date,
         getattr(oldest_visible_lead, "created_at", None)
     )
+    # Custom dates are calendar days in Bogotá; persisted event timestamps are UTC.
+    local_period_start, local_period_end = period_start, period_end
+    if company_scope and start_date and end_date:
+        period_start = local_period_start.replace(tzinfo=BOGOTA_TZ).astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        period_end = local_period_end.replace(tzinfo=BOGOTA_TZ).astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        local_bucket = get_trend_bucket
+        get_trend_bucket = lambda value: local_bucket(value.replace(tzinfo=datetime.timezone.utc).astimezone(BOGOTA_TZ))
 
     leads_query = visible_leads_query.options(
         joinedload(models.Lead.supervisors),
@@ -9734,6 +9741,8 @@ def read_advisor_stats(
         models.User.company_id == current_user.company_id,
         models.User.is_active == True,
     ).all()
+    if employee_id:
+        active_company_users = [user for user in active_company_users if user.id == employee_id]
     management_role_names = {"asesor", "vendedor", "aliado"}
     for user in active_company_users:
         user_role_name = get_user_role_name(user)
@@ -9939,7 +9948,7 @@ def read_advisor_stats(
         key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
     )
     supervised_advisors = sorted(
-        supervised_advisor_map.values(),
+        [item for item in supervised_advisor_map.values() if not employee_id or item["user_id"] == employee_id],
         key=lambda item: (
             -item["total_leads"],
             item.get("full_name") or item.get("email") or ""
@@ -9986,7 +9995,8 @@ def read_advisor_stats(
         and (appointment.status or "scheduled") != "cancelled"
     ) if appointments else 0
 
-    current_goal_month = today_bogota.replace(day=1)
+    current_goal_month = local_period_start.date().replace(day=1) if company_scope else today_bogota.replace(day=1)
+    last_goal_month = (local_period_end.date() - datetime.timedelta(days=1)).replace(day=1) if company_scope else current_goal_month
     next_goal_month = (
         datetime.date(current_goal_month.year + 1, 1, 1)
         if current_goal_month.month == 12
@@ -10000,7 +10010,8 @@ def read_advisor_stats(
     ).astimezone(datetime.timezone.utc).replace(tzinfo=None)
     current_month_goals = db.query(models.MonthlyGoal).filter(
         models.MonthlyGoal.company_id == current_user.company_id,
-        models.MonthlyGoal.goal_month == current_goal_month,
+        models.MonthlyGoal.goal_month >= current_goal_month,
+        models.MonthlyGoal.goal_month <= last_goal_month,
     ).all()
     if employee_id:
         current_month_goals = [goal for goal in current_month_goals if goal.user_id == employee_id]
@@ -10016,8 +10027,8 @@ def read_advisor_stats(
     )
     current_month_sales = db.query(models.Sale).filter(
         models.Sale.company_id == current_user.company_id,
-        models.Sale.sale_date >= goal_month_start_utc,
-        models.Sale.sale_date < goal_month_end_utc,
+        models.Sale.sale_date >= (period_start if company_scope else goal_month_start_utc),
+        models.Sale.sale_date < (period_end if company_scope else goal_month_end_utc),
         models.Sale.status != models.SaleStatus.REJECTED.value,
     ).all()
     if employee_id:
@@ -10089,7 +10100,7 @@ def read_advisor_stats(
         "personal_appointments_total": personal_appointments_total,
         "personal_appointments_today": personal_appointments_today,
         "personal_appointments_upcoming": personal_appointments_upcoming,
-        "goal_month": current_goal_month.strftime("%Y-%m"),
+        "goal_month": current_goal_month.strftime("%Y-%m") if current_goal_month == last_goal_month else f"{current_goal_month:%Y-%m} a {last_goal_month:%Y-%m}",
         "global_sales_goal_target": global_sales_goal_target,
         "global_sales_goal_actual": global_sales_goal_actual,
         "global_sales_goal_percentage": goal_percentage(global_sales_goal_actual, global_sales_goal_target),
