@@ -1,0 +1,23 @@
+[Unit]
+Description=Cola persistente de copias y restauraciones por empresa AutosQP
+After=network-online.target mysql.service
+
+[Service]
+Type=simple
+User=autosqp
+Group=www-data
+WorkingDirectory=/home/autosqp/apps/autosqp/backend
+ExecStart=/home/autosqp/apps/autosqp/backend/venv/bin/python /home/autosqp/apps/autosqp/ops/backup/company-backup-worker.py
+Environment=AUTOSQP_COMPANY_BACKUP_ROOT=/var/lib/autosqp-company-backups
+UMask=0077
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

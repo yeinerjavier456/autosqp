@@ -3,6 +3,11 @@ import axios from 'axios';
 import Swal from 'sweetalert2';
 
 const bytes = (value) => `${(Number(value || 0) / 1024 / 1024).toLocaleString('es-CO', { maximumFractionDigits: 1 })} MB`;
+const jobDate = (value) => {
+    if (!value) return '';
+    const text = String(value);
+    return new Date(/(?:Z|[+-]\d{2}:?\d{2})$/.test(text) ? text : `${text}Z`).toLocaleString('es-CO', { timeZone: 'America/Bogota' });
+};
 
 export default function CompanyBackups({ companyId, globalSettings = false }) {
     const [settings, setSettings] = useState(null);
@@ -13,12 +18,13 @@ export default function CompanyBackups({ companyId, globalSettings = false }) {
     const [error, setError] = useState('');
     const [jobId, setJobId] = useState('');
     const [message, setMessage] = useState('');
+    const [jobHistory, setJobHistory] = useState([]);
     const base = `/api/company-backups/${companyId}`;
     const config = (token = access) => ({ headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'X-Backup-Access-Token': token } });
 
     useEffect(() => {
         let mounted = true;
-        setAccess(''); setPassword(''); setItems([]); setSettings(null); setError(''); setJobId(''); setBusy(false); setMessage('');
+        setAccess(''); setPassword(''); setItems([]); setSettings(null); setError(''); setJobId(''); setBusy(false); setMessage(''); setJobHistory([]);
         if (companyId) axios.get(`${base}/settings`, config('')).then(({ data }) => { if (mounted) setSettings(data); }).catch((err) => { if (mounted) setError(err.response?.data?.detail || 'No se pudo consultar la configuración'); });
         return () => { mounted = false; };
     }, [companyId]);
@@ -26,7 +32,11 @@ export default function CompanyBackups({ companyId, globalSettings = false }) {
     const refresh = async (token = access) => {
         const { data } = await axios.get(base, config(token));
         setItems(data.items || []);
-        if (data.active_job) setJobId(data.active_job);
+        setJobHistory(data.jobs || []);
+        setJobId(data.active_job || '');
+        const active = (data.jobs || []).find((job) => job.id === data.active_job);
+        const latest = active || data.jobs?.[0];
+        if (latest) setMessage(latest.message);
     };
 
     useEffect(() => {
@@ -38,6 +48,7 @@ export default function CompanyBackups({ companyId, globalSettings = false }) {
                 const { data } = await axios.get(`${base}/jobs/${jobId}`, config());
                 if (cancelled) return;
                 setMessage(data.message);
+                setJobHistory((current) => [data, ...current.filter((item) => item.id !== data.id)].slice(0, 20));
                 if (['complete', 'failed'].includes(data.state)) {
                     setJobId(''); setBusy(false);
                     if (data.state === 'failed') setError(data.message);
@@ -124,8 +135,10 @@ export default function CompanyBackups({ companyId, globalSettings = false }) {
             <button disabled={busy} className="rounded-xl bg-blue-600 px-5 py-3 font-bold text-white disabled:opacity-50">{busy ? 'Validando...' : 'Ver copias de esta empresa'}</button>
         </form>}
         {settings?.enabled && access && <>
-            <div className="flex flex-wrap gap-3"><button type="button" disabled={busy || Boolean(jobId)} onClick={create} className="rounded-xl bg-blue-600 px-4 py-2 font-bold text-white disabled:opacity-50">Crear copia ahora</button><button type="button" disabled={busy || Boolean(jobId)} onClick={() => refresh().catch((err) => setError(err.response?.data?.detail || 'Error al actualizar'))} className="rounded-xl border border-slate-300 px-4 py-2 font-semibold text-slate-700 disabled:opacity-50">Actualizar listado</button><button type="button" onClick={() => { setAccess(''); setPassword(''); }} className="rounded-xl border border-slate-300 px-4 py-2 text-slate-700">Bloquear</button></div>
+            <div className="flex flex-wrap gap-3"><button type="button" disabled={busy || Boolean(jobId)} onClick={create} className="rounded-xl bg-blue-600 px-4 py-2 font-bold text-white disabled:opacity-50">Crear copia ahora</button><button type="button" disabled={busy && !jobId} onClick={() => refresh().catch((err) => setError(err.response?.data?.detail || 'Error al actualizar'))} className="rounded-xl border border-slate-300 px-4 py-2 font-semibold text-slate-700 disabled:opacity-50">Actualizar listado</button><button type="button" onClick={() => { setAccess(''); setPassword(''); }} className="rounded-xl border border-slate-300 px-4 py-2 text-slate-700">Bloquear</button></div>
+            <p className="text-xs text-slate-500">El proceso continúa en el servidor aunque cambies de pestaña, cierres el navegador o recargues. Al volver e ingresar la contraseña recuperarás su estado.</p>
             {(busy || jobId || message) && <p role="status" className="rounded-xl bg-blue-50 p-4 text-sm text-blue-900">{(busy || jobId) && <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />}{message}</p>}
+            {jobHistory.length > 0 && <div className="rounded-xl border border-slate-200 p-4"><h4 className="mb-3 font-bold text-slate-800">Historial de operaciones</h4><div className="space-y-3">{jobHistory.map((job) => <div key={job.id} className="border-b border-slate-100 pb-2 text-sm"><div className="flex flex-wrap justify-between gap-2"><strong className="text-slate-800">{job.kind === 'restore' ? 'Restauración' : 'Copia de seguridad'}</strong><span className={job.state === 'complete' ? 'font-bold text-emerald-700' : job.state === 'failed' ? 'font-bold text-red-700' : 'font-bold text-blue-700'}>{{ queued: 'En cola', running: 'En ejecución', complete: 'Terminada', failed: 'Fallida' }[job.state] || job.state}</span></div><p className="mt-1 text-slate-600">{job.message}</p><p className="mt-1 text-xs text-slate-500">{jobDate(job.created_at)}{job.finished_at ? ` · Finalizada: ${jobDate(job.finished_at)}` : ''}</p></div>)}</div></div>}
             {!items.length && <p className="text-sm text-slate-500">No hay copias de esta empresa todavía. Puedes crear la primera ahora.</p>}
             {items.map((backup) => <article key={backup.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 p-4">
                 <div><p className="font-bold text-slate-900">{new Date(backup.created_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</p><p className="text-xs text-slate-500">{backup.reason === 'pre-restore' ? 'Preventiva antes de restaurar' : 'Copia de la empresa'} · {bytes(backup.total_bytes)} · {backup.static_files} archivos · {backup.rows} registros</p><p className={`text-xs ${backup.verified ? 'text-emerald-700' : 'text-red-700'}`}>{backup.verified ? 'Completa' : `Incompleta: ${backup.missing_files} archivos faltantes`}</p></div>

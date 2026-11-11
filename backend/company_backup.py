@@ -21,6 +21,7 @@ from sqlalchemy import select, delete, and_, or_, DateTime, Date, Numeric, Large
 
 ID_PATTERN = re.compile(r'^\d{8}T\d{6}-[a-f0-9]{8}$')
 FILE_FIELDS = {'file_path', 'business_sheet_url', 'attachments', 'photos', 'media_url', 'form_payload', 'logo_url'}
+EXCLUDED_TABLES = {'companies', 'company_backup_jobs'}
 
 
 def root_dir():
@@ -55,7 +56,7 @@ def scope_rows(db, metadata, company_id):
     """Company-owned rows plus children of those rows, never referenced parents."""
     selected = {}
     for table in metadata.sorted_tables:
-        if table.name == 'companies' or 'company_id' not in table.c:
+        if table.name in EXCLUDED_TABLES or 'company_id' not in table.c:
             continue
         rows = db.execute(select(table).where(table.c.company_id == company_id)).mappings().all()
         selected[table.name] = {key(table, row): dict(row) for row in rows}
@@ -63,7 +64,7 @@ def scope_rows(db, metadata, company_id):
     while changed:
         changed = False
         for table in metadata.sorted_tables:
-            if table.name == 'companies' or 'company_id' in table.c:
+            if table.name in EXCLUDED_TABLES or 'company_id' in table.c:
                 continue
             predicates = []
             for fk in table.foreign_keys:
@@ -136,11 +137,11 @@ def decode_rows(table, rows):
 
 
 def schema_signature(metadata):
-    structure = {table.name: [(col.name, str(col.type)) for col in table.columns] for table in metadata.sorted_tables}
+    structure = {table.name: [(col.name, str(col.type)) for col in table.columns] for table in metadata.sorted_tables if table.name != 'company_backup_jobs'}
     return hashlib.sha256(json.dumps(structure, sort_keys=True).encode()).hexdigest()
 
 
-def create_archive(db, metadata, company_id, static_root, reason='daily'):
+def create_archive(db, metadata, company_id, static_root, reason='daily', job_id=None):
     directory = tenant_dir(company_id)
     backup_id = dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%S-') + uuid.uuid4().hex[:8]
     rows = scope_rows(db, metadata, company_id)
@@ -184,6 +185,7 @@ def create_archive(db, metadata, company_id, static_root, reason='daily'):
                 hashes[entry] = digest.hexdigest()
             archive.writestr('checksums.json', json.dumps(hashes))
         manifest = dict(id=backup_id, company_id=company_id, created_at=dt.datetime.now(dt.timezone.utc).isoformat(),
+            job_id=job_id,
             reason=reason, database_bytes=len(data), static_bytes=file_bytes, static_files=len(hashes) - 1,
             total_bytes=temp.stat().st_size, verified=not missing_files, missing_files=len(missing_files),
             rows=sum(len(items) for items in rows.values()))
@@ -200,7 +202,7 @@ def validate_ownership(db, metadata, company_id, rows):
     for name, items in rows.items():
         table = metadata.tables[name]
         for row in items:
-            if name == 'companies' or ('company_id' in row and row['company_id'] != company_id):
+            if name in EXCLUDED_TABLES or ('company_id' in row and row['company_id'] != company_id):
                 raise ValueError('La copia contiene información fuera de esta empresa')
             for fk in table.foreign_keys:
                 parent = fk.column.table

@@ -4,9 +4,9 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'backend'))
-from database import SessionLocal, Base
+from database import SessionLocal
 import models
-import company_backup as backups
+import company_backup_jobs as jobs
 
 
 def main():
@@ -17,11 +17,8 @@ def main():
     for company_id in ids:
         db = SessionLocal()
         try:
-            with backups.tenant_lock(company_id):
-                backups.prune(company_id)
-                result = backups.create_archive(db, Base.metadata, company_id, 'static')
-                db.commit()
-                print(f'Empresa {company_id}: {result["id"]}, completa={result["verified"]}', flush=True)
+            job_id = jobs.enqueue(db, company_id, 'backup')
+            print(f'Empresa {company_id}: copia en cola {job_id}', flush=True)
         except Exception as error:
             db.rollback()
             failures += 1

@@ -29,11 +29,13 @@ la conexión de la aplicación, no las credenciales MySQL de root.
 
 ```bash
 systemctl list-timers autosqp-company-backup.timer --all
+sudo systemctl status autosqp-company-backup-worker --no-pager
 sudo systemctl start --no-block autosqp-company-backup.service
 sudo journalctl -u autosqp-company-backup.service -n 50 --no-pager
+sudo journalctl -u autosqp-company-backup-worker -n 50 --no-pager
 ```
 
-Se ejecuta a las 03:45 de Bogotá, con hasta cinco minutos de variación, solo para
+El timer agrega solicitudes a la cola a las 03:45 de Bogotá, con hasta cinco minutos de variación, solo para
 empresas habilitadas. Conserva siete días. Los ZIP son privados en
 `/var/lib/autosqp-company-backups/ID_EMPRESA/`. No publiques ese directorio en Nginx.
 Las descargas requieren un enlace firmado de dos minutos, después de validar la
@@ -59,8 +61,19 @@ contraseña; la descarga no carga todo el archivo en memoria del navegador.
   sobre esa empresa durante la restauración. Puede ser necesario iniciar sesión otra vez.
 - Se rechazan copias cuyo esquema no coincide con la versión actual. Requieren
   una migración supervisada, no desactivar la verificación.
-- Cada operación conserva un estado consultable. Los trabajos se ejecutan en
-  segundo plano y no dependen del tiempo de espera de Nginx.
+- Cada operación conserva su estado, fechas, intentos y señal de actividad en la
+  tabla `company_backup_jobs`: `queued`, `running`, `complete` o `failed`.
+- El servicio `autosqp-company-backup-worker` ejecuta la cola fuera de Gunicorn.
+  No depende de una petición HTTP, una pestaña ni del proceso web. Puede reiniciarse
+  la API sin interrumpirlo. La interfaz recupera la operación activa desde la base de
+  datos al entrar y muestra el historial de las últimas veinte solicitudes.
+- Los clics repetidos para la misma copia recuperan la solicitud activa; no generan
+  trabajos duplicados. El worker mantiene una señal de actividad cada quince segundos.
+- Si el worker se interrumpe, una copia puede retomarse cuando vence su reserva de
+  tres minutos. Si ya se publicó el ZIP, se recupera ese resultado sin duplicarlo.
+- Las restauraciones interrumpidas no se repiten automáticamente porque son
+  destructivas y pueden haber sustituido archivos. Requieren revisar la copia preventiva.
+- La cola no se incluye en las copias ni se revierte al restaurar los datos de empresa.
 
 ## Capacidad y recuperación
 
@@ -73,10 +86,15 @@ falla sin intentar llenar el disco. No borres las copias globales automáticamen
 No es una protección frente a pérdida del disco/servidor: las copias están en el mismo
 servidor. Descarga y guarda periódicamente ZIP fuera del servidor.
 
-Si el proceso del servidor se interrumpe a mitad de una restauración, el estado de
-la operación advertirá del fallo al volver a consultarlo. Revisa la copia preventiva
+Si el worker pierde su señal de actividad a mitad de una restauración y ya no tiene
+el bloqueo de archivos, el estado advertirá del fallo. Revisa la copia preventiva
 y los archivos antes de repetirla: la base de datos se revierte por transacción, pero
 una interrupción del proceso puede dejar una sustitución de archivos incompleta.
-No elimines manualmente marcadores `restoring` o `active-job` mientras haya un trabajo
-real en curso. Los archivos temporales de restauración son privados y no se sirven
+No elimines manualmente el marcador `restoring` mientras haya una restauración
+real en curso. `active-job` y `job-*.json` pertenecen a la implementación anterior y
+ya no controlan la cola. Los archivos temporales de restauración son privados y no se sirven
 por HTTP.
+
+Después de actualizar código del worker, reinicia ese servicio solo cuando no haya
+restauraciones en curso. El instalador habilita el servicio pero no fuerza un reinicio
+si ya estaba ejecutándose. No uses `systemctl restart autosqp` como sustituto del worker.

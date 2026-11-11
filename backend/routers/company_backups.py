@@ -1,19 +1,16 @@
 import datetime
 import hashlib
-import json
-import os
-from pathlib import Path
-import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from jose import jwt, JWTError
 from pydantic import BaseModel
 
 import auth_utils
 import company_backup as backups
+import company_backup_jobs as jobs
 import models
-from database import get_db, SessionLocal, Base
+from database import get_db
 from dependencies import get_current_user, get_effective_role_name, is_company_admin
 
 router = APIRouter(prefix='/company-backups', tags=['company backups'])
@@ -89,79 +86,30 @@ def unlock(company_id: int, payload: Password, db=Depends(get_db), user=Depends(
     return {'access_token': token}
 
 
-def write_job(path, payload):
-    temporary = path.with_suffix('.tmp')
-    temporary.write_text(json.dumps(payload), encoding='utf-8')
-    os.replace(temporary, path)
-
-
-def run_job(company_id, job_id, kind, backup_id, actor):
-    path = backups.tenant_dir(company_id) / f'job-{job_id}.json'
-    result = {'id': job_id, 'kind': kind, 'state': 'running', 'owner_pid': os.getpid(), 'message': 'Procesando; no cierres esta ventana'}
-    write_job(path, result)
-    db = SessionLocal()
-    try:
-        with backups.tenant_lock(company_id):
-            company = db.query(models.Company).filter(models.Company.id == company_id).first()
-            if not company or not company.backups_enabled:
-                raise ValueError('Las copias se desactivaron para esta empresa')
-            if kind == 'restore':
-                (backups.tenant_dir(company_id) / 'restoring').write_text(job_id, encoding='utf-8')
-                db.query(models.Company).filter(models.Company.id == company_id).with_for_update().first()
-                preventive = backups.restore_archive(db, Base.metadata, company_id, backup_id, 'static')
-                result['message'] = f'Empresa restaurada. Copia preventiva: {preventive}. Vuelve a iniciar sesión si es necesario.'
-            else:
-                item = backups.create_archive(db, Base.metadata, company_id, 'static', reason='manual')
-                db.commit()
-                backups.prune(company_id)
-                result['message'] = 'Copia de la empresa creada' if item['verified'] else 'Copia creada con archivos faltantes; revisa el listado antes de restaurar'
-            db.add(models.SystemLog(company_id=company_id, user_id=None, action='COMPANY_RESTORE' if kind == 'restore' else 'COMPANY_BACKUP', entity_type='Company', entity_id=company_id, details=f'Operación {job_id}, solicitada por usuario #{actor}'))
-            db.commit()
-            result['state'] = 'complete'
-    except Exception as error:
-        db.rollback()
-        detail = str(error) if isinstance(error, ValueError) else 'La operación no pudo completarse. Revisa el servicio y la copia preventiva antes de reintentar.'
-        print(f'Company backup job {job_id} ({company_id}) failed: {type(error).__name__}', flush=True)
-        result.update(state='failed', message=detail)
-    finally:
-        db.close()
-        if kind == 'restore':
-            (backups.tenant_dir(company_id) / 'restoring').unlink(missing_ok=True)
-        write_job(path, result)
-        (backups.tenant_dir(company_id) / 'active-job').unlink(missing_ok=True)
-
-
-def queue(company_id, tasks, kind, backup_id, actor):
-    directory = backups.tenant_dir(company_id)
-    job_id = uuid.uuid4().hex
-    try:
-        descriptor = os.open(directory / 'active-job', os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
-        raise HTTPException(409, 'Ya hay una operación en curso para esta empresa. Si el servicio se reinició, solicita al administrador revisar active-job')
-    with os.fdopen(descriptor, 'w') as handle:
-        handle.write(job_id)
-    write_job(directory / f'job-{job_id}.json', {'id': job_id, 'kind': kind, 'state': 'queued', 'owner_pid': os.getpid(), 'message': 'Operación en cola'})
-    tasks.add_task(run_job, company_id, job_id, kind, backup_id, actor)
-    return {'job_id': job_id}
 
 
 @router.get('/{company_id}')
 def listing(company_id: int, request: Request, db=Depends(get_db), user=Depends(get_current_user)):
     authorize(company_id, user, db, request)
     payload = backups.catalog(company_id)
-    active = backups.tenant_dir(company_id) / 'active-job'
-    payload['active_job'] = active.read_text().strip() if active.is_file() else None
+    records = db.query(models.CompanyBackupJob).filter(models.CompanyBackupJob.company_id == company_id).order_by(models.CompanyBackupJob.created_at.desc()).limit(20).all()
+    active = next((job for job in records if job.state in {'queued', 'running'}), None)
+    payload['active_job'] = active.id if active else None
+    payload['jobs'] = [jobs.serialize(job) for job in records]
     return payload
 
 
 @router.post('/{company_id}/create', status_code=202)
-def create(company_id: int, request: Request, tasks: BackgroundTasks, db=Depends(get_db), user=Depends(get_current_user)):
+def create(company_id: int, request: Request, db=Depends(get_db), user=Depends(get_current_user)):
     authorize(company_id, user, db, request)
-    return queue(company_id, tasks, 'backup', None, user.id)
+    try:
+        return {'job_id': jobs.enqueue(db, company_id, 'backup', actor=user.id)}
+    except ValueError as error:
+        raise HTTPException(409, str(error))
 
 
 @router.post('/{company_id}/restore', status_code=202)
-def restore(company_id: int, payload: Restore, request: Request, tasks: BackgroundTasks, db=Depends(get_db), user=Depends(get_current_user)):
+def restore(company_id: int, payload: Restore, request: Request, db=Depends(get_db), user=Depends(get_current_user)):
     company = authorize(company_id, user, db, request)
     if payload.confirmation != 'RESTAURAR EMPRESA' or not auth_utils.verify_password(payload.password, company.finance_password_hash):
         raise HTTPException(403, 'Confirma RESTAURAR EMPRESA e ingresa la contraseña de Cuentas')
@@ -172,32 +120,19 @@ def restore(company_id: int, payload: Restore, request: Request, tasks: Backgrou
             raise ValueError('La copia está incompleta y no puede restaurarse')
     except ValueError as error:
         raise HTTPException(400, str(error))
-    return queue(company_id, tasks, 'restore', payload.backup_id, user.id)
+    try:
+        return {'job_id': jobs.enqueue(db, company_id, 'restore', payload.backup_id, user.id)}
+    except ValueError as error:
+        raise HTTPException(409, str(error))
 
 
 @router.get('/{company_id}/jobs/{job_id}')
 def job_status(company_id: int, job_id: str, request: Request, db=Depends(get_db), user=Depends(get_current_user)):
     authorize(company_id, user, db, request)
-    if not re_job_id(job_id):
-        raise HTTPException(404, 'Operación no encontrada')
-    path = backups.tenant_dir(company_id) / f'job-{job_id}.json'
-    if not path.is_file():
-        raise HTTPException(404, 'Operación no encontrada')
-    payload = json.loads(path.read_text(encoding='utf-8'))
-    if payload.get('state') in {'queued', 'running'}:
-        try:
-            os.kill(int(payload['owner_pid']), 0)
-        except ProcessLookupError:
-            payload.update(state='failed', message='El servicio se reinició durante la operación. Revisa la copia preventiva antes de repetir la restauración.')
-            write_job(path, payload)
-            (backups.tenant_dir(company_id) / 'active-job').unlink(missing_ok=True)
-            (backups.tenant_dir(company_id) / 'restoring').unlink(missing_ok=True)
-    return payload
-
-
-def re_job_id(value):
-    import re
-    return bool(re.fullmatch('[a-f0-9]{32}', value))
+    job = db.query(models.CompanyBackupJob).filter(models.CompanyBackupJob.id == job_id, models.CompanyBackupJob.company_id == company_id).first()
+    if not job:
+        raise HTTPException(404, 'Operación no encontrada en esta empresa')
+    return jobs.serialize(job)
 
 
 @router.post('/{company_id}/{backup_id}/download-link')

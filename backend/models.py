@@ -511,6 +511,24 @@ class Sale(Base):
     attachments = relationship("SaleAttachment", back_populates="sale", cascade="all, delete-orphan")
 
 
+class CompanyBackupJob(Base):
+    __tablename__ = 'company_backup_jobs'
+    id = Column(String(32), primary_key=True)
+    company_id = Column(Integer, ForeignKey('companies.id'), nullable=False, index=True)
+    kind = Column(String(20), nullable=False)
+    state = Column(String(20), nullable=False, default='queued', index=True)
+    backup_id = Column(String(40), nullable=True)
+    requested_by = Column(Integer, nullable=True)
+    worker_token = Column(String(32), nullable=True)
+    message = Column(String(1000), nullable=False, default='En cola')
+    attempts = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    heartbeat_at = Column(DateTime, nullable=True)
+    lease_expires_at = Column(DateTime, nullable=True, index=True)
+
+
 class FinanceCatalogEntry(Base):
     __tablename__ = "finance_catalog_entries"
     __table_args__ = (UniqueConstraint('company_id', 'kind', 'code', name='uq_finance_catalog_code'),)
