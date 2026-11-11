@@ -619,7 +619,7 @@ const AdvisorDashboard = () => {
                 </div>
             </div>
 
-            <div className={`grid grid-cols-1 gap-4 md:grid-cols-2 ${isEmployeeFiltered ? 'xl:grid-cols-3' : 'xl:grid-cols-4'}`}>
+            <div className={`grid grid-cols-1 gap-4 md:grid-cols-2 ${isEmployeeFiltered ? '' : 'xl:grid-cols-4'}`}>
                 <DashboardMetric
                     title={isAllyDashboard ? 'Leads de aliados' : 'Leads a cargo'}
                     value={displayedLeadTotal}
@@ -636,7 +636,7 @@ const AdvisorDashboard = () => {
                     className="border-emerald-200 bg-emerald-50 text-emerald-900"
                     helperClassName="text-emerald-700"
                 />
-                <DashboardMetric
+                {!isEmployeeFiltered && <DashboardMetric
                     title={isAllyDashboard ? 'Pipeline activo' : 'Asesor que más gestiona'}
                     value={isAllyDashboard
                         ? dashboardActivePipeline
@@ -649,7 +649,7 @@ const AdvisorDashboard = () => {
                     onClick={(isAllyDashboard ? hasAllySection : hasLeadsSection) ? () => navigate(isAllyDashboard ? '/aliado/dashboard' : leadBoardPath) : undefined}
                     className="border-amber-200 bg-amber-50 text-amber-900"
                     helperClassName="text-amber-700"
-                />
+                />}
                 {!isEmployeeFiltered && <DashboardMetric
                     title="Chats por responder"
                     value={dashboardUnreadReplies}
@@ -660,7 +660,7 @@ const AdvisorDashboard = () => {
                 />}
             </div>
 
-            <div className={`grid grid-cols-1 gap-4 ${showAppointmentsMetrics ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+            <div className={`grid grid-cols-1 gap-4 ${showAppointmentsMetrics ? (isEmployeeFiltered ? 'md:grid-cols-2' : 'md:grid-cols-3') : (isEmployeeFiltered ? '' : 'md:grid-cols-2')}`}>
                 <DashboardMetric
                     title="Nuevos del rango"
                     value={dashboardNewLeadsInRange}
@@ -669,13 +669,13 @@ const AdvisorDashboard = () => {
                     className="border-blue-200 bg-blue-50 text-blue-900"
                     helperClassName="text-blue-700"
                 />
-                <DashboardMetric
+                {!isEmployeeFiltered && <DashboardMetric
                     title="Usuario que más gestiona"
                     value={topManager ? (topManager.full_name || topManager.email || 'Usuario') : 'Sin datos'}
                     helper={topManager ? `${topManager.count} cambios de estado registrados en el rango.` : 'Aun no hay cambios de estado registrados en el rango.'}
                     className="border-fuchsia-200 bg-fuchsia-50 text-fuchsia-900"
                     helperClassName="text-fuchsia-700"
-                />
+                />}
                 {showAppointmentsMetrics && (
                     <DashboardMetric
                         title="Citas programadas"
