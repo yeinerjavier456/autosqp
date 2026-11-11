@@ -5,6 +5,8 @@ from types import SimpleNamespace
 import re
 import unicodedata
 import unittest
+from unittest.mock import patch
+from backend import company_backup
 
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, or_
 from sqlalchemy.orm import declarative_base, Session
@@ -51,6 +53,9 @@ class Notification(Base):
 
 class RecontactTests(unittest.TestCase):
     def setUp(self):
+        self.modules = patch.dict('sys.modules', company_backup=company_backup)
+        self.modules.start()
+        self.addCleanup(self.modules.stop)
         tree = ast.parse(Path(__file__).with_name('lead_recontact.py').read_text(encoding='utf-8'))
         nodes = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.Assign))]
         self.ctx = dict(datetime=datetime, re=re, unicodedata=unicodedata, or_=or_, models=SimpleNamespace(

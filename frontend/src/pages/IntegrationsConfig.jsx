@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { useAuth } from '../context/AuthContext';
+import CompanyBackups from '../components/CompanyBackups';
 
 const IntegrationTab = ({ active, label, onClick, icon }) => (
     <button
@@ -18,24 +19,6 @@ const IntegrationTab = ({ active, label, onClick, icon }) => (
     </button>
 );
 
-const formatBackupBytes = (value) => {
-    const bytes = Number(value || 0);
-    if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const unitIndex = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-    return `${(bytes / (1024 ** unitIndex)).toFixed(unitIndex >= 3 ? 2 : 1)} ${units[unitIndex]}`;
-};
-
-const formatBackupDate = (value) => {
-    if (!value) return 'Fecha no disponible';
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return value;
-    return new Intl.DateTimeFormat('es-CO', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-        timeZone: 'America/Bogota',
-    }).format(parsed);
-};
 
 const IntegrationsConfig = () => {
     const { user } = useAuth();
@@ -47,12 +30,6 @@ const IntegrationsConfig = () => {
     const [gmailConnecting, setGmailConnecting] = useState(false);
     const [gmailTesting, setGmailTesting] = useState(false);
     const [gmailPreview, setGmailPreview] = useState([]);
-    const [backupCatalog, setBackupCatalog] = useState({ items: [], retention_days: 7, available: false });
-    const [backupLoading, setBackupLoading] = useState(false);
-    const [backupError, setBackupError] = useState('');
-    const [restoringBackupId, setRestoringBackupId] = useState('');
-    const effectiveRoleName = user?.role?.base_role_name || user?.role?.name || '';
-    const canRestoreBackups = effectiveRoleName === 'super_admin';
 
     // Initial state matching backend schema
     const [settings, setSettings] = useState({
@@ -116,81 +93,6 @@ const IntegrationsConfig = () => {
         return () => window.removeEventListener('message', handleMessage);
     }, []);
 
-    const fetchBackups = async () => {
-        setBackupLoading(true);
-        setBackupError('');
-        try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get('/api/admin/backups', {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            setBackupCatalog(response.data || { items: [], retention_days: 7, available: false });
-        } catch (error) {
-            console.error('Error fetching backup catalog', error);
-            setBackupError(error.response?.data?.detail || 'No se pudo consultar el catálogo de respaldos.');
-        } finally {
-            setBackupLoading(false);
-        }
-    };
-
-    const handleRestoreBackup = async (backup) => {
-        const decision = await Swal.fire({
-            icon: 'warning',
-            title: 'Restaurar todo el sistema',
-            html: `
-                <div style="text-align:left;font-size:14px;line-height:1.5">
-                    <p>Se reemplazarán <strong>toda la base de datos y todos los archivos</strong> con la copia <strong>${backup.id}</strong>.</p>
-                    <p style="margin-top:8px">El CRM quedará desconectado temporalmente. Antes de restaurar se generará una copia preventiva del estado actual.</p>
-                    <label style="display:block;margin-top:16px;font-weight:700">Escribe RESTAURAR TODO</label>
-                    <input id="backup-confirmation" class="swal2-input" style="margin:8px 0 0;width:100%" autocomplete="off">
-                    <label style="display:block;margin-top:12px;font-weight:700">Contraseña actual</label>
-                    <input id="backup-password" type="password" class="swal2-input" style="margin:8px 0 0;width:100%" autocomplete="current-password">
-                </div>`,
-            showCancelButton: true,
-            confirmButtonText: 'Restaurar todo',
-            cancelButtonText: 'Cancelar',
-            confirmButtonColor: '#dc2626',
-            focusCancel: true,
-            preConfirm: () => {
-                const confirmation = document.getElementById('backup-confirmation')?.value || '';
-                const password = document.getElementById('backup-password')?.value || '';
-                if (confirmation !== 'RESTAURAR TODO') {
-                    Swal.showValidationMessage('Debes escribir exactamente RESTAURAR TODO');
-                    return false;
-                }
-                if (!password) {
-                    Swal.showValidationMessage('Ingresa tu contraseña actual');
-                    return false;
-                }
-                return { confirmation, password };
-            },
-        });
-        if (!decision.isConfirmed) return;
-
-        setRestoringBackupId(backup.id);
-        try {
-            const token = localStorage.getItem('token');
-            const response = await axios.post('/api/admin/backups/restore', {
-                backup_id: backup.id,
-                confirmation: decision.value.confirmation,
-                password: decision.value.password,
-            }, { headers: { Authorization: `Bearer ${token}` }, timeout: 15000 });
-            await Swal.fire({
-                icon: 'success',
-                title: 'Restauración iniciada',
-                text: response.data?.message || 'El CRM se desconectará y volverá automáticamente.',
-                confirmButtonColor: '#2563eb',
-            });
-        } catch (error) {
-            Swal.fire('No se pudo iniciar', error.response?.data?.detail || 'No se pudo solicitar la restauración.', 'error');
-        } finally {
-            setRestoringBackupId('');
-        }
-    };
-
-    useEffect(() => {
-        if (activeTab === 'backups') fetchBackups();
-    }, [activeTab]);
 
     const handleChange = (e) => {
         const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
@@ -845,57 +747,7 @@ const IntegrationsConfig = () => {
                         </div>
                     )}
 
-                    {activeTab === 'backups' && (
-                        <div className="space-y-6 fade-in">
-                            <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                    <h2 className="text-xl font-bold text-slate-800">Copias de seguridad disponibles</h2>
-                                    <p className="mt-1 text-sm text-slate-500">Solo los administradores pueden consultar este listado. La restauración se realiza de forma controlada desde el servidor.</p>
-                                </div>
-                                <button type="button" onClick={fetchBackups} disabled={backupLoading} className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100 disabled:opacity-60">
-                                    {backupLoading ? 'Actualizando...' : 'Actualizar listado'}
-                                </button>
-                            </div>
-
-                            <div className="grid gap-3 sm:grid-cols-3">
-                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-bold uppercase text-slate-500">Copias disponibles</p><p className="mt-1 text-2xl font-extrabold text-slate-800">{backupCatalog.items?.length || 0}</p></div>
-                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-bold uppercase text-slate-500">Retención</p><p className="mt-1 text-2xl font-extrabold text-slate-800">{backupCatalog.retention_days || 7} días</p></div>
-                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-bold uppercase text-slate-500">Última actualización</p><p className="mt-2 text-sm font-bold text-slate-800">{formatBackupDate(backupCatalog.generated_at)}</p></div>
-                            </div>
-
-                            {backupError && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">{backupError}</div>}
-                            {!backupLoading && !backupError && !backupCatalog.available && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">El catálogo se generará en la próxima ejecución del respaldo.</div>}
-                            {!backupLoading && backupCatalog.available && (backupCatalog.items || []).length === 0 && <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">Aún no hay copias registradas.</div>}
-
-                            <div className="space-y-3">
-                                {(backupCatalog.items || []).map((backup) => (
-                                    <div key={backup.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                            <div>
-                                                <div className="flex items-center gap-2"><p className="font-bold text-slate-900">{formatBackupDate(backup.created_at)}</p><span className={`rounded-full px-2 py-1 text-xs font-bold ${backup.verified ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{backup.verified ? 'Verificada' : 'Incompleta'}</span></div>
-                                                <p className="mt-1 text-xs text-slate-400">ID: {backup.id} · Código: {(backup.git_commit || 'desconocido').slice(0, 8)}</p>
-                                            </div>
-                                            <div className="grid grid-cols-3 gap-4 text-right text-sm">
-                                                <div><p className="text-xs text-slate-400">Base</p><p className="font-bold text-slate-700">{formatBackupBytes(backup.database_bytes)}</p></div>
-                                                <div><p className="text-xs text-slate-400">Archivos</p><p className="font-bold text-slate-700">{formatBackupBytes(backup.static_bytes)}</p></div>
-                                                <div><p className="text-xs text-slate-400">Cantidad</p><p className="font-bold text-slate-700">{Number(backup.static_files || 0).toLocaleString('es-CO')}</p></div>
-                                            </div>
-                                            {canRestoreBackups && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleRestoreBackup(backup)}
-                                                    disabled={!backup.verified || Boolean(restoringBackupId)}
-                                                    className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                                >
-                                                    {restoringBackupId === backup.id ? 'Iniciando...' : 'Restaurar todo'}
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
+                    {activeTab === 'backups' && <CompanyBackups companyId={user?.company_id} />}
 
                     {!['import', 'backups'].includes(activeTab) && (
                         <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">

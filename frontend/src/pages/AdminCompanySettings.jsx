@@ -4,6 +4,7 @@ import { useParams } from 'react-router-dom';
 import { COMPANY_MODULE_OPTIONS } from '../config/views';
 import { normalizeMediaUrl } from '../utils/media';
 import UsersList from './UsersList';
+import CompanyBackups from '../components/CompanyBackups';
 
 const COMPANY_VIEWS = COMPANY_MODULE_OPTIONS;
 const COMPANY_VIEW_GROUPS = COMPANY_VIEWS.reduce((acc, view) => {
@@ -26,6 +27,7 @@ const SETTINGS_TABS = [
     { id: 'email', label: 'Correo', description: 'Validación, SMTP y destinatarios.' },
     { id: 'finance-security', label: 'Seguridad financiera', description: 'Contraseña de Finanzas y Ventas.' },
     { id: 'users', label: 'Usuarios', description: 'Usuarios, roles y estado en esta empresa.' },
+    { id: 'backups', label: 'Copias de seguridad', description: 'Activación y restauración independiente por empresa.' },
     { id: 'modules', label: 'Módulos', description: 'Vistas habilitadas para la empresa.' },
 ];
 
@@ -1571,8 +1573,9 @@ const AdminCompanySettings = () => {
                         {activeTab === 'users' && isEditing && (
                             <UsersList embedded companyId={id} />
                         )}
+                        {activeTab === 'backups' && (isEditing ? <CompanyBackups companyId={Number(id)} globalSettings /> : <p className="text-slate-600">Guarda la empresa primero para configurar sus copias.</p>)}
 
-                        {activeTab !== 'users' && <div className="pt-4">
+                        {!['users', 'backups'].includes(activeTab) && <div className="pt-4">
                         {activeTab !== 'finance-security' && <button
                                 onClick={handleSave}
                                 disabled={status.type === 'loading'}

@@ -25,6 +25,7 @@ class Company(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, index=True)
+    backups_enabled = Column(Boolean, nullable=False, default=False)
     public_domain = Column(String(255), nullable=True, unique=True, index=True)
     public_domains_json = Column(Text, nullable=True)
     website_url = Column(String(500), nullable=True)

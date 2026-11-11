@@ -37,8 +37,13 @@ async def _verify_token_and_get_user(token: str, db: Session):
         )
     return user
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    return await _verify_token_and_get_user(token, db)
+async def get_current_user(request: Request, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    user = await _verify_token_and_get_user(token, db)
+    if user.company_id and not request.url.path.startswith('/company-backups/'):
+        from company_backup import root_dir
+        if (root_dir() / str(user.company_id) / 'restoring').is_file():
+            raise HTTPException(status_code=503, detail='Tu empresa se está restaurando. Espera a que termine antes de continuar.')
+    return user
 
 async def get_user_from_anywhere(
     request: Request,

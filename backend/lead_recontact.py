@@ -21,6 +21,10 @@ def name_key(value):
 
 
 def find_existing_contact(db, company_id, name, phone):
+    from company_backup import root_dir
+    if (root_dir() / str(company_id) / 'restoring').is_file():
+        from fastapi import HTTPException
+        raise HTTPException(status_code=503, detail='La empresa se está restaurando; intenta nuevamente al finalizar')
     # Lock the company so concurrent channels cannot create the same lead twice.
     db.query(models.Company).filter(models.Company.id == company_id).with_for_update().first()
     key = phone_key(phone)

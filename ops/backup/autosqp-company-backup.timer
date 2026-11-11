@@ -1,0 +1,12 @@
+[Unit]
+Description=Copia diaria por empresa AutosQP
+
+[Timer]
+OnCalendar=*-*-* 03:45:00 America/Bogota
+Persistent=true
+RandomizedDelaySec=5m
+Unit=autosqp-company-backup.service
+
+[Install]
+WantedBy=timers.target
+

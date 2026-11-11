@@ -2151,6 +2151,7 @@ def ensure_company_public_domain_columns():
             conn.execute(text("CREATE INDEX ix_companies_public_domain ON companies (public_domain)"))
 
         company_columns = {
+            "backups_enabled": "ALTER TABLE companies ADD COLUMN backups_enabled BOOLEAN NOT NULL DEFAULT FALSE",
             "max_users": "ALTER TABLE companies ADD COLUMN max_users INTEGER NULL",
             "max_leads": "ALTER TABLE companies ADD COLUMN max_leads INTEGER NULL",
             "max_active_accounts": "ALTER TABLE companies ADD COLUMN max_active_accounts INTEGER NULL",
@@ -2984,6 +2985,8 @@ app.include_router(meta.router)
 app.include_router(tiktok.router)
 app.include_router(gmail.router)
 app.include_router(appointments.router)
+from routers import company_backups
+app.include_router(company_backups.router)
 
 
 # Configure CORS
@@ -7536,8 +7539,8 @@ def update_integration_settings(company_id: int, settings_update: schemas.Integr
 
 @app.get("/admin/backups")
 def read_server_backups(current_user: models.User = Depends(get_current_user)):
-    if get_user_role_name(current_user) not in {"admin", "super_admin"}:
-        raise HTTPException(status_code=403, detail="Solo los administradores pueden consultar los respaldos")
+    if get_user_role_name(current_user) != "super_admin":
+        raise HTTPException(status_code=403, detail="Las copias globales son exclusivas de recuperación del servidor. Usa las copias de tu empresa")
     catalog_path = os.getenv("AUTOSQP_BACKUP_CATALOG", "/var/lib/autosqp-backup/catalog.json")
     if not os.path.isfile(catalog_path):
         return {"generated_at": None, "retention_days": 7, "items": [], "available": False}
