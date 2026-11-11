@@ -5584,7 +5584,7 @@ def get_website_inventory(request: Request, before_id: Optional[int] = Query(def
 @app.post('/public/website/contact')
 def send_website_contact(payload: ContactMessage, request: Request, db: Session = Depends(get_db)):
     return submit_contact(db, resolve_public_company(db, request), payload, client_ip(request),
-        _get_public_credit_smtp_settings, _deliver_smtp_message)
+        _get_public_credit_smtp_settings, _deliver_smtp_message, ensure_company_lead_creation_capacity)
 
 
 @app.get("/public/company-context", response_model=schemas.PublicCompanyContext)

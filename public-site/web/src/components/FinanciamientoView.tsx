@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { COMPANY_INFO } from '../data/company';
 import { calculateLoanMonthlyPayment, createWhatsAppLink } from '../utils/formatters';
+import { creditFormUrl } from '../credit';
 import { Calculator, Landmark, Shield, FileText, CheckCircle2, MessageCircle, ArrowRight } from 'lucide-react';
 
 export const FinanciamientoView: React.FC = () => {
@@ -18,7 +19,7 @@ export const FinanciamientoView: React.FC = () => {
 
   const handleWhatsAppCredit = () => {
     const msg = `Hola Autos QP, deseo asesoría de crédito para financiar un vehículo de $ ${vehiclePrice.toLocaleString('es-CO')} con cuota inicial de $ ${downPayment.toLocaleString('es-CO')} a ${termMonths} meses.`;
-    window.location.assign('/crm/credito');
+    window.location.assign(creditFormUrl());
   };
 
   const handleWhatsAppInsurance = () => {

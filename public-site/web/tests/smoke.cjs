@@ -26,6 +26,7 @@ async function main() {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     let contactCalls = 0;
+    const submittedSubjects = [];
     let inventoryCalls = 0;
     const car = id => ({ id: String(id), make: 'Mazda', model: id === 2 ? 'CX-5' : 'Mazda 3', version: '', year: 2020, price: 60000000,
       mileage: 45000, transmission: 'Automático', fuel: 'Gasolina', bodyType: '', images: ['/api/static/test.svg'],
@@ -39,9 +40,9 @@ async function main() {
         data = { items: [car(url.search ? 1 : 2)], next_cursor: url.search ? null : 2 };
       } else if (url.pathname.endsWith('/website/contact')) {
         contactCalls++;
-        assert.equal(route.request().postDataJSON().subject, 'Comprar vehículo');
+        submittedSubjects.push(route.request().postDataJSON().subject);
         await new Promise(resolve => setTimeout(resolve, 200));
-        return route.fulfill({ status: contactCalls === 1 ? 503 : 200, contentType: 'application/json', body: JSON.stringify(contactCalls === 1 ? { detail: 'No pudimos enviar el correo.' } : { sent: true }) });
+        return route.fulfill({ status: contactCalls === 1 ? 503 : 200, contentType: 'application/json', body: JSON.stringify(contactCalls === 1 ? { detail: 'No pudimos registrar la solicitud.' } : { received: true, sent: true }) });
       } else if (url.pathname.endsWith('/public-chat/session')) data = { session_token: 'browser-test' };
       else if (url.pathname.endsWith('/messages')) data = [];
       else if (url.pathname.endsWith('/public-chat/config')) data = { bot_name: 'Asesor de prueba' };
@@ -69,11 +70,20 @@ async function main() {
     await form.locator('input[type=email]').fill('client@example.com');
     await form.locator('textarea').fill('Quiero información sobre un vehículo.');
     await form.evaluate(element => { element.requestSubmit(); element.requestSubmit(); });
-    await page.getByRole('alert').filter({ hasText: 'No pudimos enviar' }).waitFor();
+    await page.getByRole('alert').filter({ hasText: 'No pudimos registrar' }).waitFor();
     assert.equal(contactCalls, 1);
     await form.getByRole('button', { name: 'Enviar consulta' }).click();
     await page.getByText('¡Mensaje recibido con éxito!').waitFor();
     assert.equal(contactCalls, 2);
+    assert.deepEqual(submittedSubjects, ['Comprar vehículo', 'Comprar vehículo']);
+    await page.goto(base + '/preview/#reactivacion-financiera');
+    const reactivation = page.locator('form').filter({ has: page.getByPlaceholder('Tu nombre y apellido') });
+    await reactivation.locator('input[type=text]').fill('Cliente Reactivación');
+    await reactivation.locator('input[type=tel]').fill('3001234568');
+    await reactivation.evaluate(element => { element.requestSubmit(); element.requestSubmit(); });
+    await page.getByRole('status').filter({ hasText: 'Recibimos tu solicitud de Reactivación' }).waitFor();
+    assert.equal(contactCalls, 3);
+    assert.equal(submittedSubjects[2], 'Reactivación Financiera');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(base + '/preview/#inventario');
     await page.reload();

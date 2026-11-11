@@ -1,0 +1,25 @@
+/* Only the website entry point changes appearance; company forms retain their theme. */
+.website-credit-form { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color-scheme: dark; }
+.website-credit-form :is(h1,h2,h3) { font-family: 'Outfit', system-ui, sans-serif; letter-spacing: -.025em; }
+.website-credit-form .bg-white:not(canvas):not(img) { background-color: #11161d; }
+.website-credit-form .bg-slate-50 { background-color: #0c1118; }
+.website-credit-form .bg-slate-100 { background-color: #18212b; }
+.website-credit-form .bg-slate-200 { background-color: #263240; }
+.website-credit-form :is(.border-slate-200,.border-slate-300) { border-color: #2b3744; }
+.website-credit-form :is(input:not([type=checkbox]):not([type=file]),select,textarea) {
+  background: #090c10; color: #f1f5f9; border-color: #2b3744;
+}
+.website-credit-form :is(input,select,textarea):focus { outline: 2px solid #00c89666; outline-offset: 2px; }
+.website-credit-form input::placeholder,.website-credit-form textarea::placeholder { color: #94a3b8; }
+.website-credit-form input[type=checkbox] { accent-color: #00c896; }
+.website-credit-form :is(.text-slate-500,.text-slate-400,.text-slate-600) { color: #a5b4c7 !important; }
+.website-credit-form :is(.text-slate-900,.text-slate-800,.text-slate-700) { color: #e5e7eb !important; }
+.website-credit-form :is(.bg-emerald-50,.bg-amber-50) { background-color: #10251f; }
+.website-credit-form :is(.text-emerald-700,.text-emerald-600) { color: #6ee7b7; }
+.website-credit-form [class*="bg-red-50"] { background-color: #261820 !important; }
+.website-credit-form :is(.text-red-500,.text-red-600) { color: #fda4af; }
+.website-credit-form :is(.text-red-700,.text-amber-700,.text-amber-800,.text-amber-900) { color: #fcd34d; }
+.website-credit-form :is(button,a)[style*="background-color: rgb(0, 200, 150)"] { color: #07110f !important; }
+.website-credit-form canvas { background: white; color-scheme: light; }
+.website-credit-form button { transition: background-color .15s, opacity .15s; }
+.website-credit-form button:disabled { cursor: wait; opacity: .55; }

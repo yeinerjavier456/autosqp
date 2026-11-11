@@ -4,6 +4,11 @@ export async function sendContact(payload: Record<string, unknown>, requestId: s
     body: JSON.stringify({ ...payload, request_id: requestId })
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'No fue posible enviar el mensaje. Intenta nuevamente.');
+  if (!response.ok) {
+    const message = typeof data.detail === 'string' ? data.detail
+      : Array.isArray(data.detail) && data.detail[0]?.msg ? String(data.detail[0].msg).replace(/^Value error,\s*/, '')
+      : 'No fue posible registrar la solicitud. Intenta nuevamente.';
+    throw new Error(message);
+  }
   return data;
 }

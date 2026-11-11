@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { createWhatsAppLink } from '../utils/formatters';
+import { useInquiry } from '../useInquiry';
 import { ShieldCheck, CheckCircle2, Lock, MessageCircle, AlertCircle, Sparkles } from 'lucide-react';
 
 export const ReactivacionFinancieraView: React.FC = () => {
@@ -7,7 +7,7 @@ export const ReactivacionFinancieraView: React.FC = () => {
   const [phone, setPhone] = useState('');
   const [reportType, setReportType] = useState('Datacrédito');
   const [reportAge, setReportAge] = useState('Menos de 1 año');
-  const [submitted, setSubmitted] = useState(false);
+  const { submitted, sending, error, submit } = useInquiry();
 
   const includes = [
     'Revisión detallada de tu situación actual en centrales de riesgo (Datacrédito / TransUnion)',
@@ -24,11 +24,10 @@ export const ReactivacionFinancieraView: React.FC = () => {
     'Quienes desean sanear su historial crediticio antes de solicitar un crédito vehicular'
   ];
 
-  const handleConsultSubmit = (e: React.FormEvent) => {
+  const handleConsultSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const msg = `Hola Autos QP, solicito consulta confidencial para Reactivación Financiera.\nNombre: ${fullName || 'Cliente'}\nTeléfono: ${phone}\nCentral: ${reportType}\nAntigüedad: ${reportAge}`;
-    window.open(createWhatsAppLink(msg), '_blank');
-    setSubmitted(true);
+    await submit({ name: fullName, phone, subject: 'Reactivación Financiera', message: msg });
   };
 
   return (
@@ -118,7 +117,8 @@ export const ReactivacionFinancieraView: React.FC = () => {
               </p>
             </div>
 
-            <form onSubmit={handleConsultSubmit} className="space-y-4">
+            {submitted ? <div role="status" className="rounded-2xl border border-[#00C896]/40 bg-[#00C896]/10 p-6 text-slate-200">Recibimos tu solicitud de Reactivación Financiera. Nuestro equipo continuará el seguimiento.</div> : <form onSubmit={handleConsultSubmit} className="space-y-4">
+              {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
               <div>
                 <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
                   Nombre completo
@@ -183,16 +183,17 @@ export const ReactivacionFinancieraView: React.FC = () => {
 
               <button
                 type="submit"
+                disabled={sending}
                 className="w-full py-3.5 px-4 rounded-xl font-bold text-slate-950 bg-[#00C896] hover:bg-[#00B486] transition-all transform hover:-translate-y-0.5 shadow-lg shadow-[#00C896]/20 cursor-pointer flex items-center justify-center gap-2 text-sm mt-2"
               >
                 <MessageCircle className="w-5 h-5" />
-                <span>Solicitar consulta → WhatsApp</span>
+                <span>{sending ? 'Registrando solicitud…' : 'Solicitar consulta'}</span>
               </button>
 
               <p className="text-center text-xs text-slate-400 italic">
                 "Tu información es completamente confidencial. Hablemos sin compromiso."
               </p>
-            </form>
+            </form>}
 
             {/* Aviso legal obligatorio (Page 8) */}
             <div className="pt-4 border-t border-slate-800 text-[10px] text-slate-400 leading-relaxed">

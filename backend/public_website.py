@@ -10,20 +10,40 @@ from typing import Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, model_validator
 from sqlalchemy.exc import IntegrityError
 import models
+from website_intake import SUBJECTS, destination, register_inquiry
+from lead_recontact import phone_key
 
 
 class ContactMessage(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra='forbid')
     request_id: str = Field(pattern=r'^[a-zA-Z0-9-]{16,36}$')
-    name: str = Field(min_length=2, max_length=150)
-    email: EmailStr
+    name: str = Field(min_length=2, max_length=100)
+    email: Optional[EmailStr] = None
     phone: str = Field(default='', max_length=40)
     subject: str = Field(min_length=2, max_length=120)
     message: str = Field(min_length=5, max_length=5000)
     website: str = Field(default='', max_length=250)  # Honeypot, never rendered to users.
+    vehicle_make: str = Field(default='', max_length=100)
+    vehicle_model: str = Field(default='', max_length=100)
+    vehicle_year: Optional[int] = Field(default=None, ge=1900, le=2200)
+    vehicle_mileage: Optional[int] = Field(default=None, ge=0)
+    vehicle_plate: str = Field(default='', max_length=30)
+
+    @model_validator(mode='after')
+    def validate_inquiry(self):
+        if self.subject not in SUBJECTS:
+            raise ValueError('Selecciona un motivo de contacto válido')
+        if self.subject == 'Suscripción al boletín':
+            if not self.email:
+                raise ValueError('El correo es obligatorio para suscribirse')
+        elif not phone_key(self.phone):
+            raise ValueError('Ingresa un número de teléfono válido')
+        if self.email and len(str(self.email)) > 100:
+            raise ValueError('El correo no puede superar 100 caracteres')
+        return self
 
 
 def client_ip(request):
@@ -80,18 +100,19 @@ def public_vehicle(vehicle):
             color=vehicle.color or 'Consultar', city=vehicle.location or 'Consultar'))
 
 
-def submit_contact(db, company, payload, ip, smtp_loader, deliver):
+def submit_contact(db, company, payload, ip, smtp_loader, deliver, capacity_check=None):
     if not company:
         raise HTTPException(404, 'Este dominio no tiene una empresa configurada')
     if payload.website:
         return {'sent': True}
+    db.query(models.Company).filter_by(id=company.id).with_for_update().first()
     record = db.query(models.PublicWebsiteContact).filter_by(company_id=company.id, request_id=payload.request_id).with_for_update().first()
     if record:
-        if any(getattr(record, field) != str(getattr(payload, field)).strip() for field in ['name', 'email', 'phone', 'subject', 'message']):
+        if any(getattr(record, field) != str(getattr(payload, field) or '').strip() for field in ['name', 'email', 'phone', 'subject', 'message']):
             raise HTTPException(409, 'El identificador pertenece a otro mensaje. Recarga el formulario antes de continuar.')
         if record.state == 'sent':
             db.rollback()
-            return {'sent': True}
+            return {'sent': True, 'received': True, 'destination': destination(payload.subject)}
         if record.state == 'pending':
             db.rollback()
             raise HTTPException(409, 'El mensaje está en proceso. Espera la respuesta antes de volver a enviarlo.')
@@ -107,14 +128,18 @@ def submit_contact(db, company, payload, ip, smtp_loader, deliver):
         if count >= 5:
             raise HTTPException(429, 'Has enviado varios mensajes. Espera antes de enviar otro o utiliza nuestro asesor virtual.')
         record = models.PublicWebsiteContact(company_id=company.id, request_id=payload.request_id,
-            name=payload.name.strip(), phone=payload.phone.strip(), email=str(payload.email),
+            name=payload.name.strip(), phone=payload.phone.strip(), email=str(payload.email or ''),
             subject=payload.subject.strip(), message=payload.message.strip(), ip_hash=ip_hash)
         db.add(record)
     try:
+        target = register_inquiry(db, company, payload, capacity_check)
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(409, 'Este mensaje ya se está procesando')
+    except Exception:
+        db.rollback()
+        raise
     try:
         settings = smtp_loader(db, company)
         integration = db.query(models.IntegrationSettings).filter_by(company_id=company.id).first()
@@ -124,7 +149,8 @@ def submit_contact(db, company, payload, ip, smtp_loader, deliver):
         message = EmailMessage()
         message['From'] = settings['sender']
         message['To'] = ', '.join(recipients)
-        message['Reply-To'] = record.email
+        if record.email:
+            message['Reply-To'] = record.email
         message['Subject'] = f"Contacto web — {company.name}: " + re.sub(r'[\r\n]+', ' ', record.subject)
         message.set_content(f'Nombre: {record.name}\nTeléfono: {record.phone}\nCorreo: {record.email}\nMotivo: {record.subject}\n\n{record.message}')
         deliver(message, settings)
@@ -132,7 +158,9 @@ def submit_contact(db, company, payload, ip, smtp_loader, deliver):
         record.state = 'failed'
         db.commit()
         print(f'Website contact {record.id}: {type(error).__name__}', flush=True)
+        if target != 'newsletter':
+            return {'received': True, 'sent': False, 'destination': target}
         raise HTTPException(503, 'No pudimos enviar el correo. Intenta nuevamente o habla con nuestro asesor virtual.')
     record.state = 'sent'
     db.commit()
-    return {'sent': True}
+    return {'sent': True, 'received': True, 'destination': target}

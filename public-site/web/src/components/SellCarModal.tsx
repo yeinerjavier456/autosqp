@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { createWhatsAppLink } from '../utils/formatters';
+import { useInquiry } from '../useInquiry';
 import { X, Car, ShieldCheck, Send, CheckCircle2 } from 'lucide-react';
 import { useInventory } from '../inventory';
 
@@ -17,14 +17,15 @@ export const SellCarModal: React.FC<SellCarModalProps> = ({ isOpen, onClose }) =
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const { brands: AVAILABLE_BRANDS } = useInventory();
-  const [submitted, setSubmitted] = useState(false);
+  const { submitted, sending, error, submit } = useInquiry();
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const message = `Hola Autos QP, deseo vender mi auto / solicitar retoma:\nMarca: ${make}\nModelo: ${model}\nAño: ${year}\nKm: ${mileage || 'No especificado'}\nPlaca: ${plate}\nPropietario: ${name}\nTeléfono: ${phone}`;
-    window.open(createWhatsAppLink(message), '_blank');
-    setSubmitted(true);
+    await submit({ name, phone, subject: 'Vender mi vehículo', message,
+      vehicle_make: make, vehicle_model: model, vehicle_year: Number(year) || null,
+      vehicle_plate: plate, vehicle_mileage: mileage ? Number(mileage) : null });
   };
 
   return (
@@ -67,6 +68,7 @@ export const SellCarModal: React.FC<SellCarModalProps> = ({ isOpen, onClose }) =
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+            {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
@@ -111,7 +113,7 @@ export const SellCarModal: React.FC<SellCarModalProps> = ({ isOpen, onClose }) =
                 <input
                   type="number"
                   min="2005"
-                  max="2026"
+                  max={new Date().getFullYear() + 1}
                   required
                   value={year}
                   onChange={(e) => setYear(e.target.value)}
@@ -183,10 +185,11 @@ export const SellCarModal: React.FC<SellCarModalProps> = ({ isOpen, onClose }) =
 
             <button
               type="submit"
+              disabled={sending}
               className="w-full py-3.5 px-4 rounded-xl font-bold text-slate-950 bg-[#00C896] hover:bg-[#00B486] transition-all transform hover:-translate-y-0.5 shadow-lg shadow-[#00C896]/20 cursor-pointer flex items-center justify-center gap-2 text-sm"
             >
               <Send className="w-4 h-4" />
-              <span>Enviar datos para cotización por WhatsApp</span>
+              <span>{sending ? 'Registrando solicitud…' : 'Enviar datos para cotización'}</span>
             </button>
           </form>
         )}

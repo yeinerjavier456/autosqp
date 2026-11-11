@@ -14,12 +14,32 @@ los ZIP de código fuente/producción que incluía el prototipo.
 - Chat: se reutiliza `frontend/src/components/PublicSalesChatbot.jsx`, incluidos
   sus endpoints y sesión existente. Asesoría inmediata, Chatea con nosotros y la
   consulta de cada vehículo abren ese bot (el último con su ID).
-- Crédito: enlaza al formulario existente `/crm/credito`.
+- Crédito: enlaza al formulario existente `/crm/credito?website=1`, con estilo
+  oscuro/verde y tipografía del sitio, conservando todos los pasos, validaciones,
+  documentos, firma y correo. El parámetro `return` solo admite `/` o `/preview/`.
+  Las entradas normales al formulario conservan el tema configurado de la empresa.
+- Captación: Comprar vehículo, Financiamiento, Seguros, Garantía opcional y Otro
+  se registran como leads comerciales nuevos. Vender mi vehículo crea una solicitud
+  de compra identificada con `[PURCHASE_REQUEST]`, enlazada al contacto y asignada
+  aleatoriamente al personal activo de Compras disponible. El formulario Vender mi
+  auto utiliza el mismo recorrido y guarda los datos del vehículo.
+- Reactivación: ambos formularios registran un lead en estado `new` asignado
+  aleatoriamente a personal activo de Reactivación Financiera de la empresa.
+  Si no hay personal de ese rol, se informa el error y no se confirma un caso
+  invisible. No se modifican leads con venta cerrada para trasladarlos de tablero.
+- Los contactos existentes se detectan por teléfono mediante la lógica compartida
+  de recontacto, sin duplicar el lead. Cada envío queda en notas con su identificador.
+  Si cambia el flujo entre Comercial y Reactivación, se conserva el historial del
+  contacto, se registra el traslado y se elimina la supervisión del recorrido previo.
 - Contacto y boletín: `/api/public/website/contact`, con el SMTP de la empresa.
   Destinatarios: `smtp_always_recipients`, o remitente SMTP si no se configuraron.
   El correo del visitante solo se utiliza como Reply-To, nunca como destinatario.
-  El envío tiene confirmación real, protección frente a clics repetidos, registro
+  El envío tiene protección frente a clics repetidos, registro
   por empresa, máximo 5 mensajes por IP/hora y hasta 3 intentos por mensaje fallido.
+  El registro en CRM y la solicitud de contacto se confirman en una sola transacción
+  antes del SMTP. Si el correo falla, la solicitud comercial ya recibida se conserva
+  y la respuesta distingue `received: true` de `sent: false`. Reintentar el correo
+  no duplica leads ni solicitudes. El boletín sigue requiriendo envío SMTP correcto.
   Un envío interrumpido cuyo estado es pending no se reenvía automáticamente:
   SMTP no garantiza exactamente una entrega. Revisarlo antes de repetir.
 - Los enlaces telefónicos, sociales y de WhatsApp de las demás secciones

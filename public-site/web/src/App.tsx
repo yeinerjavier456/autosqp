@@ -19,6 +19,7 @@ import { WhatsAppFloatingButton } from './components/WhatsAppFloatingButton';
 import { Footer } from './components/Footer';
 import { InventoryProvider, useInventory } from './inventory';
 import PublicSalesChatbot from '../../../frontend/src/components/PublicSalesChatbot';
+import { creditFormUrl } from './credit';
 
 const tabs: PageTab[] = ['inicio', 'inventario', 'financiamiento', 'reactivacion-financiera', 'nosotros', 'contacto', 'faq'];
 function Website() {
@@ -62,7 +63,7 @@ function Website() {
     <Footer onSelectTab={navigate} onOpenLegal={setLegalModalType} onOpenSellModal={() => setIsSellModalOpen(true)} onOpenAdmin={() => window.location.assign('/crm/login')} />
     {!chat && <WhatsAppFloatingButton />}
     {chat && <div className="text-slate-900"><PublicSalesChatbot key={chat.key} autoOpen vehicleId={chat.vehicleId} sourcePage={`website:${currentTab}`} sessionStorageKey="autosqp_website_chat" brandName="Autos QP" /></div>}
-    {selectedVehicle && <VehicleDetailModal key={selectedVehicle.id} vehicle={selectedVehicle} onClose={() => setSelectedVehicle(null)} onSimulateCredit={() => window.location.assign('/crm/credito')} />}
+    {selectedVehicle && <VehicleDetailModal key={selectedVehicle.id} vehicle={selectedVehicle} onClose={() => setSelectedVehicle(null)} onSimulateCredit={() => window.location.assign(creditFormUrl())} />}
     <SellCarModal isOpen={isSellModalOpen} onClose={() => setIsSellModalOpen(false)} />
     <LegalModal type={legalModalType} onClose={() => setLegalModalType(null)} />
   </div>;

@@ -50,14 +50,103 @@ class PublicWebsiteTests(unittest.TestCase):
     def test_smtp_failure_is_not_acknowledged_and_retry_uses_existing_message(self):
         self.run_case('''
             deliver.side_effect = RuntimeError('mail unavailable')
-            try: send()
-            except HTTPException as error: assert error.status_code == 503
-            else: raise AssertionError('false success')
+            result = send()
+            assert result['received'] and not result['sent']
+            assert db.query(models.Lead).count() == 1
             assert db.query(models.PublicWebsiteContact).one().state == 'failed'
             deliver.side_effect = None
             assert send()['sent']
             row = db.query(models.PublicWebsiteContact).one()
             assert row.state == 'sent' and row.attempts == 2
+            assert db.query(models.Lead).count() == 1
+        ''')
+
+    def test_contact_subject_routes_to_leads_purchases_and_reactivation(self):
+        self.run_case('''
+            db.add_all([models.Role(id=1, name='asesor'), models.Role(id=2, name='compras'), models.Role(id=3, name='reactivacion')])
+            db.add_all([models.User(id=i, company_id=1, role_id=i, email=f'u{i}@test.invalid', auto_assign_leads=True) for i in [1,2,3]])
+            db.commit()
+            for i, subject in enumerate(['Comprar vehículo', 'Financiamiento', 'Seguros', 'Garantía opcional', 'Otro', 'Vender mi vehículo', 'Reactivación Financiera']):
+                data = ContactMessage(**dict(payload.model_dump(), request_id=f'routing-request-{i:020d}', phone=f'300111{i:04d}', subject=subject))
+                result = send(data=data, ip=f'8.0.0.{i}')
+                lead = db.query(models.Lead).filter_by(phone=data.phone).one()
+                if subject == 'Vender mi vehículo':
+                    purchase = db.query(models.CreditApplication).one()
+                    assert purchase.lead_id == lead.id and purchase.assigned_to_id == 2
+                    assert '[PURCHASE_REQUEST]' in purchase.notes and result['destination'] == 'purchases'
+                elif subject == 'Reactivación Financiera':
+                    assert lead.status == 'new' and lead.assigned_to_id == 3 and result['destination'] == 'financial_solutions'
+                else:
+                    assert lead.status == 'new' and lead.assigned_to_id == 1 and result['destination'] == 'leads'
+            assert db.query(models.Lead).count() == 7
+            assert db.query(models.CreditApplication).count() == 1
+        ''')
+
+    def test_purchase_retry_and_repeat_contact_do_not_duplicate_leads(self):
+        self.run_case('''
+            data = ContactMessage(**dict(payload.model_dump(), subject='Vender mi vehículo', vehicle_make='Mazda', vehicle_plate='ABC123'))
+            deliver.side_effect = RuntimeError('SMTP down')
+            assert send(data=data)['received']
+            deliver.side_effect = None
+            assert send(data=data)['sent']
+            assert db.query(models.CreditApplication).count() == 1
+            assert db.query(models.Lead).count() == 1
+            purchase = db.query(models.CreditApplication).one()
+            assert purchase.purchase_vehicle_plate == 'ABC123'
+            send(data=ContactMessage(**dict(payload.model_dump(), request_id='another-request-1234567890')))
+            assert db.query(models.Lead).count() == 1
+            assert db.query(models.LeadNote).count() == 2
+        ''')
+
+    def test_reactivation_moves_existing_contact_and_requires_eligible_staff(self):
+        self.run_case('''
+            data = ContactMessage(**dict(payload.model_dump(), subject='Reactivación Financiera', email=None))
+            try: send(data=data)
+            except HTTPException as error: assert error.status_code == 503
+            else: raise AssertionError('invisible unassigned case accepted')
+            assert db.query(models.Lead).count() == 0
+            db.add(models.Role(id=3, name='reactivacion', label='Reactivación Financiera'))
+            db.add(models.Role(id=1, name='asesor'))
+            db.add(models.User(id=3, role_id=3, company_id=1, email='reactivation@test.invalid'))
+            db.add(models.User(id=1, role_id=1, company_id=1, email='advisor@test.invalid', auto_assign_leads=True))
+            db.commit()
+            send()
+            lead = db.query(models.Lead).one()
+            lead.status = 'contacted'; db.commit()
+            assert send(data=ContactMessage(**dict(data.model_dump(), request_id='reactivation-request-123456')))['received']
+            assert db.query(models.Lead).count() == 1
+            db.refresh(lead)
+            assert lead.assigned_to_id == 3 and lead.status == 'new'
+            assert db.query(models.LeadHistory).count() >= 2
+            lead.status = 'lost'; db.commit()
+            send(data=ContactMessage(**dict(data.model_dump(), request_id='reactivation-renewed-123456')))
+            db.refresh(lead)
+            assert lead.status == 'new' and lead.assigned_to_id == 3
+            send(data=ContactMessage(**dict(payload.model_dump(), request_id='commercial-request-12345678')))
+            db.refresh(lead)
+            assert lead.status == 'new' and lead.assigned_to_id == 1
+            assert db.query(models.Lead).count() == 1
+        ''')
+
+    def test_newsletter_does_not_create_lead_and_still_reports_smtp_failure(self):
+        self.run_case('''
+            newsletter = ContactMessage(**dict(payload.model_dump(), subject='Suscripción al boletín', phone=''))
+            deliver.side_effect = RuntimeError('SMTP down')
+            try: send(data=newsletter)
+            except HTTPException as error: assert error.status_code == 503
+            else: raise AssertionError('newsletter false success')
+            assert db.query(models.Lead).count() == 0
+        ''')
+
+    def test_capacity_failure_rolls_back_contact_and_crm_records(self):
+        self.run_case('''
+            def limit(*args): raise HTTPException(403, 'Capacity reached')
+            try: submit_contact(db, company, payload, '1.2.3.4', loader, deliver, limit)
+            except HTTPException as error: assert error.status_code == 403
+            else: raise AssertionError('capacity bypassed')
+            assert db.query(models.Lead).count() == 0
+            assert db.query(models.PublicWebsiteContact).count() == 0
+            assert deliver.call_count == 0
         ''')
 
     def test_pending_message_and_changed_idempotency_payload_are_not_resent(self):

@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Link } from 'react-router-dom';
 import PublicBrandLogo from '../components/PublicBrandLogo';
 import { usePublicCompany } from '../utils/publicCompany';
+import './PublicCreditForm.css';
 import {
   COLOMBIA_CITY_OPTIONS,
   VEHICLE_BRANDS,
@@ -200,6 +201,17 @@ const writeStoredDraft = (storageKey, formValue, stepValue) => {
 
 const PublicCreditForm = () => {
   const company = usePublicCompany();
+  const isWebsiteTheme = new URLSearchParams(window.location.search).get('website') === '1';
+  const requestedHome = new URLSearchParams(window.location.search).get('return');
+  const websiteHome = requestedHome === '/preview/' ? '/preview/' : '/';
+  useEffect(() => {
+    if (!isWebsiteTheme) return undefined;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap';
+    document.head.appendChild(link);
+    return () => link.remove();
+  }, [isWebsiteTheme]);
   const canvasRef = useRef(null);
   const drawingRef = useRef(false);
   const accessToken = useMemo(() => {
@@ -268,12 +280,12 @@ const PublicCreditForm = () => {
   }, [isEnabled]);
 
   const theme = useMemo(() => {
-    const primary = company?.primary_color || '#2563eb';
-    const secondary = company?.secondary_color || '#0f172a';
-    const header = company?.public_header_color || secondary;
-    const headerText = company?.public_header_text_color || '#ffffff';
-    const body = company?.public_body_color || '#f8fafc';
-    const text = company?.public_body_text_color || '#0f172a';
+    const primary = isWebsiteTheme ? '#00C896' : company?.primary_color || '#2563eb';
+    const secondary = isWebsiteTheme ? '#17212b' : company?.secondary_color || '#0f172a';
+    const header = isWebsiteTheme ? '#0d1014' : company?.public_header_color || secondary;
+    const headerText = isWebsiteTheme ? '#ffffff' : company?.public_header_text_color || '#ffffff';
+    const body = isWebsiteTheme ? '#0c0f13' : company?.public_body_color || '#f8fafc';
+    const text = isWebsiteTheme ? '#e5e7eb' : company?.public_body_text_color || '#0f172a';
     return {
       primary,
       secondary,
@@ -285,7 +297,7 @@ const PublicCreditForm = () => {
       primaryBorder: withAlpha(primary, '38'),
       secondarySoft: withAlpha(secondary, '12'),
     };
-  }, [company]);
+  }, [company, isWebsiteTheme]);
 
   useEffect(() => {
     if (!accessToken) return undefined;
@@ -897,10 +909,10 @@ const PublicCreditForm = () => {
   };
 
   return (
-    <div className="public-theme-scope min-h-screen" style={{ '--public-body-text': theme.text, background: theme.body, color: theme.text }}>
+    <div className={`public-theme-scope min-h-screen ${isWebsiteTheme ? 'website-credit-form' : ''}`} style={{ '--public-body-text': theme.text, background: theme.body, color: theme.text }}>
       <header className="sticky top-0 z-40 border-b backdrop-blur" style={{ backgroundColor: theme.header, borderColor: theme.primarySoft, color: theme.headerText }}>
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
-          <Link to="/autos" className="flex items-center gap-3">
+          <a href={isWebsiteTheme ? `${websiteHome}#inventario` : '/crm/autos'} className="flex items-center gap-3">
             <PublicBrandLogo
               company={company}
               brandName={brandName}
@@ -911,11 +923,11 @@ const PublicCreditForm = () => {
               secondaryColor={theme.secondary}
             />
             <span className="text-2xl font-black" style={{ color: theme.headerText }}>{brandName}</span>
-          </Link>
+          </a>
           <div className="flex items-center gap-3">
-            <Link to="/autos" className="rounded-xl border px-4 py-2 text-sm font-semibold" style={{ borderColor: theme.primaryBorder, color: theme.headerText }}>
+            <a href={isWebsiteTheme ? `${websiteHome}#inventario` : '/crm/autos'} className="rounded-xl border px-4 py-2 text-sm font-semibold" style={{ borderColor: theme.primaryBorder, color: theme.headerText }}>
               Ver inventario
-            </Link>
+            </a>
             <Link to="/politica-de-privacidad" className="hidden rounded-xl px-3 py-2 text-sm font-semibold md:inline-flex" style={{ color: theme.headerText }}>
               Privacidad
             </Link>
@@ -946,9 +958,9 @@ const PublicCreditForm = () => {
               Recibimos tu solicitud de crédito correctamente. El equipo comercial revisará la información y continuará el seguimiento.
             </p>
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-              <Link to="/autos" className="rounded-xl px-5 py-3 text-sm font-bold text-white" style={{ backgroundColor: theme.primary }}>
+              <a href={isWebsiteTheme ? `${websiteHome}#inventario` : '/crm/autos'} className="rounded-xl px-5 py-3 text-sm font-bold text-white" style={{ backgroundColor: theme.primary }}>
                 Ver inventario
-              </Link>
+              </a>
               <button type="button" onClick={startAnotherForm} className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700">
                 Enviar otro formulario
               </button>
