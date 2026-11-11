@@ -4652,6 +4652,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const [visibleLeadsByStatus, setVisibleLeadsByStatus] = useState({});
     const [boardTotalsByStatus, setBoardTotalsByStatus] = useState({});
     const [boardAlertsByLead, setBoardAlertsByLead] = useState({});
+    const boardAlertsRequest = useRef(null);
+    useEffect(() => () => boardAlertsRequest.current?.abort(), []);
 
     // Modal State - Sales
     const [showSaleModal, setShowSaleModal] = useState(false);
@@ -4761,6 +4763,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
     useEffect(() => {
         setLoading(true);
+        boardAlertsRequest.current?.abort();
         setLeads([]);
         setVisibleLeadsByStatus({});
         setBoardTotalsByStatus({});
@@ -5007,6 +5010,9 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     };
 
     const fetchBoardAlerts = async (leadItems = []) => {
+        boardAlertsRequest.current?.abort();
+        const controller = new AbortController();
+        boardAlertsRequest.current = controller;
         const leadIds = (Array.isArray(leadItems) ? leadItems : [])
             .map((lead) => parseUserId(lead?.id))
             .filter((leadId) => leadId !== null);
@@ -5017,20 +5023,23 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
 
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.post(`${API_BASE_URL}/rules/board-alerts`, {
-                lead_ids: leadIds
-            }, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
             const alertsByLead = {};
-            (Array.isArray(response.data) ? response.data : []).forEach((alert) => {
-                const leadId = parseUserId(alert?.lead_id);
-                if (leadId !== null && !alertsByLead[leadId]) {
-                    alertsByLead[leadId] = alert;
-                }
-            });
+            for (let offset = 0; offset < leadIds.length; offset += 100) {
+                const response = await axios.post(`${API_BASE_URL}/rules/board-alerts`, {
+                    lead_ids: leadIds.slice(offset, offset + 100)
+                }, {
+                    headers: { Authorization: `Bearer ${token}` },
+                    signal: controller.signal
+                });
+                if (controller.signal.aborted) return;
+                (Array.isArray(response.data) ? response.data : []).forEach((alert) => {
+                    const leadId = parseUserId(alert?.lead_id);
+                    if (leadId !== null && !alertsByLead[leadId]) alertsByLead[leadId] = alert;
+                });
+            }
             setBoardAlertsByLead(alertsByLead);
         } catch (error) {
+            if (controller.signal.aborted) return;
             console.error("Error fetching board alerts", error);
             setBoardAlertsByLead({});
         }

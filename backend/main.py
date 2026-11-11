@@ -2894,6 +2894,16 @@ def ensure_lead_query_indexes():
                     "ix_notifications_user_created",
                     "CREATE INDEX ix_notifications_user_created ON notifications (user_id, created_at, id)"
                 ),
+                (
+                    "lead_reminders",
+                    "ix_reminders_user_pending_id",
+                    "CREATE INDEX ix_reminders_user_pending_id ON lead_reminders (user_id, is_completed, id)"
+                ),
+                (
+                    "lead_appointments",
+                    "ix_appointments_user_pending_status_id",
+                    "CREATE INDEX ix_appointments_user_pending_status_id ON lead_appointments (user_id, is_notified, status, id)"
+                ),
             ]
 
             for table_name, index_name, ddl in desired_indexes:

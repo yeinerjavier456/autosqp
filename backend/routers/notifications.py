@@ -1,14 +1,12 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
-import models, schemas, database
+import models, schemas
 from dependencies import get_current_user, get_db, ensure_can_modify_lead, get_effective_role_name
 import datetime
 import os
 from zoneinfo import ZoneInfo
-from routers.rules import check_and_trigger_rules
-from db_work_lock import optional_work_lock
 
 router = APIRouter(
     prefix="/notifications",
@@ -16,28 +14,6 @@ router = APIRouter(
 )
 
 BOGOTA_TZ = ZoneInfo("America/Bogota")
-RULES_CHECK_INTERVAL_SECONDS = int(os.getenv("RULES_CHECK_INTERVAL_SECONDS", "45"))
-LAST_RULES_CHECK_BY_COMPANY: dict[int, datetime.datetime] = {}
-
-def maybe_run_automation_rules(db: Session, company_id: Optional[int]):
-    if not company_id:
-        return
-
-    now_local = datetime.datetime.now(BOGOTA_TZ)
-    last_run = LAST_RULES_CHECK_BY_COMPANY.get(company_id)
-    if last_run and (now_local - last_run).total_seconds() < RULES_CHECK_INTERVAL_SECONDS:
-        return
-
-    # Bloqueamos el tiempo de ejecución ANTES para que otras peticiones concurrentes reboten
-    LAST_RULES_CHECK_BY_COMPANY[company_id] = now_local
-    
-    try:
-        with optional_work_lock(database.engine, f'autosqp-rules-{company_id}') as acquired:
-            if acquired:
-                check_and_trigger_rules(db, company_id)
-    except Exception as e:
-        db.rollback()
-        raise e
 
 @router.get("/", response_model=List[schemas.Notification])
 def get_notifications(
@@ -46,20 +22,17 @@ def get_notifications(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    try:
-        maybe_run_automation_rules(db, current_user.company_id)
-    except Exception as exc:
-        print(f"Notification rules check failed: {exc}")
-
     # Lazy check for reminders
     try:
         check_due_reminders(db, current_user.id)
     except Exception as exc:
+        db.rollback()
         print(f"Notification reminder check failed: {exc}")
 
     try:
         check_due_appointments(db, current_user.id)
     except Exception as exc:
+        db.rollback()
         print(f"Notification appointment check failed: {exc}")
 
     notifications_query = db.query(models.Notification).filter(
@@ -73,7 +46,7 @@ def get_notifications(
             models.Notification.title != "Lead reasignado automáticamente"
         )
 
-    notifications = notifications_query.order_by(models.Notification.created_at.desc()).offset(skip).limit(limit).all()
+    notifications = notifications_query.order_by(models.Notification.created_at.desc()).offset(max(0, skip)).limit(max(1, min(limit, 100))).all()
     
     return notifications
 
@@ -154,11 +127,11 @@ def check_due_reminders(db: Session, user_id: int):
     """
     now = datetime.datetime.now(BOGOTA_TZ).replace(tzinfo=None)
     
-    due_reminders = db.query(models.LeadReminder).filter(
+    due_reminders = db.query(models.LeadReminder).options(joinedload(models.LeadReminder.lead)).filter(
         models.LeadReminder.user_id == user_id,
         models.LeadReminder.is_completed == 0,
         models.LeadReminder.reminder_date <= now
-    ).all()
+    ).order_by(models.LeadReminder.id).limit(100).with_for_update(skip_locked=True, of=models.LeadReminder).all()
     
     for reminder in due_reminders:
         # Create Notification
@@ -182,12 +155,12 @@ def check_due_reminders(db: Session, user_id: int):
 def check_due_appointments(db: Session, user_id: int):
     now = datetime.datetime.now(BOGOTA_TZ).replace(tzinfo=None)
 
-    due_appointments = db.query(models.LeadAppointment).filter(
+    due_appointments = db.query(models.LeadAppointment).options(joinedload(models.LeadAppointment.lead)).filter(
         models.LeadAppointment.user_id == user_id,
         models.LeadAppointment.is_notified == 0,
         models.LeadAppointment.status == "scheduled",
         models.LeadAppointment.appointment_date <= now
-    ).all()
+    ).order_by(models.LeadAppointment.id).limit(100).with_for_update(skip_locked=True, of=models.LeadAppointment).all()
 
     for appointment in due_appointments:
         lead_name = appointment.lead.name if appointment.lead else "Lead Desconocido"

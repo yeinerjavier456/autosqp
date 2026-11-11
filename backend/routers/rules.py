@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Body
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
 from typing import List, Optional
 import models, schemas
@@ -8,6 +8,10 @@ import random
 from zoneinfo import ZoneInfo
 from dependencies import get_current_user, get_db
 import lead_assignment
+from db_work_lock import optional_work_lock
+
+ALERT_BATCH_SIZE = 100
+ALERT_CYCLE_INTERVAL = 60
 
 router = APIRouter(
     prefix="/rules",
@@ -185,7 +189,8 @@ def perform_rule_reassignment_if_needed(
     db: Session,
     rule: models.AutomationRule,
     lead: models.Lead,
-    alert_count_after_current_log: int
+    alert_count_after_current_log: int,
+    users_by_id=None,
 ):
     if not getattr(rule, "reassign_after_alerts_enabled", False):
         return
@@ -198,12 +203,14 @@ def perform_rule_reassignment_if_needed(
         return
 
     if target_user_id:
-        target_user = db.query(models.User).join(models.Role, isouter=True).filter(
+        target_user = users_by_id.get(target_user_id) if users_by_id is not None else db.query(models.User).join(models.Role, isouter=True).filter(
             models.User.id == target_user_id,
             models.User.company_id == rule.company_id
         ).first()
     else:
-        candidates = get_reassignment_candidates(db, rule.company_id, excluded_user_id=current_assigned_to_id)
+        candidates = ([user for user in users_by_id.values() if user.id != current_assigned_to_id
+            and getattr(user, 'is_active', True) and can_receive_alert_reassignment(user)]
+            if users_by_id is not None else get_reassignment_candidates(db, rule.company_id, excluded_user_id=current_assigned_to_id))
         target_user = random.choice(candidates) if candidates else None
     if not can_receive_alert_reassignment(target_user):
         return
@@ -231,7 +238,7 @@ def perform_rule_reassignment_if_needed(
         link=f"/admin/leads?leadId={lead.id}"
     ))
     if previous_assigned_to_id and previous_assigned_to_id != target_user.id:
-        previous_user = db.query(models.User).join(models.Role, isouter=True).filter(
+        previous_user = users_by_id.get(previous_assigned_to_id) if users_by_id is not None else db.query(models.User).join(models.Role, isouter=True).filter(
             models.User.id == previous_assigned_to_id
         ).first()
         if is_admin_user(previous_user):
@@ -298,6 +305,8 @@ def get_board_alerts(
     raw_lead_ids = payload.get("lead_ids") if isinstance(payload, dict) else []
     if not isinstance(raw_lead_ids, list):
         return []
+    if len(raw_lead_ids) > ALERT_BATCH_SIZE:
+        raise HTTPException(status_code=400, detail='Consulta las alertas en lotes de máximo 100 leads')
     lead_ids = []
     for value in raw_lead_ids:
         try:
@@ -344,6 +353,7 @@ def get_board_alerts(
         models.SentAlertLog.lead_id,
         func.count(models.SentAlertLog.id).label("sent_count")
     ).filter(
+        models.SentAlertLog.rule_id.in_([rule.id for rule in rules]),
         models.SentAlertLog.lead_id.in_([lead.id for lead in leads])
     ).group_by(models.SentAlertLog.rule_id, models.SentAlertLog.lead_id).all()
     sent_count_by_rule_lead = {
@@ -428,6 +438,8 @@ def delete_rule(
     if not db_rule:
         raise HTTPException(status_code=404, detail="Rule not found")
     db.query(models.SentAlertLog).filter(models.SentAlertLog.rule_id == rule_id).delete(synchronize_session=False)
+    db.query(models.AlertRuleProgress).filter(models.AlertRuleProgress.rule_id == rule_id,
+        models.AlertRuleProgress.company_id == company_id).delete(synchronize_session=False)
 
     db.delete(db_rule)
     db.commit()
@@ -436,18 +448,26 @@ def delete_rule(
 # --- Logic Engine ---
 
 def check_and_trigger_rules(db: Session, company_id: int):
-    """
-    Evaluates active rules against leads and generates notifications.
-    """
-    # optimization: fetch rules joined with company to check context if needed
-    rules = db.query(models.AutomationRule).filter(
-        models.AutomationRule.company_id == company_id,
-        models.AutomationRule.is_active == 1
-    ).all()
-    
-    for rule in rules:
-        if rule.event_type == 'time_in_status':
-            evaluate_time_in_status(db, rule)
+    """Compatibility entry point: HTTP callers never execute rule scans."""
+    return {'status': 'queued', 'message': 'El proceso de alertas revisa la empresa en segundo plano.'}
+
+
+def process_rule_batch(db: Session, rule_id: int, company_id: int):
+    db.rollback()  # Start a fresh snapshot only after acquiring the company lock.
+    # All worker instances coordinate on the same company, not just one rule.
+    with optional_work_lock(db.get_bind(), f'autosqp-rules-{company_id}') as acquired:
+        if not acquired:
+            return False
+        rule = db.query(models.AutomationRule).filter(
+            models.AutomationRule.id == rule_id,
+            models.AutomationRule.company_id == company_id,
+            models.AutomationRule.is_active == 1,
+            models.AutomationRule.event_type == 'time_in_status',
+        ).with_for_update().first()
+        if not rule:
+            db.rollback()
+            return False
+        return evaluate_time_in_status(db, rule)
 
 def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
     """
@@ -455,6 +475,18 @@ def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
     """
     # Calculate threshold time
     now = now_utc_naive_from_bogota()
+    progress = db.get(models.AlertRuleProgress, rule.id)
+    if progress is None:
+        progress = models.AlertRuleProgress(rule_id=rule.id, company_id=rule.company_id,
+            last_lead_id=0, processed_count=0)
+        db.add(progress)
+    if progress.next_run_at and progress.next_run_at > now:
+        db.rollback()
+        return
+    if progress.cycle_at is None:
+        progress.cycle_at = now
+        progress.last_lead_id = 0
+        progress.processed_count = 0
     delta = timedelta(minutes=0)
     if rule.time_unit == 'minutes':
         delta = timedelta(minutes=rule.time_value)
@@ -463,20 +495,34 @@ def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
     elif rule.time_unit == 'days':
         delta = timedelta(days=rule.time_value)
     
-    threshold_time = now - delta
+    threshold_time = progress.cycle_at - delta
     
     # Query Leads
     # We look for leads in the statuses matching the rule AND matching the COMPANY
     # AND status_updated_at < threshold_time
     # AND NOT EXISTS in sent_log for this rule
     
-    leads = db.query(models.Lead).filter(
+    already_sent = db.query(models.SentAlertLog.id).filter(
+        models.SentAlertLog.rule_id == rule.id,
+        models.SentAlertLog.lead_id == models.Lead.id,
+    )
+    if rule.is_repeating:
+        already_sent = already_sent.filter(models.SentAlertLog.sent_at > now - timedelta(minutes=rule.repeat_interval))
+    lead_query = db.query(models.Lead).filter(
         models.Lead.company_id == rule.company_id, # Must belong to same company
+        models.Lead.deleted_at.is_(None),
+        models.Lead.id > progress.last_lead_id,
         models.Lead.status == rule.condition_value,
-        models.Lead.status_updated_at <= threshold_time
-    ).all()
+        models.Lead.status_updated_at <= threshold_time,
+        ~already_sent.exists(),
+    )
+    leads = lead_query.order_by(models.Lead.id).limit(ALERT_BATCH_SIZE).with_for_update(skip_locked=True).all()
 
     if not leads:
+        progress.cycle_at = None
+        progress.last_lead_id = 0
+        progress.next_run_at = now + timedelta(seconds=ALERT_CYCLE_INTERVAL)
+        db.commit()
         return
 
     lead_ids = [lead.id for lead in leads]
@@ -493,7 +539,7 @@ def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
 
     users_by_id = {
         user.id: user
-        for user in db.query(models.User).join(models.Role, isouter=True).filter(
+        for user in db.query(models.User).options(joinedload(models.User.role)).filter(
             models.User.company_id == rule.company_id
         ).all()
     }
@@ -524,7 +570,8 @@ def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
             recipients = [recipient_id]
         recipients = [
             uid for uid in recipients
-            if not is_admin_user(users_by_id.get(uid))
+            if uid in users_by_id and getattr(users_by_id[uid], 'is_active', True)
+            and not is_admin_user(users_by_id[uid])
         ]
             
         alert_count_after_current_log = sent_count_by_lead.get(lead.id, 0) + 1
@@ -544,39 +591,22 @@ def evaluate_time_in_status(db: Session, rule: models.AutomationRule):
         # Log it
         log = models.SentAlertLog(rule_id=rule.id, lead_id=lead.id)
         db.add(log)
-        perform_rule_reassignment_if_needed(db, rule, lead, alert_count_after_current_log)
+        perform_rule_reassignment_if_needed(db, rule, lead, alert_count_after_current_log, users_by_id)
         
+    progress.last_lead_id = leads[-1].id
+    progress.processed_count += len(leads)
+    progress.updated_at = now
+    # Notifications, sent logs, assignment and cursor are one transaction. A
+    # crash retries this batch without advancing past uncommitted work.
     db.commit()
 
-import time
-
-LAST_CHECK_TIME_BY_COMPANY: dict[int, float] = {}
-CHECK_INTERVAL = 60
+    return len(leads)
 
 @router.post("/run-checks")
 def trigger_checks(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    """
-    Manual trigger or called by frontend polling to lazy-evaluate rules.
-    Throttled independently per company to avoid locking the DB.
-    """
+    """Compatibility endpoint; the independent worker owns evaluation."""
     company_id = get_rules_company_id(current_user)
-    current_time = time.time()
-    last_check_time = LAST_CHECK_TIME_BY_COMPANY.get(company_id, 0)
-    
-    # Solo ejecutar como maximo 1 vez por minuto
-    if current_time - last_check_time < CHECK_INTERVAL:
-        return {"status": "skipped", "message": "Throttled to prevent DB locks"}
-        
-    LAST_CHECK_TIME_BY_COMPANY[company_id] = current_time
-    
-    try:
-        check_and_trigger_rules(db, company_id)
-    except Exception as e:
-        # Reset on failure to allow retry
-        LAST_CHECK_TIME_BY_COMPANY.pop(company_id, None)
-        raise e
-        
-    return {"status": "checked"}
+    return check_and_trigger_rules(db, company_id)

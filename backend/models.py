@@ -726,6 +726,22 @@ class SentAlertLog(Base):
     sent_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
+class AlertRuleProgress(Base):
+    """Operational cursor, committed atomically with each alert batch.
+
+    No foreign keys: restoring/deleting business records must not be blocked by
+    transient worker state. IDs are always checked against the live rule.
+    """
+    __tablename__ = "alert_rule_progress"
+    rule_id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, nullable=False, index=True)
+    last_lead_id = Column(Integer, nullable=False, default=0)
+    cycle_at = Column(DateTime, nullable=True)
+    next_run_at = Column(DateTime, nullable=True)
+    processed_count = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+
 
 class IntegrationSettings(Base):
     __tablename__ = "integration_settings"

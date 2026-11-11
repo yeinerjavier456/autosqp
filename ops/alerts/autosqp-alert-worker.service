@@ -1,0 +1,26 @@
+[Unit]
+Description=Alertas AutosQP por empresa en lotes con avance persistente
+After=network-online.target mysql.service autosqp.service
+
+[Service]
+Type=simple
+User=autosqp
+Group=www-data
+WorkingDirectory=/home/autosqp/apps/autosqp/backend
+ExecStart=/home/autosqp/apps/autosqp/backend/venv/bin/python /home/autosqp/apps/autosqp/ops/alerts/alerts-worker.py
+Environment=AUTOSQP_COMPANY_BACKUP_ROOT=/var/lib/autosqp-company-backups
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+Nice=10
+CPUQuota=25%
+MemoryHigh=256M
+MemoryMax=512M
+MemorySwapMax=64M
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

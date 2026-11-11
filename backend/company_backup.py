@@ -23,7 +23,7 @@ from sqlalchemy import select, delete, and_, or_, tuple_, DateTime, Date, Numeri
 
 ID_PATTERN = re.compile(r'^\d{8}T\d{6}-[a-f0-9]{8}$')
 FILE_FIELDS = {'file_path', 'business_sheet_url', 'attachments', 'photos', 'media_url', 'form_payload', 'logo_url'}
-EXCLUDED_TABLES = {'companies', 'company_backup_jobs'}
+EXCLUDED_TABLES = {'companies', 'company_backup_jobs', 'alert_rule_progress'}
 
 
 def root_dir():
@@ -178,7 +178,7 @@ def decode_rows(table, rows):
 
 
 def schema_signature(metadata):
-    structure = {table.name: [(col.name, str(col.type)) for col in table.columns] for table in metadata.sorted_tables if table.name != 'company_backup_jobs'}
+    structure = {table.name: [(col.name, str(col.type)) for col in table.columns] for table in metadata.sorted_tables if table.name not in {'company_backup_jobs', 'alert_rule_progress'}}
     return hashlib.sha256(json.dumps(structure, sort_keys=True).encode()).hexdigest()
 
 
@@ -361,6 +361,9 @@ def restore_archive(db, metadata, company_id, backup_id, static_root):
             for table in metadata.sorted_tables:
                 for row in rows.get(table.name, []):
                     db.execute(table.insert().values(**row))
+            if 'alert_rule_progress' in metadata.tables:
+                progress = metadata.tables['alert_rule_progress']
+                db.execute(delete(progress).where(progress.c.company_id == company_id))
             for name in hashes:
                 if not name.startswith('files/'):
                     continue

@@ -104,6 +104,21 @@ class CompanyBackupTests(unittest.TestCase):
         self.assertFalse(saved['verified'])
         self.assertEqual(saved['missing_files'], 1)
 
+    def test_alert_cursor_is_excluded_and_preserves_old_archive_schema_signature(self):
+        signature = backups.schema_signature(self.meta)
+        progress = Table('alert_rule_progress', self.meta, Column('rule_id', Integer, primary_key=True),
+            Column('company_id', Integer), Column('last_lead_id', Integer))
+        progress.create(self.engine)
+        self.db.execute(progress.insert(), [dict(rule_id=1, company_id=1, last_lead_id=100),
+            dict(rule_id=2, company_id=2, last_lead_id=200)])
+        self.db.commit()
+        self.assertEqual(backups.schema_signature(self.meta), signature)
+        saved = self.snapshot()
+        with zipfile.ZipFile(backups.archive_path(1, saved['id'])) as archive:
+            self.assertNotIn('alert_rule_progress', json.loads(archive.read('data.json'))['tables'])
+        backups.restore_archive(self.db, self.meta, 1, saved['id'], self.static)
+        self.assertEqual(self.db.execute(select(progress.c.rule_id)).scalars().all(), [2])
+
     def test_checksum_failure_does_not_modify_database(self):
         saved = self.snapshot()
         path = backups.archive_path(1, saved['id'])

@@ -9,8 +9,13 @@ from sqlalchemy import or_, and_
 import models
 import company_backup as backups
 from database import SessionLocal, Base
+from db_work_lock import optional_work_lock
 
 LEASE_SECONDS = 180
+
+
+class CompanyWorkBusy(ValueError):
+    pass
 
 
 def log_error(context, error):
@@ -112,6 +117,7 @@ def run_claimed(job_id, token):
         stopped.set(); thread.join(); db.close(); return
     company_id, kind, selected, actor = job.company_id, job.kind, job.backup_id, job.requested_by
     entered = False
+    restore_started = False
     try:
         with backups.tenant_lock(company_id):
             entered = True
@@ -119,9 +125,13 @@ def run_claimed(job_id, token):
             if not company or not company.backups_enabled:
                 raise ValueError('Las copias están desactivadas para esta empresa')
             if kind == 'restore':
-                (backups.tenant_dir(company_id) / 'restoring').write_text(job_id, encoding='utf-8')
-                db.query(models.Company).filter(models.Company.id == company_id).with_for_update().first()
-                rescue = backups.restore_archive(db, Base.metadata, company_id, selected, 'static')
+                with optional_work_lock(db.get_bind(), f'autosqp-rules-{company_id}') as acquired:
+                    if not acquired:
+                        raise CompanyWorkBusy('Esperando a que termine el lote de alertas de esta empresa.')
+                    (backups.tenant_dir(company_id) / 'restoring').write_text(job_id, encoding='utf-8')
+                    restore_started = True
+                    db.query(models.Company).filter(models.Company.id == company_id).with_for_update().first()
+                    rescue = backups.restore_archive(db, Base.metadata, company_id, selected, 'static')
                 message = f'Restauración terminada. Copia preventiva: {rescue}. Inicia sesión nuevamente si es necesario.'
                 result_id = selected
             else:
@@ -139,11 +149,11 @@ def run_claimed(job_id, token):
             finish(job_id, token, 'complete', message, result_id)
     except Exception as error:
         db.rollback()
-        if not entered and isinstance(error, ValueError) and str(error).startswith('Ya hay una copia'):
+        if isinstance(error, CompanyWorkBusy) or (not entered and isinstance(error, ValueError) and str(error).startswith('Ya hay una copia')):
             # Another process (e.g. the daily backup) owns the file lock. Wait,
             # rather than marking a valid request as failed/restarted.
             db.query(models.CompanyBackupJob).filter(models.CompanyBackupJob.id == job_id, models.CompanyBackupJob.worker_token == token).update({
-                'state': 'queued', 'message': 'Esperando a que termine otra copia de esta empresa.',
+                'state': 'queued', 'message': str(error) if isinstance(error, CompanyWorkBusy) else 'Esperando a que termine otra copia de esta empresa.',
                 'lease_expires_at': dt.datetime.utcnow() + dt.timedelta(seconds=30),
             }, synchronize_session=False)
             db.commit()
@@ -152,7 +162,7 @@ def run_claimed(job_id, token):
             finish(job_id, token, 'failed', str(error) if isinstance(error, ValueError) else 'La operación falló. Revisa el registro del proceso de copias antes de reintentar.')
     finally:
         stopped.set(); thread.join(); db.close()
-        if entered and kind == 'restore':
+        if restore_started:
             (backups.tenant_dir(company_id) / 'restoring').unlink(missing_ok=True)
 
 
