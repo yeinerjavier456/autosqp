@@ -4645,6 +4645,8 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     const [showLeadUploadModal, setShowLeadUploadModal] = useState(false);
     const [leadUploadFile, setLeadUploadFile] = useState(null);
     const [uploadingLeads, setUploadingLeads] = useState(false);
+    const leadUploadInFlight = useRef(false);
+    const [leadUploadProgress, setLeadUploadProgress] = useState({ stage: '', percent: 0 });
     const [migratingLostLeads, setMigratingLostLeads] = useState(false);
     const [showMyLeadsOnly, setShowMyLeadsOnly] = useState(false);
     const [visibleLeadsByStatus, setVisibleLeadsByStatus] = useState({});
@@ -5882,13 +5884,15 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
     };
 
     const handleUploadLeads = async () => {
-        if (!leadUploadFile || uploadingLeads) return;
+        if (!leadUploadFile || leadUploadInFlight.current) return;
+        leadUploadInFlight.current = true;
         setUploadingLeads(true);
         try {
             const token = localStorage.getItem('token');
             let deletePassword = '';
             let confirmDelete = false;
             const sendUpload = async ({ preview, updateExisting = false }) => {
+                setLeadUploadProgress({ stage: preview ? 'Enviando archivo para validar' : 'Enviando archivo para guardar', percent: 0 });
                 const formData = new FormData();
                 formData.append('file', leadUploadFile);
                 formData.append('preview', preview ? 'true' : 'false');
@@ -5897,10 +5901,17 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                 if (!preview && confirmDelete) formData.append('delete_password', deletePassword);
                 return axios.post(`${API_BASE_URL}/leads/upload`, formData, {
                     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
+                    onUploadProgress: (event) => {
+                        const percent = event.total ? Math.min(100, Math.round(event.loaded * 100 / event.total)) : null;
+                        setLeadUploadProgress({ stage: percent === 100
+                            ? (preview ? 'Validando filas y buscando leads existentes en el servidor' : 'Guardando y procesando los leads en el servidor')
+                            : (preview ? 'Enviando archivo para validar' : 'Enviando archivo para guardar'), percent });
+                    },
                 });
             };
             const previewResponse = await sendUpload({ preview: true });
             const previewResult = previewResponse.data || {};
+            setLeadUploadProgress({ stage: 'Validación terminada. Esperando tu confirmación', percent: null });
             if (Number(previewResult.deletable || 0) > 0) {
                 const escapeText = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
                 const decision = await Swal.fire({
@@ -5941,6 +5952,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             const response = await sendUpload({ preview: false, updateExisting });
             const result = response.data || {};
             const omittedDuplicates = Math.max(Number(result.duplicates || 0) - Number(result.updated || 0), 0);
+            setLeadUploadProgress({ stage: 'Actualizando el tablero con los resultados', percent: null });
             await fetchBoardLeads(searchTerm);
             setShowLeadUploadModal(false);
             setLeadUploadFile(null);
@@ -5960,7 +5972,9 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
             console.error('Error uploading leads', error);
             Swal.fire('Error', error.response?.data?.detail || 'No se pudo procesar el archivo de leads.', 'error');
         } finally {
+            leadUploadInFlight.current = false;
             setUploadingLeads(false);
+            setLeadUploadProgress({ stage: '', percent: 0 });
         }
     };
 
@@ -6094,7 +6108,7 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                             <p className="font-bold">Datos mínimos: nombre y teléfono.</p>
                             <p className="mt-1">Correo, origen, mensaje, estado y responsable son opcionales. Si hay teléfonos existentes, podrás actualizar todos esos leads u omitirlos.</p>
                         </div>
-                        <button type="button" onClick={handleDownloadLeadTemplate} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100">
+                        <button type="button" disabled={uploadingLeads} onClick={handleDownloadLeadTemplate} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
                             Descargar plantilla
                         </button>
                         <label className="mt-5 block text-sm font-semibold text-slate-700">
@@ -6107,6 +6121,16 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                                 className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-100 file:px-4 file:py-2 file:font-bold file:text-blue-700"
                             />
                         </label>
+                        {uploadingLeads && <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4" role="status" aria-live="polite" aria-busy="true">
+                            <div className="mb-2 flex items-center justify-between gap-3 text-sm font-semibold text-blue-900">
+                                <span>{leadUploadProgress.stage || 'Preparando carga...'}</span>
+                                {leadUploadProgress.stage.startsWith('Enviando') && leadUploadProgress.percent !== null && <span>{leadUploadProgress.percent}%</span>}
+                            </div>
+                            <div className="h-3 overflow-hidden rounded-full bg-blue-100" role="progressbar" aria-label={leadUploadProgress.stage} aria-valuemin={0} aria-valuemax={100} aria-valuenow={leadUploadProgress.stage.startsWith('Enviando') && leadUploadProgress.percent !== null ? leadUploadProgress.percent : undefined}>
+                                <div className={`h-full rounded-full bg-blue-600 transition-[width] duration-300 ${leadUploadProgress.stage.startsWith('Enviando') && leadUploadProgress.percent !== null ? '' : 'animate-pulse'}`} style={{ width: leadUploadProgress.stage.startsWith('Enviando') && leadUploadProgress.percent !== null ? `${leadUploadProgress.percent}%` : '100%' }} />
+                            </div>
+                            <p className="mt-2 text-xs text-blue-800">El porcentaje corresponde al envío del archivo. La validación y el guardado continúan en el servidor. No cierres esta ventana ni vuelvas a enviar la carga.</p>
+                        </div>}
                         <div className="mt-6 flex justify-end gap-3">
                             <button type="button" disabled={uploadingLeads} onClick={() => setShowLeadUploadModal(false)} className="rounded-xl border border-slate-300 px-4 py-2 font-semibold text-slate-600">Cancelar</button>
                             <button type="button" disabled={uploadingLeads || !leadUploadFile} onClick={handleUploadLeads} className="rounded-xl bg-blue-600 px-5 py-2 font-bold text-white hover:bg-blue-700 disabled:opacity-60">{uploadingLeads ? 'Procesando...' : 'Cargar leads'}</button>
