@@ -13,6 +13,8 @@ from openpyxl import Workbook, load_workbook
 class Field:
     def __eq__(self, other): return self
     def is_(self, other): return self
+    def desc(self): return self
+    def in_(self, other): return self
 
 
 class Query:
@@ -21,6 +23,7 @@ class Query:
     def with_for_update(self): return self
     def first(self): return self.value
     def all(self): return [self.value] if self.value else []
+    def order_by(self, *args): return self
 
 
 class UploadError(Exception):
@@ -32,7 +35,7 @@ class UploadError(Exception):
 class LeadExcelRoundtripTests(unittest.TestCase):
     def setUp(self):
         tree = ast.parse(Path(__file__).with_name('main.py').read_text(encoding='utf-8'))
-        names = {'_lead_excel_responsible_label', '_add_lead_excel_selectors', 'upload_leads_xlsx'}
+        names = {'_lead_excel_responsible_label', '_add_lead_excel_selectors', 'upload_leads_xlsx', 'export_leads_xlsx'}
         nodes = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in names]
         for node in nodes:
             node.decorator_list = []
@@ -147,6 +150,40 @@ class LeadExcelRoundtripTests(unittest.TestCase):
         self.assertEqual(len(saved.active.data_validations.dataValidation), 2)
         self.assertEqual(saved.defined_names['EstadosLead'].attr_text, "'Opciones'!$A$1:$A$3")
         self.assertEqual(saved['Opciones']['A3'].value, 'Eliminar')
+
+    def test_large_export_has_filters_and_dropdowns_without_structured_tables(self):
+        import zipfile
+        class Rows(Query):
+            def all(self): return self.value
+        leads = [NS(id=index, name=f'Cliente {index}', created_at=None, source='web', status='new',
+                    phone=f'300{index:07}', email='', assigned_to=self.user, supervisors=[], message='')
+                 for index in range(1, 1501)]
+        users = [NS(id=index, full_name=f'Empleado {index}', email=f'empleado{index}@empresa.com') for index in range(400)]
+        for name in ['created_at', 'company_id']:
+            setattr(self.context['models'].Lead, name, Field())
+        self.context['models'].User.is_active = Field()
+        self.context['models'].PublicCreditSubmission = type('Submission', (), {'lead_id': Field(), 'created_at': Field()})
+        self.context['models'].CreditApplication = type('Credit', (), {'lead_id': Field(), 'updated_at': Field(), 'created_at': Field()})
+        def query(model):
+            if model is self.context['models'].User: return Rows(users)
+            if model is self.context['models'].Company: return Query(NS())
+            return Rows([])
+        self.context.update(
+            apply_lead_access_filters=lambda *args, **kwargs: Rows(leads),
+            build_lead_summary_query=lambda db: None,
+            _public_credit_bogota_datetime=lambda value: None,
+            normalize_lead_status_value=lambda value: value,
+            StreamingResponse=lambda buffer, **kwargs: buffer.getvalue(),
+        )
+        payload = self.context['export_leads_xlsx'](None, None, None, NS(query=query), NS(company_id=3))
+        with zipfile.ZipFile(BytesIO(payload)) as archive:
+            self.assertFalse(any(name.startswith('xl/tables/') for name in archive.namelist()))
+        saved = load_workbook(BytesIO(payload))
+        self.assertEqual(saved['Leads'].max_row, 1501)
+        self.assertEqual(saved['Leads'].auto_filter.ref, 'A1:N1501')
+        self.assertEqual(saved.defined_names['ResponsablesLead'].attr_text, "'Opciones'!$B$1:$B$401")
+        validations = saved['Leads'].data_validations.dataValidation
+        self.assertEqual([str(item.sqref) for item in validations], ['H2:H10001', 'I2:I10001'])
 
 
 if __name__ == '__main__':

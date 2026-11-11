@@ -7927,7 +7927,7 @@ def _add_lead_excel_selectors(wb, ws, users, statuses, status_column, responsibl
         validation.errorTitle = "Selecciona una opción válida"
         validation.error = "Usa una de las opciones disponibles en la lista."
         ws.add_data_validation(validation)
-        validation.add(f"{target}2:{target}{max(last_row, 1001)}")
+        validation.add(f"{target}2:{target}{max(last_row, 10001)}")
     options.sheet_state = "hidden"
 
 
@@ -7986,7 +7986,6 @@ def export_leads_xlsx(
     try:
         from openpyxl import Workbook
         from openpyxl.styles import Alignment, Font, PatternFill
-        from openpyxl.worksheet.table import Table, TableStyleInfo
     except ImportError:
         raise HTTPException(status_code=500, detail="La librería openpyxl no está instalada en el servidor")
 
@@ -8049,19 +8048,22 @@ def export_leads_xlsx(
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = ws.dimensions
-    widths = [10, 21, 28, 18, 18, 30, 16, 20, 28, 34, 34, 14, 52, 28]
+    widths = [10, 21, 28, 18, 18, 30, 16, 25, 62, 34, 34, 14, 52, 28]
     for index, width in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(1, index).column_letter].width = width
     for row in ws.iter_rows(min_row=2):
         for cell in row:
-            cell.alignment = Alignment(vertical="top", wrap_text=cell.column in {9, 10, 11, 13, 14})
+            cell.alignment = Alignment(vertical="top", wrap_text=cell.column in {10, 11, 13, 14})
+            # User text must remain text (never Excel formulas).
+            if isinstance(cell.value, str):
+                cell.data_type = "s"
+            if cell.row % 2 == 0:
+                cell.fill = PatternFill("solid", fgColor="F1F5F9")
         row[1].number_format = "dd/mm/yyyy hh:mm"
         for text_column in (4, 5, 12):
             row[text_column - 1].number_format = "@"
-    if leads:
-        table = Table(displayName="TablaLeads", ref=f"A1:N{len(leads) + 1}")
-        table.tableStyleInfo = TableStyleInfo(name="TableStyleMedium2", showRowStripes=True, showFirstColumn=False, showLastColumn=False)
-        ws.add_table(table)
+    # A plain filtered range avoids Excel repairing/removing the structured table.
+    # Dropdown validation remains independent from table XML.
 
     _add_lead_excel_selectors(wb, ws, responsible_users,
         FINANCIAL_SOLUTION_STATUSES if board_scope == "ally" else get_company_allowed_lead_statuses(company),
@@ -8101,7 +8103,7 @@ def download_leads_upload_template(
         cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    widths = [30, 20, 32, 18, 52, 22, 34]
+    widths = [30, 20, 32, 18, 52, 25, 62]
     for index, width in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(1, index).column_letter].width = width
     ws.freeze_panes = "A2"
@@ -8226,6 +8228,23 @@ async def upload_leads_xlsx(
     files_to_delete = set()
     seen_delete_ids = set()
     seen_lead_ids = set()
+    # Index once per upload; the previous per-row duplicate lookup scanned the
+    # entire company's leads repeatedly and timed out on large workbooks.
+    company_leads = db.query(models.Lead).filter(
+        models.Lead.company_id == current_user.company_id,
+        models.Lead.deleted_at.is_(None),
+    ).all()
+    leads_by_id = {lead.id: lead for lead in company_leads}
+    leads_by_phone = {}
+    for lead in sorted(company_leads, key=lambda item: item.id, reverse=True):
+        phone_key = normalize_lead_duplicate_phone(lead.phone)
+        if phone_key:
+            leads_by_phone.setdefault(phone_key, lead)
+    company_users = db.query(models.User).filter(models.User.company_id == current_user.company_id).all()
+    users_by_email = {str(user.email or '').lower(): user for user in company_users}
+    users_by_name = {}
+    for user in company_users:
+        users_by_name.setdefault(str(user.full_name or '').lower(), []).append(user)
 
     def cell_value(row, header_name):
         index = headers.get(header_name)
@@ -8278,6 +8297,10 @@ async def upload_leads_xlsx(
                     raise HTTPException(status_code=403, detail="El borrado definitivo requiere confirmación y la contraseña correcta de Cuentas")
                 from lead_purge import purge_lead_records
                 paths, counts = purge_lead_records(db, models.Base.metadata, lead_id)
+                leads_by_id.pop(lead_id, None)
+                deleted_phone = normalize_lead_duplicate_phone(lead.phone)
+                if getattr(leads_by_phone.get(deleted_phone), "id", None) == lead_id:
+                    leads_by_phone.pop(deleted_phone, None)
                 files_to_delete.update(paths)
                 db.add(models.SystemLog(company_id=current_user.company_id, user_id=current_user.id,
                     action="PURGE_LEAD", entity_type="Lead", entity_id=lead_id,
@@ -8317,11 +8340,8 @@ async def upload_leads_xlsx(
             email_match = re.search(r"<([^<>]+)>$", responsible_value)
             if email_match:
                 responsible_email = email_match.group(1).strip().lower()
-            assigned_users = db.query(models.User).filter(
-                models.User.company_id == current_user.company_id,
-                or_(func.lower(models.User.email) == responsible_email,
-                    func.lower(models.User.full_name) == responsible_value.lower()),
-            ).all()
+            email_user = users_by_email.get(responsible_email)
+            assigned_users = [email_user] if email_user else users_by_name.get(responsible_value.lower(), [])
             assigned_user = assigned_users[0] if len(assigned_users) == 1 else None
             if not assigned_user or not is_active_user(assigned_user):
                 errors += 1
@@ -8330,9 +8350,6 @@ async def upload_leads_xlsx(
             assigned_to_id = assigned_user.id
         elif responsible_value:
             assigned_to_id = None
-        else:
-            assigned_user = choose_auto_assign_user(db, current_user.company_id)
-            assigned_to_id = assigned_user.id if assigned_user else None
 
         incoming_id = cell_value(row, "id")
         if incoming_id not in (None, ""):
@@ -8342,11 +8359,7 @@ async def upload_leads_xlsx(
                 errors += 1
                 details.append({"fila": row_number, "error": "El ID del lead no es válido"})
                 continue
-            duplicate = db.query(models.Lead).filter(
-                models.Lead.id == lead_id,
-                models.Lead.company_id == current_user.company_id,
-                models.Lead.deleted_at.is_(None),
-            ).first()
+            duplicate = leads_by_id.get(lead_id)
             if not duplicate:
                 errors += 1
                 details.append({"fila": row_number, "error": "El ID no corresponde a un lead activo de esta empresa"})
@@ -8357,7 +8370,7 @@ async def upload_leads_xlsx(
                 continue
             seen_lead_ids.add(lead_id)
         else:
-            duplicate = find_duplicate_company_lead(db, current_user.company_id, name, phone)
+            duplicate = leads_by_phone.get(normalized_phone)
         if duplicate:
             duplicates += 1
             existing_duplicates += 1
@@ -8366,6 +8379,10 @@ async def upload_leads_xlsx(
                 details.append({"fila": row_number, "error": f"Coincide con el lead #{duplicate.id}, asignado a {assigned_name}"})
             elif update_existing:
                 previous_status = duplicate.status
+                previous_phone_key = normalize_lead_duplicate_phone(duplicate.phone)
+                if previous_phone_key != normalized_phone and getattr(leads_by_phone.get(previous_phone_key), "id", None) == duplicate.id:
+                    leads_by_phone.pop(previous_phone_key, None)
+                leads_by_phone[normalized_phone] = duplicate
                 previous_responsible = getattr(duplicate.assigned_to, "full_name", None) or getattr(duplicate.assigned_to, "email", None) or "Sin asignar"
                 duplicate.name = name[:100]
                 duplicate.phone = phone[:50]
@@ -8403,6 +8420,9 @@ async def upload_leads_xlsx(
             details.append({"fila": row_number, "error": str(exc.detail)})
             break
 
+        if not responsible_value:
+            assigned_user = choose_auto_assign_user(db, current_user.company_id)
+            assigned_to_id = assigned_user.id if assigned_user else None
         lead = models.Lead(
             name=name[:100],
             phone=phone[:50],
@@ -8417,6 +8437,8 @@ async def upload_leads_xlsx(
         )
         db.add(lead)
         db.flush()
+        leads_by_id[lead.id] = lead
+        leads_by_phone[normalized_phone] = lead
         db.add(models.LeadHistory(
             lead_id=lead.id,
             user_id=current_user.id,
