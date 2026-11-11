@@ -4,6 +4,7 @@ import Swal from 'sweetalert2';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler } from 'chart.js';
 import { useAuth } from '../context/AuthContext';
+import FinanceCatalogSettings from '../components/FinanceCatalogSettings';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
@@ -300,6 +301,8 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
     const [financePassword, setFinancePassword] = useState('');
     const [financeUnlocking, setFinanceUnlocking] = useState(false);
     const [financeUnlockError, setFinanceUnlockError] = useState('');
+    const [catalogEntries, setCatalogEntries] = useState([]);
+    const [catalogError, setCatalogError] = useState('');
     const [stats, setStats] = useState({
         total_revenue: 0,
         total_commissions: 0,
@@ -375,7 +378,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         file: null
     });
 
-    const receiptConceptOptions = [
+    const defaultConceptOptions = [
         'Venta de Vehiculo',
         'Compra de Vehiculo',
         'Abono compra',
@@ -394,7 +397,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         'Publicidad',
         'Otros'
     ];
-    const receiptCategoryOptions = [
+    const defaultCategoryOptions = [
         ['ingreso_venta', 'Ingresos por Venta'],
         ['costo_vehiculo', 'Costo de Vehículo (Compra)'],
         ['vehicle_purchase', 'Compra de Vehículo'],
@@ -407,6 +410,16 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         ['transferencia_cuentas', 'Transferencia entre cuentas'],
         ['otros', 'Otros Movimientos']
     ];
+    const receiptConceptOptions = catalogEntries.length ? catalogEntries.filter((entry) => entry.kind === 'concept' && entry.is_active).map((entry) => entry.label) : defaultConceptOptions;
+    const receiptCategoryOptions = catalogEntries.length ? catalogEntries.filter((entry) => entry.kind === 'category' && entry.is_active).map((entry) => [entry.code, entry.label]) : defaultCategoryOptions;
+    const fetchCatalog = async () => {
+        const response = await axios.get('/api/finance/catalog', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+        setCatalogEntries(response.data.items || []); setCatalogError('');
+    };
+    useEffect(() => {
+        setCatalogEntries([]);
+        fetchCatalog().catch((error) => setCatalogError(error.response?.data?.detail || 'No se pudo cargar el catálogo contable.'));
+    }, [user?.company_id]);
     const paymentMethodOptions = [
         ['efectivo', 'Efectivo'],
         ['transferencia', 'Transferencia']
@@ -420,6 +433,8 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
     };
 
     const getReceiptDefaultsForConcept = (concept) => {
+        const configured = catalogEntries.find((entry) => entry.kind === 'concept' && entry.label === concept && entry.is_active);
+        if (configured) return { category: configured.category_code, movement_type: configured.movement_type };
         if (concept === 'Venta de Vehiculo') return { category: 'ingreso_venta', movement_type: 'income' };
         if (concept === 'Compra de Vehiculo') return { category: 'costo_vehiculo', movement_type: 'expense' };
         if (concept === 'Abono compra') return { category: 'purchase_payment', movement_type: 'expense' };
@@ -433,6 +448,30 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         if (concept === 'Pago Comision') return { category: 'comisiones', movement_type: 'expense' };
         return { category: 'otros', movement_type: 'expense' };
     };
+    const getAccountMovementDefaults = (movementType) => {
+        if (!catalogEntries.length) return { concept: movementType === 'income' ? 'Venta de Vehiculo' : 'Compra de Vehiculo', category: movementType === 'income' ? 'ingreso_venta' : 'costo_vehiculo', movement_type: movementType };
+        const entry = catalogEntries.find((item) => item.kind === 'concept' && item.is_active && item.movement_type === movementType && item.label !== 'Otros');
+        return { concept: entry?.label || 'Otros', category: entry?.category_code || receiptCategoryOptions.find(([code]) => code !== 'transferencia_cuentas')?.[0] || 'otros', movement_type: movementType };
+    };
+
+    useEffect(() => {
+        if (!catalogEntries.length) return;
+        const categories = catalogEntries.filter((entry) => entry.kind === 'category' && entry.is_active);
+        const concepts = catalogEntries.filter((entry) => entry.kind === 'concept' && entry.is_active);
+        const categoryCodes = new Set(categories.map((entry) => entry.code));
+        setReceiptForm((current) => ({ ...current,
+            category: categoryCodes.has(current.category) ? current.category : categories[0]?.code || '',
+            concept: concepts.some((entry) => entry.label === current.concept) ? current.concept : '',
+        }));
+        setAccountTransactionForm((current) => {
+            const keepConcept = concepts.some((entry) => entry.label === current.concept) || current.category === 'transferencia_cuentas';
+            const replacement = concepts.find((entry) => entry.movement_type === current.movement_type) || concepts.find((entry) => entry.label === 'Otros');
+            return { ...current,
+                category: !keepConcept && replacement ? replacement.category_code : categoryCodes.has(current.category) ? current.category : categories[0]?.code || '',
+                concept: keepConcept ? current.concept : replacement?.label || 'Otros',
+            };
+        });
+    }, [catalogEntries]);
 
     useEffect(() => {
         const interceptorId = axios.interceptors.request.use((config) => {
@@ -679,7 +718,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             const accounts = await refreshFinancialAccounts();
             const updatedAccount = accounts.find((account) => account.id === selectedFinancialAccount.id) || selectedFinancialAccount;
             setSelectedFinancialAccount(updatedAccount);
-            setAccountTransactionForm({ concept: 'Venta de Vehiculo', movement_type: 'income', amount: '', payment_date: getBogotaDateTimeLocal(), category: 'ingreso_venta', destination_account_id: '', notes: '' });
+            setAccountTransactionForm({ ...getAccountMovementDefaults('income'), amount: '', payment_date: getBogotaDateTimeLocal(), destination_account_id: '', notes: '' });
             await openFinancialAccount(updatedAccount);
             await fetchData({ silent: true });
             Swal.fire(isTransfer ? 'Transferencia realizada' : 'Movimiento registrado', isTransfer ? 'Se registró la deducción en la cuenta de origen y el ingreso en la cuenta de destino.' : 'El saldo y el historial fueron actualizados.', 'success');
@@ -747,11 +786,9 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         if (!result.isConfirmed) return;
         const account = activeAccounts.find((item) => String(item.id) === String(result.value));
         setAccountTransactionForm({
-            concept: movementType === 'expense' ? 'Compra de Vehiculo' : 'Venta de Vehiculo',
-            movement_type: movementType,
+            ...getAccountMovementDefaults(movementType),
             amount: '',
             payment_date: getBogotaDateTimeLocal(),
-            category: movementType === 'expense' ? 'costo_vehiculo' : 'ingreso_venta',
             notes: '',
         });
         await openFinancialAccount(account);
@@ -1249,6 +1286,8 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
     };
 
     const getCategoryLabel = (category) => {
+        const configured = catalogEntries.find((entry) => entry.kind === 'category' && entry.code === category);
+        if (configured) return configured.label;
         if (category === 'ingreso_venta') return 'Ingresos por Venta';
         if (category === 'costo_vehiculo') return 'Costo de Vehículo (Compra)';
         if (category === 'vehicle_purchase') return 'Compra de Vehículo';
@@ -2048,7 +2087,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                             <div class="sale-item-field">
                                 Concepto
                                 <select id="new-receipt-concept">
-                                    ${receiptConceptOptions.map((option) => `<option value="${option}">${option}</option>`).join('')}
+                                    ${receiptConceptOptions.map((option) => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`).join('')}
                                 </select>
                             </div>
                             <div class="sale-item-field" style="margin-top: 12px;">
@@ -2077,7 +2116,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                             <label class="sale-item-field">
                                 Cuenta contable
                                 <select id="new-receipt-category">
-                                    ${receiptCategoryOptions.map(([optionValue, label]) => `<option value="${optionValue}" ${optionValue === 'vehicle_expense' ? 'selected' : ''}>${label}</option>`).join('')}
+                                    ${receiptCategoryOptions.map(([optionValue, label]) => `<option value="${escapeHtml(optionValue)}" ${optionValue === 'vehicle_expense' ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}
                                 </select>
                             </label>
                         </section>
@@ -3062,6 +3101,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                 >
                     Cuentas
                 </button>
+                <button type="button" onClick={() => handleFinanceTabChange('settings')} className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>Configuración</button>
             </div>
 
             <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
@@ -3083,7 +3123,8 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                 </div>
             </div>
 
-            {activeTab === 'sales' ? (
+            {catalogError && <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-700">{catalogError}</p>}
+            {activeTab === 'settings' ? <FinanceCatalogSettings entries={catalogEntries} onChanged={fetchCatalog} /> : activeTab === 'sales' ? (
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
@@ -3416,16 +3457,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                             onChange={(e) => setReceiptForm({ ...receiptForm, category: e.target.value })}
                                             className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
                                         >
-                                            <option value="ingreso_venta">Ingresos por Venta</option>
-                                            <option value="costo_vehiculo">Costo de Vehículo (Compra)</option>
-                                            <option value="vehicle_purchase">Compra de Vehículo</option>
-                                            <option value="purchase_payment">Abono compra</option>
-                                            <option value="vehicle_separation">Separación del vehículo</option>
-                                            <option value="gasto_tramites">Gastos de Trámites y Alistamiento</option>
-                                            <option value="vehicle_expense">Gastos del Vehículo</option>
-                                            <option value="gasto_operativo">Gastos Operativos y Administrativos</option>
-                                            <option value="comisiones">Pago de Comisiones</option>
-                                            <option value="otros">Otros Movimientos</option>
+                                            {receiptCategoryOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                                         </select>
                                     </div>
                                 </div>
@@ -4062,10 +4094,10 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                 <p className="text-sm text-slate-500">Registra una compra, venta, ingreso o deducción.</p>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
-                                <button type="button" onClick={() => setAccountTransactionForm({ ...accountTransactionForm, movement_type: 'income', concept: 'Venta de Vehiculo', category: 'ingreso_venta', destination_account_id: '' })} className={`rounded-xl border px-3 py-3 text-sm font-bold ${accountTransactionForm.movement_type === 'income' && accountTransactionForm.category !== 'transferencia_cuentas' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-500'}`}>Ingreso / venta</button>
-                                <button type="button" onClick={() => setAccountTransactionForm({ ...accountTransactionForm, movement_type: 'expense', concept: 'Compra de Vehiculo', category: 'costo_vehiculo', destination_account_id: '' })} className={`rounded-xl border px-3 py-3 text-sm font-bold ${accountTransactionForm.movement_type === 'expense' && accountTransactionForm.category !== 'transferencia_cuentas' ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-slate-200 text-slate-500'}`}>Deducción / compra</button>
+                                <button type="button" onClick={() => setAccountTransactionForm({ ...accountTransactionForm, ...getAccountMovementDefaults('income'), destination_account_id: '' })} className={`rounded-xl border px-3 py-3 text-sm font-bold ${accountTransactionForm.movement_type === 'income' && accountTransactionForm.category !== 'transferencia_cuentas' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-500'}`}>Ingreso / venta</button>
+                                <button type="button" onClick={() => setAccountTransactionForm({ ...accountTransactionForm, ...getAccountMovementDefaults('expense'), destination_account_id: '' })} className={`rounded-xl border px-3 py-3 text-sm font-bold ${accountTransactionForm.movement_type === 'expense' && accountTransactionForm.category !== 'transferencia_cuentas' ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-slate-200 text-slate-500'}`}>Deducción / compra</button>
                             </div>
-                            <div><label className="mb-1 block text-sm font-semibold text-slate-700">Concepto</label><input required value={accountTransactionForm.concept} onChange={(event) => setAccountTransactionForm({ ...accountTransactionForm, concept: event.target.value })} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500" /></div>
+                            <div><label className="mb-1 block text-sm font-semibold text-slate-700">Concepto</label><select required value={accountTransactionForm.concept} onChange={(event) => { const concept = event.target.value; const defaults = getReceiptDefaultsForConcept(concept); setAccountTransactionForm({ ...accountTransactionForm, concept, category: defaults.category, movement_type: defaults.movement_type, destination_account_id: '' }); }} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500">{!receiptConceptOptions.includes(accountTransactionForm.concept) && <option value={accountTransactionForm.concept}>{accountTransactionForm.concept}</option>}{receiptConceptOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></div>
                             <div><label className="mb-1 block text-sm font-semibold text-slate-700">Valor</label><input required inputMode="numeric" value={accountTransactionForm.amount} onChange={(event) => setAccountTransactionForm({ ...accountTransactionForm, amount: formatCurrencyInput(event.target.value) })} placeholder="$ 0" className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500" /></div>
                             <div><label className="mb-1 block text-sm font-semibold text-slate-700">Fecha y hora</label><input required type="datetime-local" value={accountTransactionForm.payment_date} onChange={(event) => setAccountTransactionForm({ ...accountTransactionForm, payment_date: event.target.value })} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500" /></div>
                             <div><label className="mb-1 block text-sm font-semibold text-slate-700">Categoría</label><select value={accountTransactionForm.category} onChange={(event) => { const category = event.target.value; setAccountTransactionForm({ ...accountTransactionForm, category, ...(category === 'transferencia_cuentas' ? { movement_type: 'expense', concept: 'Transferencia entre cuentas' } : { destination_account_id: '' }) }); }} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500">{receiptCategoryOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
@@ -4315,6 +4347,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                 {receiptCategoryOptions.map(([val, label]) => (
                                     <option key={val} value={val}>{label}</option>
                                 ))}
+                                {editReceiptForm.category && !receiptCategoryOptions.some(([code]) => code === editReceiptForm.category) && <option value={editReceiptForm.category}>{getCategoryLabel(editReceiptForm.category)} (histórico)</option>}
                             </select>
                         </div>
 

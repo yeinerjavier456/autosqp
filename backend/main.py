@@ -2987,6 +2987,8 @@ app.include_router(gmail.router)
 app.include_router(appointments.router)
 from routers import company_backups
 app.include_router(company_backups.router)
+import finance_catalog
+app.include_router(finance_catalog.router)
 
 
 # Configure CORS
@@ -13654,7 +13656,12 @@ def _first_receipt(receipts, movement_type=None, categories=None):
     return None
 
 
-def _accounting_category_label(category: Optional[str]) -> str:
+def _accounting_category_label(category: Optional[str], db=None, company_id=None) -> str:
+    if db is not None and company_id:
+        from finance_catalog import category_label
+        custom = category_label(db, company_id, category)
+        if custom:
+            return custom
     labels = {
         "ingreso_venta": "Ingresos por venta",
         "sale_payment": "Ingresos por venta",
@@ -13788,7 +13795,7 @@ def download_finance_projection_xlsx(
         expenses.append([
             receipt.payment_date or receipt.created_at,
             receipt.concept,
-            _accounting_category_label(receipt.category),
+            _accounting_category_label(receipt.category, db, receipt.company_id),
             _accounting_movement_label(receipt.movement_type),
             _projection_money(receipt.amount),
             "X" if (receipt.payment_method or "").lower() == "efectivo" else "",
@@ -14009,7 +14016,7 @@ def download_payment_receipts_xlsx(
             receipt.concept,
             receipt.receipt_number,
             _accounting_movement_label(receipt.movement_type),
-            _accounting_category_label(receipt.category),
+            _accounting_category_label(receipt.category, db, receipt.company_id),
             int(receipt.amount or 0),
             "X" if payment_method == "efectivo" else "",
             "X" if payment_method == "transferencia" else "",
@@ -14470,7 +14477,7 @@ def download_financial_account_movements(
             movement_datetime,
             movement.concept or movement.display_name or "Movimiento",
             "Deducción" if is_expense else "Ingreso",
-            _accounting_category_label(movement.category),
+            _accounting_category_label(movement.category, db, movement.company_id),
             0 if is_expense else amount,
             amount if is_expense else 0,
             running_balance,
@@ -14961,7 +14968,7 @@ def download_sale_invoice_pdf(
             [
                 receipt.payment_date.strftime("%d/%m/%Y") if receipt.payment_date else "-",
                 receipt.concept or receipt.notes or "Movimiento contable",
-                _accounting_category_label(receipt.category),
+                _accounting_category_label(receipt.category, db, receipt.company_id),
                 _accounting_movement_label(receipt.movement_type),
                 money(receipt.amount)
             ],
@@ -15070,7 +15077,7 @@ def download_payment_receipt_pdf(
     display_lines = [
         ("Concepto", (receipt.concept or "Sin concepto").upper()),
         ("Tipo de Movimiento", _accounting_movement_label(receipt.movement_type).upper()),
-        ("Cuenta Contable", _accounting_category_label(receipt.category).upper()),
+        ("Cuenta Contable", _accounting_category_label(receipt.category, db, receipt.company_id).upper()),
         ("Forma de Pago", (receipt.payment_method or "Sin definir").capitalize()),
         ("Banco / Cuenta", (receipt.bank or "Sin definir").upper()),
         ("Valor Total", f"COP ${int(receipt.amount or 0):,}".replace(",", ".")),

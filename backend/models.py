@@ -511,6 +511,19 @@ class Sale(Base):
     attachments = relationship("SaleAttachment", back_populates="sale", cascade="all, delete-orphan")
 
 
+class FinanceCatalogEntry(Base):
+    __tablename__ = "finance_catalog_entries"
+    __table_args__ = (UniqueConstraint('company_id', 'kind', 'code', name='uq_finance_catalog_code'),)
+    id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, ForeignKey('companies.id'), nullable=False, index=True)
+    kind = Column(String(20), nullable=False)
+    code = Column(String(200), nullable=False)
+    label = Column(String(180), nullable=False)
+    category_code = Column(String(50), nullable=True)
+    movement_type = Column(String(20), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+
 class FinancialAccount(Base):
     __tablename__ = "financial_accounts"
 
