@@ -296,7 +296,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
     const companyPositiveColor = getVisibleAccent(companySecondaryColor);
     const companyNegativeColor = getVisibleAccent(companyPrimaryColor, '#fb7185');
     const defaultRange = getLastMonthRange();
-    const [financeAccessToken, setFinanceAccessToken] = useState(() => sessionStorage.getItem('financeAccessToken') || '');
+    const [financeAccessToken, setFinanceAccessToken] = useState('');
     const [financePassword, setFinancePassword] = useState('');
     const [financeUnlocking, setFinanceUnlocking] = useState(false);
     const [financeUnlockError, setFinanceUnlockError] = useState('');
@@ -403,6 +403,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         ['vehicle_expense', 'Gastos del Vehículo'],
         ['gasto_operativo', 'Gastos Operativos y Administrativos'],
         ['comisiones', 'Pago de Comisiones'],
+        ['transferencia_cuentas', 'Transferencia entre cuentas'],
         ['otros', 'Otros Movimientos']
     ];
     const paymentMethodOptions = [
@@ -434,7 +435,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
 
     useEffect(() => {
         const interceptorId = axios.interceptors.request.use((config) => {
-            if (financeAccessToken && String(config.url || '').startsWith('/api/finance/')) {
+            if (financeAccessToken && String(config.url || '').startsWith('/api/finance/accounts')) {
                 config.headers = config.headers || {};
                 config.headers['X-Finance-Access-Token'] = financeAccessToken;
             }
@@ -444,10 +445,6 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
     }, [financeAccessToken]);
 
     useEffect(() => {
-        if (!financeAccessToken) {
-            setLoading(false);
-            return;
-        }
         fetchData({ silent: sales.length > 0 || receipts.length > 0 });
     }, [financeAccessToken, filterStatus, salesSearch, receiptSearch, receiptCategory, receiptMovementType, periodPreset, startDate, endDate]);
 
@@ -559,7 +556,9 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                     headers,
                     params: { limit: 500 }
                 }),
-                axios.get('/api/finance/accounts', { headers, params: { include_inactive: true } })
+                financeAccessToken
+                    ? axios.get('/api/finance/accounts', { headers, params: { include_inactive: true } })
+                    : axios.get('/api/finance/account-options', { headers })
             ]);
 
             setStats(statsRes.data || {});
@@ -572,9 +571,8 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         } catch (error) {
             console.error('Error fetching sales data', error);
             if ([401, 403, 423].includes(error.response?.status) && String(error.response?.data?.detail || '').toLowerCase().includes('finanz')) {
-                sessionStorage.removeItem('financeAccessToken');
                 setFinanceAccessToken('');
-                setFinanceUnlockError(error.response?.data?.detail || 'Debes volver a ingresar la contraseña de Finanzas.');
+                setFinanceUnlockError(error.response?.data?.detail || 'Debes volver a ingresar la contraseña para consultar las cuentas.');
             }
         } finally {
             if (!silent) {
@@ -594,15 +592,30 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                 headers: { Authorization: `Bearer ${token}` },
             });
             const accessToken = response.data?.access_token || '';
-            sessionStorage.setItem('financeAccessToken', accessToken);
+            const accountsResponse = await axios.get('/api/finance/accounts', {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'X-Finance-Access-Token': accessToken,
+                },
+                params: { include_inactive: true },
+            });
             setFinanceAccessToken(accessToken);
             setFinancePassword('');
-            setLoading(true);
+            setFinanceUnlockError('');
+            setFinancialAccounts(Array.isArray(accountsResponse.data?.items) ? accountsResponse.data.items : []);
         } catch (error) {
             setFinanceUnlockError(error.response?.data?.detail || 'No se pudo validar la contraseña de Finanzas.');
         } finally {
             setFinanceUnlocking(false);
         }
+    };
+
+    const handleFinanceTabChange = (tab) => {
+        setSelectedFinancialAccount(null);
+        setFinancePassword('');
+        setFinanceUnlockError('');
+        setFinanceAccessToken('');
+        setActiveTab(tab);
     };
 
     const refreshFinancialAccounts = async () => {
@@ -877,6 +890,132 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             Swal.fire('Cuenta actualizada', 'La información fue guardada correctamente.', 'success');
         } catch (error) {
             Swal.fire('Error', error.response?.data?.detail || 'No se pudo actualizar la cuenta.', 'error');
+        }
+    };
+
+    const handleEditAccountBalance = async (account) => {
+        const result = await Swal.fire({
+            title: 'Editar saldo de la cuenta',
+            html: `
+                <div style="text-align:left">
+                    <p style="margin-bottom:12px;color:#64748b">Saldo actual: <strong>$${Number(account.current_balance || 0).toLocaleString('es-CO')}</strong></p>
+                    <label style="font-size:13px;font-weight:700;color:#334155">Nuevo saldo
+                        <input id="new-account-balance" class="swal2-input" style="width:100%;margin:6px 0 0" inputmode="numeric" value="${Number(account.current_balance || 0).toLocaleString('es-CO')}" />
+                    </label>
+                    <label style="display:block;margin-top:14px;font-size:13px;font-weight:700;color:#334155">Motivo del ajuste
+                        <input id="account-balance-reason" class="swal2-input" style="width:100%;margin:6px 0 0" placeholder="Ej. Corrección de saldo inicial" />
+                    </label>
+                    <p style="margin-top:12px;font-size:12px;color:#64748b">La diferencia quedará registrada como un movimiento para conservar el historial.</p>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Actualizar saldo',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const newBalance = parseCurrencyInput(document.getElementById('new-account-balance')?.value || '');
+                const reason = (document.getElementById('account-balance-reason')?.value || '').trim();
+                if (newBalance < 0) {
+                    Swal.showValidationMessage('El saldo no puede ser negativo');
+                    return false;
+                }
+                if (!reason) {
+                    Swal.showValidationMessage('Indica el motivo del ajuste');
+                    return false;
+                }
+                return { newBalance, reason };
+            },
+        });
+        if (!result.isConfirmed) return;
+        const difference = result.value.newBalance - Number(account.current_balance || 0);
+        if (difference === 0) {
+            Swal.fire('Sin cambios', 'El nuevo saldo es igual al saldo actual.', 'info');
+            return;
+        }
+        try {
+            const token = localStorage.getItem('token');
+            await axios.post(`/api/finance/accounts/${account.id}/adjustments`, {
+                amount: Math.abs(difference),
+                movement_type: difference > 0 ? 'income' : 'expense',
+                notes: result.value.reason,
+            }, { headers: { Authorization: `Bearer ${token}` } });
+            const accounts = await refreshFinancialAccounts();
+            const updatedAccount = accounts.find((item) => item.id === account.id);
+            if (selectedFinancialAccount?.id === account.id && updatedAccount) {
+                setSelectedFinancialAccount(updatedAccount);
+                await openFinancialAccount(updatedAccount);
+            }
+            await fetchData({ silent: true });
+            Swal.fire('Saldo actualizado', 'El ajuste quedó registrado en el historial de la cuenta.', 'success');
+        } catch (error) {
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo actualizar el saldo.', 'error');
+        }
+    };
+
+    const handleTransferBetweenAccounts = async () => {
+        const activeAccounts = financialAccounts.filter((account) => account.is_active);
+        if (activeAccounts.length < 2) {
+            Swal.fire('Cuentas insuficientes', 'Necesitas al menos dos cuentas activas para realizar una transferencia.', 'info');
+            return;
+        }
+        const accountOptions = activeAccounts.map((account) => `<option value="${account.id}">${escapeHtml(account.name)}</option>`).join('');
+        const result = await Swal.fire({
+            title: 'Transferir entre cuentas',
+            width: 600,
+            html: `
+                <div style="display:grid;gap:14px;text-align:left">
+                    <label style="font-size:13px;font-weight:700;color:#334155">Cuenta de origen
+                        <select id="transfer-source" class="swal2-select" style="width:100%;margin:6px 0 0"><option value="">Seleccionar</option>${accountOptions}</select>
+                    </label>
+                    <label style="font-size:13px;font-weight:700;color:#334155">Cuenta de destino
+                        <select id="transfer-destination" class="swal2-select" style="width:100%;margin:6px 0 0"><option value="">Seleccionar</option>${accountOptions}</select>
+                    </label>
+                    <label style="font-size:13px;font-weight:700;color:#334155">Valor
+                        <input id="transfer-amount" class="swal2-input" style="width:100%;margin:6px 0 0" inputmode="numeric" placeholder="$0" />
+                    </label>
+                    <label style="font-size:13px;font-weight:700;color:#334155">Detalle opcional
+                        <input id="transfer-notes" class="swal2-input" style="width:100%;margin:6px 0 0" placeholder="Motivo de la transferencia" />
+                    </label>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Realizar transferencia',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const sourceAccountId = Number(document.getElementById('transfer-source')?.value || 0);
+                const destinationAccountId = Number(document.getElementById('transfer-destination')?.value || 0);
+                const amount = parseCurrencyInput(document.getElementById('transfer-amount')?.value || '');
+                if (!sourceAccountId || !destinationAccountId) {
+                    Swal.showValidationMessage('Selecciona la cuenta de origen y la cuenta de destino');
+                    return false;
+                }
+                if (sourceAccountId === destinationAccountId) {
+                    Swal.showValidationMessage('Las cuentas de origen y destino deben ser diferentes');
+                    return false;
+                }
+                if (!amount) {
+                    Swal.showValidationMessage('Ingresa un valor mayor que cero');
+                    return false;
+                }
+                return {
+                    source_account_id: sourceAccountId,
+                    destination_account_id: destinationAccountId,
+                    amount,
+                    payment_date: `${getBogotaDateTimeLocal()}:00-05:00`,
+                    notes: (document.getElementById('transfer-notes')?.value || '').trim() || null,
+                };
+            },
+        });
+        if (!result.isConfirmed) return;
+        try {
+            const token = localStorage.getItem('token');
+            await axios.post('/api/finance/accounts/transfers', result.value, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            await refreshFinancialAccounts();
+            await fetchData({ silent: true });
+            Swal.fire('Transferencia realizada', 'La salida y el ingreso quedaron registrados en ambas cuentas.', 'success');
+        } catch (error) {
+            Swal.fire('Error', error.response?.data?.detail || 'No se pudo realizar la transferencia.', 'error');
         }
     };
 
@@ -2207,13 +2346,13 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
         }
     };
 
-    if (!financeAccessToken) {
+    if (activeTab === 'accounts' && !financeAccessToken) {
         return (
             <div className="flex min-h-[70vh] items-center justify-center px-4">
                 <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-xl">
                     <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-2xl text-white">🔒</div>
-                    <h1 className="mt-5 text-center text-2xl font-extrabold text-slate-900">Finanzas y Ventas protegidas</h1>
-                    <p className="mt-2 text-center text-sm text-slate-500">Ingresa la contraseña financiera de tu empresa. No se cargará información hasta validarla.</p>
+                    <h1 className="mt-5 text-center text-2xl font-extrabold text-slate-900">Cuentas protegidas</h1>
+                    <p className="mt-2 text-center text-sm text-slate-500">Ingresa la contraseña financiera de tu empresa para consultar saldos, movimientos y transferencias.</p>
                     <form onSubmit={handleFinanceUnlock} className="mt-6 space-y-4">
                         <div>
                             <label className="mb-1 block text-sm font-semibold text-slate-700">Contraseña</label>
@@ -2229,7 +2368,10 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                         </div>
                         {financeUnlockError && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{financeUnlockError}</p>}
                         <button type="submit" disabled={financeUnlocking || !financePassword} className="w-full rounded-xl bg-blue-600 px-4 py-3 font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
-                            {financeUnlocking ? 'Validando...' : 'Ingresar a Finanzas'}
+                            {financeUnlocking ? 'Validando...' : 'Ingresar a Cuentas'}
+                        </button>
+                        <button type="button" onClick={() => handleFinanceTabChange('sales')} className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-700 transition hover:bg-slate-50">
+                            Volver a Finanzas
                         </button>
                     </form>
                 </div>
@@ -2831,25 +2973,25 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
 
             <div className="inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
                 <button
-                    onClick={() => setActiveTab('sales')}
+                    onClick={() => handleFinanceTabChange('sales')}
                     className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === 'sales' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                     Ventas
                 </button>
                 <button
-                    onClick={() => setActiveTab('accounting')}
+                    onClick={() => handleFinanceTabChange('accounting')}
                     className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === 'accounting' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                     Contabilidad
                 </button>
                 <button
-                    onClick={() => setActiveTab('tax')}
+                    onClick={() => handleFinanceTabChange('tax')}
                     className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === 'tax' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                     Tributación
                 </button>
                 <button
-                    onClick={() => setActiveTab('accounts')}
+                    onClick={() => handleFinanceTabChange('accounts')}
                     className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === 'accounts' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                     Cuentas
@@ -3431,6 +3573,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                 <div className="flex flex-wrap gap-3">
                                     <button type="button" onClick={() => handleQuickAccountMovement('expense')} className="rounded-xl px-4 py-3 text-sm font-extrabold text-white shadow-lg" style={{ backgroundColor: companyNegativeColor }}>− Registrar deducción</button>
                                     <button type="button" onClick={() => handleQuickAccountMovement('income')} className="rounded-xl px-4 py-3 text-sm font-extrabold text-white shadow-lg" style={{ backgroundColor: companyPositiveColor }}>＋ Registrar ingreso</button>
+                                    <button type="button" onClick={handleTransferBetweenAccounts} className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-extrabold text-blue-700 shadow-sm hover:bg-blue-100">⇄ Transferir</button>
                                     <button type="button" onClick={() => setShowAccountCreateForm((value) => !value)} className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800 shadow-sm hover:bg-slate-50">＋ Nueva cuenta</button>
                                 </div>
                             </div>
@@ -3456,7 +3599,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
 
                         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="mb-4 flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-extrabold text-slate-900">Evolución de ingresos y deducciones</h3><p className="text-xs text-slate-500">Movimientos del periodo seleccionado</p></div><span className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{accountChartLabels.length} días con actividad</span></div><div className="h-72 rounded-xl bg-white">{accountChartLabels.length ? <Line data={accountChartData} options={accountChartOptions} /> : <div className="flex h-full items-center justify-center text-sm text-slate-500">Registra o relaciona movimientos para visualizar la gráfica.</div>}</div></section>
 
-                        <section><div className="mb-4 flex items-center justify-between"><div><h3 className="text-lg font-extrabold text-slate-900">Mis cuentas y tarjetas</h3><p className="text-xs text-slate-500">Selecciona una cuenta para consultar su billetera y movimientos.</p></div></div><div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">{financialAccounts.map((account) => <article key={account.id} className={`rounded-2xl border bg-white p-5 shadow-sm ${account.is_active ? 'border-slate-200' : 'border-slate-200 opacity-60'}`}><div className="flex items-start justify-between"><div><span className="text-xs font-bold uppercase tracking-wider" style={{ color: companyPositiveColor }}>{accountTypeLabels[account.account_type] || 'Cuenta'}</span><h4 className="mt-2 text-lg font-extrabold text-slate-900">{account.name}</h4><p className="text-xs text-slate-500">{[account.institution, account.last_four ? `•••• ${account.last_four}` : ''].filter(Boolean).join(' · ') || 'Sin entidad'}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${account.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{account.is_active ? 'ACTIVA' : 'INACTIVA'}</span></div><p className="mt-6 text-xs font-bold uppercase text-slate-500">Saldo disponible</p><p className="mt-1 text-3xl font-black" style={{ color: Number(account.current_balance || 0) >= 0 ? companyPositiveColor : '#e11d48' }}>${Number(account.current_balance || 0).toLocaleString('es-CO')}</p><div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-lg bg-slate-50 p-2"><p className="text-slate-500">Ingresos</p><p className="font-bold text-emerald-700">${Number(account.income_total || 0).toLocaleString('es-CO')}</p></div><div className="rounded-lg bg-slate-50 p-2"><p className="text-slate-500">Salidas</p><p className="font-bold text-rose-600">${Number(account.expense_total || 0).toLocaleString('es-CO')}</p></div><div className="rounded-lg bg-slate-50 p-2"><p className="text-slate-500">Mov.</p><p className="font-bold text-sky-700">{account.movement_count || 0}</p></div></div><div className="mt-4 flex flex-wrap gap-2"><button onClick={() => openFinancialAccount(account)} className="rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ backgroundColor: companyPrimaryColor }}>Abrir</button><button onClick={() => handleEditFinancialAccount(account)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">Editar</button><button onClick={() => downloadFinancialAccountExcel(account)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">Excel</button>{account.is_active && <button onClick={() => handleLinkExistingMovements(account)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">Relacionar</button>}<button onClick={() => handleToggleFinancialAccount(account)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">{account.is_active ? 'Desactivar' : 'Activar'}</button></div></article>)}{financialAccounts.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500 lg:col-span-2 2xl:col-span-3">Crea la primera cuenta para comenzar.</div>}</div></section>
+                        <section><div className="mb-4 flex items-center justify-between"><div><h3 className="text-lg font-extrabold text-slate-900">Mis cuentas y tarjetas</h3><p className="text-xs text-slate-500">Selecciona una cuenta para consultar su billetera y movimientos.</p></div></div><div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">{financialAccounts.map((account) => <article key={account.id} className={`rounded-2xl border bg-white p-5 shadow-sm ${account.is_active ? 'border-slate-200' : 'border-slate-200 opacity-60'}`}><div className="flex items-start justify-between"><div><span className="text-xs font-bold uppercase tracking-wider" style={{ color: companyPositiveColor }}>{accountTypeLabels[account.account_type] || 'Cuenta'}</span><h4 className="mt-2 text-lg font-extrabold text-slate-900">{account.name}</h4><p className="text-xs text-slate-500">{[account.institution, account.last_four ? `•••• ${account.last_four}` : ''].filter(Boolean).join(' · ') || 'Sin entidad'}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${account.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{account.is_active ? 'ACTIVA' : 'INACTIVA'}</span></div><p className="mt-6 text-xs font-bold uppercase text-slate-500">Saldo disponible</p><p className="mt-1 text-3xl font-black" style={{ color: Number(account.current_balance || 0) >= 0 ? companyPositiveColor : '#e11d48' }}>${Number(account.current_balance || 0).toLocaleString('es-CO')}</p><div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-lg bg-slate-50 p-2"><p className="text-slate-500">Ingresos</p><p className="font-bold text-emerald-700">${Number(account.income_total || 0).toLocaleString('es-CO')}</p></div><div className="rounded-lg bg-slate-50 p-2"><p className="text-slate-500">Salidas</p><p className="font-bold text-rose-600">${Number(account.expense_total || 0).toLocaleString('es-CO')}</p></div><div className="rounded-lg bg-slate-50 p-2"><p className="text-slate-500">Mov.</p><p className="font-bold text-sky-700">{account.movement_count || 0}</p></div></div><div className="mt-4 flex flex-wrap gap-2"><button onClick={() => openFinancialAccount(account)} className="rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ backgroundColor: companyPrimaryColor }}>Abrir</button><button onClick={() => handleEditFinancialAccount(account)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">Editar</button>{account.is_active && <button onClick={() => handleEditAccountBalance(account)} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">Editar saldo</button>}<button onClick={() => downloadFinancialAccountExcel(account)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">Excel</button>{account.is_active && <button onClick={() => handleLinkExistingMovements(account)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">Relacionar</button>}<button onClick={() => handleToggleFinancialAccount(account)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">{account.is_active ? 'Desactivar' : 'Activar'}</button></div></article>)}{financialAccounts.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500 lg:col-span-2 2xl:col-span-3">Crea la primera cuenta para comenzar.</div>}</div></section>
 
                         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="mb-4"><h3 className="font-extrabold text-slate-900">Últimos movimientos</h3><p className="text-xs text-slate-500">Actividad reciente de todas las cuentas.</p></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead><tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-600"><th className="p-3">Concepto</th><th className="p-3">Cuenta</th><th className="p-3">Fecha y hora</th><th className="p-3">Tipo</th><th className="p-3 text-right">Valor</th><th className="p-3 text-right">Acciones</th></tr></thead><tbody className="divide-y divide-slate-200">{accountDashboardMovements.slice(0, 8).map((movement) => <tr key={movement.id} className="text-slate-900 hover:bg-slate-50"><td className="p-3 text-sm font-semibold">{movement.concept || 'Movimiento'}</td><td className="p-3 text-sm text-slate-600">{movement.account?.name || movement.bank || 'Sin cuenta'}</td><td className="p-3 text-sm text-slate-600">{formatBogotaDateTime(movement.payment_date || movement.created_at)}</td><td className="p-3"><span className={`rounded-full px-2 py-1 text-xs font-bold ${movement.movement_type === 'expense' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>{movement.movement_type === 'expense' ? 'Deducción' : 'Ingreso'}</span></td><td className={`p-3 text-right font-extrabold ${movement.movement_type === 'expense' ? 'text-rose-600' : 'text-emerald-700'}`}>{movement.movement_type === 'expense' ? '-' : '+'}${Number(movement.amount || 0).toLocaleString('es-CO')}</td><td className="p-3 text-right"><button type="button" onClick={() => handleDeleteAccountMovement(movement)} className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100">Eliminar</button></td></tr>)}{accountDashboardMovements.length === 0 && <tr><td colSpan={6} className="p-10 text-center text-slate-500">No hay movimientos relacionados todavía.</td></tr>}</tbody></table></div></section>
                     </div>

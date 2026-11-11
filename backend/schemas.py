@@ -1248,6 +1248,14 @@ class FinancialAccountTransactionCreate(BaseModel):
     category: Optional[str] = "otros"
     notes: Optional[str] = None
 
+
+class FinancialAccountTransfer(BaseModel):
+    source_account_id: int
+    destination_account_id: int
+    amount: int = Field(gt=0)
+    payment_date: Optional[datetime] = None
+    notes: Optional[str] = None
+
 # --- STATS ---
 
 class DashboardStats(BaseModel):

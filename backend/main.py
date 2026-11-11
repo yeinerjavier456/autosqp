@@ -3034,7 +3034,7 @@ def _finance_password_marker(password_hash: str) -> str:
 @app.middleware("http")
 async def protect_finance_routes(request: Request, call_next):
     path = request.url.path.rstrip("/")
-    if not path.startswith("/finance/") or path == "/finance/access/unlock":
+    if not path.startswith("/finance/accounts"):
         return await call_next(request)
 
     auth_header = request.headers.get("Authorization", "")
@@ -13891,6 +13891,32 @@ def read_financial_accounts(
     return {"items": [_serialize_financial_account(db, account) for account in accounts], "total": len(accounts)}
 
 
+@app.get("/finance/account-options")
+def read_financial_account_options(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    accounts = _financial_account_query(db, current_user).filter(
+        models.FinancialAccount.is_active.is_(True),
+    ).order_by(models.FinancialAccount.name.asc()).all()
+    return {
+        "items": [
+            {
+                "id": account.id,
+                "name": account.name,
+                "account_type": account.account_type,
+                "institution": account.institution,
+                "last_four": account.last_four,
+                "is_active": True,
+            }
+            for account in accounts
+        ],
+        "total": len(accounts),
+    }
+
+
 @app.post("/finance/accounts", response_model=schemas.FinancialAccount)
 def create_financial_account(
     payload: schemas.FinancialAccountCreate,
@@ -14076,6 +14102,68 @@ def create_financial_account_transaction(
     db.commit()
     db.refresh(receipt)
     return receipt
+
+
+@app.post("/finance/accounts/transfers")
+def transfer_between_financial_accounts(
+    payload: schemas.FinancialAccountTransfer,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if get_user_role_name(current_user) not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    if payload.source_account_id == payload.destination_account_id:
+        raise HTTPException(status_code=400, detail="La cuenta de origen y destino deben ser diferentes")
+
+    source = _get_financial_account_for_company(db, payload.source_account_id, current_user.company_id)
+    destination = _get_financial_account_for_company(db, payload.destination_account_id, current_user.company_id)
+    source_data = _serialize_financial_account(db, source)
+    if int(source_data["current_balance"]) < int(payload.amount):
+        raise HTTPException(status_code=400, detail="La cuenta de origen no tiene saldo suficiente")
+
+    payment_datetime = payload.payment_date or datetime.datetime.utcnow()
+    if payment_datetime.tzinfo is not None:
+        payment_datetime = payment_datetime.astimezone(BOGOTA_TZ).replace(tzinfo=None)
+    transfer_reference = f"TRF-{datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{source.id}-{destination.id}"
+    notes = (payload.notes or "").strip()
+    source_receipt = models.PaymentReceipt(
+        company_id=source.company_id,
+        account_id=source.id,
+        user_id=current_user.id,
+        display_name=source.name,
+        concept=f"Transferencia a {destination.name}",
+        movement_type="expense",
+        receipt_number=transfer_reference,
+        payment_date=payment_datetime,
+        amount=int(payload.amount),
+        category="transferencia_cuentas",
+        notes=notes or f"Transferencia hacia {destination.name}",
+        payment_method="transferencia",
+        bank=source.institution or source.name,
+    )
+    destination_receipt = models.PaymentReceipt(
+        company_id=destination.company_id,
+        account_id=destination.id,
+        user_id=current_user.id,
+        display_name=destination.name,
+        concept=f"Transferencia desde {source.name}",
+        movement_type="income",
+        receipt_number=transfer_reference,
+        payment_date=payment_datetime,
+        amount=int(payload.amount),
+        category="transferencia_cuentas",
+        notes=notes or f"Transferencia recibida desde {source.name}",
+        payment_method="transferencia",
+        bank=destination.institution or destination.name,
+    )
+    db.add_all([source_receipt, destination_receipt])
+    db.commit()
+    return {
+        "message": "Transferencia registrada correctamente",
+        "reference": transfer_reference,
+        "source": _serialize_financial_account(db, source),
+        "destination": _serialize_financial_account(db, destination),
+    }
 
 
 @app.get("/finance/accounts/{account_id}/movements.xlsx")
@@ -14808,6 +14896,17 @@ def delete_payment_receipt(
         raise HTTPException(status_code=403, detail="Solo un administrador puede eliminar recibos")
 
     receipt = _get_receipt_with_access(db, receipt_id, current_user)
+    if receipt.category == "transferencia_cuentas" and receipt.receipt_number:
+        transfer_receipts = db.query(models.PaymentReceipt).filter(
+            models.PaymentReceipt.company_id == receipt.company_id,
+            models.PaymentReceipt.category == "transferencia_cuentas",
+            models.PaymentReceipt.receipt_number == receipt.receipt_number,
+        ).all()
+        for transfer_receipt in transfer_receipts:
+            db.delete(transfer_receipt)
+        db.commit()
+        return {"message": "Transferencia eliminada de ambas cuentas correctamente"}
+
     if receipt.file_path:
         try:
             relative_path = receipt.file_path.lstrip("/").replace("/", os.sep)
