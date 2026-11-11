@@ -3,13 +3,140 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Formulario | Autos QP</title>
-  <meta name="description" content="Formulario de contacto para compra, venta, retoma, credito y servicios Autos QP.">
-  <link rel="stylesheet" href="/preview/assets/styles.css">
+  <title>Contacto y Solicitudes | Autos QP</title>
+  <meta name="description" content="Formulario de contacto para compra, venta, retoma, crédito y servicios Autos QP.">
+  <link rel="stylesheet" href="/preview/assets/styles.css?v=2">
 </head>
 <body>
-  <nav class="nav"><div class="wrap nav__inner"><a class="brand" href="/preview/"><span class="brand__mark">QP</span><span>Autos QP</span></a><div class="nav__links"><a href="/crm/autos">Catalogo</a><a href="/preview/venta/">Compra</a><a href="/preview/formulario/">Formulario</a><a href="/preview/detailing/">Detailing</a><a class="nav__crm" href="/crm/login">Ingresar CRM</a></div></div></nav>
-  <header class="hero hero--formulario"><div class="wrap hero__content"><div class="eyebrow">Solicitudes Autos QP</div><h1>Formulario de contacto y solicitudes.</h1><p>Deja tus datos para recibir asesoria sobre compra, venta, retoma, financiacion o servicios para tu vehiculo.</p><div class="actions"><a class="btn btn--primary" href="/crm/credito">Abrir formulario de credito</a><a class="btn btn--light" href="/preview/venta/">Quiero vender</a></div></div></header>
-  <section class="section"><div class="wrap"><h2 class="title">Que puedes solicitar</h2><p class="copy">Nuestro equipo recibe tu solicitud y la direcciona al area correspondiente para darte respuesta.</p><div class="grid" style="margin-top:28px"><div class="card"><div class="card__body"><h3>Vehiculos</h3><p>Informacion sobre disponibilidad, precios, visitas y proceso de compra.</p></div></div><div class="card"><div class="card__body"><h3>Credito</h3><p>Registro de datos para iniciar revision y acompanamiento comercial.</p></div></div><div class="card"><div class="card__body"><h3>Venta o retoma</h3><p>Solicitud de evaluacion para compra, retoma o gestion comercial de tu vehiculo.</p></div></div></div></div></section>
+  <nav class="nav">
+    <div class="wrap nav__inner">
+      <a class="brand" href="/preview/">Autos<span class="brand__qp">QP</span></a>
+      <div class="nav__links">
+        <a href="/preview/">Inicio</a>
+        <a href="/crm/autos">Inventario</a>
+        <a href="/preview/venta/">Vender auto</a>
+        <a href="/crm/credito">Financiamiento</a>
+        <a href="/preview/detailing/">Detailing</a>
+        <a class="is-active" href="/preview/formulario/">Contacto</a>
+      </div>
+      <div class="nav__actions">
+        <a class="nav__cta" href="/crm/autos">Ver Inventario</a>
+        <button class="nav__toggle" type="button" aria-label="Abrir menú" aria-expanded="false" data-nav-toggle>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="nav__mobile" data-nav-mobile>
+      <a href="/preview/">Inicio</a>
+      <a href="/crm/autos">Inventario</a>
+      <a href="/preview/venta/">Vender auto</a>
+      <a href="/crm/credito">Financiamiento</a>
+      <a href="/preview/detailing/">Detailing</a>
+      <a href="/preview/formulario/">Contacto</a>
+      <a href="/crm/login">Ingresar CRM</a>
+    </div>
+  </nav>
+
+  <header class="hero hero--formulario">
+    <div class="wrap hero__content">
+      <span class="hero__eyebrow">Solicitudes Autos QP</span>
+      <h1>Formulario de contacto y <span class="accent">solicitudes</span></h1>
+      <p>Deja tus datos para recibir asesoría sobre compra, venta, retoma, financiación o servicios para tu vehículo.</p>
+      <div class="hero__actions">
+        <a class="btn btn--green" href="/crm/credito">Abrir formulario de crédito</a>
+        <a class="btn btn--outline" href="/preview/venta/">Quiero vender</a>
+      </div>
+    </div>
+  </header>
+
+  <section class="section">
+    <div class="wrap">
+      <h2 class="section-title">Qué puedes <span class="accent">solicitar</span></h2>
+      <p class="section-sub">Nuestro equipo recibe tu solicitud y la direcciona al área correspondiente para darte respuesta.</p>
+      <div class="grid" style="margin-top:28px">
+        <div class="card">
+          <div class="card__body">
+            <h3>Vehículos</h3>
+            <p>Información sobre disponibilidad, precios, visitas y proceso de compra.</p>
+            <a href="/crm/autos">Explorar inventario →</a>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card__body">
+            <h3>Crédito</h3>
+            <p>Registro de datos para iniciar revisión y acompañamiento comercial.</p>
+            <a href="/crm/credito">Solicitar financiamiento →</a>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card__body">
+            <h3>Venta o retoma</h3>
+            <p>Solicitud de evaluación para compra, retoma o gestión comercial de tu vehículo.</p>
+            <a href="/preview/venta/">Conocer proceso →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="wrap">
+      <div class="footer__grid">
+        <div>
+          <a class="brand" href="/preview/">Autos<span class="brand__qp">QP</span></a>
+          <p class="footer__tagline">Calidad y confianza en cada kilómetro.</p>
+        </div>
+        <div>
+          <h4>Contacto</h4>
+          <div class="footer__contact">
+            <a class="footer__contact-item" href="tel:+573001234567">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <span data-company-phone>+57 300 123 4567</span>
+            </a>
+            <a class="footer__contact-item" href="mailto:info@autosqp.com">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+              <span>info@autosqp.com</span>
+            </a>
+            <div class="footer__contact-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              <span data-company-address>Colombia</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <h4>Enlaces</h4>
+          <div class="footer__links">
+            <a href="/preview/">Inicio</a>
+            <a href="/crm/autos">Inventario</a>
+            <a href="/preview/venta/">Vender mi auto</a>
+            <a href="/crm/credito">Financiamiento</a>
+            <a href="/preview/detailing/">Detailing</a>
+            <a href="/preview/formulario/">Contacto</a>
+            <a href="/crm/login">Ingresar CRM</a>
+          </div>
+        </div>
+        <div>
+          <h4>Síguenos</h4>
+          <div class="footer__social">
+            <a href="https://www.facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 13.5h2.5l1-4H14v-2c0-1.03 0-2 2-2h1.5V2.14c-.326-.043-1.557-.14-2.857-.14C11.928 2 10 3.657 10 6.7v2.8H7v4h3V22h4v-8.5z"/></svg>
+            </a>
+            <a href="https://www.instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>
+            </a>
+            <a href="/preview/formulario/" aria-label="WhatsApp y contacto">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="footer__bottom">
+        <span>Autos QP — Vehículos, compra, venta y detailing.</span>
+        <a href="/crm/politica-de-privacidad">Política de privacidad</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/preview/assets/app.js?v=2"></script>
 </body>
 </html>

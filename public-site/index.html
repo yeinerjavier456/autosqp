@@ -3,107 +3,297 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Autos QP | Compra y venta de vehiculos</title>
-  <meta name="description" content="Autos QP: catalogo de vehiculos, compra, retoma, formulario y detailing profesional.">
-  <link rel="stylesheet" href="/preview/assets/styles.css">
+  <title>Autos QP | Más que autos, creamos conexiones</title>
+  <meta name="description" content="Autos QP: catálogo de vehículos, compra, retoma, financiamiento y detailing profesional.">
+  <link rel="stylesheet" href="/preview/assets/styles.css?v=2">
 </head>
 <body>
   <nav class="nav">
     <div class="wrap nav__inner">
-      <a class="brand" href="/preview/"><span class="brand__mark">QP</span><span>Autos QP</span></a>
+      <a class="brand" href="/preview/">Autos<span class="brand__qp">QP</span></a>
       <div class="nav__links">
-        <a href="/crm/autos">Catalogo</a>
-        <a href="/preview/venta/">Compra</a>
-        <a href="/preview/formulario/">Formulario</a>
+        <a class="is-active" href="/preview/">Inicio</a>
+        <a href="/crm/autos">Inventario</a>
+        <a href="/preview/venta/">Vender auto</a>
+        <a href="/crm/credito">Financiamiento</a>
         <a href="/preview/detailing/">Detailing</a>
-        <a class="nav__crm" href="/crm/login">Ingresar CRM</a>
+        <a href="/preview/formulario/">Contacto</a>
       </div>
+      <div class="nav__actions">
+        <a class="nav__cta" href="/crm/autos">Ver Inventario</a>
+        <button class="nav__toggle" type="button" aria-label="Abrir menú" aria-expanded="false" data-nav-toggle>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="nav__mobile" data-nav-mobile>
+      <a href="/preview/">Inicio</a>
+      <a href="/crm/autos">Inventario</a>
+      <a href="/preview/venta/">Vender auto</a>
+      <a href="/crm/credito">Financiamiento</a>
+      <a href="/preview/detailing/">Detailing</a>
+      <a href="/preview/formulario/">Contacto</a>
+      <a href="/crm/login">Ingresar CRM</a>
     </div>
   </nav>
 
   <header class="hero hero--home">
     <div class="wrap hero__content">
-      <div class="eyebrow">Compra, venta y experiencia automotriz</div>
-      <h1>Vehiculos seleccionados con respaldo profesional.</h1>
-      <p>En Autos QP conectamos compradores y vendedores con un proceso claro, inventario actualizado, gestion comercial organizada y servicios pensados para cuidar cada vehiculo.</p>
-      <div class="actions">
-        <a class="btn btn--primary" href="/crm/autos">Ver catalogo</a>
-        <a class="btn btn--light" href="/preview/venta/">Quiero vender mi vehiculo</a>
+      <h1>Más que autos,<br>creamos <span class="accent">conexiones</span></h1>
+      <p>Encuentra el auto que se adapta a tu vida.<br>Calidad, confianza y el mejor servicio.</p>
+      <div class="hero__actions">
+        <a class="btn btn--green" href="/crm/autos">Ver inventario</a>
+        <a class="btn btn--outline" href="/preview/venta/">Vender mi auto</a>
       </div>
     </div>
   </header>
 
-  <section class="wrap stats">
-    <div class="stat"><strong>360</strong><span>Acompanamiento comercial</span></div>
-    <div class="stat"><strong>Digital</strong><span>Catalogo y solicitudes en linea</span></div>
-    <div class="stat"><strong>QP</strong><span>Compra, venta y detailing</span></div>
-  </section>
-
-  <section class="section">
-    <div class="wrap">
-      <div class="section__head">
-        <h2>Todo para decidir mejor.</h2>
-        <p>Encuentra el vehiculo ideal, solicita acompanamiento y agenda servicios desde una experiencia simple y directa.</p>
+  <section class="stats-strip" aria-label="Indicadores Autos QP">
+    <div class="wrap stats">
+      <div class="stat">
+        <div class="stat__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 11l2-5h10l2 5"/>
+            <rect x="3" y="11" width="18" height="6" rx="2"/>
+            <circle cx="7.5" cy="14" r="1"/>
+            <circle cx="16.5" cy="14" r="1"/>
+            <path d="M5 17v2M19 17v2"/>
+          </svg>
+        </div>
+        <div>
+          <strong class="stat__num">+1,200</strong>
+          <span class="stat__label">Autos disponibles</span>
+        </div>
       </div>
-      <div class="grid">
-        <article class="card">
-          <img src="https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=900&q=82" alt="Vehiculo deportivo en carretera">
-          <div class="card__body">
-            <h3>Catalogo</h3>
-            <p>Vehiculos publicados con informacion clara, fotos y contacto para avanzar rapidamente.</p>
-            <a href="/crm/autos">Explorar inventario</a>
-          </div>
-        </article>
-        <article class="card">
-          <img src="https://images.unsplash.com/photo-1563720223185-11003d516935?auto=format&fit=crop&w=900&q=82" alt="Llaves de vehiculo">
-          <div class="card__body">
-            <h3>Compra y retoma</h3>
-            <p>Recibimos tu vehiculo, evaluamos su estado y te damos una ruta comercial transparente.</p>
-            <a href="/preview/venta/">Conocer proceso</a>
-          </div>
-        </article>
-        <article class="card">
-          <img src="https://images.unsplash.com/photo-1603386329225-868f9b1ee6c9?auto=format&fit=crop&w=900&q=82" alt="Detalle de vehiculo premium">
-          <div class="card__body">
-            <h3>Detailing</h3>
-            <p>Limpieza, brillo, proteccion y presentacion profesional para elevar el estado visual del vehiculo.</p>
-            <a href="/preview/detailing/">Ver servicios</a>
-          </div>
-        </article>
+
+      <div class="stat">
+        <div class="stat__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="8" r="3.5"/>
+            <path d="M3 19c0-3.3 2.7-5 6-5s6 1.7 6 5"/>
+            <circle cx="17" cy="9" r="2.5"/>
+            <path d="M16.5 14c2.4.3 4.5 1.7 4.5 5"/>
+          </svg>
+        </div>
+        <div>
+          <strong class="stat__num">+850</strong>
+          <span class="stat__label">Clientes satisfechos</span>
+        </div>
+      </div>
+
+      <div class="stat">
+        <div class="stat__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="5" width="16" height="15" rx="2"/>
+            <path d="M8 3v4M16 3v4M4 10h16"/>
+            <path d="M9.5 15l2 2 3.5-3.5"/>
+          </svg>
+        </div>
+        <div>
+          <strong class="stat__num">+5 Años</strong>
+          <span class="stat__label">De experiencia</span>
+        </div>
+      </div>
+
+      <div class="stat">
+        <div class="stat__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3l7 3v5c0 4.6-3 8.6-7 10-4-1.4-7-5.4-7-10V6l7-3z"/>
+            <path d="M9.5 12l2 2 3.5-3.5"/>
+          </svg>
+        </div>
+        <div>
+          <strong class="stat__num">100%</strong>
+          <span class="stat__label">Transparencia</span>
+        </div>
       </div>
     </div>
   </section>
 
-  <section class="section section--dark">
+  <section class="vehicles">
     <div class="wrap">
-      <div class="section__head">
-        <h2>Un proceso comercial ordenado.</h2>
-        <p>El objetivo es que cada cliente tenga informacion clara, tiempos definidos y acompanamiento durante la decision.</p>
+      <div class="section-header-center">
+        <h2 class="section-title">Destacados de <span class="accent">Autos QP</span></h2>
       </div>
-      <div class="grid">
-        <div class="step"><span>01</span><h3>Consulta</h3><p>Revisa el catalogo o cuentanos que vehiculo buscas.</p></div>
-        <div class="step"><span>02</span><h3>Asesoria</h3><p>Un asesor valida disponibilidad, estado y opciones.</p></div>
-        <div class="step"><span>03</span><h3>Gestion</h3><p>Coordinamos visita, documentos, retoma o solicitud.</p></div>
-        <div class="step"><span>04</span><h3>Entrega</h3><p>Cerramos con trazabilidad y acompanamiento posventa.</p></div>
+
+      <div class="vehicles__grid" data-featured-vehicles>
+        <a class="vcard" href="/crm/autos">
+          <div class="vcard__img">
+            <span class="vcard__badge">Autos<span>QP</span></span>
+            <img src="https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&w=800&q=82" alt="Renault Duster Expression MT" loading="lazy">
+          </div>
+          <div class="vcard__body">
+            <div class="vcard__brand">RENAULT</div>
+            <div class="vcard__model">DUSTER EXPRESSION MT</div>
+            <div class="vcard__meta">2019 • Mecánico • Gasolina</div>
+            <div class="vcard__price">$ 54.900.000</div>
+          </div>
+        </a>
+
+        <a class="vcard" href="/crm/autos">
+          <div class="vcard__img">
+            <span class="vcard__badge">Autos<span>QP</span></span>
+            <img src="https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=800&q=82" alt="Ford Fiesta Titanium TP" loading="lazy">
+          </div>
+          <div class="vcard__body">
+            <div class="vcard__brand">FORD</div>
+            <div class="vcard__model">FIESTA TITANIUM TP</div>
+            <div class="vcard__meta">2019 • Automático • Gasolina</div>
+            <div class="vcard__price">$ 46.900.000</div>
+          </div>
+        </a>
+
+        <a class="vcard" href="/crm/autos">
+          <div class="vcard__img">
+            <span class="vcard__badge">Autos<span>QP</span></span>
+            <img src="https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=800&q=82" alt="Toyota Fortuner 2.7 AT" loading="lazy">
+          </div>
+          <div class="vcard__body">
+            <div class="vcard__brand">TOYOTA</div>
+            <div class="vcard__model">FORTUNER 2.7 AT</div>
+            <div class="vcard__meta">2019 • Automático • Gasolina</div>
+            <div class="vcard__price">$ 206.000.000</div>
+          </div>
+        </a>
+
+        <a class="vcard" href="/crm/autos">
+          <div class="vcard__img">
+            <span class="vcard__badge">Autos<span>QP</span></span>
+            <img src="https://images.unsplash.com/photo-1580273916550-e323be2ae537?auto=format&fit=crop&w=800&q=82" alt="Kia K3" loading="lazy">
+          </div>
+          <div class="vcard__body">
+            <div class="vcard__brand">KIA</div>
+            <div class="vcard__model">K3</div>
+            <div class="vcard__meta">2022 • Automático • Gasolina</div>
+            <div class="vcard__price">$ 94.900.000</div>
+          </div>
+        </a>
+      </div>
+
+      <div class="vehicles__more">
+        <a class="btn btn--green" href="/crm/autos">Ver todos los vehículos</a>
       </div>
     </div>
   </section>
 
-  <section class="cta">
-    <div class="wrap cta__inner">
-      <div>
-        <h2>Listo para comprar, vender o cuidar tu vehiculo?</h2>
-        <p>Empieza por el catalogo, deja tus datos en el formulario o solicita una valoracion de compra.</p>
+  <section class="testimonials" id="nosotros">
+    <div class="wrap">
+      <div class="testimonials__box">
+        <button class="testimonials__arrow testimonials__arrow--prev" type="button" aria-label="Testimonio anterior" data-testimonial-prev>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+
+        <div class="testimonials__inner">
+          <div class="testimonials__avatar">
+            <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=320&q=80" alt="Carlos Méndez" data-testimonial-avatar>
+          </div>
+          <div>
+            <h2 class="testimonials__title">Lo que dicen nuestros clientes</h2>
+            <p class="testimonials__quote" data-testimonial-quote>"Excelente atención y transparencia en todo el proceso. Compré mi carro con total confianza. ¡Recomendados!"</p>
+            <div class="testimonials__author" data-testimonial-author>Carlos Méndez</div>
+            <div class="testimonials__stars" aria-label="5 de 5 estrellas">★★★★★</div>
+          </div>
+        </div>
+
+        <button class="testimonials__arrow testimonials__arrow--next" type="button" aria-label="Siguiente testimonio" data-testimonial-next>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+
+        <div class="testimonials__dots" role="tablist" aria-label="Seleccionar testimonio">
+          <button class="testimonials__dot is-active" type="button" aria-label="Testimonio 1" data-testimonial-dot></button>
+          <button class="testimonials__dot" type="button" aria-label="Testimonio 2" data-testimonial-dot></button>
+          <button class="testimonials__dot" type="button" aria-label="Testimonio 3" data-testimonial-dot></button>
+        </div>
       </div>
-      <div class="actions">
-        <a class="btn btn--primary" href="/crm/autos">Catalogo</a>
-        <a class="btn btn--dark" href="/preview/formulario/">Formulario</a>
+    </div>
+  </section>
+
+  <section class="sell-banner">
+    <div class="wrap">
+      <div class="sell-banner__box">
+        <div class="sell-banner__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 11l2-5h10l2 5"/>
+            <rect x="3" y="11" width="18" height="6" rx="2"/>
+            <circle cx="7.5" cy="14" r="1"/>
+            <circle cx="16.5" cy="14" r="1"/>
+            <path d="M5 17v2M19 17v2"/>
+          </svg>
+        </div>
+        <div class="sell-banner__copy">
+          <h2>¿Quieres vender tu auto?</h2>
+          <p>Nosotros te ofrecemos la mejor valoración y una venta segura.</p>
+          <a class="btn btn--green" href="/preview/venta/">Vender mi auto</a>
+        </div>
+        <div class="sell-banner__media">
+          <img src="https://images.unsplash.com/photo-1617788138017-80ad40651399?auto=format&fit=crop&w=900&q=82" alt="Vehículo en valoración Autos QP" loading="lazy">
+        </div>
       </div>
     </div>
   </section>
 
   <footer class="footer">
-    <div class="wrap">Autos QP - Vehiculos, compra, venta y detailing.</div>
+    <div class="wrap">
+      <div class="footer__grid">
+        <div>
+          <a class="brand" href="/preview/">Autos<span class="brand__qp">QP</span></a>
+          <p class="footer__tagline">Calidad y confianza en cada kilómetro.</p>
+        </div>
+
+        <div>
+          <h4>Contacto</h4>
+          <div class="footer__contact">
+            <a class="footer__contact-item" href="tel:+573001234567">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <span data-company-phone>+57 300 123 4567</span>
+            </a>
+            <a class="footer__contact-item" href="mailto:info@autosqp.com">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+              <span>info@autosqp.com</span>
+            </a>
+            <div class="footer__contact-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              <span data-company-address>Colombia</span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h4>Enlaces</h4>
+          <div class="footer__links">
+            <a href="/preview/">Inicio</a>
+            <a href="/crm/autos">Inventario</a>
+            <a href="/preview/venta/">Vender mi auto</a>
+            <a href="/crm/credito">Financiamiento</a>
+            <a href="/preview/detailing/">Detailing</a>
+            <a href="/preview/formulario/">Contacto</a>
+            <a href="/crm/login">Ingresar CRM</a>
+          </div>
+        </div>
+
+        <div>
+          <h4>Síguenos</h4>
+          <div class="footer__social">
+            <a href="https://www.facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 13.5h2.5l1-4H14v-2c0-1.03 0-2 2-2h1.5V2.14c-.326-.043-1.557-.14-2.857-.14C11.928 2 10 3.657 10 6.7v2.8H7v4h3V22h4v-8.5z"/></svg>
+            </a>
+            <a href="https://www.instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>
+            </a>
+            <a href="/preview/formulario/" aria-label="WhatsApp y contacto">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer__bottom">
+        <span>Autos QP — Vehículos, compra, venta y detailing.</span>
+        <a href="/crm/politica-de-privacidad">Política de privacidad</a>
+      </div>
+    </div>
   </footer>
+
+  <script src="/preview/assets/app.js?v=2"></script>
 </body>
 </html>
