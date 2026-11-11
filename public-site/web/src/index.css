@@ -1,0 +1,39 @@
+@import "tailwindcss";
+@source "../../../frontend/src/components/PublicSalesChatbot.jsx";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --brand-primary: #00C896;
+    --brand-dark: #0e1114;
+    --brand-surface: #14181d;
+    --brand-border: #232a32;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: #0d1014;
+    color: #e5e7eb;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, .font-heading {
+    font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+  }
+}
+
+/* Custom subtle scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0f1216;
+}
+::-webkit-scrollbar-thumb {
+  background: #232a32;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #00C896;
+}

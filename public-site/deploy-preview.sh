@@ -3,12 +3,15 @@ set -euo pipefail
 
 SITE_ROOT="${SITE_ROOT:-/var/www/html/autosqp-preview}"
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUILD_DIR="$SOURCE_DIR/web/dist"
+[[ "$(realpath -m "$SITE_ROOT")" == "/var/www/html/autosqp-preview" ]] || { echo "Destino de preview no permitido" >&2; exit 1; }
+[[ -f "$BUILD_DIR/index.html" ]] || { echo "Primero ejecuta npm ci y npm run build dentro de public-site/web" >&2; exit 1; }
 NGINX_SNIPPET="/etc/nginx/snippets/autosqp-preview.conf"
 NGINX_SITE="/etc/nginx/sites-available/autosqp"
 
 # 1. Copiar archivos del sitio
 sudo mkdir -p "$SITE_ROOT"
-sudo rsync -a --delete "$SOURCE_DIR"/ "$SITE_ROOT"/ \
+sudo rsync -a --delete "$BUILD_DIR"/ "$SITE_ROOT"/ \
   --exclude "deploy-static-site.sh" \
   --exclude "deploy-preview.sh" \
   --exclude "nginx-autosqp-static-notes.txt" \
@@ -26,9 +29,8 @@ echo "✓ Snippet Nginx instalado en $NGINX_SNIPPET"
 
 # 3. Agregar include en el site config si aún no está
 if ! grep -q "autosqp-preview.conf" "$NGINX_SITE" 2>/dev/null; then
-  # Inserta el include justo antes del primer location
-  sudo sed -i '0,/location/{s|location|    include /etc/nginx/snippets/autosqp-preview.conf;\n\n    location|}' "$NGINX_SITE"
-  echo "✓ Include agregado en $NGINX_SITE"
+  echo "Agrega include /etc/nginx/snippets/autosqp-preview.conf; dentro del server HTTPS de autosqp.com y vuelve a ejecutar este script." >&2
+  exit 1
 else
   echo "· Include ya existe en $NGINX_SITE, sin cambios"
 fi

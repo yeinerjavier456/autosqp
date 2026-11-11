@@ -135,6 +135,16 @@ class CompanyBackupTests(unittest.TestCase):
         self.leads.append_column(Column('new_field', String))
         with self.assertRaises(ValueError): backups.restore_archive(self.db, self.meta, 1, saved['id'], self.static)
 
+    def test_backup_before_website_contact_table_remains_restorable(self):
+        saved = self.snapshot()
+        contacts = Table('public_website_contacts', self.meta, Column('id', Integer, primary_key=True),
+            Column('company_id', ForeignKey('companies.id')), Column('message', String))
+        contacts.create(self.engine)
+        self.db.execute(contacts.insert(), [dict(id=1, company_id=1, message='New'), dict(id=2, company_id=2, message='Other')])
+        self.db.commit()
+        backups.restore_archive(self.db, self.meta, 1, saved['id'], self.static)
+        self.assertEqual(self.db.execute(select(contacts.c.id)).scalars().all(), [2])
+
     def test_cross_company_reference_blocks_archive(self):
         # An unscoped child connected to another tenant's lead must never leak.
         cross = Table('cross_links', self.meta, Column('id', Integer, primary_key=True),

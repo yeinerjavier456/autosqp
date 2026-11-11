@@ -177,8 +177,11 @@ def decode_rows(table, rows):
     return result
 
 
-def schema_signature(metadata):
-    structure = {table.name: [(col.name, str(col.type)) for col in table.columns] for table in metadata.sorted_tables if table.name not in {'company_backup_jobs', 'alert_rule_progress'}}
+def schema_signature(metadata, before_website_contacts=False):
+    ignored = {'company_backup_jobs', 'alert_rule_progress'}
+    if before_website_contacts:
+        ignored.add('public_website_contacts')
+    structure = {table.name: [(col.name, str(col.type)) for col in table.columns] for table in metadata.sorted_tables if table.name not in ignored}
     return hashlib.sha256(json.dumps(structure, sort_keys=True).encode()).hexdigest()
 
 
@@ -328,7 +331,11 @@ def restore_archive(db, metadata, company_id, backup_id, static_root):
         payload = json.loads((stage / 'data.json').read_text(encoding='utf-8'))
         if payload.get('company_id') != company_id or payload.get('format') != 1:
             raise ValueError('Esta copia no pertenece a la empresa seleccionada')
-        if payload.get('schema') != schema_signature(metadata):
+        # Known additive migration: older snapshots predate the public-contact
+        # table. Accept only the exact old schema hash, never arbitrary changes.
+        legacy_website_schema = ('public_website_contacts' not in payload.get('tables', {})
+            and payload.get('schema') == schema_signature(metadata, before_website_contacts=True))
+        if payload.get('schema') != schema_signature(metadata) and not legacy_website_schema:
             raise ValueError('La estructura de la aplicación cambió. Esta copia requiere una migración antes de restaurarla')
         rows = {name: decode_rows(metadata.tables[name], items) for name, items in payload['tables'].items()}
         current = scope_rows(db, metadata, company_id)

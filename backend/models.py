@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, Float, String, ForeignKey, Enum as SqEnum, JSON, DateTime, Text, Date, UniqueConstraint
+from sqlalchemy import Boolean, Column, Integer, Float, String, ForeignKey, Enum as SqEnum, JSON, DateTime, Text, Date, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
 from database import Base
 import enum
@@ -125,6 +125,26 @@ class PublicCreditEmailVerification(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     company = relationship("Company")
+
+
+class PublicWebsiteContact(Base):
+    __tablename__ = 'public_website_contacts'
+    __table_args__ = (
+        UniqueConstraint('company_id', 'request_id', name='uq_website_contact_request'),
+        Index('ix_website_contact_rate', 'company_id', 'ip_hash', 'created_at'),
+    )
+    id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, ForeignKey('companies.id'), nullable=False)
+    request_id = Column(String(36), nullable=False)
+    name = Column(String(150), nullable=False)
+    email = Column(String(255), nullable=False)
+    phone = Column(String(40), nullable=False, default='')
+    subject = Column(String(120), nullable=False)
+    message = Column(Text, nullable=False)
+    ip_hash = Column(String(64), nullable=False)
+    state = Column(String(20), nullable=False, default='pending')
+    attempts = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
 
 
 class PublicCreditSubmission(Base):

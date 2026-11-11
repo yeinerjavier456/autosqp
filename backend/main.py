@@ -37,6 +37,7 @@ from fastapi.responses import JSONResponse
 from fastapi.responses import FileResponse
 from fastapi.responses import StreamingResponse
 from schema_ensure import ensure_mysql_schema
+from public_website import ContactMessage, inventory_page, submit_contact, client_ip
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
@@ -683,13 +684,13 @@ def _deliver_smtp_message(message: EmailMessage, smtp_settings: Dict[str, Any]):
 
     if smtp_settings["use_tls"]:
         context = ssl.create_default_context()
-        with smtplib.SMTP(smtp_settings["host"], smtp_settings["port"]) as server:
+        with smtplib.SMTP(smtp_settings["host"], smtp_settings["port"], timeout=20) as server:
             server.starttls(context=context)
             if smtp_settings["username"]:
                 server.login(smtp_settings["username"], smtp_settings["password"])
             server.send_message(message)
     else:
-        with smtplib.SMTP_SSL(smtp_settings["host"], smtp_settings["port"]) as server:
+        with smtplib.SMTP_SSL(smtp_settings["host"], smtp_settings["port"], timeout=20) as server:
             if smtp_settings["username"]:
                 server.login(smtp_settings["username"], smtp_settings["password"])
             server.send_message(message)
@@ -5574,6 +5575,17 @@ def update_company_finance_password(
     company.finance_password_hash = auth_utils.get_password_hash(password)
     db.commit()
     return {"message": "Contraseña de Finanzas actualizada", "finance_password_configured": True}
+
+@app.get('/public/website/inventory')
+def get_website_inventory(request: Request, before_id: Optional[int] = Query(default=None, ge=1), db: Session = Depends(get_db)):
+    return inventory_page(db, resolve_public_company(db, request), before_id)
+
+
+@app.post('/public/website/contact')
+def send_website_contact(payload: ContactMessage, request: Request, db: Session = Depends(get_db)):
+    return submit_contact(db, resolve_public_company(db, request), payload, client_ip(request),
+        _get_public_credit_smtp_settings, _deliver_smtp_message)
+
 
 @app.get("/public/company-context", response_model=schemas.PublicCompanyContext)
 def read_public_company_context(request: Request, db: Session = Depends(get_db)):
