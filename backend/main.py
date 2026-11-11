@@ -9264,6 +9264,7 @@ def read_advisor_stats(
     period: str = Query("month"),
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
+    employee_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -9273,6 +9274,15 @@ def read_advisor_stats(
     role_name = get_user_role_name(current_user) or ""
     permissions = set(get_role_permissions(current_user.role))
     company_scope = role_name in {"admin", "super_admin"}
+    if employee_id:
+        if not company_scope:
+            raise HTTPException(status_code=403, detail="Solo los administradores pueden filtrar por empleado")
+        employee = db.query(models.User).filter(
+            models.User.id == employee_id,
+            models.User.company_id == current_user.company_id,
+        ).first()
+        if not employee:
+            raise HTTPException(status_code=404, detail="Empleado no encontrado en esta empresa")
     ally_user_ids = set(get_company_ally_user_ids(db, current_user.company_id))
     tracked_advisor_ids = get_user_tracked_advisor_ids(current_user)
     supervised_profile_ids = list(dict.fromkeys([
@@ -9298,6 +9308,8 @@ def read_advisor_stats(
         joinedload(models.Lead.purchase_options)
     )
     all_leads = leads_query.all()
+    if employee_id:
+        all_leads = [lead for lead in all_leads if lead.assigned_to_id == employee_id]
     all_leads_by_id = {lead.id: lead for lead in all_leads}
 
     def is_within_dashboard_range(dt_value: Optional[datetime.datetime]) -> bool:
@@ -9603,6 +9615,7 @@ def read_advisor_stats(
     human_history_entries = [
         entry for entry in history_entries
         if not is_automatic_alert_history(entry)
+        and (not employee_id or entry.user_id == employee_id)
     ]
     status_change_entries = [
         entry for entry in human_history_entries
@@ -9743,7 +9756,7 @@ def read_advisor_stats(
         current_item["assigned_leads_count"] = len(assigned_map.get(user.id, set()))
         current_item["managed_leads_count"] = len(managed_map.get(user.id, set()))
     top_managers = sorted(
-        manager_activity_map.values(),
+        [item for item in manager_activity_map.values() if not employee_id or item["user_id"] == employee_id],
         key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
     )
     top_status_movers = sorted(
@@ -9755,7 +9768,7 @@ def read_advisor_stats(
         key=lambda item: (-item["count"], item.get("full_name") or item.get("email") or "")
     )
     least_managers = sorted(
-        manager_activity_map.values(),
+        [item for item in manager_activity_map.values() if not employee_id or item["user_id"] == employee_id],
         key=lambda item: (item["count"], item.get("full_name") or item.get("email") or "")
     )
     ally_least_managers = sorted(
@@ -9773,6 +9786,7 @@ def read_advisor_stats(
         credits = [
             credit for credit in credits_query.all()
             if not is_purchase_request_record(credit)
+            and (not employee_id or credit.assigned_to_id == employee_id)
             and is_within_dashboard_range(getattr(credit, "updated_at", None) or getattr(credit, "created_at", None))
         ]
         credit_total = len(credits)
@@ -9796,6 +9810,7 @@ def read_advisor_stats(
         purchases = [
             purchase for purchase in purchases_query.all()
             if is_purchase_request_record(purchase)
+            and (not employee_id or purchase.assigned_to_id == employee_id)
             and is_within_dashboard_range(getattr(purchase, "updated_at", None) or getattr(purchase, "created_at", None))
         ]
         purchase_total = len(purchases)
@@ -9821,6 +9836,7 @@ def read_advisor_stats(
         sales = [
             sale for sale in sales_query.all()
             if is_within_dashboard_range(getattr(sale, "sale_date", None) or getattr(sale, "created_at", None))
+            and (not employee_id or employee_id in {sale.seller_id, sale.purchase_manager_id, sale.credit_manager_id})
         ]
         sales_total = len(sales)
         for sale in sales:
@@ -9841,6 +9857,9 @@ def read_advisor_stats(
         vehicles = db.query(models.Vehicle).filter(
             models.Vehicle.company_id == current_user.company_id
         ).all()
+        if employee_id:
+            employee_vehicle_ids = {sale.vehicle_id for sale in sales}
+            vehicles = [vehicle for vehicle in vehicles if vehicle.id in employee_vehicle_ids]
         inventory_total = len(vehicles)
         for vehicle in vehicles:
             status_key = vehicle.status or "available"
@@ -9867,6 +9886,7 @@ def read_advisor_stats(
         appointments = [
             appointment for appointment in appointments_query.all()
             if is_within_dashboard_range(getattr(appointment, "appointment_date", None))
+            and (not employee_id or appointment.user_id == employee_id)
         ]
 
         appointments_total = len(appointments)
@@ -9982,6 +10002,8 @@ def read_advisor_stats(
         models.MonthlyGoal.company_id == current_user.company_id,
         models.MonthlyGoal.goal_month == current_goal_month,
     ).all()
+    if employee_id:
+        current_month_goals = [goal for goal in current_month_goals if goal.user_id == employee_id]
     global_sales_goal_target = sum(goal.target_count or 0 for goal in current_month_goals if goal.goal_type == "sales")
     global_purchase_goal_target = sum(goal.target_count or 0 for goal in current_month_goals if goal.goal_type == "purchase")
     personal_sales_goal_target = sum(
@@ -9998,8 +10020,10 @@ def read_advisor_stats(
         models.Sale.sale_date < goal_month_end_utc,
         models.Sale.status != models.SaleStatus.REJECTED.value,
     ).all()
-    global_sales_goal_actual = sum(1 for sale in current_month_sales if sale.seller_id)
-    global_purchase_goal_actual = sum(1 for sale in current_month_sales if sale.purchase_manager_id)
+    if employee_id:
+        current_month_sales = [sale for sale in current_month_sales if employee_id in {sale.seller_id, sale.purchase_manager_id}]
+    global_sales_goal_actual = sum(1 for sale in current_month_sales if sale.seller_id and (not employee_id or sale.seller_id == employee_id))
+    global_purchase_goal_actual = sum(1 for sale in current_month_sales if sale.purchase_manager_id and (not employee_id or sale.purchase_manager_id == employee_id))
     personal_sales_goal_actual = sum(1 for sale in current_month_sales if sale.seller_id == current_user.id)
     personal_purchase_goal_actual = sum(1 for sale in current_month_sales if sale.purchase_manager_id == current_user.id)
 

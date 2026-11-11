@@ -95,9 +95,10 @@ const OPTION_DECISION_LABELS = {
 const formatLabel = (key, labelMap) => labelMap[key] || key || 'Sin dato';
 
 const getLast7DaysRange = () => {
-    const end = new Date();
-    const start = new Date();
-    start.setDate(end.getDate() - 6);
+    const bogotaToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const end = new Date(`${bogotaToday}T12:00:00Z`);
+    const start = new Date(end);
+    start.setUTCDate(end.getUTCDate() - 6);
 
     const formatDate = (date) => date.toISOString().slice(0, 10);
 
@@ -108,9 +109,10 @@ const getLast7DaysRange = () => {
 };
 
 const getCurrentMonthRange = () => {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const bogotaToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const now = new Date(`${bogotaToday}T12:00:00Z`);
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
 
     const formatDate = (date) => date.toISOString().slice(0, 10);
 
@@ -159,10 +161,14 @@ const AdvisorDashboard = () => {
     const [loadingStats, setLoadingStats] = useState(true);
     const [statsError, setStatsError] = useState('');
     const [dashboardView, setDashboardView] = useState('autosqp');
-    const defaultRange = getLast7DaysRange();
-    const [rangePreset, setRangePreset] = useState('last7');
+    const todayBogota = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const defaultRange = ['admin', 'super_admin'].includes(getRoleName(user)) ? { start: todayBogota, end: todayBogota } : getLast7DaysRange();
+    const [rangePreset, setRangePreset] = useState(['admin', 'super_admin'].includes(getRoleName(user)) ? 'today' : 'last7');
     const [startDate, setStartDate] = useState(defaultRange.start);
     const [endDate, setEndDate] = useState(defaultRange.end);
+    const [employees, setEmployees] = useState([]);
+    const [employeeId, setEmployeeId] = useState('');
+    const [appliedFilters, setAppliedFilters] = useState({ start: defaultRange.start, end: defaultRange.end, employee: '' });
 
     const roleName = getRoleName(user);
     const isAdministrator = roleName === 'admin' || roleName === 'super_admin';
@@ -178,12 +184,23 @@ const AdvisorDashboard = () => {
     const hasAppointmentsSection = permissions.has('appointments_calendar');
 
     useEffect(() => {
+        if (!isAdministrator) return;
+        axios.get('/api/users/', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }, params: { limit: 1000 } })
+            .then(({ data }) => setEmployees((data.items || []).filter((employee) => employee.company_id === user.company_id)))
+            .catch(() => setStatsError('No se pudo cargar el listado de empleados.'));
+    }, [isAdministrator, user?.company_id]);
+
+    useEffect(() => {
         const fetchStats = async () => {
             setLoadingStats(true);
             setStatsError('');
             try {
                 const token = localStorage.getItem('token');
-                const params = rangePreset === 'all'
+                const params = isAdministrator ? {
+                    start_date: appliedFilters.start,
+                    end_date: appliedFilters.end,
+                    employee_id: appliedFilters.employee || undefined,
+                } : rangePreset === 'all'
                     ? { period: 'all' }
                     : {
                         start_date: startDate,
@@ -203,7 +220,7 @@ const AdvisorDashboard = () => {
         };
 
         if (user?.company_id && (rangePreset === 'all' || (startDate && endDate))) fetchStats();
-    }, [user, startDate, endDate, rangePreset]);
+    }, [user, isAdministrator ? appliedFilters : startDate, isAdministrator ? null : endDate, isAdministrator ? null : rangePreset]);
 
     if (loadingStats && !stats) {
         return <div className="p-8 text-center text-gray-500">Cargando tablero...</div>;
@@ -303,9 +320,9 @@ const AdvisorDashboard = () => {
         : [];
     const advisorManagers = topManagers.filter((manager) => manager?.role_name === 'asesor');
 
-    const rangeLabel = rangePreset === 'all'
+    const rangeLabel = !isAdministrator && rangePreset === 'all'
         ? 'de todo el historial'
-        : `del ${startDate} al ${endDate}`;
+        : `del ${isAdministrator ? appliedFilters.start : startDate} al ${isAdministrator ? appliedFilters.end : endDate}`;
     const trendTitle = 'Ritmo de gestión del rango elegido';
     const trendDescription = 'Leads gestionados dentro del rango manual seleccionado.';
     const leadBoardPath = permissions.has('ally_board') && !permissions.has('leads_board')
@@ -517,7 +534,7 @@ const AdvisorDashboard = () => {
                         <p className="mt-2 max-w-3xl text-sm text-slate-200">
                             Vista operativa general de la empresa: leads, cierres, estados y colas relacionadas según los accesos disponibles para tu rol.
                         </p>
-                        {hasAllySection && (
+                        {hasAllySection && !isAdministrator && (
                             <div className="mt-4 flex flex-wrap gap-3">
                                 <button
                                     type="button"
@@ -560,6 +577,12 @@ const AdvisorDashboard = () => {
                                     const nextPreset = e.target.value;
                                     setRangePreset(nextPreset);
 
+                                    if (nextPreset === 'today') {
+                                        setStartDate(todayBogota);
+                                        setEndDate(todayBogota);
+                                        return;
+                                    }
+
                                     if (nextPreset === 'month') {
                                         const range = getCurrentMonthRange();
                                         setStartDate(range.start);
@@ -575,11 +598,18 @@ const AdvisorDashboard = () => {
                                 }}
                                 className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-cyan-50 outline-none transition focus:border-cyan-200"
                             >
-                                <option value="all" className="text-slate-900">Todo</option>
+                                <option value="today" className="text-slate-900">Hoy</option>
                                 <option value="month" className="text-slate-900">Mes</option>
                                 <option value="last7" className="text-slate-900">Últimos 7 días</option>
                             </select>
                         </div>
+                        {isAdministrator && <div className="mt-3 flex flex-wrap gap-3">
+                            <select aria-label="Empleado" value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} className="min-w-0 flex-1 rounded-xl border border-white/20 bg-white px-4 py-3 text-sm font-semibold text-slate-900">
+                                <option value="">Todos los empleados</option>
+                                {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name || employee.email}</option>)}
+                            </select>
+                            <button type="button" disabled={loadingStats || !startDate || !endDate || startDate > endDate} onClick={() => setAppliedFilters({ start: startDate, end: endDate, employee: employeeId })} className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-slate-900 disabled:opacity-50">{loadingStats ? 'Cargando...' : 'Aplicar filtros'}</button>
+                        </div>}
                     </div>
                 </div>
             </div>
