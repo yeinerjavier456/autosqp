@@ -85,9 +85,24 @@ class FinanceCatalogTests(unittest.TestCase):
         with self.assertRaises(Denied): self.context['update'](category['id'], self.payload(kind='category', label='Otro'), self.db, NS(company_id=2, role='admin'))
 
     def test_non_admin_and_duplicate_names_are_blocked(self):
-        with self.assertRaises(Denied): self.context['listing'](self.db, NS(company_id=1, role='asesor'))
+        employee = NS(company_id=1, role='asesor')
+        with self.assertRaises(Denied): self.context['listing'](self.db, employee)
+        with self.assertRaises(Denied): self.context['create'](self.payload(kind='category', label='No permitida'), self.db, employee)
+        entry = self.db.query(Entry).first()
+        with self.assertRaises(Denied): self.context['update'](entry.id, self.payload(kind='category', label='No permitida'), self.db, employee)
+        with self.assertRaises(Denied): self.context['remove'](entry.id, self.db, employee)
         self.create_category()
         with self.assertRaises(Denied): self.create_category()
+
+    def test_employee_gets_only_active_form_options_of_own_company(self):
+        category = self.create_category()
+        self.context['remove'](category['id'], self.db, self.user)
+        self.db.add(Entry(company_id=2, kind='category', code='private', label='Otra empresa', is_active=True))
+        self.db.commit()
+        items = self.context['form_options'](self.db, NS(company_id=1, role='asesor'))['items']
+        self.assertTrue(items)
+        self.assertTrue(all('id' not in entry and entry['is_active'] for entry in items))
+        self.assertFalse(any(entry['code'] in {'private', category['code']} for entry in items))
 
     def test_category_in_use_and_transfer_are_protected(self):
         used = self.db.query(Entry).filter(Entry.code == 'ingreso_venta').first()

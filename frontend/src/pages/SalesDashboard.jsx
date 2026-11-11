@@ -5,6 +5,7 @@ import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler } from 'chart.js';
 import { useAuth } from '../context/AuthContext';
 import FinanceCatalogSettings from '../components/FinanceCatalogSettings';
+import { getRoleName } from '../config/views';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
@@ -292,6 +293,7 @@ const SaleRequestModal = ({ sale, users = [], saving, requireCommissions, onClos
 
 const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, initialTab = 'sales' }) => {
     const { user } = useAuth();
+    const canManageFinanceCatalog = ['admin', 'super_admin'].includes(getRoleName(user));
     const companyPrimaryColor = user?.company?.primary_color || '#2563eb';
     const companySecondaryColor = user?.company?.secondary_color || '#10b981';
     const companyPositiveColor = getVisibleAccent(companySecondaryColor);
@@ -413,13 +415,13 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
     const receiptConceptOptions = catalogEntries.length ? catalogEntries.filter((entry) => entry.kind === 'concept' && entry.is_active).map((entry) => entry.label) : defaultConceptOptions;
     const receiptCategoryOptions = catalogEntries.length ? catalogEntries.filter((entry) => entry.kind === 'category' && entry.is_active).map((entry) => [entry.code, entry.label]) : defaultCategoryOptions;
     const fetchCatalog = async () => {
-        const response = await axios.get('/api/finance/catalog', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+        const response = await axios.get(canManageFinanceCatalog ? '/api/finance/catalog' : '/api/finance/catalog/options', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
         setCatalogEntries(response.data.items || []); setCatalogError('');
     };
     useEffect(() => {
         setCatalogEntries([]);
         fetchCatalog().catch((error) => setCatalogError(error.response?.data?.detail || 'No se pudo cargar el catálogo contable.'));
-    }, [user?.company_id]);
+    }, [user?.company_id, canManageFinanceCatalog]);
     const paymentMethodOptions = [
         ['efectivo', 'Efectivo'],
         ['transferencia', 'Transferencia']
@@ -651,6 +653,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
     };
 
     const handleFinanceTabChange = (tab) => {
+        if (tab === 'settings' && !canManageFinanceCatalog) return;
         setSelectedFinancialAccount(null);
         setFinancePassword('');
         setFinanceUnlockError('');
@@ -3101,7 +3104,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                 >
                     Cuentas
                 </button>
-                <button type="button" onClick={() => handleFinanceTabChange('settings')} className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>Configuración</button>
+                {canManageFinanceCatalog && <button type="button" onClick={() => handleFinanceTabChange('settings')} className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>Configuración</button>}
             </div>
 
             <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
@@ -3124,7 +3127,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             </div>
 
             {catalogError && <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-700">{catalogError}</p>}
-            {activeTab === 'settings' ? <FinanceCatalogSettings entries={catalogEntries} onChanged={fetchCatalog} /> : activeTab === 'sales' ? (
+            {activeTab === 'settings' ? (canManageFinanceCatalog ? <FinanceCatalogSettings entries={catalogEntries} onChanged={fetchCatalog} /> : <p className="rounded-xl bg-amber-50 p-4 text-amber-800">Configuración disponible solo para administradores de la empresa.</p>) : activeTab === 'sales' ? (
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">

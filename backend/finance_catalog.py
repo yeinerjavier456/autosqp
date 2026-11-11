@@ -61,6 +61,18 @@ def listing(db=Depends(get_db), user=Depends(get_current_user)):
     return {'items': [serialize(entry) for entry in scoped(db, user).order_by(models.FinanceCatalogEntry.id).all()]}
 
 
+@router.get('/options')
+def form_options(db=Depends(get_db), user=Depends(get_current_user)):
+    """Dropdown values, not the administrative configuration or inactive entries."""
+    if not user.company_id:
+        raise HTTPException(403, 'Debes tener una empresa asignada')
+    entries = db.query(models.FinanceCatalogEntry).filter(
+        models.FinanceCatalogEntry.company_id == user.company_id,
+        models.FinanceCatalogEntry.is_active.is_(True),
+    ).order_by(models.FinanceCatalogEntry.id).all()
+    return {'items': [{key: value for key, value in serialize(entry).items() if key not in {'id', 'protected'}} for entry in entries]}
+
+
 def validate(db, user, payload, exclude_id=None):
     label = payload.label.strip()
     if not label or payload.kind not in {'category', 'concept'}:
