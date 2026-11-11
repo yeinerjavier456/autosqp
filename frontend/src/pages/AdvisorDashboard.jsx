@@ -410,6 +410,9 @@ const AdvisorDashboard = () => {
         ? 'Leads donde un aliado participa dentro del rango seleccionado.'
         : trendDescription;
     const currentRanking = isAllyDashboard ? allyTopManagers : topManagers;
+    const employeeManagement = isEmployeeFiltered
+        ? currentRanking.find((manager) => String(manager.user_id) === String(appliedFilters.employee))
+        : null;
     const currentLeastManagers = (isAllyDashboard ? allyLeastManagers : leastManagers).slice(0, 8);
     const currentUnattendedAlertReassignmentUsers = isAllyDashboard
         ? allyUnattendedAlertReassignmentUsers
@@ -687,6 +690,25 @@ const AdvisorDashboard = () => {
                     />
                 )}
             </div>
+
+            {isEmployeeFiltered && (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <DashboardMetric
+                        title="Leads gestionados"
+                        value={Number(employeeManagement?.managed_leads_count || 0)}
+                        helper={`Leads distintos con gestiones del empleado ${rangeLabel}.`}
+                        className="border-emerald-200 bg-emerald-50 text-emerald-900"
+                        helperClassName="text-emerald-700"
+                    />
+                    <DashboardMetric
+                        title="Acciones realizadas"
+                        value={Number(employeeManagement?.count || 0)}
+                        helper={`Acciones registradas en el historial por el empleado ${rangeLabel}.`}
+                        className="border-blue-200 bg-blue-50 text-blue-900"
+                        helperClassName="text-blue-700"
+                    />
+                </div>
+            )}
 
             {(isAllyDashboard ? hasAllySection : showLeadsMetrics) && (
                 <div className={`grid grid-cols-1 gap-6 ${isEmployeeFiltered ? '' : 'xl:grid-cols-3'}`}>
@@ -1016,7 +1038,7 @@ const AdvisorDashboard = () => {
                 </div>
             )}
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            {!isEmployeeFiltered && <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="mb-4">
                     <h3 className="text-lg font-bold text-slate-800">{isAllyDashboard ? 'Quién asigna leads a aliados' : 'Ranking de gestión por usuario'}</h3>
                     <p className="text-sm text-slate-500">
@@ -1052,7 +1074,7 @@ const AdvisorDashboard = () => {
                         Aun no hay registros para este rango.
                     </div>
                 )}
-            </div>
+            </div>}
 
             {showAppointmentsMetrics && !isAllyDashboard && !isEmployeeFiltered && (
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
