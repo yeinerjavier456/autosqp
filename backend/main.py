@@ -1866,6 +1866,8 @@ def apply_lead_access_filters(
 def hydrate_lead_summary_fields(db: Session, leads: List[models.Lead]):
     if not leads:
         return
+    from lead_recontact import hydrate_recontact_alerts
+    hydrate_recontact_alerts(db, leads)
 
     lead_ids = [lead.id for lead in leads]
     related_credits = db.query(models.CreditApplication).filter(
@@ -6110,7 +6112,12 @@ async def submit_public_credit_request(
             if verification.expires_at < datetime.datetime.now():
                 raise HTTPException(status_code=400, detail="La validación por correo expiró. Solicita un nuevo código.")
 
-        ensure_company_lead_creation_capacity(db, company.id)
+        from lead_recontact import find_existing_contact, request_recontact
+        linked_lead = find_existing_contact(db, company.id, applicant_name, applicant_phone)
+        if linked_lead:
+            request_recontact(db, linked_lead, "formulario público de crédito")
+        else:
+            ensure_company_lead_creation_capacity(db, company.id)
 
     front_capture = None
     back_capture = None
@@ -6160,7 +6167,8 @@ async def submit_public_credit_request(
         linked_lead.email = applicant_email or linked_lead.email
         linked_lead.phone = applicant_phone or linked_lead.phone
         linked_lead.message = _build_public_credit_lead_message(payload)
-        linked_lead.assigned_to_id = selected_advisor.id
+        if linked_access:
+            linked_lead.assigned_to_id = selected_advisor.id
         linked_lead.updated_at = datetime.datetime.now()
 
         process_detail = db.query(models.LeadProcessDetail).filter(
@@ -6273,15 +6281,16 @@ async def submit_public_credit_request(
         submission.phone = applicant_phone
         submission.desired_vehicle = desired_vehicle
         submission.status = "submitted"
-        submission.verification_code = linked_access.code if requires_email_validation else None
-        submission.verification_verified_at = linked_access.verified_at
+        submission.verification_code = linked_access.code if linked_access and requires_email_validation else verification_code
+        submission.verification_verified_at = linked_access.verified_at if linked_access else auto_verified_at
         submission.form_payload = payload
         current_attachments = submission.attachments or {}
         current_attachments.update({key: value for key, value in attachments.items() if value})
         submission.attachments = current_attachments
         submission.consent_text = PUBLIC_CREDIT_POLICY_TEXT
         submission.updated_at = datetime.datetime.now()
-        linked_access.used_at = datetime.datetime.now()
+        if linked_access:
+            linked_access.used_at = datetime.datetime.now()
 
         db.commit()
         db.refresh(submission)
@@ -8786,12 +8795,37 @@ def check_lead_duplicate(
     }
 
 
+@app.post("/leads/{lead_id:int}/request-recontact")
+def report_lead_recontact(lead_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    lead = db.query(models.Lead).filter(models.Lead.id == lead_id, models.Lead.company_id == current_user.company_id, models.Lead.deleted_at.is_(None)).with_for_update().first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead no encontrado en esta empresa")
+    from lead_recontact import request_recontact
+    request_recontact(db, lead, "registro manual", current_user.id)
+    db.commit()
+    return {"message": "Se notificó al responsable del lead existente"}
+
+
+@app.post("/leads/{lead_id:int}/acknowledge-recontact")
+def acknowledge_lead_recontact(lead_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    lead = db.query(models.Lead).filter(models.Lead.id == lead_id, models.Lead.company_id == current_user.company_id).with_for_update().first()
+    if not lead or (lead.assigned_to_id != current_user.id and not is_company_admin(current_user)):
+        raise HTTPException(status_code=403, detail="Solo el responsable o un administrador puede atender esta alerta")
+    from lead_recontact import ACK
+    db.add(models.LeadHistory(lead_id=lead.id, user_id=current_user.id, previous_status=lead.status,
+        new_status=lead.status, comment=f"{ACK} Solicitud de nuevo contacto marcada como atendida"))
+    db.commit()
+    return {"message": "Alerta atendida"}
+
+
 @app.post("/leads", response_model=schemas.Lead)
 def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     import datetime
     
     # 1. Determine Company
     company_id = lead.company_id
+    if company_id and current_user.company_id and company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="No puedes crear leads en otra empresa")
     if not company_id:
         if current_user.company_id:
             company_id = current_user.company_id
@@ -8806,6 +8840,9 @@ def create_lead(lead: schemas.LeadCreate, db: Session = Depends(get_db), current
 
     duplicate_lead = find_duplicate_company_lead(db, company_id, lead.name, lead.phone)
     if duplicate_lead:
+        from lead_recontact import request_recontact
+        request_recontact(db, duplicate_lead, "registro manual", current_user.id)
+        db.commit()
         assigned_user = getattr(duplicate_lead, "assigned_to", None)
         assigned_name = (
             getattr(assigned_user, "full_name", None)
@@ -11241,17 +11278,8 @@ def maybe_create_public_chat_lead(
     if not should_create_lead:
         return None
 
-    lookup_phones = phone_variants_for_lookup(phone)
-    duplicate_window_days = int(os.getenv("PUBLIC_CHAT_DUPLICATE_WINDOW_DAYS", "30") or "30")
-    recent_threshold = datetime.datetime.utcnow() - datetime.timedelta(days=duplicate_window_days)
-
-    existing_lead = None
-    if lookup_phones:
-        existing_lead = db.query(models.Lead).filter(
-            models.Lead.company_id == session.company_id,
-            models.Lead.phone.in_(lookup_phones),
-            models.Lead.created_at >= recent_threshold
-        ).order_by(models.Lead.created_at.desc()).first()
+    from lead_recontact import find_existing_contact, request_recontact
+    existing_lead = find_existing_contact(db, session.company_id, name, phone)
 
     normalized_source_page = (session.source_page or "").lower()
     is_tiktok_landing = "tiktok" in normalized_source_page
@@ -11267,6 +11295,7 @@ def maybe_create_public_chat_lead(
     )
 
     if existing_lead:
+        request_recontact(db, existing_lead, lead_channel_label)
         existing_lead.name = name or existing_lead.name
         existing_lead.email = email or existing_lead.email
         existing_lead.message = lead_message
@@ -12266,6 +12295,12 @@ def receive_webhook_lead(
     company = db.query(models.Company).first()
     company_id = company.id if company else None
 
+    from lead_recontact import find_existing_contact, request_recontact
+    existing = find_existing_contact(db, company_id, name, phone)
+    if existing:
+        request_recontact(db, existing, source)
+        db.commit()
+        return {"status": "existing_contact_notified", "lead_id": existing.id}
     # Create Lead
     ensure_company_lead_creation_capacity(db, company_id)
     new_lead = models.Lead(

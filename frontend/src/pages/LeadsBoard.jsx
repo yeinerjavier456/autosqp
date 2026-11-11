@@ -1122,6 +1122,7 @@ const getPurchaseOptionDecisionMeta = (decisionStatus) => {
 
 // Draggable Lead Card Component
 const LeadCard = ({ lead, status, onDragStart, onViewHistory, onShowDuplicates, isHighlighted = false, boardMode = 'general', canDrag = true, boardAlert = null }) => {
+    const [acknowledgedRecontact, setAcknowledgedRecontact] = useState(null);
     const getLeadAgePalette = (createdAt) => {
         if (!createdAt) {
             return {
@@ -1355,6 +1356,19 @@ const LeadCard = ({ lead, status, onDragStart, onViewHistory, onShowDuplicates, 
                     {lead.source || 'WEB'}
                 </span>
                 <div className="flex flex-wrap items-center justify-end gap-2">
+                    {lead.recontact_requested && acknowledgedRecontact !== lead.recontact_requested_at && (
+                        <button type="button" className="rounded-full border border-orange-400 bg-orange-100 px-2 py-1 text-[10px] font-bold text-orange-900" title="Solicita ser contactado nuevamente. Haz clic para marcar la alerta como atendida." onClick={async (event) => {
+                            event.stopPropagation();
+                            const result = await Swal.fire({ icon: 'info', title: 'Solicita ser contactado nuevamente', text: 'El contacto volvió a solicitar atención. ¿Ya atendiste esta solicitud?', showCancelButton: true, confirmButtonText: 'Marcar como atendida', cancelButtonText: 'Pendiente' });
+                            if (!result.isConfirmed) return;
+                            try {
+                                await axios.post(`${API_BASE_URL}/leads/${lead.id}/acknowledge-recontact`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+                                setAcknowledgedRecontact(lead.recontact_requested_at);
+                            } catch (error) {
+                                Swal.fire('Error', error.response?.data?.detail || 'No se pudo atender la alerta.', 'error');
+                            }
+                        }}>⚠️ Solicita ser contactado nuevamente</button>
+                    )}
                     {lead.is_duplicate && (
                         <button
                             type="button"
@@ -6706,6 +6720,16 @@ const LeadsBoard = ({ boardMode = 'general' }) => {
                                 {duplicateCheck?.exists
                                     ? `⚠️ ${duplicateCheck.message}`
                                     : 'Verificando si el lead ya existe...'}
+                                {duplicateCheck?.exists && <button type="button" disabled={creatingLead} className="mt-3 block rounded-lg bg-amber-700 px-3 py-2 font-bold text-white disabled:opacity-50" onClick={async () => {
+                                    setCreatingLead(true);
+                                    try {
+                                        await axios.post(`${API_BASE_URL}/leads/${duplicateCheck.lead_id}/request-recontact`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+                                        await fetchBoardLeads(searchTerm);
+                                        Swal.fire('Responsable notificado', 'Se agregó una alerta al lead existente. No se creó un duplicado.', 'success');
+                                    } catch (error) {
+                                        Swal.fire('Error', error.response?.data?.detail || 'No se pudo notificar al responsable.', 'error');
+                                    } finally { setCreatingLead(false); }
+                                }}>Notificar al responsable: solicita nuevo contacto</button>}
                             </div>
                         )}
 

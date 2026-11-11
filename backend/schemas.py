@@ -827,6 +827,8 @@ class Lead(LeadBase):
     is_duplicate: bool = False
     duplicate_count: int = 0
     duplicate_match: Optional[str] = None
+    recontact_requested: bool = False
+    recontact_requested_at: Optional[datetime] = None
     
     model_config = ConfigDict(from_attributes=True)
 

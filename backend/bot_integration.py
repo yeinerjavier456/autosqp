@@ -724,17 +724,8 @@ def maybe_create_channel_lead(
     if not required_core:
         return None
 
-    duplicate_window_days = int(os.getenv("PUBLIC_CHAT_DUPLICATE_WINDOW_DAYS", "30") or "30")
-    recent_threshold = datetime.datetime.utcnow() - datetime.timedelta(days=duplicate_window_days)
-    lookup_phones = phone_variants_for_lookup(phone)
-
-    existing_lead = None
-    if lookup_phones:
-        existing_lead = db.query(models.Lead).filter(
-            models.Lead.company_id == chat_session.company_id,
-            models.Lead.phone.in_(lookup_phones),
-            models.Lead.created_at >= recent_threshold,
-        ).order_by(models.Lead.created_at.desc()).first()
+    from lead_recontact import find_existing_contact, request_recontact
+    existing_lead = find_existing_contact(db, chat_session.company_id, name, phone)
 
     if channel == WHATSAPP_CHANNEL_PURCHASES:
         lead_message = (
@@ -758,6 +749,7 @@ def maybe_create_channel_lead(
         lead_status = models.LeadStatus.NEW.value
 
     if existing_lead:
+        request_recontact(db, existing_lead, f"chatbot {source_label}")
         existing_lead.name = first_name or existing_lead.name
         existing_lead.phone = phone or existing_lead.phone
         existing_lead.email = email or existing_lead.email

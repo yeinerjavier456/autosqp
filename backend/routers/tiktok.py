@@ -63,7 +63,12 @@ def find_or_create_lead(
     phone: str,
     email: str
 ):
-    lead = None
+    from lead_recontact import find_existing_contact, request_recontact
+    lead = find_existing_contact(db, company_id, name, phone)
+    if lead:
+        request_recontact(db, lead, 'TikTok')
+        db.commit()
+        return lead
     if phone:
         lead = db.query(models.Lead).filter(
             models.Lead.company_id == company_id,
