@@ -331,7 +331,8 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
     const [accountMovements, setAccountMovements] = useState([]);
     const [loadingAccountMovements, setLoadingAccountMovements] = useState(false);
     const [savingAccountTransaction, setSavingAccountTransaction] = useState(false);
-    const [accountTransactionForm, setAccountTransactionForm] = useState({ concept: 'Venta de Vehiculo', movement_type: 'income', amount: '', payment_date: getBogotaDateTimeLocal(), category: 'ingreso_venta', notes: '' });
+    const [accountTransactionForm, setAccountTransactionForm] = useState({ concept: 'Venta de Vehiculo', movement_type: 'income', amount: '', payment_date: getBogotaDateTimeLocal(), category: 'ingreso_venta', destination_account_id: '', notes: '' });
+    const [linkingMovementsMessage, setLinkingMovementsMessage] = useState('');
     const [loading, setLoading] = useState(!receiptSearchOnly);
     const [filterStatus, setFilterStatus] = useState('pending');
     const [activeTab, setActiveTab] = useState(receiptEntryOnly || receiptSearchOnly ? 'accounting' : initialTab);
@@ -648,24 +649,40 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
 
     const handleCreateAccountTransaction = async (event) => {
         event.preventDefault();
-        if (!selectedFinancialAccount) return;
+        if (!selectedFinancialAccount || savingAccountTransaction) return;
         const amount = parseCurrencyInput(accountTransactionForm.amount);
         if (!amount) return;
         setSavingAccountTransaction(true);
         try {
             const token = localStorage.getItem('token');
-            await axios.post(`/api/finance/accounts/${selectedFinancialAccount.id}/transactions`, {
-                ...accountTransactionForm,
-                amount,
-                payment_date: accountTransactionForm.payment_date ? `${accountTransactionForm.payment_date}:00-05:00` : null,
-            }, { headers: { Authorization: `Bearer ${token}` } });
+            const isTransfer = accountTransactionForm.category === 'transferencia_cuentas';
+            if (isTransfer) {
+                const destinationAccountId = Number(accountTransactionForm.destination_account_id || 0);
+                if (!destinationAccountId) {
+                    Swal.fire('Cuenta requerida', 'Selecciona la cuenta que recibirá el dinero.', 'warning');
+                    return;
+                }
+                await axios.post('/api/finance/accounts/transfers', {
+                    source_account_id: selectedFinancialAccount.id,
+                    destination_account_id: destinationAccountId,
+                    amount,
+                    payment_date: accountTransactionForm.payment_date ? `${accountTransactionForm.payment_date}:00-05:00` : null,
+                    notes: accountTransactionForm.notes || null,
+                }, { headers: { Authorization: `Bearer ${token}` } });
+            } else {
+                await axios.post(`/api/finance/accounts/${selectedFinancialAccount.id}/transactions`, {
+                    ...accountTransactionForm,
+                    amount,
+                    payment_date: accountTransactionForm.payment_date ? `${accountTransactionForm.payment_date}:00-05:00` : null,
+                }, { headers: { Authorization: `Bearer ${token}` } });
+            }
             const accounts = await refreshFinancialAccounts();
             const updatedAccount = accounts.find((account) => account.id === selectedFinancialAccount.id) || selectedFinancialAccount;
             setSelectedFinancialAccount(updatedAccount);
-            setAccountTransactionForm({ concept: 'Venta de Vehiculo', movement_type: 'income', amount: '', payment_date: getBogotaDateTimeLocal(), category: 'ingreso_venta', notes: '' });
+            setAccountTransactionForm({ concept: 'Venta de Vehiculo', movement_type: 'income', amount: '', payment_date: getBogotaDateTimeLocal(), category: 'ingreso_venta', destination_account_id: '', notes: '' });
             await openFinancialAccount(updatedAccount);
             await fetchData({ silent: true });
-            Swal.fire('Movimiento registrado', 'El saldo y el historial fueron actualizados.', 'success');
+            Swal.fire(isTransfer ? 'Transferencia realizada' : 'Movimiento registrado', isTransfer ? 'Se registró la deducción en la cuenta de origen y el ingreso en la cuenta de destino.' : 'El saldo y el historial fueron actualizados.', 'success');
         } catch (error) {
             Swal.fire('Error', error.response?.data?.detail || 'No se pudo registrar el movimiento.', 'error');
         } finally {
@@ -761,14 +778,8 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
     };
 
     const handleLinkExistingMovements = async (account) => {
-        Swal.fire({
-            title: 'Cargando movimientos',
-            text: `Buscando registros disponibles para ${account.name}...`,
-            allowOutsideClick: false,
-            allowEscapeKey: false,
-            showConfirmButton: false,
-            didOpen: () => Swal.showLoading(),
-        });
+        if (linkingMovementsMessage) return;
+        setLinkingMovementsMessage(`Buscando registros disponibles para ${account.name}...`);
         try {
             const token = localStorage.getItem('token');
             const response = await axios.get('/api/finance/receipts', {
@@ -776,7 +787,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                 params: { limit: 1000 },
             });
             const unassigned = (response.data?.items || []).filter((receipt) => !receipt.account_id);
-            Swal.close();
+            setLinkingMovementsMessage('');
             if (unassigned.length === 0) {
                 Swal.fire('Todo organizado', 'No hay movimientos pendientes de relacionar con una cuenta.', 'info');
                 return;
@@ -824,22 +835,17 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             });
             if (!result.isConfirmed) return;
 
-            Swal.fire({
-                title: 'Relacionando movimientos',
-                text: `Asignando los registros seleccionados a ${account.name}...`,
-                allowOutsideClick: false,
-                allowEscapeKey: false,
-                showConfirmButton: false,
-                didOpen: () => Swal.showLoading(),
-            });
+            setLinkingMovementsMessage(`Asignando los registros seleccionados a ${account.name}...`);
             const linkResponse = await axios.post(`/api/finance/accounts/${account.id}/link-receipts`, {
                 receipt_ids: result.value,
             }, { headers: { Authorization: `Bearer ${token}` } });
             await Promise.all([refreshFinancialAccounts(), fetchData({ silent: true })]);
             Swal.fire('Movimientos relacionados', `${linkResponse.data?.linked_count || result.value.length} movimientos fueron asignados a ${account.name}.`, 'success');
         } catch (error) {
-            Swal.close();
+            setLinkingMovementsMessage('');
             Swal.fire('Error', error.response?.data?.detail || 'No se pudieron relacionar los movimientos.', 'error');
+        } finally {
+            setLinkingMovementsMessage('');
         }
     };
 
@@ -2906,6 +2912,16 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
 
     return (
         <>
+        {linkingMovementsMessage && (
+            <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-label="Cargando movimientos">
+                <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-2xl" role="status" aria-live="polite" aria-busy="true">
+                    <div className="mx-auto mb-5 h-10 w-10 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" />
+                    <h2 className="text-xl font-bold text-slate-900">Procesando movimientos</h2>
+                    <p className="mt-3 text-sm text-slate-600">{linkingMovementsMessage}</p>
+                    <p className="mt-2 text-xs text-slate-500">Espera un momento, esta ventana se cerrará automáticamente.</p>
+                </div>
+            </div>
+        )}
         <div className="animate-fade-in space-y-8">
             <header>
                 <h1 className="text-3xl font-bold text-gray-800">Finanzas y Comisiones</h1>
@@ -4046,15 +4062,16 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                                 <p className="text-sm text-slate-500">Registra una compra, venta, ingreso o deducción.</p>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
-                                <button type="button" onClick={() => setAccountTransactionForm({ ...accountTransactionForm, movement_type: 'income', concept: 'Venta de Vehiculo', category: 'ingreso_venta' })} className={`rounded-xl border px-3 py-3 text-sm font-bold ${accountTransactionForm.movement_type === 'income' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-500'}`}>Ingreso / venta</button>
-                                <button type="button" onClick={() => setAccountTransactionForm({ ...accountTransactionForm, movement_type: 'expense', concept: 'Compra de Vehiculo', category: 'costo_vehiculo' })} className={`rounded-xl border px-3 py-3 text-sm font-bold ${accountTransactionForm.movement_type === 'expense' ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-slate-200 text-slate-500'}`}>Deducción / compra</button>
+                                <button type="button" onClick={() => setAccountTransactionForm({ ...accountTransactionForm, movement_type: 'income', concept: 'Venta de Vehiculo', category: 'ingreso_venta', destination_account_id: '' })} className={`rounded-xl border px-3 py-3 text-sm font-bold ${accountTransactionForm.movement_type === 'income' && accountTransactionForm.category !== 'transferencia_cuentas' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-500'}`}>Ingreso / venta</button>
+                                <button type="button" onClick={() => setAccountTransactionForm({ ...accountTransactionForm, movement_type: 'expense', concept: 'Compra de Vehiculo', category: 'costo_vehiculo', destination_account_id: '' })} className={`rounded-xl border px-3 py-3 text-sm font-bold ${accountTransactionForm.movement_type === 'expense' && accountTransactionForm.category !== 'transferencia_cuentas' ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-slate-200 text-slate-500'}`}>Deducción / compra</button>
                             </div>
                             <div><label className="mb-1 block text-sm font-semibold text-slate-700">Concepto</label><input required value={accountTransactionForm.concept} onChange={(event) => setAccountTransactionForm({ ...accountTransactionForm, concept: event.target.value })} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500" /></div>
                             <div><label className="mb-1 block text-sm font-semibold text-slate-700">Valor</label><input required inputMode="numeric" value={accountTransactionForm.amount} onChange={(event) => setAccountTransactionForm({ ...accountTransactionForm, amount: formatCurrencyInput(event.target.value) })} placeholder="$ 0" className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500" /></div>
                             <div><label className="mb-1 block text-sm font-semibold text-slate-700">Fecha y hora</label><input required type="datetime-local" value={accountTransactionForm.payment_date} onChange={(event) => setAccountTransactionForm({ ...accountTransactionForm, payment_date: event.target.value })} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500" /></div>
-                            <div><label className="mb-1 block text-sm font-semibold text-slate-700">Categoría</label><select value={accountTransactionForm.category} onChange={(event) => setAccountTransactionForm({ ...accountTransactionForm, category: event.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500">{receiptCategoryOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+                            <div><label className="mb-1 block text-sm font-semibold text-slate-700">Categoría</label><select value={accountTransactionForm.category} onChange={(event) => { const category = event.target.value; setAccountTransactionForm({ ...accountTransactionForm, category, ...(category === 'transferencia_cuentas' ? { movement_type: 'expense', concept: 'Transferencia entre cuentas' } : { destination_account_id: '' }) }); }} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500">{receiptCategoryOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+                            {accountTransactionForm.category === 'transferencia_cuentas' && <div className="rounded-xl border border-blue-200 bg-blue-50 p-3"><label className="mb-1 block text-sm font-semibold text-blue-900">Cuenta que recibe el dinero</label><select required value={accountTransactionForm.destination_account_id || ''} onChange={(event) => setAccountTransactionForm({ ...accountTransactionForm, destination_account_id: event.target.value })} className="w-full rounded-xl border border-blue-300 bg-white px-3 py-2.5 text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"><option value="">Seleccionar cuenta destino</option>{financialAccounts.filter((account) => account.is_active && account.id !== selectedFinancialAccount.id).map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select><p className="mt-2 text-xs text-blue-700">Se descontará de <strong>{selectedFinancialAccount.name}</strong> y se registrará como ingreso en la cuenta seleccionada.</p></div>}
                             <div><label className="mb-1 block text-sm font-semibold text-slate-700">Detalle</label><textarea rows={3} value={accountTransactionForm.notes} onChange={(event) => setAccountTransactionForm({ ...accountTransactionForm, notes: event.target.value })} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500" /></div>
-                            <button disabled={savingAccountTransaction} className={`w-full rounded-xl px-4 py-3 font-bold text-white ${accountTransactionForm.movement_type === 'expense' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'} disabled:opacity-60`}>{savingAccountTransaction ? 'Guardando...' : accountTransactionForm.movement_type === 'expense' ? 'Registrar deducción' : 'Registrar ingreso'}</button>
+                            <button disabled={savingAccountTransaction} className={`w-full rounded-xl px-4 py-3 font-bold text-white ${accountTransactionForm.category === 'transferencia_cuentas' ? 'bg-blue-600 hover:bg-blue-700' : accountTransactionForm.movement_type === 'expense' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'} disabled:opacity-60`}>{savingAccountTransaction ? 'Guardando...' : accountTransactionForm.category === 'transferencia_cuentas' ? 'Transferir saldo' : accountTransactionForm.movement_type === 'expense' ? 'Registrar deducción' : 'Registrar ingreso'}</button>
                         </form>
 
                         <div className="min-h-0 bg-slate-50 p-6 lg:overflow-y-auto">
