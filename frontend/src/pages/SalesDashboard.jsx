@@ -761,6 +761,14 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
     };
 
     const handleLinkExistingMovements = async (account) => {
+        Swal.fire({
+            title: 'Cargando movimientos',
+            text: `Buscando registros disponibles para ${account.name}...`,
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading(),
+        });
         try {
             const token = localStorage.getItem('token');
             const response = await axios.get('/api/finance/receipts', {
@@ -768,6 +776,7 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                 params: { limit: 1000 },
             });
             const unassigned = (response.data?.items || []).filter((receipt) => !receipt.account_id);
+            Swal.close();
             if (unassigned.length === 0) {
                 Swal.fire('Todo organizado', 'No hay movimientos pendientes de relacionar con una cuenta.', 'info');
                 return;
@@ -815,12 +824,21 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
             });
             if (!result.isConfirmed) return;
 
+            Swal.fire({
+                title: 'Relacionando movimientos',
+                text: `Asignando los registros seleccionados a ${account.name}...`,
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => Swal.showLoading(),
+            });
             const linkResponse = await axios.post(`/api/finance/accounts/${account.id}/link-receipts`, {
                 receipt_ids: result.value,
             }, { headers: { Authorization: `Bearer ${token}` } });
             await Promise.all([refreshFinancialAccounts(), fetchData({ silent: true })]);
             Swal.fire('Movimientos relacionados', `${linkResponse.data?.linked_count || result.value.length} movimientos fueron asignados a ${account.name}.`, 'success');
         } catch (error) {
+            Swal.close();
             Swal.fire('Error', error.response?.data?.detail || 'No se pudieron relacionar los movimientos.', 'error');
         }
     };
@@ -975,11 +993,43 @@ const SalesDashboard = ({ receiptEntryOnly = false, receiptSearchOnly = false, i
                     <label style="font-size:13px;font-weight:700;color:#334155">Detalle opcional
                         <input id="transfer-notes" class="swal2-input" style="width:100%;margin:6px 0 0" placeholder="Motivo de la transferencia" />
                     </label>
+                    <div id="transfer-summary" style="display:none;border:1px solid #bfdbfe;border-radius:12px;background:#eff6ff;padding:12px;color:#1e3a8a;font-size:13px;line-height:1.55"></div>
                 </div>
             `,
             showCancelButton: true,
             confirmButtonText: 'Realizar transferencia',
             cancelButtonText: 'Cancelar',
+            didOpen: () => {
+                const sourceSelect = document.getElementById('transfer-source');
+                const destinationSelect = document.getElementById('transfer-destination');
+                const amountInput = document.getElementById('transfer-amount');
+                const summary = document.getElementById('transfer-summary');
+                const updateTransferSelection = (changedField) => {
+                    if (sourceSelect.value && sourceSelect.value === destinationSelect.value) {
+                        if (changedField === 'source') destinationSelect.value = '';
+                        else sourceSelect.value = '';
+                    }
+                    [...sourceSelect.options].forEach((option) => {
+                        option.disabled = Boolean(option.value && option.value === destinationSelect.value);
+                    });
+                    [...destinationSelect.options].forEach((option) => {
+                        option.disabled = Boolean(option.value && option.value === sourceSelect.value);
+                    });
+                    const sourceName = sourceSelect.options[sourceSelect.selectedIndex]?.text || '';
+                    const destinationName = destinationSelect.options[destinationSelect.selectedIndex]?.text || '';
+                    const amount = parseCurrencyInput(amountInput.value || '');
+                    if (sourceSelect.value && destinationSelect.value) {
+                        summary.style.display = 'block';
+                        summary.innerHTML = `<strong>${escapeHtml(sourceName)}</strong>: se registrará una deducción${amount ? ` de $${amount.toLocaleString('es-CO')}` : ''}.<br><strong>${escapeHtml(destinationName)}</strong>: se registrará un ingreso por el mismo valor.`;
+                    } else {
+                        summary.style.display = 'none';
+                        summary.innerHTML = '';
+                    }
+                };
+                sourceSelect?.addEventListener('change', () => updateTransferSelection('source'));
+                destinationSelect?.addEventListener('change', () => updateTransferSelection('destination'));
+                amountInput?.addEventListener('input', () => updateTransferSelection('amount'));
+            },
             preConfirm: () => {
                 const sourceAccountId = Number(document.getElementById('transfer-source')?.value || 0);
                 const destinationAccountId = Number(document.getElementById('transfer-destination')?.value || 0);
