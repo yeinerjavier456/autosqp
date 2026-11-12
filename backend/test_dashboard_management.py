@@ -22,10 +22,10 @@ def event(lead,user,old,new,comment='',when=None):
     db.add(models.LeadHistory(lead_id=lead,user_id=user,previous_status=old,new_status=new,comment=comment,created_at=when or dt.datetime(2026,11,12,15)))
 event(1,7,'contacted','lost','Lead marcado como perdido.')
 event(1,7,'lost','new','Transferido automáticamente a Soluciones Financieras y asignado a 9.')
-event(2,7,'contacted','credit_study')
+event(2,7,'contacted','credit_study','Primer envío')
 event(2,7,'credit_study','contacted')
-event(2,7,'contacted','credit_application')
-event(2,7,'credit_study','credit_study','Llamada realizada')
+event(2,7,'contacted','credit_application','Último envío al estudio')
+event(2,7,'credit_study','credit_study','Nota posterior que no cambió el estado')
 event(3,7,'contacted','contacted','Lead eliminado del tablero. Motivo: No interesado')
 event(4,8,'new','sold')
 event(5,7,'new','sold') # another company must never leak
@@ -55,8 +55,10 @@ for status, count in r['management_transition_distribution'].items():
     assert len({item['id'] for item in detail['items']})==count
 credit=management_transition_leads(db,1,start,end,'credit_study',[7])
 assert credit['items'][0]['id']==2 and credit['items'][0]['assigned_name']=='9'
+assert credit['items'][0]['transition_comment']=='Último envío al estudio' # same timestamp: newest history ID wins
 lost=management_transition_leads(db,1,start,end,'lost',[7])
 assert lost['items'][0]['id']==1 and lost['items'][0]['current_status']=='new'
+assert lost['items'][0]['transition_comment']=='Lead marcado como perdido.' # not the following automatic transfer
 assert management_transition_leads(db,1,start,end,'discarded',[7])['items'][0]['id']==3
 assert management_transition_leads(db,1,start,end,'sold',[7])['total']==0
 assert management_transition_leads(db,1,start,end,'new',[7])['total']==0 # automatic transfer excluded

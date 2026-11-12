@@ -40,7 +40,7 @@ def human_management(entry):
 
 
 def history_query(db, company_id, start, end, actor_ids=None):
-    query = db.query(models.LeadHistory.user_id, models.LeadHistory.lead_id,
+    query = db.query(models.LeadHistory.id.label('history_id'), models.LeadHistory.user_id, models.LeadHistory.lead_id,
                      models.LeadHistory.previous_status, models.LeadHistory.new_status,
                      models.LeadHistory.comment, models.LeadHistory.created_at,
                      models.Lead.status, models.Lead.deleted_at, models.Lead.source).join(
@@ -109,8 +109,10 @@ def management_transition_leads(db, company_id, start, end, status, actor_ids=No
     latest = {}
     for entry in history_query(db, company_id, start, end, actor_ids).yield_per(500):
         if transition_target(entry) == status:
-            latest[entry.lead_id] = max(latest.get(entry.lead_id, entry.created_at), entry.created_at)
-    ordered = sorted(latest, key=lambda lead_id: (latest[lead_id], lead_id), reverse=True)
+            previous = latest.get(entry.lead_id)
+            if previous is None or (entry.created_at, entry.history_id) > (previous.created_at, previous.history_id):
+                latest[entry.lead_id] = entry
+    ordered = sorted(latest, key=lambda lead_id: (latest[lead_id].created_at, lead_id), reverse=True)
     page_ids = ordered[offset:offset + limit]
     items = []
     if page_ids:
@@ -127,5 +129,6 @@ def management_transition_leads(db, company_id, start, end, status, actor_ids=No
             items.append({'id': row.id, 'name': row.name, 'phone': row.phone, 'email': row.email,
                           'current_status': 'discarded' if row.deleted_at else canonical_status(row.status),
                           'assigned_name': row.assigned_name or row.assigned_email,
-                          'transitioned_at': latest[lead_id]})
+                          'transitioned_at': latest[lead_id].created_at,
+                          'transition_comment': latest[lead_id].comment})
     return {'items': items, 'total': len(ordered), 'offset': offset, 'limit': limit, 'status': status}

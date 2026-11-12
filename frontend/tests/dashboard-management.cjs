@@ -36,7 +36,8 @@ async function main() {
         const offset=Number(params.offset||0),total=params.status==='new'?0:params.status==='contacted'?51:1;
         const items=Array.from({length:Math.min(50,Math.max(0,total-offset))},(_,index)=>({id:offset+index+1,
           name:params.status==='lost'?'Lead perdido y reasignado':`Cliente ${offset+index+1}`,phone:'3001234567',email:'cliente@test.local',
-          transitioned_at:'2026-11-12T15:00:00',current_status:params.status==='discarded'?'discarded':'new',assigned_name:'Responsable actual distinto'}));
+          transitioned_at:'2026-11-12T15:00:00',transition_comment:params.status==='lost'?'Cliente solicita llamada <b>mañana</b>':null,
+          current_status:params.status==='discarded'?'discarded':'new',assigned_name:'Responsable actual distinto'}));
         data={items,total,offset,limit:50,status:params.status};
       }
       else if(endpoint==='/api/stats/advisor') {
@@ -81,6 +82,8 @@ async function main() {
     assert.equal(detailCalls.at(-1).employee_id,'7');assert.equal(detailCalls.at(-1).start_date,'2026-11-12');
     assert.equal(detailCalls.at(-1).end_date,'2026-11-12');assert.equal(detailCalls.at(-1).status,'lost');
     await dialog.getByText('Responsable actual distinto',{exact:true}).waitFor();
+    await dialog.getByText('Cliente solicita llamada <b>mañana</b>',{exact:true}).waitFor();
+    assert.equal(await dialog.locator('td b').count(),0,'history messages must remain plain text');
     assert((await dialog.innerText()).includes('10:00'),'must display 15:00 UTC as 10:00 Bogota');
     if(process.env.SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.SCREENSHOT_DIR,'dashboard-transition-leads.png')});
     await page.keyboard.press('Escape');await dialog.waitFor({state:'detached'});
@@ -88,6 +91,7 @@ async function main() {
     dialog=page.getByRole('dialog');await dialog.getByText('Cliente 1',{exact:true}).waitFor();
     await dialog.getByRole('button',{name:'Siguiente',exact:true}).click();
     await dialog.getByText('Cliente 51',{exact:true}).waitFor();
+    await dialog.getByText('Sin mensaje registrado',{exact:true}).waitFor();
     assert.equal(detailCalls.at(-1).offset,'50');
     assert(await dialog.getByRole('button',{name:'Siguiente',exact:true}).isDisabled());
     await dialog.getByRole('button',{name:'Cerrar',exact:true}).click();

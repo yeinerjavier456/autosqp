@@ -50,19 +50,20 @@ export default function DashboardTransitionLeads({ selection, statusLabels, onCl
                 <div>
                     <h2 id="transition-dialog-title" className="text-xl font-bold">Leads que pasaron a {statusLabels[selection.status] || selection.status}</h2>
                     <p className="mt-1 text-sm text-slate-600">{selection.employeeName} · Del {selection.start} al {selection.end} · Bogotá, Colombia</p>
-                    <p className="mt-2 text-xs text-slate-500">Un registro por lead. La fecha corresponde al último paso a este estado dentro del rango; el estado y responsable actuales pueden ser diferentes.</p>
+                    <p className="mt-2 text-xs text-slate-500">Un registro por lead. La fecha y el mensaje corresponden al último paso a este estado dentro del rango; el estado y responsable actuales pueden ser diferentes.</p>
                 </div>
                 <button ref={closeButton} type="button" onClick={onClose} aria-label="Cerrar listado de leads" className="rounded-xl border px-3 py-2 font-bold hover:bg-slate-100">✕</button>
             </header>
             <div className="min-h-32 overflow-auto p-5" aria-busy={loading}>
                 {loading ? <p role="status" className="py-8 text-center text-slate-600">Cargando leads del estado…</p> : error ? <div role="alert" className="rounded-xl bg-red-50 p-4 text-red-700">{error}<button type="button" onClick={() => setRetry(value => value + 1)} className="ml-3 rounded-lg border px-3 py-2 font-semibold">Reintentar</button></div> : <>
                     <p className="mb-4 text-sm font-semibold">{result?.total || 0} {result?.total === 1 ? 'lead encontrado' : 'leads encontrados'}</p>
-                    {!result?.items?.length ? <p className="rounded-xl bg-slate-50 p-8 text-center text-slate-600">No hay leads que coincidan con este estado, empleado y rango.</p> : <table className="w-full min-w-[850px] text-left text-sm">
-                        <thead className="bg-slate-100 text-xs uppercase text-slate-600"><tr>{['Lead', 'Teléfono', 'Correo', 'Último paso al estado', 'Estado actual', 'Responsable actual'].map(label => <th key={label} className="p-3">{label}</th>)}</tr></thead>
+                    {!result?.items?.length ? <p className="rounded-xl bg-slate-50 p-8 text-center text-slate-600">No hay leads que coincidan con este estado, empleado y rango.</p> : <table className="w-full min-w-[1100px] text-left text-sm">
+                        <thead className="bg-slate-100 text-xs uppercase text-slate-600"><tr>{['Lead', 'Teléfono', 'Correo', 'Último paso al estado', 'Último mensaje del cambio', 'Estado actual', 'Responsable actual'].map(label => <th key={label} className="p-3">{label}</th>)}</tr></thead>
                         <tbody>{result.items.map(lead => <tr key={lead.id} className="border-b border-slate-100 align-top">
                             <td className="p-3"><p className="font-semibold">{lead.name || 'Sin nombre'}</p><span className="text-xs text-slate-500">#{lead.id}</span></td>
                             <td className="p-3">{lead.phone || '—'}</td><td className="break-all p-3">{lead.email || '—'}</td>
                             <td className="p-3">{formatBogotaDateTime(lead.transitioned_at)}</td>
+                            <td className="min-w-60 max-w-sm whitespace-pre-wrap break-words p-3">{lead.transition_comment?.trim() || 'Sin mensaje registrado'}</td>
                             <td className="p-3">{statusLabels[lead.current_status] || lead.current_status || 'Sin estado'}</td>
                             <td className="p-3">{lead.assigned_name || 'Sin asignar'}</td>
                         </tr>)}</tbody>
