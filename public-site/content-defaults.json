@@ -2,6 +2,13 @@
   "version": 1,
   "fields": [
     {
+      "key": "Hero.available_vehicle_count",
+      "section": "Inicio · Portada",
+      "kind": "number",
+      "label": "Cantidad de autos disponibles",
+      "value": ""
+    },
+    {
       "key": "App.80b2350a11a9",
       "section": "Página · Mensajes generales",
       "kind": "text",

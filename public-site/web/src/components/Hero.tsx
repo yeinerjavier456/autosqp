@@ -130,7 +130,7 @@ export const Hero: React.FC<HeroProps> = ({
             </div>
             <div>
               <p className="text-xl sm:text-2xl font-extrabold text-white tracking-tight tabular-nums">
-                {loading ? '…' : vehicles.length.toLocaleString('es-CO')}
+                {webText('Hero.available_vehicle_count', '').trim() || (loading ? '…' : vehicles.length.toLocaleString('es-CO'))}
               </p>
               <p className="text-xs sm:text-sm text-slate-400">{webText("Hero.2d1b76729bb2", "Autos disponibles")}</p>
             </div>

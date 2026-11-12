@@ -61,6 +61,7 @@ async function main() {
     await page.getByText('Editas únicamente la página de esta empresa.', { exact: false }).waitFor();
     const title = catalog.fields.find(field => field.key.startsWith('Hero.') && field.value.includes('MÁS QUE AUTOS'));
     await page.getByLabel(title.label, { exact: true }).fill('NUEVA PORTADA <b>sin HTML</b>');
+    await page.getByLabel('Cantidad de autos disponibles', { exact: true }).fill('350');
     await page.getByRole('button', { name: 'Editar imágenes', exact: true }).click();
     await page.locator('input[type=file]').first().setInputFiles({ name: 'hero.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jg1EAAAAASUVORK5CYII=', 'base64') });
     const image = catalog.fields.find(field => field.key.startsWith('Hero.') && field.kind === 'image');
@@ -83,6 +84,7 @@ async function main() {
     await page.locator('h1').filter({ hasText: 'NUEVA PORTADA <b>sin HTML</b>' }).waitFor();
     assert.equal(await page.locator('h1 b').count(), 0);
     await page.getByText('María Prueba', { exact: true }).waitFor();
+    await page.getByText('350', { exact: true }).waitFor();
     assert.equal(await page.locator(`img[src="${uploaded}"]`).count(), 1);
     if (process.env.SCREENSHOT_DIR) await page.screenshot({ path: path.join(process.env.SCREENSHOT_DIR, 'website-cms-public.png'), fullPage: true });
     await page.goto(base + '/crm/admin/companies/1', { waitUntil: 'domcontentloaded' });
@@ -92,6 +94,11 @@ async function main() {
     await page.getByRole('button', { name: 'Guardar página web', exact: true }).click();
     await page.getByRole('alert').filter({ hasText: 'Otra persona modificó' }).waitFor();
     assert.equal(state[1].values[title.key], 'NUEVA PORTADA <b>sin HTML</b>');
+    // An empty override restores the actual loaded inventory count (zero here).
+    state[1].values['Hero.available_vehicle_count'] = '';
+    await page.goto(base + '/preview/', { waitUntil: 'domcontentloaded' });
+    await page.getByText('Autos disponibles', { exact: true }).waitFor();
+    assert.equal(await page.getByText('Autos disponibles', { exact: true }).locator('..').locator('p').first().innerText(), '0');
     assert.deepEqual(errors, []);
     console.log('CMS editor save, image upload, testimonial CRUD, public rendering, tenant isolation, escaped text and stale-edit protection passed.');
   } finally { await browser.close(); }

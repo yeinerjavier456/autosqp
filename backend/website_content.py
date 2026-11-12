@@ -65,6 +65,9 @@ class WebsiteContentUpdate(BaseModel):
         for key, value in self.values.items():
             if key not in fields or len(value) > 12000:
                 raise ValueError('Uno de los campos no existe o supera el límite de texto')
+            if fields[key]['kind'] == 'number' and value != '':
+                if not value.isascii() or not value.isdigit() or int(value) > 1000000:
+                    raise ValueError('Autos disponibles debe ser un número entero entre 0 y 1000000, o quedar vacío para usar el inventario')
             if fields[key]['kind'] in {'image', 'link'}:
                 if fields[key]['kind'] == 'image' and not value.strip():
                     raise ValueError('Selecciona una imagen o restablece la imagen original')

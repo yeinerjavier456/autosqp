@@ -105,7 +105,7 @@ for (const file of files) {
     if (p.node.callee.name !== 'webText' || !t.isStringLiteral(p.node.arguments[0]) || !t.isStringLiteral(p.node.arguments[1])) return;
     const key = p.node.arguments[0].value;
     const value = p.node.arguments[1].value;
-    if (!/[\p{L}\p{N}]/u.test(value)) { p.replaceWith(t.stringLiteral(value)); p.skip(); changed = true; return; }
+    if (!/[\p{L}\p{N}]/u.test(value) && catalog.fields.find(item => item.key === key)?.kind !== 'number') { p.replaceWith(t.stringLiteral(value)); p.skip(); changed = true; return; }
     if (seen.has(key)) {
       let suffix = 2;
       while (seen.has(key + '.' + suffix)) suffix++;

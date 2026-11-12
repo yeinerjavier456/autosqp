@@ -55,6 +55,9 @@ administrador global puede modificar textos por sección, enlaces, imágenes y
 testimonios (crear, editar, ordenar o quitar). Cada empresa guarda su propio
 contenido; la web obtiene el de la empresa asociada al dominio, sin aceptar un ID
 de empresa enviado por el visitante. El inventario continúa viniendo del CRM.
+En Inicio · Portada, «Cantidad de autos disponibles» permite una cifra manual
+entre 0 y 1000000. Vacío utiliza el conteo real del inventario. Solo cambia la
+estadística de portada: no crea vehículos ni modifica el catálogo publicado.
 
 Guardar publica los cambios sin recompilar: recargar la web los muestra al momento;
 una página abierta también consulta cambios cada minuto. Hay control de versión

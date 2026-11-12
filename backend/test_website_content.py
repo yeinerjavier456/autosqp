@@ -104,6 +104,21 @@ class WebsiteContentTests(unittest.TestCase):
             assert key not in result['values']
         ''')
 
+    def test_available_count_override_is_scoped_validated_and_resettable(self):
+        self.run_case('''
+            count='Hero.available_vehicle_count'
+            for value in ['0','350','1000000']:
+                p=cms.WebsiteContentUpdate(revision=cms.read_content(db,1)['revision'],values={count:value},testimonials=[])
+                assert cms.save_content(db,1,p,10)['values'][count]==value
+            assert count not in cms.read_content(db,2)['values']
+            for value in ['-1','1.5','1000001','texto','１２',' '*3]:
+                try: cms.WebsiteContentUpdate(revision=0,values={count:value},testimonials=[])
+                except ValidationError: pass
+                else: raise AssertionError('invalid vehicle count')
+            p=cms.WebsiteContentUpdate(revision=3,values={count:''},testimonials=[])
+            assert count not in cms.save_content(db,1,p,10)['values']
+        ''')
+
     def test_admin_routes_check_role_before_work_and_public_route_resolves_host(self):
         source = (Path(__file__).parent / 'main.py').read_text(encoding='utf-8')
         import ast
