@@ -1265,6 +1265,12 @@ class DashboardStats(BaseModel):
     users_count: int
 
 class RoleDashboardStats(BaseModel):
+    management_actions_total: int = 0
+    management_leads_total: int = 0
+    management_transition_distribution: Dict[str, int] = {}
+    management_current_distribution: Dict[str, int] = {}
+    management_leads_by_day: Dict[str, int] = {}
+    management_source_distribution: Dict[str, int] = {}
     total_leads: int
     leads_new: int
     leads_sold: int

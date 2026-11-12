@@ -39,6 +39,7 @@ from fastapi.responses import StreamingResponse
 from schema_ensure import ensure_mysql_schema
 from public_website import ContactMessage, inventory_page, submit_contact, client_ip
 import website_content
+from dashboard_management import management_metrics
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
@@ -2905,6 +2906,16 @@ def ensure_lead_query_indexes():
                     "lead_appointments",
                     "ix_appointments_user_pending_status_id",
                     "CREATE INDEX ix_appointments_user_pending_status_id ON lead_appointments (user_id, is_notified, status, id)"
+                ),
+                (
+                    "lead_history",
+                    "ix_lead_history_user_created_lead",
+                    "CREATE INDEX ix_lead_history_user_created_lead ON lead_history (user_id, created_at, lead_id)"
+                ),
+                (
+                    "lead_history",
+                    "ix_lead_history_lead_created",
+                    "CREATE INDEX ix_lead_history_lead_created ON lead_history (lead_id, created_at)"
                 ),
             ]
 
@@ -10324,7 +10335,13 @@ def read_advisor_stats(
     def goal_percentage(actual: int, target: int) -> float:
         return round((actual / target * 100), 2) if target else 0
 
+    lead_management = management_metrics(
+        db, current_user.company_id, period_start, period_end,
+        [employee_id] if employee_id else (None if company_scope else visible_user_ids),
+        bucket=get_trend_bucket,
+    )
     return {
+        **lead_management,
         "total_leads": total_leads,
         "leads_new": leads_new,
         "leads_sold": leads_sold,

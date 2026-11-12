@@ -41,6 +41,9 @@ const LEAD_STATUS_LABELS = {
     credit_application: 'Estudio de credito',
     sold: 'Vendidos',
     lost: 'Perdidos',
+    discarded: 'Descartados',
+    autofinancing: 'Autofinanciamiento',
+    financial_reactivation: 'Reactivación financiera',
     ally_managed: 'Aliados'
 };
 
@@ -239,13 +242,13 @@ const AdvisorDashboard = () => {
         );
     }
 
-    const leadEntries = Object.entries(stats.status_distribution || {})
+    const leadEntries = Object.entries((isAdministrator && appliedFilters.employee ? stats.management_current_distribution : stats.status_distribution) || {})
         .map(([key, value]) => [formatLabel(key, LEAD_STATUS_LABELS), value])
         .sort((a, b) => b[1] - a[1]);
     const allyEntries = Object.entries(stats.ally_status_distribution || {})
         .map(([key, value]) => [formatLabel(key, LEAD_STATUS_LABELS), value])
         .sort((a, b) => b[1] - a[1]);
-    const sourceEntries = Object.entries(stats.source_distribution || {})
+    const sourceEntries = Object.entries((isAdministrator && appliedFilters.employee ? stats.management_source_distribution : stats.source_distribution) || {})
         .map(([key, value]) => [formatLabel(key, LEAD_SOURCE_LABELS), value])
         .sort((a, b) => b[1] - a[1]);
     const allySourceEntries = Object.entries(stats.ally_source_distribution || {})
@@ -266,7 +269,8 @@ const AdvisorDashboard = () => {
     const optionDecisionEntries = Object.entries(stats.purchase_option_decision_distribution || {})
         .map(([key, value]) => [formatLabel(key, OPTION_DECISION_LABELS), value])
         .sort((a, b) => b[1] - a[1]);
-    const trendEntries = Object.entries(stats.recent_leads_by_day || {});
+    const trendEntries = Object.entries(stats.recent_leads_by_day || {}).map(([day, count]) => [day,
+        isAdministrator && appliedFilters.employee ? (stats.management_leads_by_day?.[day] || 0) : count]);
 
     const leadTrendData = {
         labels: trendEntries.map(([label]) => label),
@@ -410,9 +414,6 @@ const AdvisorDashboard = () => {
         ? 'Leads donde un aliado participa dentro del rango seleccionado.'
         : trendDescription;
     const currentRanking = isAllyDashboard ? allyTopManagers : topManagers;
-    const employeeManagement = isEmployeeFiltered
-        ? currentRanking.find((manager) => String(manager.user_id) === String(appliedFilters.employee))
-        : null;
     const currentLeastManagers = (isAllyDashboard ? allyLeastManagers : leastManagers).slice(0, 8);
     const currentUnattendedAlertReassignmentUsers = isAllyDashboard
         ? allyUnattendedAlertReassignmentUsers
@@ -695,14 +696,14 @@ const AdvisorDashboard = () => {
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <DashboardMetric
                         title="Leads gestionados"
-                        value={Number(employeeManagement?.managed_leads_count || 0)}
+                        value={Number(stats.management_leads_total || 0)}
                         helper={`Leads distintos con gestiones del empleado ${rangeLabel}.`}
                         className="border-emerald-200 bg-emerald-50 text-emerald-900"
                         helperClassName="text-emerald-700"
                     />
                     <DashboardMetric
                         title="Acciones realizadas"
-                        value={Number(employeeManagement?.count || 0)}
+                        value={Number(stats.management_actions_total || 0)}
                         helper={`Acciones registradas en el historial por el empleado ${rangeLabel}.`}
                         className="border-blue-200 bg-blue-50 text-blue-900"
                         helperClassName="text-blue-700"
@@ -710,7 +711,7 @@ const AdvisorDashboard = () => {
                 </div>
             )}
 
-            {(isAllyDashboard ? hasAllySection : showLeadsMetrics) && (
+            {!isEmployeeFiltered && (isAllyDashboard ? hasAllySection : showLeadsMetrics) && (
                 <div className={`grid grid-cols-1 gap-6 ${isEmployeeFiltered ? '' : 'xl:grid-cols-3'}`}>
                     {!isEmployeeFiltered && <div className={`rounded-2xl border p-6 shadow-sm ${isAllyDashboard ? 'border-teal-200 bg-teal-50 text-teal-950' : 'border-rose-200 bg-rose-50 text-rose-950'}`}>
                         <p className={`text-xs font-bold uppercase tracking-[0.24em] ${isAllyDashboard ? 'text-teal-700' : 'text-rose-700'}`}>
@@ -775,13 +776,33 @@ const AdvisorDashboard = () => {
                 </div>
             )}
 
-            {!isAllyDashboard && (
+            {!isAllyDashboard && isAdministrator && (
+                <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm" aria-label="Gestiones por estado">
+                    <div>
+                        <h3 className="text-lg font-bold text-slate-800">Leads que pasaron a cada estado</h3>
+                        <p className="text-sm text-slate-500">Cambios realizados {isEmployeeFiltered ? 'por el empleado' : 'por los usuarios de la empresa'} {rangeLabel}, según el historial, aunque el lead haya cambiado de responsable. Incluye descartados y perdidos.</p>
+                        <p className="mt-1 text-xs text-slate-500">Cada lead cuenta una vez por estado en el rango. Puede aparecer en varios estados; no son cantidades de formularios ni de ventas aprobadas.</p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        {[...new Set(['new', 'contacted', 'in_process', 'credit_study', 'approvals', 'reserved', 'preparation', 'sold', 'lost', 'discarded', ...Object.keys(stats.management_transition_distribution || {})])].map(status => (
+                            <DashboardMetric key={status}
+                                title={status === 'credit_study' ? 'Solicitudes de crédito · Estudio' : formatLabel(status, LEAD_STATUS_LABELS)}
+                                value={stats.management_transition_distribution?.[status] || 0}
+                                helper={`Leads que pasaron a ${formatLabel(status, LEAD_STATUS_LABELS).toLocaleLowerCase()} ${rangeLabel}.`}
+                                className={['lost', 'discarded'].includes(status) ? 'border-rose-200 bg-rose-50 text-rose-900' : 'border-blue-200 bg-blue-50 text-blue-900'}
+                                helperClassName={['lost', 'discarded'].includes(status) ? 'text-rose-700' : 'text-blue-700'} />
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            {!isAllyDashboard && !isEmployeeFiltered && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {showCreditsMetrics && (
                     <DashboardMetric
-                        title="Solicitudes de credito"
+                        title="Formularios de crédito"
                         value={displayedCreditTotal}
-                        helper={isAdministrator ? 'Solicitudes de crédito generales de la empresa dentro del rango.' : 'Solicitudes de crédito relacionadas con tus leads dentro del rango.'}
+                        helper={isAdministrator ? 'Formularios registrados en la empresa dentro del rango; los pasos de estado se muestran arriba.' : 'Solicitudes de crédito relacionadas con tus leads dentro del rango.'}
                         onClick={hasCreditsSection ? () => navigate('/admin/credits') : undefined}
                         className="border-violet-200 bg-violet-50 text-violet-900"
                         helperClassName="text-violet-700"
@@ -979,8 +1000,8 @@ const AdvisorDashboard = () => {
 
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                         <div className="mb-4">
-                            <h3 className="text-lg font-bold text-slate-800">{isAllyDashboard ? 'Estado de leads de aliados' : 'Estado general de leads'}</h3>
-                            <p className="text-sm text-slate-500">{isAllyDashboard ? 'Distribución actual de la gestión donde participan aliados.' : 'Distribución actual de los leads de AutosQP en el rango seleccionado.'}</p>
+                            <h3 className="text-lg font-bold text-slate-800">{isEmployeeFiltered ? 'Estado actual de los leads gestionados' : isAllyDashboard ? 'Estado de leads de aliados' : 'Estado general de leads'}</h3>
+                            <p className="text-sm text-slate-500">{isEmployeeFiltered ? 'Estado actual de los leads con acciones del empleado en el rango, incluidos los reasignados y descartados. Puede ser distinto del estado al que los pasó.' : isAllyDashboard ? 'Distribución actual de la gestión donde participan aliados.' : 'Distribución actual de los leads de AutosQP en el rango seleccionado.'}</p>
                         </div>
                         <div className="h-80">
                             {isAllyDashboard ? (
@@ -1112,7 +1133,7 @@ const AdvisorDashboard = () => {
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                         <div className="mb-4">
                             <h3 className="text-lg font-bold text-slate-800">Estado de creditos</h3>
-                            <p className="text-sm text-slate-500">Solicitudes de crédito generales de la empresa en el rango seleccionado.</p>
+                            <p className="text-sm text-slate-500">{isEmployeeFiltered ? 'Formularios de crédito registrados por el empleado en el rango. Los pasos a Estudio de crédito se cuentan arriba.' : 'Solicitudes de crédito generales de la empresa en el rango seleccionado.'}</p>
                         </div>
                         <div className="h-72">
                             {creditEntries.length > 0 ? (
@@ -1138,7 +1159,7 @@ const AdvisorDashboard = () => {
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                         <div className="mb-4">
                             <h3 className="text-lg font-bold text-slate-800">Estado de compras y busquedas</h3>
-                            <p className="text-sm text-slate-500">Solicitudes de compra generales de la empresa y avance de las opciones encontradas.</p>
+                            <p className="text-sm text-slate-500">{isEmployeeFiltered ? 'Solicitudes de compra relacionadas con el empleado en el rango; son registros, no cambios de estado del lead.' : 'Solicitudes de compra generales de la empresa y avance de las opciones encontradas.'}</p>
                         </div>
                         <div className="h-72">
                             {purchaseEntries.length > 0 ? (
