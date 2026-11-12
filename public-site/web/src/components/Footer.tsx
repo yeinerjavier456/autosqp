@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { sendContact } from '../contact';
 import { PageTab } from '../types';
 import { COMPANY_INFO } from '../data/company';
+import { SocialLinks } from './SocialLinks';
 import { Phone, Mail, MapPin, Clock, Send, CheckCircle2 } from 'lucide-react';
 
 interface FooterProps {
@@ -117,8 +118,6 @@ export const Footer: React.FC<FooterProps> = ({
 
             <div className="pt-2 text-xs text-slate-400 space-y-1">
               <p><strong className="text-slate-300">Razón social:</strong> {COMPANY_INFO.name}</p>
-              <p><strong className="text-slate-300">NIT:</strong> {COMPANY_INFO.nit}</p>
-              <p><strong className="text-slate-300">Representante:</strong> {COMPANY_INFO.legalRepresentative}</p>
             </div>
           </div>
 
@@ -208,40 +207,7 @@ export const Footer: React.FC<FooterProps> = ({
             <p className="text-xs font-bold uppercase tracking-wider text-white">
               Síguenos
             </p>
-            <div className="space-y-2 text-xs">
-              <a
-                href={COMPANY_INFO.social.facebook}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block hover:text-[#00C896] transition-colors"
-              >
-                Facebook: Autos QP
-              </a>
-              <a
-                href={COMPANY_INFO.social.instagram}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block hover:text-[#00C896] transition-colors"
-              >
-                Instagram: {COMPANY_INFO.social.instagramHandle}
-              </a>
-              <a
-                href={COMPANY_INFO.social.tiktok}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block hover:text-[#00C896] transition-colors"
-              >
-                TikTok: {COMPANY_INFO.social.tiktokHandle}
-              </a>
-              <a
-                href={COMPANY_INFO.social.whatsapp}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block text-[#00C896] hover:underline"
-              >
-                WhatsApp Business: {COMPANY_INFO.phone1}
-              </a>
-            </div>
+            <SocialLinks />
           </div>
         </div>
 

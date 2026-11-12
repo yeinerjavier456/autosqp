@@ -53,6 +53,29 @@ async function main() {
     assert.equal(inventoryCalls, 2);
     assert.equal(await page.getByRole('button', { name: 'Carros y Camionetas', exact: true }).count(), 0);
     if (process.env.SCREENSHOT_DIR) await page.screenshot({ path: path.join(process.env.SCREENSHOT_DIR, 'website-desktop.png'), fullPage: true });
+    await page.getByRole('button', { name: 'Nosotros', exact: true }).first().click();
+    assert.equal(await page.getByRole('heading', { name: 'Información legal y corporativa', exact: true }).count(), 0);
+    assert.equal(await page.getByText('Diego Plazas', { exact: false }).count(), 0);
+    const networks = page.getByRole('navigation', { name: 'Redes sociales', exact: true }).first();
+    const socialUrls = [
+      'https://www.facebook.com/share/19fMWb1pLP/?mibextid=wwXIfr',
+      'https://www.instagram.com/autosqp?vrfl=ZGtucHlndDI4bjM2&utm_source=qr',
+      'https://www.tiktok.com/@jenn_quimba?_r=1&_t=ZS-9BKPyEk75AV',
+      'https://www.tiktok.com/@autosqp?_r=1&_t=ZS-9BKQB0VbcOb'
+    ];
+    for (const href of socialUrls) {
+      const link = networks.locator(`a[href="${href}"]`);
+      assert.equal(await link.getAttribute('target'), '_blank');
+      assert.equal(await link.getAttribute('rel'), 'noopener noreferrer');
+      assert(await link.locator('svg').count() >= 1);
+    }
+    await page.context().route('https://www.instagram.com/**', route => route.fulfill({ contentType: 'text/html', body: '<title>Social link test</title>' }));
+    const [popup] = await Promise.all([page.context().waitForEvent('page'), networks.locator(`a[href="${socialUrls[1]}"]`).click()]);
+    await popup.waitForLoadState('domcontentloaded');
+    assert(popup.url().startsWith('https://www.instagram.com/autosqp'));
+    await popup.close();
+    if (process.env.SCREENSHOT_DIR) await page.screenshot({ path: path.join(process.env.SCREENSHOT_DIR, 'website-socials.png'), fullPage: true });
+    await page.getByRole('button', { name: 'Inicio', exact: true }).first().click();
     for (let i = 0; i < 2; i++) {
       await page.getByRole('button', { name: 'Vender mi auto', exact: true }).first().click();
       await page.getByRole('button', { name: 'Cerrar modal', exact: true }).click();

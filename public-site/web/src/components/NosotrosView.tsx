@@ -1,6 +1,6 @@
 import React from 'react';
-import { COMPANY_INFO } from '../data/company';
-import { ShieldCheck, HeartHandshake, CheckCircle2, Award, Calendar, Building2, UserCheck, MapPin } from 'lucide-react';
+import { ShieldCheck, HeartHandshake, CheckCircle2, Award, Calendar } from 'lucide-react';
+import { SocialLinks } from './SocialLinks';
 
 export const NosotrosView: React.FC = () => {
   const values = [
@@ -122,44 +122,14 @@ export const NosotrosView: React.FC = () => {
           </div>
         </div>
 
-        {/* Información Legal Box (PDF Page 9) */}
-        <div className="p-8 rounded-3xl bg-[#0b0e12] border border-[#222c38] space-y-6">
-          <div className="flex items-center gap-2 text-xs font-bold text-[#00C896] uppercase tracking-wider">
-            <Building2 className="w-4 h-4" />
-            <span>Datos Corporativos</span>
+        <section className="rounded-3xl border border-[#222c38] bg-[#0b0e12] p-6 sm:p-8 space-y-5">
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-[#00C896]">Nuestras redes</p>
+            <h2 className="text-2xl font-bold text-white">Conecta con Autos QP</h2>
+            <p className="mt-2 text-sm text-slate-400">Conoce nuestros vehículos, novedades y consejos. Cada perfil se abre en una pestaña nueva.</p>
           </div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">
-            Información legal y corporativa
-          </h2>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-2">
-            <div className="space-y-1">
-              <p className="text-xs text-slate-400 uppercase tracking-wider">Razón social</p>
-              <p className="text-sm font-bold text-white">{COMPANY_INFO.name}</p>
-            </div>
-
-            <div className="space-y-1">
-              <p className="text-xs text-slate-400 uppercase tracking-wider">NIT</p>
-              <p className="text-sm font-bold text-[#00C896] font-mono">{COMPANY_INFO.nit}</p>
-            </div>
-
-            <div className="space-y-1">
-              <p className="text-xs text-slate-400 uppercase tracking-wider">Representante Legal</p>
-              <p className="text-sm font-bold text-white flex items-center gap-1.5">
-                <UserCheck className="w-4 h-4 text-[#00C896]" />
-                <span>{COMPANY_INFO.legalRepresentative}</span>
-              </p>
-            </div>
-
-            <div className="space-y-1">
-              <p className="text-xs text-slate-400 uppercase tracking-wider">Ubicación física</p>
-              <p className="text-xs font-semibold text-slate-200 flex items-start gap-1">
-                <MapPin className="w-3.5 h-3.5 text-[#00C896] shrink-0 mt-0.5" />
-                <span>{COMPANY_INFO.address}</span>
-              </p>
-            </div>
-          </div>
-        </div>
+          <SocialLinks includeWhatsApp={false} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" />
+        </section>
       </div>
     </div>
   );

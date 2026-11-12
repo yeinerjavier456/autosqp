@@ -2,7 +2,6 @@ export const COMPANY_INFO = {
   name: 'AUTOS QP S.A.S.',
   brandName: 'Autos QP',
   nit: '901.263.615-6',
-  legalRepresentative: 'Diego Plazas',
   slogan: 'Abriendo caminos contigo',
   secondarySlogan: 'MÁS QUE AUTOS, CREAMOS CONEXIONES',
   subtitle: 'Encuentra el auto que se adapta a tu vida. Calidad, confianza y el mejor servicio.',
@@ -16,11 +15,13 @@ export const COMPANY_INFO = {
   scheduleWeekday: 'Lunes a sábado 9:00 a.m. – 6:00 p.m.',
   scheduleWeekend: 'Domingos y festivos 10:00 a.m. – 3:00 p.m.',
   social: {
-    facebook: 'https://facebook.com/autosqp',
-    instagram: 'https://instagram.com/autosqp',
+    facebook: 'https://www.facebook.com/share/19fMWb1pLP/?mibextid=wwXIfr',
+    instagram: 'https://www.instagram.com/autosqp?vrfl=ZGtucHlndDI4bjM2&utm_source=qr',
     instagramHandle: '@autosqp',
-    tiktok: 'https://tiktok.com/@autosqp',
+    tiktok: 'https://www.tiktok.com/@autosqp?_r=1&_t=ZS-9BKQB0VbcOb',
     tiktokHandle: '@autosqp',
+    tiktokAdvisor: 'https://www.tiktok.com/@jenn_quimba?_r=1&_t=ZS-9BKPyEk75AV',
+    tiktokAdvisorHandle: '@jenn_quimba',
     whatsapp: 'https://wa.me/573218912903'
   },
   stats: {
