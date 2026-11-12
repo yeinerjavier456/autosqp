@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 from sqlalchemy import select, delete, and_, or_, tuple_, DateTime, Date, Numeric, LargeBinary, cast, String
 
 ID_PATTERN = re.compile(r'^\d{8}T\d{6}-[a-f0-9]{8}$')
-FILE_FIELDS = {'file_path', 'business_sheet_url', 'attachments', 'photos', 'media_url', 'form_payload', 'logo_url'}
+FILE_FIELDS = {'file_path', 'business_sheet_url', 'attachments', 'photos', 'media_url', 'form_payload', 'logo_url', 'website_content'}
 EXCLUDED_TABLES = {'companies', 'company_backup_jobs', 'alert_rule_progress'}
 
 
@@ -130,7 +130,7 @@ def _file_paths(value):
             value = urlsplit(value).path
         for prefix in ('/api/static/', '/static/', 'static/'):
             if value.startswith(prefix):
-                yield value[len(prefix):].split('?', 1)[0]
+                yield urlsplit(value).path[len(prefix):]
                 break
     elif isinstance(value, dict):
         for item in value.values():
@@ -177,10 +177,12 @@ def decode_rows(table, rows):
     return result
 
 
-def schema_signature(metadata, before_website_contacts=False):
+def schema_signature(metadata, before_website_contacts=False, before_website_content=False):
     ignored = {'company_backup_jobs', 'alert_rule_progress'}
     if before_website_contacts:
         ignored.add('public_website_contacts')
+    if before_website_content:
+        ignored.add('company_website_content')
     structure = {table.name: [(col.name, str(col.type)) for col in table.columns] for table in metadata.sorted_tables if table.name not in ignored}
     return hashlib.sha256(json.dumps(structure, sort_keys=True).encode()).hexdigest()
 
@@ -333,8 +335,11 @@ def restore_archive(db, metadata, company_id, backup_id, static_root):
             raise ValueError('Esta copia no pertenece a la empresa seleccionada')
         # Known additive migration: older snapshots predate the public-contact
         # table. Accept only the exact old schema hash, never arbitrary changes.
-        legacy_website_schema = ('public_website_contacts' not in payload.get('tables', {})
-            and payload.get('schema') == schema_signature(metadata, before_website_contacts=True))
+        missing_contacts = 'public_website_contacts' not in payload.get('tables', {})
+        missing_content = 'company_website_content' not in payload.get('tables', {})
+        legacy_website_schema = any(payload.get('schema') == schema_signature(metadata, before_website_contacts=contacts, before_website_content=content)
+            for contacts in ([False, True] if missing_contacts else [False])
+            for content in ([False, True] if missing_content else [False]))
         if payload.get('schema') != schema_signature(metadata) and not legacy_website_schema:
             raise ValueError('La estructura de la aplicación cambió. Esta copia requiere una migración antes de restaurarla')
         rows = {name: decode_rows(metadata.tables[name], items) for name, items in payload['tables'].items()}

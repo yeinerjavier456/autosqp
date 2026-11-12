@@ -549,6 +549,15 @@ class CompanyBackupJob(Base):
     lease_expires_at = Column(DateTime, nullable=True, index=True)
 
 
+class CompanyWebsiteContent(Base):
+    __tablename__ = 'company_website_content'
+    company_id = Column(Integer, ForeignKey('companies.id'), primary_key=True)
+    website_content = Column(JSON, nullable=False, default=dict)
+    revision = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    updated_by_id = Column(Integer, nullable=True)
+
+
 class FinanceCatalogEntry(Base):
     __tablename__ = "finance_catalog_entries"
     __table_args__ = (UniqueConstraint('company_id', 'kind', 'code', name='uq_finance_catalog_code'),)

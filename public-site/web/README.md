@@ -48,6 +48,30 @@ los ZIP de código fuente/producción que incluía el prototipo.
 El boletín registra y notifica al equipo la solicitud de suscripción; no realiza
 envíos automáticos semanales. No se envían correos de prueba durante el desarrollo.
 
+## Edición por empresa
+
+Desde **Empresas Globales > Editar empresa > Página web**, únicamente el
+administrador global puede modificar textos por sección, enlaces, imágenes y
+testimonios (crear, editar, ordenar o quitar). Cada empresa guarda su propio
+contenido; la web obtiene el de la empresa asociada al dominio, sin aceptar un ID
+de empresa enviado por el visitante. El inventario continúa viniendo del CRM.
+
+Guardar publica los cambios sin recompilar: recargar la web los muestra al momento;
+una página abierta también consulta cambios cada minuto. Hay control de versión
+para rechazar guardados que sobrescribirían una edición más reciente.
+
+Las imágenes admiten PNG, JPG y WEBP, hasta 8 MB y 16 megapíxeles. El servidor
+las convierte a WEBP (máximo 2400 × 2400), sin metadatos. El contenido y las
+imágenes locales referenciadas se incluyen en las copias de cada empresa.
+Los textos son texto plano: no se aceptan plantillas HTML ni código ejecutable.
+
+`public-site/content-defaults.json` mantiene el catálogo versionado. Al agregar
+campos de presentación en código puede ejecutarse
+`node scripts/register-website-content.cjs` desde la raíz (requiere las
+dependencias del frontend). Revisar el catálogo y el resultado antes de publicar:
+los identificadores de negocio y valores enviados a la API no deben convertirse
+en contenido editable.
+
 ## Compilación y publicación
 
 Se requiere Node 20.19+ o 22.12+ y las dependencias del frontend del CRM,

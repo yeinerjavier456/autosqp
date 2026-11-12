@@ -5,6 +5,7 @@ import { COMPANY_MODULE_OPTIONS } from '../config/views';
 import { normalizeMediaUrl } from '../utils/media';
 import UsersList from './UsersList';
 import CompanyBackups from '../components/CompanyBackups';
+import CompanyWebsiteEditor from '../components/CompanyWebsiteEditor';
 
 const COMPANY_VIEWS = COMPANY_MODULE_OPTIONS;
 const COMPANY_VIEW_GROUPS = COMPANY_VIEWS.reduce((acc, view) => {
@@ -22,6 +23,7 @@ const SECTION_LABELS = {
 const SETTINGS_TABS = [
     { id: 'general', label: 'General', description: 'Identidad, logo, dominio y colores.' },
     { id: 'contact', label: 'Contacto', description: 'Dirección, teléfono y redes sociales.' },
+    { id: 'website', label: 'Página web', description: 'Textos, imágenes y testimonios de la página pública de esta empresa.' },
     { id: 'license', label: 'Licencia', description: 'Límites de uso y vigencia.' },
     { id: 'integrations', label: 'Integraciones', description: 'Meta, WhatsApp, IA y Gmail.' },
     { id: 'email', label: 'Correo', description: 'Validación, SMTP y destinatarios.' },
@@ -1574,8 +1576,9 @@ const AdminCompanySettings = () => {
                             <UsersList embedded companyId={id} />
                         )}
                         {activeTab === 'backups' && (isEditing ? <CompanyBackups companyId={Number(id)} globalSettings /> : <p className="text-slate-600">Guarda la empresa primero para configurar sus copias.</p>)}
+                        {activeTab === 'website' && (isEditing ? <CompanyWebsiteEditor key={id} companyId={Number(id)} /> : <p className="text-slate-600">Guarda la empresa primero para editar su página web.</p>)}
 
-                        {!['users', 'backups'].includes(activeTab) && <div className="pt-4">
+                        {!['users', 'backups', 'website'].includes(activeTab) && <div className="pt-4">
                         {activeTab !== 'finance-security' && <button
                                 onClick={handleSave}
                                 disabled={status.type === 'loading'}

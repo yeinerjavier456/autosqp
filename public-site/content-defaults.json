@@ -1,0 +1,3813 @@
+{
+  "version": 1,
+  "fields": [
+    {
+      "key": "App.80b2350a11a9",
+      "section": "Página · Mensajes generales",
+      "kind": "text",
+      "label": "Párrafo: Cargando vehículos disponibles…",
+      "value": "Cargando vehículos disponibles…"
+    },
+    {
+      "key": "App.93bf234f7f64",
+      "section": "Página · Mensajes generales",
+      "kind": "text",
+      "label": "Párrafo: Cargando inventario…",
+      "value": "Cargando inventario…"
+    },
+    {
+      "key": "ContactoView.e01f0954c378",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "div: Canales de Atención Directa",
+      "value": "Canales de Atención Directa"
+    },
+    {
+      "key": "ContactoView.279b101d711e",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Título principal: ¡Hablemos!",
+      "value": "¡Hablemos!"
+    },
+    {
+      "key": "ContactoView.fd9bdb19de6d",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Párrafo: Estamos listos para ayudarte. Escríbenos, llámanos o visítanos en nuestra vitrina en ",
+      "value": "Estamos listos para ayudarte. Escríbenos, llámanos o visítanos en nuestra vitrina en Bogotá."
+    },
+    {
+      "key": "ContactoView.2f69f2bf73e4",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Título de sección: Datos de contacto",
+      "value": "Datos de contacto"
+    },
+    {
+      "key": "ContactoView.03879547326b",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Párrafo: Líneas de atención / WhatsApp",
+      "value": "Líneas de atención / WhatsApp"
+    },
+    {
+      "key": "ContactoView.eb38acee1007",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Párrafo: Correo electrónico",
+      "value": "Correo electrónico"
+    },
+    {
+      "key": "ContactoView.c3fd64bf07e8",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Párrafo: Dirección vitrina física",
+      "value": "Dirección vitrina física"
+    },
+    {
+      "key": "ContactoView.5cd67d36237a",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Texto destacado: Local 128 · Bogotá, Colombia",
+      "value": "Local 128 · Bogotá, Colombia"
+    },
+    {
+      "key": "ContactoView.0886f3e327f2",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Párrafo: Horario de atención",
+      "value": "Horario de atención"
+    },
+    {
+      "key": "ContactoView.00894c12978f",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Texto destacado: Chatea con nosotros",
+      "value": "Chatea con nosotros"
+    },
+    {
+      "key": "ContactoView.e94d5e6595a1",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Título de sección: Envíanos un mensaje",
+      "value": "Envíanos un mensaje"
+    },
+    {
+      "key": "ContactoView.397236e6295c",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Párrafo: Te responderemos en minutos en horario hábil para resolver todas tus inquietudes.",
+      "value": "Te responderemos en minutos en horario hábil para resolver todas tus inquietudes."
+    },
+    {
+      "key": "ContactoView.a37b9651e5c9",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Subtítulo: ¡Mensaje recibido con éxito!",
+      "value": "¡Mensaje recibido con éxito!"
+    },
+    {
+      "key": "ContactoView.33eeb4375c5e",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Párrafo: Gracias por comunicarte con Autos QP S.A.S. Un asesor comercial revisará tu solicitud",
+      "value": "Gracias por comunicarte con Autos QP S.A.S. Un asesor comercial revisará tu solicitud para responderte a la brevedad."
+    },
+    {
+      "key": "ContactoView.42e4759eff92",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Texto de botón: Enviar otro mensaje",
+      "value": "Enviar otro mensaje"
+    },
+    {
+      "key": "ContactoView.6bf5b2b344d9",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Etiqueta: Nombre completo *",
+      "value": "Nombre completo *"
+    },
+    {
+      "key": "ContactoView.7ca21953ba25",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Ejemplo de campo: Tu nombre y apellidos",
+      "value": "Tu nombre y apellidos"
+    },
+    {
+      "key": "ContactoView.f81fe9ae085d",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Etiqueta: Teléfono / WhatsApp *",
+      "value": "Teléfono / WhatsApp *"
+    },
+    {
+      "key": "ContactoView.7e1bb4cfc519",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Ejemplo de campo: Ej. 300 252 3226",
+      "value": "Ej. 300 252 3226"
+    },
+    {
+      "key": "ContactoView.16c4a7726e59",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Etiqueta: Correo electrónico *",
+      "value": "Correo electrónico *"
+    },
+    {
+      "key": "ContactoView.f28491470563",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Ejemplo de campo: ejemplo@correo.com",
+      "value": "ejemplo@correo.com"
+    },
+    {
+      "key": "ContactoView.231e7b700f13",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Etiqueta: ¿En qué podemos ayudarte? *",
+      "value": "¿En qué podemos ayudarte? *"
+    },
+    {
+      "key": "ContactoView.112aae7940db",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Nombre de opción: Comprar vehículo",
+      "value": "Comprar vehículo"
+    },
+    {
+      "key": "ContactoView.4d957bd2740e",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Nombre de opción: Vender mi vehículo",
+      "value": "Vender mi vehículo"
+    },
+    {
+      "key": "ContactoView.9bebd8cada05",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Nombre de opción: Financiamiento",
+      "value": "Financiamiento"
+    },
+    {
+      "key": "ContactoView.fb816fe7e3d2",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Nombre de opción: Reactivación Financiera",
+      "value": "Reactivación Financiera"
+    },
+    {
+      "key": "ContactoView.ee66fca3234d",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Nombre de opción: Seguros",
+      "value": "Seguros"
+    },
+    {
+      "key": "ContactoView.0e3efd906645",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Nombre de opción: Garantía opcional",
+      "value": "Garantía opcional"
+    },
+    {
+      "key": "ContactoView.332c333b441a",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Nombre de opción: Otro",
+      "value": "Otro"
+    },
+    {
+      "key": "ContactoView.a8c3e4743006",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Etiqueta: Mensaje *",
+      "value": "Mensaje *"
+    },
+    {
+      "key": "ContactoView.63e4bd2dd9a2",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Ejemplo de campo: Escribe aquí tu consulta o el vehículo por el que estás interesado...",
+      "value": "Escribe aquí tu consulta o el vehículo por el que estás interesado..."
+    },
+    {
+      "key": "ContactoView.cee440c48b32",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Mensaje: Enviando mensaje…",
+      "value": "Enviando mensaje…"
+    },
+    {
+      "key": "ContactoView.7618b64366ea",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Mensaje: Enviar consulta",
+      "value": "Enviar consulta"
+    },
+    {
+      "key": "ContactoView.2f9ea94fb506",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Texto destacado: Envío directo al equipo de",
+      "value": "Envío directo al equipo de "
+    },
+    {
+      "key": "ContactoView.065000a20af8",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Texto resaltado: Autos QP",
+      "value": "Autos QP"
+    },
+    {
+      "key": "ContactoView.2c33ebf20b03",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Texto destacado: Nuestra ubicación en Bogotá",
+      "value": "Nuestra ubicación en Bogotá"
+    },
+    {
+      "key": "ContactoView.10aee890d90d",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Texto destacado: Abrir en Google Maps",
+      "value": "Abrir en Google Maps"
+    },
+    {
+      "key": "ContactoView.4c43b31c3fd9",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Título: Ubicación Autos QP C.C. Outlet Factory Bogotá",
+      "value": "Ubicación Autos QP C.C. Outlet Factory Bogotá"
+    },
+    {
+      "key": "FaqView.623311ca0c90",
+      "section": "Preguntas frecuentes",
+      "kind": "text",
+      "label": "Etiqueta: Todas las preguntas",
+      "value": "Todas las preguntas"
+    },
+    {
+      "key": "FaqView.423138a86810",
+      "section": "Preguntas frecuentes",
+      "kind": "text",
+      "label": "Etiqueta: Compra de vehículos",
+      "value": "Compra de vehículos"
+    },
+    {
+      "key": "FaqView.9bebd8cada05",
+      "section": "Preguntas frecuentes",
+      "kind": "text",
+      "label": "Etiqueta: Financiamiento",
+      "value": "Financiamiento"
+    },
+    {
+      "key": "FaqView.d96d968180d6",
+      "section": "Preguntas frecuentes",
+      "kind": "text",
+      "label": "Etiqueta: Venta de vehículos",
+      "value": "Venta de vehículos"
+    },
+    {
+      "key": "FaqView.5dcfe6a11e96",
+      "section": "Preguntas frecuentes",
+      "kind": "text",
+      "label": "Etiqueta: Reactivación Financiera ★",
+      "value": "Reactivación Financiera ★"
+    },
+    {
+      "key": "FaqView.fe78ca444f5e",
+      "section": "Preguntas frecuentes",
+      "kind": "text",
+      "label": "Etiqueta: Seguros y Garantía",
+      "value": "Seguros y Garantía"
+    },
+    {
+      "key": "FaqView.7a89a0016a3e",
+      "section": "Preguntas frecuentes",
+      "kind": "text",
+      "label": "Texto destacado: Centro de Ayuda",
+      "value": "Centro de Ayuda"
+    },
+    {
+      "key": "FaqView.66e8c6a25a87",
+      "section": "Preguntas frecuentes",
+      "kind": "text",
+      "label": "Título principal: Preguntas",
+      "value": "Preguntas "
+    },
+    {
+      "key": "FaqView.1d846f9b8c3c",
+      "section": "Preguntas frecuentes",
+      "kind": "text",
+      "label": "Texto destacado: Frecuentes",
+      "value": "Frecuentes"
+    },
+    {
+      "key": "FaqView.3d1b14bf91cc",
+      "section": "Preguntas frecuentes",
+      "kind": "text",
+      "label": "Párrafo: Resolvemos tus dudas antes de que nos llames.",
+      "value": "Resolvemos tus dudas antes de que nos llames."
+    },
+    {
+      "key": "FaqView.7b6bc8059381",
+      "section": "Preguntas frecuentes",
+      "kind": "text",
+      "label": "Ejemplo de campo: Buscar por palabra clave (ej. Datacrédito, peritaje, retoma, Davivienda, garantía)...",
+      "value": "Buscar por palabra clave (ej. Datacrédito, peritaje, retoma, Davivienda, garantía)..."
+    },
+    {
+      "key": "FaqView.7bc125468462",
+      "section": "Preguntas frecuentes",
+      "kind": "text",
+      "label": "Párrafo: No encontramos preguntas que coincidan con \"",
+      "value": "No encontramos preguntas que coincidan con \""
+    },
+    {
+      "key": "FaqView.45c82940a73a",
+      "section": "Preguntas frecuentes",
+      "kind": "text",
+      "label": "Texto de botón: Ver todas las preguntas",
+      "value": "Ver todas las preguntas"
+    },
+    {
+      "key": "FaqView.a9dd81d77c7b",
+      "section": "Preguntas frecuentes",
+      "kind": "text",
+      "label": "Subtítulo: ¿Tienes alguna pregunta adicional?",
+      "value": "¿Tienes alguna pregunta adicional?"
+    },
+    {
+      "key": "FaqView.bcd32530d676",
+      "section": "Preguntas frecuentes",
+      "kind": "text",
+      "label": "Párrafo: Nuestros asesores en C.C. Outlet Factory están disponibles para resolver cualquier du",
+      "value": "Nuestros asesores en C.C. Outlet Factory están disponibles para resolver cualquier duda sobre peritaje, trámites, crédito o retoma."
+    },
+    {
+      "key": "FaqView.67df045c89d9",
+      "section": "Preguntas frecuentes",
+      "kind": "text",
+      "label": "Texto destacado: Hablar con un asesor por WhatsApp",
+      "value": "Hablar con un asesor por WhatsApp"
+    },
+    {
+      "key": "FeaturedVehicles.f4b25d7bc4e9",
+      "section": "Inicio · Vehículos destacados",
+      "kind": "text",
+      "label": "Título de sección: DESTACADOS DE",
+      "value": "DESTACADOS DE "
+    },
+    {
+      "key": "FeaturedVehicles.a6c6ff664289",
+      "section": "Inicio · Vehículos destacados",
+      "kind": "text",
+      "label": "Texto destacado: AUTOS QP",
+      "value": "AUTOS QP"
+    },
+    {
+      "key": "FeaturedVehicles.654fd29f918c",
+      "section": "Inicio · Vehículos destacados",
+      "kind": "text",
+      "label": "Párrafo: Vehículos verificados, con peritaje al día y listos para entrega inmediata en Bogotá.",
+      "value": "Vehículos verificados, con peritaje al día y listos para entrega inmediata en Bogotá."
+    },
+    {
+      "key": "FeaturedVehicles.48df5b18cbf7",
+      "section": "Inicio · Vehículos destacados",
+      "kind": "text",
+      "label": "Texto destacado: Autos",
+      "value": "Autos"
+    },
+    {
+      "key": "FeaturedVehicles.0e97614e3af8",
+      "section": "Inicio · Vehículos destacados",
+      "kind": "text",
+      "label": "Texto destacado: QP",
+      "value": "QP"
+    },
+    {
+      "key": "FeaturedVehicles.e56b811685ae",
+      "section": "Inicio · Vehículos destacados",
+      "kind": "text",
+      "label": "div: Nuevo ingreso",
+      "value": "Nuevo ingreso"
+    },
+    {
+      "key": "FeaturedVehicles.4009625c945a",
+      "section": "Inicio · Vehículos destacados",
+      "kind": "text",
+      "label": "Texto destacado: Garantía opcional disponible",
+      "value": "Garantía opcional disponible"
+    },
+    {
+      "key": "FeaturedVehicles.a5703a715608",
+      "section": "Inicio · Vehículos destacados",
+      "kind": "text",
+      "label": "Párrafo: Garantía Opcional:",
+      "value": "Garantía Opcional:"
+    },
+    {
+      "key": "FeaturedVehicles.d4231114127d",
+      "section": "Inicio · Vehículos destacados",
+      "kind": "text",
+      "label": "Texto de botón: Cerrar aviso",
+      "value": "Cerrar aviso"
+    },
+    {
+      "key": "FeaturedVehicles.6744cd6b43e4",
+      "section": "Inicio · Vehículos destacados",
+      "kind": "text",
+      "label": "Texto destacado: Ver detalles",
+      "value": "Ver detalles"
+    },
+    {
+      "key": "FeaturedVehicles.b8366f8ce84f",
+      "section": "Inicio · Vehículos destacados",
+      "kind": "text",
+      "label": "Texto destacado: Ver todos los vehículos",
+      "value": "Ver todos los vehículos"
+    },
+    {
+      "key": "FinanciamientoView.dee6be05ec60",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Título: Consulta tu perfil",
+      "value": "Consulta tu perfil"
+    },
+    {
+      "key": "FinanciamientoView.6c87866d3cad",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Descripción: Consulta tu perfil crediticio sin costo y sin afectar tu historial ante las centrales",
+      "value": "Consulta tu perfil crediticio sin costo y sin afectar tu historial ante las centrales de riesgo."
+    },
+    {
+      "key": "FinanciamientoView.96a7ec67a252",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Título: Opciones a tu medida",
+      "value": "Opciones a tu medida"
+    },
+    {
+      "key": "FinanciamientoView.54c20b2dcba5",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Descripción: Te presentamos las mejores opciones de tasas, cuotas y plazos disponibles para tu sit",
+      "value": "Te presentamos las mejores opciones de tasas, cuotas y plazos disponibles para tu situación financiera."
+    },
+    {
+      "key": "FinanciamientoView.ed7657856392",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Título: Radicación directa",
+      "value": "Radicación directa"
+    },
+    {
+      "key": "FinanciamientoView.9528d1899114",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Descripción: Radicamos tu solicitud y documentación ante la entidad financiera que más te favorece",
+      "value": "Radicamos tu solicitud y documentación ante la entidad financiera que más te favorece."
+    },
+    {
+      "key": "FinanciamientoView.cd1f7a9adbe1",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Título: Aprobación y entrega",
+      "value": "Aprobación y entrega"
+    },
+    {
+      "key": "FinanciamientoView.2d565ff5de39",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Descripción: Recibes la carta de aprobación formal, realizamos traspaso legal y te entregamos las ",
+      "value": "Recibes la carta de aprobación formal, realizamos traspaso legal y te entregamos las llaves de tu vehículo."
+    },
+    {
+      "key": "FinanciamientoView.c9fc7bd16d02",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "div: Financiamiento a tu Medida",
+      "value": "Financiamiento a tu Medida"
+    },
+    {
+      "key": "FinanciamientoView.ebd2aba4a6f4",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Título principal: Financia tu vehículo",
+      "value": "Financia tu vehículo "
+    },
+    {
+      "key": "FinanciamientoView.798904a1f1d9",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Texto destacado: con la mejor opción",
+      "value": "con la mejor opción"
+    },
+    {
+      "key": "FinanciamientoView.d61d56bba25d",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Párrafo: No buscas un crédito — buscas el crédito correcto para ti.",
+      "value": "No buscas un crédito — buscas el crédito correcto para ti."
+    },
+    {
+      "key": "FinanciamientoView.45adabbeea9c",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Párrafo: En Autos QP tenemos alianzas con todos los bancos del país para que encuentres la opc",
+      "value": "En Autos QP tenemos alianzas con todos los bancos del país para que encuentres la opción que más te conviene según tu perfil. Te asesoramos paso a paso, radicamos tu solicitud y te acompañamos hasta la entrega de tu vehículo."
+    },
+    {
+      "key": "FinanciamientoView.07f625788899",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Título de sección: Calculadora de crédito vehicular",
+      "value": "Calculadora de crédito vehicular"
+    },
+    {
+      "key": "FinanciamientoView.46bdc8d52beb",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Párrafo: Simula tu cuota mensual estimada en segundos de forma interactiva",
+      "value": "Simula tu cuota mensual estimada en segundos de forma interactiva"
+    },
+    {
+      "key": "FinanciamientoView.89c46aaafc91",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Etiqueta: Valor del vehículo a financiar",
+      "value": "Valor del vehículo a financiar"
+    },
+    {
+      "key": "FinanciamientoView.e5b2329ecadd",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Texto destacado: $ 30.000.000",
+      "value": "$ 30.000.000"
+    },
+    {
+      "key": "FinanciamientoView.f1f311beff87",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Texto destacado: $ 250.000.000",
+      "value": "$ 250.000.000"
+    },
+    {
+      "key": "FinanciamientoView.6f55280bd6b7",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Etiqueta: Cuota inicial (",
+      "value": "Cuota inicial ("
+    },
+    {
+      "key": "FinanciamientoView.1df9eeb68d51",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Párrafo: Monto neto a financiar por el banco:",
+      "value": "Monto neto a financiar por el banco:"
+    },
+    {
+      "key": "FinanciamientoView.508ecc6745d3",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Etiqueta: Plazo en meses",
+      "value": "Plazo en meses"
+    },
+    {
+      "key": "FinanciamientoView.09633a499433",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Texto de botón: meses",
+      "value": " meses"
+    },
+    {
+      "key": "FinanciamientoView.03569cd25ec1",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Texto destacado: Resultado Estimado",
+      "value": "Resultado Estimado"
+    },
+    {
+      "key": "FinanciamientoView.7c36dd9bb41d",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Párrafo: Cuota mensual aproximada:",
+      "value": "Cuota mensual aproximada:"
+    },
+    {
+      "key": "FinanciamientoView.b54ea7f2c474",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Párrafo: / mes por",
+      "value": "/ mes por "
+    },
+    {
+      "key": "FinanciamientoView.02735e7b3696",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Párrafo: cuotas",
+      "value": " cuotas"
+    },
+    {
+      "key": "FinanciamientoView.9a3a733880ba",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Texto destacado: Monto solicitado:",
+      "value": "Monto solicitado:"
+    },
+    {
+      "key": "FinanciamientoView.fbac6f326ce3",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Texto destacado: Tasa estimada referencial:",
+      "value": "Tasa estimada referencial:"
+    },
+    {
+      "key": "FinanciamientoView.a85c43c2ccae",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Texto destacado: Desde 1.28% MV (~16.5% EA)",
+      "value": "Desde 1.28% MV (~16.5% EA)"
+    },
+    {
+      "key": "FinanciamientoView.fdb41330b22e",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Texto destacado: Solicitar este crédito en línea",
+      "value": "Solicitar este crédito en línea"
+    },
+    {
+      "key": "FinanciamientoView.427b65567204",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Párrafo: * El valor es referencial. El monto aprobado y la tasa dependen del análisis creditic",
+      "value": "* El valor es referencial. El monto aprobado y la tasa dependen del análisis crediticio de la entidad financiera. No incluye seguros."
+    },
+    {
+      "key": "FinanciamientoView.61628ae8c5b1",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Párrafo: * Los seguros y la garantía mecánica de caja y motor son servicios opcionales con cos",
+      "value": "* Los seguros y la garantía mecánica de caja y motor son servicios opcionales con costo adicional; ver sección \"Seguros y garantía mecánica\"."
+    },
+    {
+      "key": "FinanciamientoView.cb6efae387f2",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Texto destacado: Red Bancaria Aliada",
+      "value": "Red Bancaria Aliada"
+    },
+    {
+      "key": "FinanciamientoView.c6adfb6f5a57",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Título de sección: Entidades bancarias aliadas",
+      "value": "Entidades bancarias aliadas"
+    },
+    {
+      "key": "FinanciamientoView.24b0747f269e",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Párrafo: Radicamos tu solicitud simultáneamente para lograr la tasa más baja y mayor viabilida",
+      "value": "Radicamos tu solicitud simultáneamente para lograr la tasa más baja y mayor viabilidad de aprobación."
+    },
+    {
+      "key": "FinanciamientoView.97e79c50959b",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Párrafo: * Trabajamos con todos los bancos excepto Davivienda.",
+      "value": "* Trabajamos con todos los bancos excepto Davivienda."
+    },
+    {
+      "key": "FinanciamientoView.b013093ac832",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Título de sección: Seguros y garantía mecánica",
+      "value": "Seguros y garantía mecánica "
+    },
+    {
+      "key": "FinanciamientoView.59bece78919b",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Texto destacado: (servicios opcionales)",
+      "value": "(servicios opcionales)"
+    },
+    {
+      "key": "FinanciamientoView.4491698fc7c2",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Párrafo: Servicios complementarios para que ruedes con total tranquilidad desde el primer día.",
+      "value": "Servicios complementarios para que ruedes con total tranquilidad desde el primer día."
+    },
+    {
+      "key": "FinanciamientoView.ba6c57089cab",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Texto destacado: Tarjeta 1 — Seguros",
+      "value": "Tarjeta 1 — Seguros"
+    },
+    {
+      "key": "FinanciamientoView.3ab49cccc62c",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Subtítulo: Cotiza tu seguro con nuestras aseguradoras aliadas (cotización comparativa sin costo)",
+      "value": "Cotiza tu seguro con nuestras aseguradoras aliadas (cotización comparativa sin costo)"
+    },
+    {
+      "key": "FinanciamientoView.9223db2d0b37",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Párrafo: Al comprar tu vehículo puedes cotizar tu seguro (todo riesgo, SOAT y otros) con las a",
+      "value": "Al comprar tu vehículo puedes cotizar tu seguro (todo riesgo, SOAT y otros) con las aseguradoras con las que Autos QP tiene alianza, para que salgas con todo resuelto."
+    },
+    {
+      "key": "FinanciamientoView.ced6ad081a31",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Párrafo: Aseguradoras aliadas:",
+      "value": "Aseguradoras aliadas:"
+    },
+    {
+      "key": "FinanciamientoView.071fdd78025e",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Texto destacado: Cotizar mi seguro → WhatsApp",
+      "value": "Cotizar mi seguro → WhatsApp"
+    },
+    {
+      "key": "FinanciamientoView.5f46faf479d7",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Texto destacado: Tarjeta 2 — Garantía Opcional",
+      "value": "Tarjeta 2 — Garantía Opcional"
+    },
+    {
+      "key": "FinanciamientoView.4c7b2260f71d",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Subtítulo: Garantía opcional de caja y motor",
+      "value": "Garantía opcional de caja y motor"
+    },
+    {
+      "key": "FinanciamientoView.b2904d110f2b",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Párrafo: Si lo deseas, puedes solicitar una garantía mecánica de caja y motor para vehículos d",
+      "value": "Si lo deseas, puedes solicitar una garantía mecánica de caja y motor para vehículos de modelo menor a 10 años. Es un valor agregado con costo adicional a cargo del cliente, y es otorgada por una empresa aliada, no por Autos QP."
+    },
+    {
+      "key": "FinanciamientoView.8dea23f02446",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Párrafo: Mensaje predefinido de WhatsApp:",
+      "value": "Mensaje predefinido de WhatsApp:"
+    },
+    {
+      "key": "FinanciamientoView.f228eb3f9ff8",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Párrafo: \"Hola, quiero información sobre la garantía opcional de caja y motor\"",
+      "value": "\"Hola, quiero información sobre la garantía opcional de caja y motor\""
+    },
+    {
+      "key": "FinanciamientoView.0402667c7e57",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Texto destacado: Preguntar por la garantía → WhatsApp",
+      "value": "Preguntar por la garantía → WhatsApp"
+    },
+    {
+      "key": "FinanciamientoView.34d39bb7d2b4",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Texto destacado: AVISO LEGAL OBLIGATORIO:",
+      "value": "AVISO LEGAL OBLIGATORIO:"
+    },
+    {
+      "key": "FinanciamientoView.fd2db4ac10e4",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Título de sección: ¿Cómo funciona? —",
+      "value": "¿Cómo funciona? — "
+    },
+    {
+      "key": "FinanciamientoView.f0ba60bae34e",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Texto destacado: Proceso en 4 pasos",
+      "value": "Proceso en 4 pasos"
+    },
+    {
+      "key": "FinanciamientoView.b1e9bee71bb5",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Párrafo: Acompañamiento personalizado desde el primer contacto hasta que estrenas",
+      "value": "Acompañamiento personalizado desde el primer contacto hasta que estrenas"
+    },
+    {
+      "key": "FinanciamientoView.8d96f817cbc5",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Texto destacado: Completar solicitud de crédito →",
+      "value": "Completar solicitud de crédito →"
+    },
+    {
+      "key": "FinanciamientoView.8abe0e7312c3",
+      "section": "Financiamiento",
+      "kind": "text",
+      "label": "Párrafo: Nuestros asesores responden en minutos.",
+      "value": "Nuestros asesores responden en minutos."
+    },
+    {
+      "key": "Footer.fd58ea06eb60",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Etiqueta: Inicio",
+      "value": "Inicio"
+    },
+    {
+      "key": "Footer.c2fc94c262a6",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Etiqueta: Inventario",
+      "value": "Inventario"
+    },
+    {
+      "key": "Footer.9bebd8cada05",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Etiqueta: Financiamiento",
+      "value": "Financiamiento"
+    },
+    {
+      "key": "Footer.fb816fe7e3d2",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Etiqueta: Reactivación Financiera",
+      "value": "Reactivación Financiera"
+    },
+    {
+      "key": "Footer.6e68cf5276e9",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Etiqueta: Nosotros",
+      "value": "Nosotros"
+    },
+    {
+      "key": "Footer.14fe6d341989",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Etiqueta: Contacto",
+      "value": "Contacto"
+    },
+    {
+      "key": "Footer.8f2328048ca7",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Etiqueta: Preguntas Frecuentes",
+      "value": "Preguntas Frecuentes"
+    },
+    {
+      "key": "Footer.317486a1445e",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Subtítulo: Boletín de novedades y ofertas exclusivas",
+      "value": "Boletín de novedades y ofertas exclusivas"
+    },
+    {
+      "key": "Footer.161f958d0818",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Párrafo: Recibe semanalmente los nuevos ingresos en vitrina antes de que se publiquen en redes",
+      "value": "Recibe semanalmente los nuevos ingresos en vitrina antes de que se publiquen en redes."
+    },
+    {
+      "key": "Footer.ddd7bebe3b56",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Texto destacado: ¡Gracias por suscribirte al boletín de Autos QP!",
+      "value": "¡Gracias por suscribirte al boletín de Autos QP!"
+    },
+    {
+      "key": "Footer.847f4d72a545",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Ejemplo de campo: Tu correo electrónico",
+      "value": "Tu correo electrónico"
+    },
+    {
+      "key": "Footer.419ff2162118",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Mensaje: Enviando…",
+      "value": "Enviando…"
+    },
+    {
+      "key": "Footer.fe111fceedf2",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Mensaje: Suscribirme",
+      "value": "Suscribirme"
+    },
+    {
+      "key": "Footer.48df5b18cbf7",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Texto destacado: Autos",
+      "value": "Autos"
+    },
+    {
+      "key": "Footer.0e97614e3af8",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Texto destacado: QP",
+      "value": "QP"
+    },
+    {
+      "key": "Footer.6a4b37b8dd53",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Párrafo: Calidad y confianza en cada kilómetro. Concesionario líder en compra, venta, financia",
+      "value": "Calidad y confianza en cada kilómetro. Concesionario líder en compra, venta, financiamiento y reactivación crediticia vehicular en Bogotá."
+    },
+    {
+      "key": "Footer.33c9fd3c123a",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Texto resaltado: Razón social:",
+      "value": "Razón social:"
+    },
+    {
+      "key": "Footer.98a46afde5c8",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Párrafo: Enlaces rápidos",
+      "value": "Enlaces rápidos"
+    },
+    {
+      "key": "Footer.2085577735cb",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Texto de botón: ¿Quieres vender tu auto?",
+      "value": "¿Quieres vender tu auto?"
+    },
+    {
+      "key": "Footer.fca2519212cb",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Texto destacado: Ingresar al CRM",
+      "value": "Ingresar al CRM"
+    },
+    {
+      "key": "Footer.296a90c84597",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Párrafo: Contacto y vitrina",
+      "value": "Contacto y vitrina"
+    },
+    {
+      "key": "Footer.661b55fb6707",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Párrafo: Síguenos",
+      "value": "Síguenos"
+    },
+    {
+      "key": "Footer.25901fcdee39",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Párrafo: . Todos los derechos reservados.",
+      "value": ". Todos los derechos reservados."
+    },
+    {
+      "key": "Footer.bb9a4e09b4cc",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Texto de botón: Política de privacidad",
+      "value": "Política de privacidad"
+    },
+    {
+      "key": "Footer.3578c8757539",
+      "section": "Pie de página",
+      "kind": "text",
+      "label": "Texto de botón: Tratamiento de datos personales (Ley 1581 de 2012)",
+      "value": "Tratamiento de datos personales (Ley 1581 de 2012)"
+    },
+    {
+      "key": "Hero.f409617fafa5",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Título principal: MÁS QUE AUTOS,",
+      "value": "MÁS QUE AUTOS, "
+    },
+    {
+      "key": "Hero.bd8e4f49168a",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Texto destacado: CREAMOS CONEXIONES",
+      "value": "CREAMOS CONEXIONES"
+    },
+    {
+      "key": "Hero.5da774f123aa",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Párrafo: Encuentra el auto que se adapta a tu vida. Calidad, confianza y el mejor servicio en ",
+      "value": "Encuentra el auto que se adapta a tu vida. Calidad, confianza y el mejor servicio en Bogotá. Todos nuestros vehículos son 100% asegurables y revisados."
+    },
+    {
+      "key": "Hero.3686f866615e",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Texto destacado: Ver inventario",
+      "value": "Ver inventario"
+    },
+    {
+      "key": "Hero.106e469d26df",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Texto de botón: Vender mi auto",
+      "value": "Vender mi auto"
+    },
+    {
+      "key": "Hero.f7f06237065e",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Etiqueta: Marca",
+      "value": "Marca"
+    },
+    {
+      "key": "Hero.ddf3202c772c",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Nombre de opción: Todas las marcas",
+      "value": "Todas las marcas"
+    },
+    {
+      "key": "Hero.93b99ecbcbf7",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Etiqueta: Referencia / Modelo",
+      "value": "Referencia / Modelo"
+    },
+    {
+      "key": "Hero.2d322ee216f2",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Ejemplo de campo: Ej. Duster, Fiesta, Fortuner...",
+      "value": "Ej. Duster, Fiesta, Fortuner..."
+    },
+    {
+      "key": "Hero.e1de386b9ed2",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Etiqueta: Precio máximo",
+      "value": "Precio máximo"
+    },
+    {
+      "key": "Hero.5584b6368453",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Nombre de opción: Sin límite",
+      "value": "Sin límite"
+    },
+    {
+      "key": "Hero.2b7065a5db5a",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Nombre de opción: Hasta $ 60.000.000",
+      "value": "Hasta $ 60.000.000"
+    },
+    {
+      "key": "Hero.0402a9de7bb0",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Nombre de opción: Hasta $ 90.000.000",
+      "value": "Hasta $ 90.000.000"
+    },
+    {
+      "key": "Hero.c3fb50b084d4",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Nombre de opción: Hasta $ 130.000.000",
+      "value": "Hasta $ 130.000.000"
+    },
+    {
+      "key": "Hero.a6b799d17248",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Nombre de opción: Hasta $ 220.000.000",
+      "value": "Hasta $ 220.000.000"
+    },
+    {
+      "key": "Hero.e29444f939cf",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Texto destacado: Buscar",
+      "value": "Buscar"
+    },
+    {
+      "key": "Hero.99eec97cefaf",
+      "section": "Inicio · Portada",
+      "kind": "image",
+      "label": "Imagen principal de portada",
+      "value": "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?auto=format&fit=crop&w=1200&q=80"
+    },
+    {
+      "key": "Hero.026422299827",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Descripción de imagen: Autos QP Vehículo Usado Destacado",
+      "value": "Autos QP Vehículo Usado Destacado"
+    },
+    {
+      "key": "Hero.d74f4a353185",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Párrafo: Concesionario Físico",
+      "value": "Concesionario Físico"
+    },
+    {
+      "key": "Hero.9076fadb1664",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Texto destacado: Bogotá, Colombia",
+      "value": "Bogotá, Colombia"
+    },
+    {
+      "key": "Hero.d39cf6f0a5e3",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Texto destacado: Local 128",
+      "value": "Local 128"
+    },
+    {
+      "key": "Hero.2d1b76729bb2",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Párrafo: Autos disponibles",
+      "value": "Autos disponibles"
+    },
+    {
+      "key": "Hero.bac42f321d9e",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Párrafo: +850",
+      "value": "+850"
+    },
+    {
+      "key": "Hero.44748aa18764",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Párrafo: Clientes satisfechos",
+      "value": "Clientes satisfechos"
+    },
+    {
+      "key": "Hero.eaac426c6ac9",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Párrafo: +5 Años",
+      "value": "+5 Años"
+    },
+    {
+      "key": "Hero.878be17e8b5f",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Párrafo: De experiencia",
+      "value": "De experiencia"
+    },
+    {
+      "key": "Hero.f71a532c955f",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Párrafo: 100%",
+      "value": "100%"
+    },
+    {
+      "key": "Hero.70f4eedf8183",
+      "section": "Inicio · Portada",
+      "kind": "text",
+      "label": "Párrafo: Transparencia",
+      "value": "Transparencia"
+    },
+    {
+      "key": "InventoryView.3969d5454f36",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "div: Catálogo Verificado",
+      "value": "Catálogo Verificado"
+    },
+    {
+      "key": "InventoryView.23a5b0dbd75d",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Título principal: Nuestro",
+      "value": "Nuestro "
+    },
+    {
+      "key": "InventoryView.c2fc94c262a6",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Texto destacado: Inventario",
+      "value": "Inventario"
+    },
+    {
+      "key": "InventoryView.7d4015484a17",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Párrafo: En Autos QP encontrarás una amplia selección de vehículos usados verificados, de toda",
+      "value": "En Autos QP encontrarás una amplia selección de vehículos usados verificados, de todas las marcas y referencias. Actualizamos nuestro inventario constantemente para ofrecerte siempre las mejores opciones al mejor precio. Todos nuestros vehículos son 100% asegurables."
+    },
+    {
+      "key": "InventoryView.5866e0ebb92b",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Texto destacado: Filtros de búsqueda",
+      "value": "Filtros de búsqueda"
+    },
+    {
+      "key": "InventoryView.0ba6c47d6d3b",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Texto destacado: Limpiar filtros",
+      "value": "Limpiar filtros"
+    },
+    {
+      "key": "InventoryView.f7f06237065e",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Etiqueta: Marca",
+      "value": "Marca"
+    },
+    {
+      "key": "InventoryView.ff1f2d19999e",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Nombre de opción: Todas",
+      "value": "Todas"
+    },
+    {
+      "key": "InventoryView.93b99ecbcbf7",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Etiqueta: Referencia / Modelo",
+      "value": "Referencia / Modelo"
+    },
+    {
+      "key": "InventoryView.4e9da58ce768",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Ejemplo de campo: Ej. Duster, Fiesta...",
+      "value": "Ej. Duster, Fiesta..."
+    },
+    {
+      "key": "InventoryView.d27558f6dfa5",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Etiqueta: Año (Desde)",
+      "value": "Año (Desde)"
+    },
+    {
+      "key": "InventoryView.a51d8abd2879",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Nombre de opción: Cualquier año",
+      "value": "Cualquier año"
+    },
+    {
+      "key": "InventoryView.0c67a704bf29",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Nombre de opción: 2016 en adelante",
+      "value": "2016 en adelante"
+    },
+    {
+      "key": "InventoryView.f598e4a213f2",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Nombre de opción: 2018 en adelante",
+      "value": "2018 en adelante"
+    },
+    {
+      "key": "InventoryView.8ecd20b3a675",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Nombre de opción: 2020 en adelante",
+      "value": "2020 en adelante"
+    },
+    {
+      "key": "InventoryView.590f2a0b44e3",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Nombre de opción: 2022 en adelante",
+      "value": "2022 en adelante"
+    },
+    {
+      "key": "InventoryView.e1de386b9ed2",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Etiqueta: Precio máximo",
+      "value": "Precio máximo"
+    },
+    {
+      "key": "InventoryView.6a3408c484c6",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Nombre de opción: Sin tope",
+      "value": "Sin tope"
+    },
+    {
+      "key": "InventoryView.2b7065a5db5a",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Nombre de opción: Hasta $ 60.000.000",
+      "value": "Hasta $ 60.000.000"
+    },
+    {
+      "key": "InventoryView.0402a9de7bb0",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Nombre de opción: Hasta $ 90.000.000",
+      "value": "Hasta $ 90.000.000"
+    },
+    {
+      "key": "InventoryView.0a99709017dd",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Nombre de opción: Hasta $ 120.000.000",
+      "value": "Hasta $ 120.000.000"
+    },
+    {
+      "key": "InventoryView.ab862aeee763",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Nombre de opción: Hasta $ 180.000.000",
+      "value": "Hasta $ 180.000.000"
+    },
+    {
+      "key": "InventoryView.6de7c092382c",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Etiqueta: Transmisión",
+      "value": "Transmisión"
+    },
+    {
+      "key": "InventoryView.c97c6ffc4eb8",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Nombre de opción: Manual (Mecánico)",
+      "value": "Manual (Mecánico)"
+    },
+    {
+      "key": "InventoryView.988e4b4f0557",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Nombre de opción: Automática",
+      "value": "Automática"
+    },
+    {
+      "key": "InventoryView.13d946467452",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Etiqueta: Combustible",
+      "value": "Combustible"
+    },
+    {
+      "key": "InventoryView.d732bfcff4ea",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Nombre de opción: Todos",
+      "value": "Todos"
+    },
+    {
+      "key": "InventoryView.857942037065",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Nombre de opción: Gasolina",
+      "value": "Gasolina"
+    },
+    {
+      "key": "InventoryView.7c409156d77d",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Nombre de opción: Híbrido",
+      "value": "Híbrido"
+    },
+    {
+      "key": "InventoryView.5238633361df",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Nombre de opción: Diésel",
+      "value": "Diésel"
+    },
+    {
+      "key": "InventoryView.554f5629d0c5",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Nombre de opción: Eléctrico",
+      "value": "Eléctrico"
+    },
+    {
+      "key": "InventoryView.ece05bf3cb9f",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Párrafo: Mostrando",
+      "value": "Mostrando "
+    },
+    {
+      "key": "InventoryView.b43c87c9c839",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Párrafo: vehículos disponibles",
+      "value": " vehículos disponibles"
+    },
+    {
+      "key": "InventoryView.6d0a845b986f",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Texto destacado: ✓ 100% asegurables y con peritaje",
+      "value": "✓ 100% asegurables y con peritaje"
+    },
+    {
+      "key": "InventoryView.2e31718149f7",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Subtítulo: No encontramos vehículos con estos filtros",
+      "value": "No encontramos vehículos con estos filtros"
+    },
+    {
+      "key": "InventoryView.d2c9bd3d2d60",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Párrafo: Intenta cambiar los parámetros de búsqueda o restablecer los filtros para ver todo nu",
+      "value": "Intenta cambiar los parámetros de búsqueda o restablecer los filtros para ver todo nuestro catálogo disponible."
+    },
+    {
+      "key": "InventoryView.d106df52950c",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Texto de botón: Restablecer filtros",
+      "value": "Restablecer filtros"
+    },
+    {
+      "key": "InventoryView.48df5b18cbf7",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Texto destacado: Autos",
+      "value": "Autos"
+    },
+    {
+      "key": "InventoryView.0e97614e3af8",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Texto destacado: QP",
+      "value": "QP"
+    },
+    {
+      "key": "InventoryView.e56b811685ae",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "div: Nuevo ingreso",
+      "value": "Nuevo ingreso"
+    },
+    {
+      "key": "InventoryView.165e17cf4eeb",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Texto destacado: km",
+      "value": " km"
+    },
+    {
+      "key": "InventoryView.4009625c945a",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Texto destacado: Garantía opcional disponible",
+      "value": "Garantía opcional disponible"
+    },
+    {
+      "key": "InventoryView.a5703a715608",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Párrafo: Garantía Opcional:",
+      "value": "Garantía Opcional:"
+    },
+    {
+      "key": "InventoryView.91e884ee963b",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Texto de botón: Entendido",
+      "value": "Entendido"
+    },
+    {
+      "key": "InventoryView.6744cd6b43e4",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Texto destacado: Ver detalles",
+      "value": "Ver detalles"
+    },
+    {
+      "key": "InventoryView.11f31591205a",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Texto destacado: Aviso Legal Garantía Opcional:",
+      "value": "Aviso Legal Garantía Opcional:"
+    },
+    {
+      "key": "LegalModal.0c4bfc3411d1",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Descripción accesible: Cerrar modal",
+      "value": "Cerrar modal"
+    },
+    {
+      "key": "LegalModal.49d6c398d10c",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Texto destacado: · NIT",
+      "value": " · NIT "
+    },
+    {
+      "key": "LegalModal.7dcbb3737f2d",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Texto resaltado: AUTOS QP S.A.S.",
+      "value": "AUTOS QP S.A.S."
+    },
+    {
+      "key": "LegalModal.da891d5a5ef6",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Párrafo: , identificada con NIT",
+      "value": ", identificada con NIT "
+    },
+    {
+      "key": "LegalModal.7d3ed5335323",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Texto resaltado: 901.263.615-6",
+      "value": "901.263.615-6"
+    },
+    {
+      "key": "LegalModal.e761202f8c11",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Párrafo: , domiciliada en Bogotá D.C. en el C.C. Outlet Factory (Av. de las Américas #62-84, L",
+      "value": ", domiciliada en Bogotá D.C. en el C.C. Outlet Factory (Av. de las Américas #62-84, Local 128), informa a los usuarios y clientes que la información suministrada a través de nuestros canales digitales será utilizada exclusivamente para:"
+    },
+    {
+      "key": "LegalModal.2ef730c20cd2",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "li: Gestión de solicitudes de cotización, compra, venta o consignación de vehículos autom",
+      "value": "Gestión de solicitudes de cotización, compra, venta o consignación de vehículos automotores."
+    },
+    {
+      "key": "LegalModal.fd249daf159e",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "li: Tramitación y radicación de solicitudes de crédito vehicular ante las entidades banca",
+      "value": "Tramitación y radicación de solicitudes de crédito vehicular ante las entidades bancarias y financieras aliadas."
+    },
+    {
+      "key": "LegalModal.4804f0fc5607",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "li: Contacto y asesoría jurídica/financiera personalizada en los servicios de Reactivació",
+      "value": "Contacto y asesoría jurídica/financiera personalizada en los servicios de Reactivación Financiera."
+    },
+    {
+      "key": "LegalModal.54d216a3d7ad",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "li: Cotización comparativa de pólizas de seguro todo riesgo y emisión de SOAT con asegura",
+      "value": "Cotización comparativa de pólizas de seguro todo riesgo y emisión de SOAT con aseguradoras vinculadas."
+    },
+    {
+      "key": "LegalModal.01e5e1f66e7f",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Párrafo: Garantizamos que bajo ninguna circunstancia comercializamos, alquilamos ni cedemos ba",
+      "value": "Garantizamos que bajo ninguna circunstancia comercializamos, alquilamos ni cedemos bases de datos personales a terceros no autorizados."
+    },
+    {
+      "key": "LegalModal.01434edde204",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Párrafo: Los precios y disponibilidades publicados en este sitio web corresponden a inventario",
+      "value": "Los precios y disponibilidades publicados en este sitio web corresponden a inventario real y están sujetos a verificación previa al perfeccionamiento del contrato de compraventa y formalización de traspaso."
+    },
+    {
+      "key": "LegalModal.46af1add8ca4",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Párrafo: En cumplimiento de la",
+      "value": "En cumplimiento de la "
+    },
+    {
+      "key": "LegalModal.71b24f9ba631",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Texto resaltado: Ley Estatutaria 1581 de 2012",
+      "value": "Ley Estatutaria 1581 de 2012"
+    },
+    {
+      "key": "LegalModal.c9a9e70b9e69",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Párrafo: y sus decretos reglamentarios sobre Protección de Datos Personales en Colombia,",
+      "value": " y sus decretos reglamentarios sobre Protección de Datos Personales en Colombia, "
+    },
+    {
+      "key": "LegalModal.5af1c0bf9312",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Párrafo: actúa como Responsable del Tratamiento de los datos personales obtenidos a través de ",
+      "value": " actúa como Responsable del Tratamiento de los datos personales obtenidos a través de su portal web, formularios y canales de atención de WhatsApp."
+    },
+    {
+      "key": "LegalModal.cae5306a9249",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Texto resaltado: Derechos de los Titulares:",
+      "value": "Derechos de los Titulares:"
+    },
+    {
+      "key": "LegalModal.b7ff9b2a8fa7",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Párrafo: Los titulares de los datos tienen derecho a conocer, actualizar, rectificar y solicit",
+      "value": " Los titulares de los datos tienen derecho a conocer, actualizar, rectificar y solicitar la supresión de sus datos personales, así como a revocar la autorización otorgada para su tratamiento cuando consideren pertinente."
+    },
+    {
+      "key": "LegalModal.5cb9b49a9d31",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Texto resaltado: Canal de Peticiones, Quejas y Reclamos (PQR):",
+      "value": "Canal de Peticiones, Quejas y Reclamos (PQR):"
+    },
+    {
+      "key": "LegalModal.f807677b55f6",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Párrafo: Para ejercer sus derechos de Habeas Data, el titular puede enviar una comunicación fo",
+      "value": " Para ejercer sus derechos de Habeas Data, el titular puede enviar una comunicación formal al correo electrónico oficial: "
+    },
+    {
+      "key": "LegalModal.60c4cd5e891a",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Texto resaltado: autosqpc@gmail.com",
+      "value": "autosqpc@gmail.com"
+    },
+    {
+      "key": "LegalModal.9b76849fcc42",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Párrafo: o radicarla físicamente en nuestra vitrina en el Local 128 del C.C. Outlet Factory en",
+      "value": " o radicarla físicamente en nuestra vitrina en el Local 128 del C.C. Outlet Factory en Bogotá."
+    },
+    {
+      "key": "LegalModal.c499477f7a9a",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Texto resaltado: Tratamiento de Información Crediticia y Financiera:",
+      "value": "Tratamiento de Información Crediticia y Financiera:"
+    },
+    {
+      "key": "LegalModal.afb2c8a43905",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Párrafo: La consulta y radicación de perfiles ante centrales de riesgo (Datacrédito y TransUni",
+      "value": " La consulta y radicación de perfiles ante centrales de riesgo (Datacrédito y TransUnion) se realiza con expresa autorización previa del titular y únicamente con el objetivo de evaluar viabilidad financiera vehicular."
+    },
+    {
+      "key": "LegalModal.f769e9d72727",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Texto de botón: Entendido y cerrar",
+      "value": "Entendido y cerrar"
+    },
+    {
+      "key": "Navbar.fd58ea06eb60",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Etiqueta: Inicio",
+      "value": "Inicio"
+    },
+    {
+      "key": "Navbar.c2fc94c262a6",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Etiqueta: Inventario",
+      "value": "Inventario"
+    },
+    {
+      "key": "Navbar.9bebd8cada05",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Etiqueta: Financiamiento",
+      "value": "Financiamiento"
+    },
+    {
+      "key": "Navbar.fb816fe7e3d2",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Etiqueta: Reactivación Financiera",
+      "value": "Reactivación Financiera"
+    },
+    {
+      "key": "Navbar.6e68cf5276e9",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Etiqueta: Nosotros",
+      "value": "Nosotros"
+    },
+    {
+      "key": "Navbar.14fe6d341989",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Etiqueta: Contacto",
+      "value": "Contacto"
+    },
+    {
+      "key": "Navbar.661a26ed4655",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Etiqueta: FAQ",
+      "value": "FAQ"
+    },
+    {
+      "key": "Navbar.1aa984819588",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Texto de botón: ¿Quieres vender tu auto? Haz clic aquí",
+      "value": "¿Quieres vender tu auto? Haz clic aquí"
+    },
+    {
+      "key": "Navbar.48df5b18cbf7",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Texto destacado: Autos",
+      "value": "Autos"
+    },
+    {
+      "key": "Navbar.0e97614e3af8",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Texto destacado: QP",
+      "value": "QP"
+    },
+    {
+      "key": "Navbar.1fde7cecd78f",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Texto destacado: ★ Exclusivo",
+      "value": "★ Exclusivo"
+    },
+    {
+      "key": "Navbar.13c0d6da3906",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Texto destacado: Ingresar",
+      "value": "Ingresar"
+    },
+    {
+      "key": "Navbar.3686f866615e",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Texto de botón: Ver inventario",
+      "value": "Ver inventario"
+    },
+    {
+      "key": "Navbar.fca2519212cb",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Título: Ingresar al CRM",
+      "value": "Ingresar al CRM"
+    },
+    {
+      "key": "Navbar.1d0c55bbe03f",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Descripción accesible: Abrir menú",
+      "value": "Abrir menú"
+    },
+    {
+      "key": "Navbar.bb47a07b5617",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Texto destacado: ★ Diferencial",
+      "value": "★ Diferencial"
+    },
+    {
+      "key": "Navbar.9d36fd647ea1",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Texto destacado: Administración",
+      "value": "Administración"
+    },
+    {
+      "key": "Navbar.106e469d26df",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Texto de botón: Vender mi auto",
+      "value": "Vender mi auto"
+    },
+    {
+      "key": "Navbar.211b1bef12a5",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Texto de botón: Ver inventario completo",
+      "value": "Ver inventario completo"
+    },
+    {
+      "key": "NosotrosView.70f4eedf8183",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Título: Transparencia",
+      "value": "Transparencia"
+    },
+    {
+      "key": "NosotrosView.3bff69e88255",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Descripción: Información clara y honesta en cada negocio, sin costos ocultos ni letras pequeñas.",
+      "value": "Información clara y honesta en cada negocio, sin costos ocultos ni letras pequeñas."
+    },
+    {
+      "key": "NosotrosView.1e3d91093911",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Título: Acompañamiento real",
+      "value": "Acompañamiento real"
+    },
+    {
+      "key": "NosotrosView.bda91c3a93ac",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Descripción: Estamos contigo desde la búsqueda inicial hasta el traspaso y entrega de llaves.",
+      "value": "Estamos contigo desde la búsqueda inicial hasta el traspaso y entrega de llaves."
+    },
+    {
+      "key": "NosotrosView.b3432bf53266",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Título: Calidad verificada",
+      "value": "Calidad verificada"
+    },
+    {
+      "key": "NosotrosView.535c8d8620b6",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Descripción: Todos nuestros vehículos son inspeccionados técnicamente y son 100% asegurables.",
+      "value": "Todos nuestros vehículos son inspeccionados técnicamente y son 100% asegurables."
+    },
+    {
+      "key": "NosotrosView.dd611062cc2f",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Título: Compromiso",
+      "value": "Compromiso"
+    },
+    {
+      "key": "NosotrosView.d0a806e77e77",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Descripción: Tu movilidad, tranquilidad y bienestar familiar son nuestra máxima prioridad diaria.",
+      "value": "Tu movilidad, tranquilidad y bienestar familiar son nuestra máxima prioridad diaria."
+    },
+    {
+      "key": "NosotrosView.e2aae0c37286",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Descripción: Venta de vehículos usados multimarca",
+      "value": "Venta de vehículos usados multimarca"
+    },
+    {
+      "key": "NosotrosView.2216e94abb28",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Descripción: Compra de vehículos — te pagamos a precio justo",
+      "value": "Compra de vehículos — te pagamos a precio justo"
+    },
+    {
+      "key": "NosotrosView.b50d827015de",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Descripción: Consignación — vendemos tu carro por ti",
+      "value": "Consignación — vendemos tu carro por ti"
+    },
+    {
+      "key": "NosotrosView.97ac5107bf2d",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Descripción: Financiamiento con todos los bancos del país",
+      "value": "Financiamiento con todos los bancos del país"
+    },
+    {
+      "key": "NosotrosView.1d15cb8f6a7d",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Descripción: Reactivación Financiera — consultoría especializada",
+      "value": "Reactivación Financiera — consultoría especializada"
+    },
+    {
+      "key": "NosotrosView.4a96d1994203",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Descripción: Seguros y garantía mecánica opcional (caja y motor) — con empresas aliadas",
+      "value": "Seguros y garantía mecánica opcional (caja y motor) — con empresas aliadas"
+    },
+    {
+      "key": "NosotrosView.9503519b974b",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Descripción: Ferias de vehículos — eventos especiales durante el año",
+      "value": "Ferias de vehículos — eventos especiales durante el año"
+    },
+    {
+      "key": "NosotrosView.5ca39a272da2",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "div: Trayectoria y Compromiso",
+      "value": "Trayectoria y Compromiso"
+    },
+    {
+      "key": "NosotrosView.e541318536c6",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Título principal: Somos",
+      "value": "Somos "
+    },
+    {
+      "key": "NosotrosView.065000a20af8",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Texto destacado: Autos QP",
+      "value": "Autos QP"
+    },
+    {
+      "key": "NosotrosView.22b68afb02c3",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Párrafo: Somos un concesionario de vehículos usados ubicado en Bogotá, Colombia, con más de 5 ",
+      "value": "Somos un concesionario de vehículos usados ubicado en Bogotá, Colombia, con más de 5 años ayudando a colombianos a moverse con confianza. Nacimos con el propósito de hacer la compra y venta de vehículos un proceso transparente, seguro y sin complicaciones."
+    },
+    {
+      "key": "NosotrosView.4e0ae4d144ec",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Párrafo: Operamos en el C.C. Outlet Factory de la Avenida de las Américas y contamos con un eq",
+      "value": "Operamos en el C.C. Outlet Factory de la Avenida de las Américas y contamos con un equipo de asesores comerciales y expertos en crédito listos para acompañarte en cada etapa del proceso."
+    },
+    {
+      "key": "NosotrosView.c34e7623a5c1",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Título de sección: Nuestros",
+      "value": "Nuestros "
+    },
+    {
+      "key": "NosotrosView.c1a18f8fab88",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Texto destacado: valores",
+      "value": "valores"
+    },
+    {
+      "key": "NosotrosView.c3c66e142192",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Texto destacado: servicios",
+      "value": "servicios"
+    },
+    {
+      "key": "NosotrosView.fe90ba798e83",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Texto destacado: Eventos del Sector",
+      "value": "Eventos del Sector"
+    },
+    {
+      "key": "NosotrosView.a36174adb6c8",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Subtítulo: Presencia en ferias automotrices",
+      "value": "Presencia en ferias automotrices"
+    },
+    {
+      "key": "NosotrosView.a5dfc10c328f",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Párrafo: Autos QP participa activamente en ferias automotrices en Bogotá. Durante estos evento",
+      "value": "Autos QP participa activamente en ferias automotrices en Bogotá. Durante estos eventos podrás encontrar ofertas exclusivas, vehículos adicionales y atención personalizada de nuestro equipo. Mantente pendiente de nuestras redes sociales para enterarte de los próximos eventos."
+    },
+    {
+      "key": "NosotrosView.b2ef877910db",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Texto destacado: Próxima Edición Especial:",
+      "value": "Próxima Edición Especial:"
+    },
+    {
+      "key": "NosotrosView.13365438e9c8",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Párrafo: Feria Usados Outlet Factory · Vitrina central en Bogotá con bonos de retoma y pre-apr",
+      "value": "Feria Usados Outlet Factory · Vitrina central en Bogotá con bonos de retoma y pre-aprobación en el acto."
+    },
+    {
+      "key": "NosotrosView.15915e618cad",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Párrafo: Nuestras redes",
+      "value": "Nuestras redes"
+    },
+    {
+      "key": "NosotrosView.d40b408c0a03",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Título de sección: Conecta con Autos QP",
+      "value": "Conecta con Autos QP"
+    },
+    {
+      "key": "NosotrosView.641d2f3a7b0d",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Párrafo: Conoce nuestros vehículos, novedades y consejos. Cada perfil se abre en una pestaña n",
+      "value": "Conoce nuestros vehículos, novedades y consejos. Cada perfil se abre en una pestaña nueva."
+    },
+    {
+      "key": "ReactivacionFinancieraView.d491fe1d00f3",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Descripción: Revisión detallada de tu situación actual en centrales de riesgo (Datacrédito / Trans",
+      "value": "Revisión detallada de tu situación actual en centrales de riesgo (Datacrédito / TransUnion)"
+    },
+    {
+      "key": "ReactivacionFinancieraView.cdf0519dba9f",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Descripción: Diagnóstico real de elegibilidad crediticia para compra vehicular",
+      "value": "Diagnóstico real de elegibilidad crediticia para compra vehicular"
+    },
+    {
+      "key": "ReactivacionFinancieraView.7cee9bd94ddf",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Descripción: Orientación sobre entidades y cooperativas con mayor flexibilidad de aprobación",
+      "value": "Orientación sobre entidades y cooperativas con mayor flexibilidad de aprobación"
+    },
+    {
+      "key": "ReactivacionFinancieraView.fbecf8ad0a44",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Descripción: Plan de acción personalizado para el saneamiento gradual de tu caso",
+      "value": "Plan de acción personalizado para el saneamiento gradual de tu caso"
+    },
+    {
+      "key": "ReactivacionFinancieraView.de619870ea3b",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Descripción: Acompañamiento jurídico especializado durante todo el proceso de reactivación",
+      "value": "Acompañamiento jurídico especializado durante todo el proceso de reactivación"
+    },
+    {
+      "key": "ReactivacionFinancieraView.5f02fee7543b",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Descripción: Personas reportadas negativamente en Datacrédito o TransUnion",
+      "value": "Personas reportadas negativamente en Datacrédito o TransUnion"
+    },
+    {
+      "key": "ReactivacionFinancieraView.1d2da3e3bc91",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Descripción: Clientes con créditos castigados o carteras en mora que buscan acuerdo",
+      "value": "Clientes con créditos castigados o carteras en mora que buscan acuerdo"
+    },
+    {
+      "key": "ReactivacionFinancieraView.45c73cbb925b",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Descripción: Personas que han sido rechazadas en otras entidades bancarias",
+      "value": "Personas que han sido rechazadas en otras entidades bancarias"
+    },
+    {
+      "key": "ReactivacionFinancieraView.514be64839a9",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Descripción: Quienes desean sanear su historial crediticio antes de solicitar un crédito vehicular",
+      "value": "Quienes desean sanear su historial crediticio antes de solicitar un crédito vehicular"
+    },
+    {
+      "key": "ReactivacionFinancieraView.d3ba7f7c599d",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Texto destacado: Servicio Exclusivo Autos QP — Diferencial en C.C. Outlet Factory",
+      "value": "Servicio Exclusivo Autos QP — Diferencial en C.C. Outlet Factory"
+    },
+    {
+      "key": "ReactivacionFinancieraView.227cf8279e53",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Título principal: Reactivación",
+      "value": "Reactivación "
+    },
+    {
+      "key": "ReactivacionFinancieraView.d4d744a99ab1",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Texto destacado: Financiera",
+      "value": "Financiera"
+    },
+    {
+      "key": "ReactivacionFinancieraView.f63c58029bde",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Párrafo: ¿Reportado en centrales de riesgo? Te ayudamos a retomar el camino.",
+      "value": "¿Reportado en centrales de riesgo? Te ayudamos a retomar el camino."
+    },
+    {
+      "key": "ReactivacionFinancieraView.8229263b816f",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Párrafo: Sabemos que un reporte en Datacrédito o TransUnion no define tu futuro. En Autos QP c",
+      "value": "Sabemos que un reporte en Datacrédito o TransUnion no define tu futuro. En Autos QP contamos con una consultoría jurídica y financiera especializada que analiza tu caso de forma personalizada, confidencial y sin juicios. Nuestro equipo te orienta sobre cómo mejorar tu historial crediticio y te acompaña en el proceso de reactivación para que puedas acceder nuevamente al financiamiento vehicular."
+    },
+    {
+      "key": "ReactivacionFinancieraView.e7e9e006dce0",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Texto destacado: ¿Qué incluye la consulta?",
+      "value": "¿Qué incluye la consulta?"
+    },
+    {
+      "key": "ReactivacionFinancieraView.41fec40bb250",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Texto destacado: ¿A quién va dirigido?",
+      "value": "¿A quién va dirigido?"
+    },
+    {
+      "key": "ReactivacionFinancieraView.9e00de719546",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Texto resaltado: Confidencialidad absoluta:",
+      "value": "Confidencialidad absoluta:"
+    },
+    {
+      "key": "ReactivacionFinancieraView.361302754692",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Párrafo: Tu información es completamente confidencial bajo la Ley 1581 de 2012. Hablemos sin c",
+      "value": " Tu información es completamente confidencial bajo la Ley 1581 de 2012. Hablemos sin compromiso."
+    },
+    {
+      "key": "ReactivacionFinancieraView.8f11ef9df5f8",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Texto destacado: Diagnóstico Sin Juicios",
+      "value": "Diagnóstico Sin Juicios"
+    },
+    {
+      "key": "ReactivacionFinancieraView.68a742c6782c",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Subtítulo: Solicitar Consulta Confidencial",
+      "value": "Solicitar Consulta Confidencial"
+    },
+    {
+      "key": "ReactivacionFinancieraView.9c4881eaecb8",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Párrafo: Completa estos datos básicos y un consultor jurídico te contactará en minutos.",
+      "value": "Completa estos datos básicos y un consultor jurídico te contactará en minutos."
+    },
+    {
+      "key": "ReactivacionFinancieraView.c9133809b99e",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "div: Recibimos tu solicitud de Reactivación Financiera. Nuestro equipo continuará el segui",
+      "value": "Recibimos tu solicitud de Reactivación Financiera. Nuestro equipo continuará el seguimiento."
+    },
+    {
+      "key": "ReactivacionFinancieraView.4ff6cf39e6cf",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Etiqueta: Nombre completo",
+      "value": "Nombre completo"
+    },
+    {
+      "key": "ReactivacionFinancieraView.b4e6fa870e93",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Ejemplo de campo: Tu nombre y apellido",
+      "value": "Tu nombre y apellido"
+    },
+    {
+      "key": "ReactivacionFinancieraView.40651301d1a6",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Etiqueta: Teléfono / WhatsApp",
+      "value": "Teléfono / WhatsApp"
+    },
+    {
+      "key": "ReactivacionFinancieraView.19f400ef51bc",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Ejemplo de campo: Ej. 320 123 4567",
+      "value": "Ej. 320 123 4567"
+    },
+    {
+      "key": "ReactivacionFinancieraView.ab58c0d659b9",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Etiqueta: Central",
+      "value": "Central"
+    },
+    {
+      "key": "ReactivacionFinancieraView.857bd5bca497",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Nombre de opción: Datacrédito",
+      "value": "Datacrédito"
+    },
+    {
+      "key": "ReactivacionFinancieraView.dbff73d9bbf9",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Nombre de opción: TransUnion",
+      "value": "TransUnion"
+    },
+    {
+      "key": "ReactivacionFinancieraView.893bd998df36",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Nombre de opción: Ambas",
+      "value": "Ambas"
+    },
+    {
+      "key": "ReactivacionFinancieraView.ba849adba6e0",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Nombre de opción: No estoy seguro",
+      "value": "No estoy seguro"
+    },
+    {
+      "key": "ReactivacionFinancieraView.64a84d752537",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Etiqueta: Antigüedad",
+      "value": "Antigüedad"
+    },
+    {
+      "key": "ReactivacionFinancieraView.21e72f97d020",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Nombre de opción: Menos de 1 año",
+      "value": "Menos de 1 año"
+    },
+    {
+      "key": "ReactivacionFinancieraView.0f7bec7dcd18",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Nombre de opción: 1 a 3 años",
+      "value": "1 a 3 años"
+    },
+    {
+      "key": "ReactivacionFinancieraView.86be618a94e0",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Nombre de opción: Más de 3 años",
+      "value": "Más de 3 años"
+    },
+    {
+      "key": "ReactivacionFinancieraView.070a261e9566",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Nombre de opción: Ya pagué la deuda",
+      "value": "Ya pagué la deuda"
+    },
+    {
+      "key": "ReactivacionFinancieraView.d731279d0300",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Mensaje: Registrando solicitud…",
+      "value": "Registrando solicitud…"
+    },
+    {
+      "key": "ReactivacionFinancieraView.a50d61e242c6",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Mensaje: Solicitar consulta",
+      "value": "Solicitar consulta"
+    },
+    {
+      "key": "ReactivacionFinancieraView.c60398c5cec5",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Párrafo: \"Tu información es completamente confidencial. Hablemos sin compromiso.\"",
+      "value": "\"Tu información es completamente confidencial. Hablemos sin compromiso.\""
+    },
+    {
+      "key": "ReactivacionFinancieraView.836907bbdfd1",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Texto destacado: Aviso legal:",
+      "value": "Aviso legal:"
+    },
+    {
+      "key": "ReactivacionFinancieraView.85ba440f2df2",
+      "section": "Reactivación financiera",
+      "kind": "text",
+      "label": "Párrafo: * La consultoría de Reactivación Financiera es prestada por una firma jurídica aliada",
+      "value": "* La consultoría de Reactivación Financiera es prestada por una firma jurídica aliada. Autos QP actúa como intermediario y orientador en el proceso."
+    },
+    {
+      "key": "SellCarCta.69aba1343289",
+      "section": "Inicio · Vender mi auto",
+      "kind": "text",
+      "label": "Texto destacado: Tasación Gratuita y Pago Inmediato",
+      "value": "Tasación Gratuita y Pago Inmediato"
+    },
+    {
+      "key": "SellCarCta.506eff5e08d5",
+      "section": "Inicio · Vender mi auto",
+      "kind": "text",
+      "label": "Título de sección: ¿QUIERES VENDER",
+      "value": "¿QUIERES VENDER "
+    },
+    {
+      "key": "SellCarCta.f3e94b556faf",
+      "section": "Inicio · Vender mi auto",
+      "kind": "text",
+      "label": "Texto destacado: TU AUTO?",
+      "value": "TU AUTO?"
+    },
+    {
+      "key": "SellCarCta.9606ca243b06",
+      "section": "Inicio · Vender mi auto",
+      "kind": "text",
+      "label": "Párrafo: Te ofrecemos la mejor valoración del mercado y una venta segura sin intermediarios du",
+      "value": "Te ofrecemos la mejor valoración del mercado y una venta segura sin intermediarios dudosos. Recibimos tu auto en retoma o lo compramos de contado."
+    },
+    {
+      "key": "SellCarCta.106e469d26df",
+      "section": "Inicio · Vender mi auto",
+      "kind": "text",
+      "label": "Texto destacado: Vender mi auto",
+      "value": "Vender mi auto"
+    },
+    {
+      "key": "SellCarCta.9e0a136c39d5",
+      "section": "Inicio · Vender mi auto",
+      "kind": "text",
+      "label": "Texto destacado: Traspaso 100% legal y seguro",
+      "value": "Traspaso 100% legal y seguro"
+    },
+    {
+      "key": "SellCarCta.333796e887d9",
+      "section": "Inicio · Vender mi auto",
+      "kind": "image",
+      "label": "Imagen de la sección Vender mi auto",
+      "value": "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?auto=format&fit=crop&w=800&q=80"
+    },
+    {
+      "key": "SellCarCta.be83bc079cfb",
+      "section": "Inicio · Vender mi auto",
+      "kind": "text",
+      "label": "Descripción de imagen: Vender auto en Autos QP",
+      "value": "Vender auto en Autos QP"
+    },
+    {
+      "key": "SellCarModal.0c4bfc3411d1",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Descripción accesible: Cerrar modal",
+      "value": "Cerrar modal"
+    },
+    {
+      "key": "SellCarModal.875c633faabd",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Texto destacado: Valoración Gratuita",
+      "value": "Valoración Gratuita"
+    },
+    {
+      "key": "SellCarModal.05fc3c831b43",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Título de sección: Vende tu auto a Autos QP",
+      "value": "Vende tu auto a Autos QP"
+    },
+    {
+      "key": "SellCarModal.3376167760e3",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Párrafo: Te ofrecemos la mejor valoración y una venta segura. Sin intermediarios ni complicaci",
+      "value": "Te ofrecemos la mejor valoración y una venta segura. Sin intermediarios ni complicaciones."
+    },
+    {
+      "key": "SellCarModal.fda56c47b6c0",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Subtítulo: ¡Solicitud de tasación enviada!",
+      "value": "¡Solicitud de tasación enviada!"
+    },
+    {
+      "key": "SellCarModal.46c07b5b65d6",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Párrafo: Nos pondremos en contacto contigo de inmediato para revisar las fotos y agendar perit",
+      "value": "Nos pondremos en contacto contigo de inmediato para revisar las fotos y agendar peritaje en el C.C. Outlet Factory."
+    },
+    {
+      "key": "SellCarModal.401a96ab7d7e",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Texto de botón: Cerrar",
+      "value": "Cerrar"
+    },
+    {
+      "key": "SellCarModal.9310d0744202",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Etiqueta: Marca *",
+      "value": "Marca *"
+    },
+    {
+      "key": "SellCarModal.963e7e319d1a",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Etiqueta: Modelo / Línea *",
+      "value": "Modelo / Línea *"
+    },
+    {
+      "key": "SellCarModal.f225a67c0f94",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Ejemplo de campo: Ej. Duster, Stepway, Tracker...",
+      "value": "Ej. Duster, Stepway, Tracker..."
+    },
+    {
+      "key": "SellCarModal.0fbdecdf0d16",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Etiqueta: Año *",
+      "value": "Año *"
+    },
+    {
+      "key": "SellCarModal.907d21a842a6",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Etiqueta: Kilometraje",
+      "value": "Kilometraje"
+    },
+    {
+      "key": "SellCarModal.935df433a83b",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Ejemplo de campo: Ej. 45.000",
+      "value": "Ej. 45.000"
+    },
+    {
+      "key": "SellCarModal.06cc0b33ca97",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Etiqueta: Placa (ciudad)",
+      "value": "Placa (ciudad)"
+    },
+    {
+      "key": "SellCarModal.f1a8a1b71b44",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Ejemplo de campo: Ej. Bogotá",
+      "value": "Ej. Bogotá"
+    },
+    {
+      "key": "SellCarModal.93e71bcba1ff",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Etiqueta: Tu nombre *",
+      "value": "Tu nombre *"
+    },
+    {
+      "key": "SellCarModal.e7227ee2cd55",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Ejemplo de campo: Nombre y apellido",
+      "value": "Nombre y apellido"
+    },
+    {
+      "key": "SellCarModal.b2ec30e056a7",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Etiqueta: WhatsApp / Celular *",
+      "value": "WhatsApp / Celular *"
+    },
+    {
+      "key": "SellCarModal.0dad2c8fc0de",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Ejemplo de campo: 300 123 4567",
+      "value": "300 123 4567"
+    },
+    {
+      "key": "SellCarModal.c4cc7825bdfb",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Texto destacado: Te ofrecemos compra de contado, retoma como parte de pago o venta en consignación.",
+      "value": "Te ofrecemos compra de contado, retoma como parte de pago o venta en consignación."
+    },
+    {
+      "key": "SellCarModal.d731279d0300",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Mensaje: Registrando solicitud…",
+      "value": "Registrando solicitud…"
+    },
+    {
+      "key": "SellCarModal.547c0a078ede",
+      "section": "Formulario de venta",
+      "kind": "text",
+      "label": "Mensaje: Enviar datos para cotización",
+      "value": "Enviar datos para cotización"
+    },
+    {
+      "key": "SocialLinks.5aebcaa66238",
+      "section": "Botones de redes",
+      "kind": "text",
+      "label": "Etiqueta: Facebook",
+      "value": "Facebook"
+    },
+    {
+      "key": "SocialLinks.0a2f8b4f83d7",
+      "section": "Botones de redes",
+      "kind": "text",
+      "label": "Etiqueta: Instagram",
+      "value": "Instagram"
+    },
+    {
+      "key": "SocialLinks.98958b4395e7",
+      "section": "Botones de redes",
+      "kind": "text",
+      "label": "Etiqueta: TikTok",
+      "value": "TikTok"
+    },
+    {
+      "key": "SocialLinks.5350f4cbd671",
+      "section": "Botones de redes",
+      "kind": "text",
+      "label": "Etiqueta: WhatsApp",
+      "value": "WhatsApp"
+    },
+    {
+      "key": "SocialLinks.296dde0b4bf6",
+      "section": "Botones de redes",
+      "kind": "text",
+      "label": "Descripción accesible: Redes sociales",
+      "value": "Redes sociales"
+    },
+    {
+      "key": "SolucionQP.6719dc8ed6c9",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "Título: Comprar",
+      "value": "Comprar"
+    },
+    {
+      "key": "SolucionQP.b5a497bd74ba",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "Subtítulo: Inventario 100% asegurable",
+      "value": "Inventario 100% asegurable"
+    },
+    {
+      "key": "SolucionQP.b6ab6b523205",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "Descripción: Encuentra autos y camionetas multimarca verificados mecánicamente, con peritaje trans",
+      "value": "Encuentra autos y camionetas multimarca verificados mecánicamente, con peritaje transparente y entrega inmediata."
+    },
+    {
+      "key": "SolucionQP.9564f253385a",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "Texto de botón: Ver catálogo",
+      "value": "Ver catálogo"
+    },
+    {
+      "key": "SolucionQP.ad095c7b2855",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "Título: Vender o Retoma",
+      "value": "Vender o Retoma"
+    },
+    {
+      "key": "SolucionQP.73abecf5f9ec",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "Subtítulo: Pago justo y sin rodeos",
+      "value": "Pago justo y sin rodeos"
+    },
+    {
+      "key": "SolucionQP.b03ebe53c783",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "Descripción: Compramos tu vehículo o lo recibimos en parte de pago. También te ofrecemos gestión p",
+      "value": "Compramos tu vehículo o lo recibimos en parte de pago. También te ofrecemos gestión por consignación segura."
+    },
+    {
+      "key": "SolucionQP.83fa8bdeda6b",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "Texto de botón: Tasación inmediata",
+      "value": "Tasación inmediata"
+    },
+    {
+      "key": "SolucionQP.916b2854b2f3",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "Título: Financiar",
+      "value": "Financiar"
+    },
+    {
+      "key": "SolucionQP.a0157a4b86b9",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "Subtítulo: Alianzas bancarias nacionales",
+      "value": "Alianzas bancarias nacionales"
+    },
+    {
+      "key": "SolucionQP.09752036ea6a",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "Descripción: Tramitamos tu crédito con Banco Santander, Occidente, Finandina, Banco W, Bancamía y ",
+      "value": "Tramitamos tu crédito con Banco Santander, Occidente, Finandina, Banco W, Bancamía y cooperativas. Hasta 72 meses."
+    },
+    {
+      "key": "SolucionQP.6dae6adb8605",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "Texto de botón: Simular cuotas",
+      "value": "Simular cuotas"
+    },
+    {
+      "key": "SolucionQP.fb816fe7e3d2",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "Título: Reactivación Financiera",
+      "value": "Reactivación Financiera"
+    },
+    {
+      "key": "SolucionQP.e0c8a36cc052",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "Subtítulo: ★ Diferencial Exclusivo",
+      "value": "★ Diferencial Exclusivo"
+    },
+    {
+      "key": "SolucionQP.8ec8e5d4ba56",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "Descripción: ¿Reportado en Datacrédito o TransUnion? Consultoría jurídica especializada para sanea",
+      "value": "¿Reportado en Datacrédito o TransUnion? Consultoría jurídica especializada para sanear tu historial y volver a calificar."
+    },
+    {
+      "key": "SolucionQP.a50d61e242c6",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "Texto de botón: Solicitar consulta",
+      "value": "Solicitar consulta"
+    },
+    {
+      "key": "SolucionQP.89ba3c8f1684",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "div: Concepto Integral",
+      "value": "Concepto Integral"
+    },
+    {
+      "key": "SolucionQP.61c23cf84f9e",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "Título de sección: La Solución",
+      "value": "La Solución "
+    },
+    {
+      "key": "SolucionQP.0e97614e3af8",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "Texto destacado: QP",
+      "value": "QP"
+    },
+    {
+      "key": "SolucionQP.f6e9bf1b2ac7",
+      "section": "Inicio · La solución QP",
+      "kind": "text",
+      "label": "Párrafo: \"En Autos QP no solo vendemos carros — te damos toda la solución. Compramos, vendemos",
+      "value": "\"En Autos QP no solo vendemos carros — te damos toda la solución. Compramos, vendemos, financiamos con todos los bancos y te ayudamos a reactivarte financieramente si lo necesitas. Todo en un solo lugar.\""
+    },
+    {
+      "key": "Testimonials.f7f871eeae11",
+      "section": "Inicio · Testimonios",
+      "kind": "text",
+      "label": "Título de sección: LO QUE DICEN NUESTROS",
+      "value": "LO QUE DICEN NUESTROS "
+    },
+    {
+      "key": "Testimonials.05ed1abd1797",
+      "section": "Inicio · Testimonios",
+      "kind": "text",
+      "label": "Texto destacado: CLIENTES",
+      "value": "CLIENTES"
+    },
+    {
+      "key": "Testimonials.d45243b945a7",
+      "section": "Inicio · Testimonios",
+      "kind": "text",
+      "label": "Párrafo: Experiencias compartidas con Autos QP en C.C. Outlet Factory",
+      "value": "Experiencias compartidas con Autos QP en C.C. Outlet Factory"
+    },
+    {
+      "key": "Testimonials.a0555f9c0b4b",
+      "section": "Inicio · Testimonios",
+      "kind": "text",
+      "label": "Descripción accesible: Testimonio anterior",
+      "value": "Testimonio anterior"
+    },
+    {
+      "key": "Testimonials.c23079d215da",
+      "section": "Inicio · Testimonios",
+      "kind": "text",
+      "label": "Descripción accesible: Testimonio siguiente",
+      "value": "Testimonio siguiente"
+    },
+    {
+      "key": "VehicleDetailModal.0c4bfc3411d1",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Descripción accesible: Cerrar modal",
+      "value": "Cerrar modal"
+    },
+    {
+      "key": "VehicleDetailModal.48df5b18cbf7",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Texto destacado: Autos",
+      "value": "Autos"
+    },
+    {
+      "key": "VehicleDetailModal.0e97614e3af8",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Texto destacado: QP",
+      "value": "QP"
+    },
+    {
+      "key": "VehicleDetailModal.e56b811685ae",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "div: Nuevo ingreso",
+      "value": "Nuevo ingreso"
+    },
+    {
+      "key": "VehicleDetailModal.8a213f026e95",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Descripción de imagen: Miniatura",
+      "value": "Miniatura"
+    },
+    {
+      "key": "VehicleDetailModal.0e32369f876b",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Texto destacado: Vehículo verificado en historial, libre de embargos y",
+      "value": "Vehículo verificado en historial, libre de embargos y "
+    },
+    {
+      "key": "VehicleDetailModal.26b3a062aaa7",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Texto resaltado: 100% asegurable",
+      "value": "100% asegurable"
+    },
+    {
+      "key": "VehicleDetailModal.c31be6d7e73a",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Texto destacado: Precio de contado:",
+      "value": "Precio de contado:"
+    },
+    {
+      "key": "VehicleDetailModal.d22fc6cdb8ac",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Párrafo: COP",
+      "value": " COP"
+    },
+    {
+      "key": "VehicleDetailModal.77f6ca1996bb",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Texto destacado: Listo para traspaso",
+      "value": "Listo para traspaso"
+    },
+    {
+      "key": "VehicleDetailModal.ff2e8906a443",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Subtítulo: Ficha técnica y especificaciones",
+      "value": "Ficha técnica y especificaciones"
+    },
+    {
+      "key": "VehicleDetailModal.2ee99d841775",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Texto resaltado: Año:",
+      "value": "Año:"
+    },
+    {
+      "key": "VehicleDetailModal.fa39d9ee8ad7",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Texto resaltado: Km:",
+      "value": "Km:"
+    },
+    {
+      "key": "VehicleDetailModal.fdaf71a9174d",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Texto resaltado: Caja:",
+      "value": "Caja:"
+    },
+    {
+      "key": "VehicleDetailModal.250373750547",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Texto resaltado: Combustible:",
+      "value": "Combustible:"
+    },
+    {
+      "key": "VehicleDetailModal.64c7b6857d9d",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Texto resaltado: Color:",
+      "value": "Color:"
+    },
+    {
+      "key": "VehicleDetailModal.c3479adee835",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Texto resaltado: Placa:",
+      "value": "Placa:"
+    },
+    {
+      "key": "VehicleDetailModal.ab607d1687ef",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Texto destacado: Termina en",
+      "value": " Termina en "
+    },
+    {
+      "key": "VehicleDetailModal.07bdb417da0a",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Texto resaltado: Motor:",
+      "value": "Motor:"
+    },
+    {
+      "key": "VehicleDetailModal.91f7121bcf30",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Texto resaltado: SOAT vigente:",
+      "value": "SOAT vigente:"
+    },
+    {
+      "key": "VehicleDetailModal.9f35f7722e43",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Texto resaltado: Tecnomecánica:",
+      "value": "Tecnomecánica:"
+    },
+    {
+      "key": "VehicleDetailModal.88448a35c45e",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Texto destacado: Garantía Opcional de Caja y Motor Disponible",
+      "value": "Garantía Opcional de Caja y Motor Disponible"
+    },
+    {
+      "key": "VehicleDetailModal.2da04d14a13c",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Texto destacado: Preguntar al asesor virtual",
+      "value": "Preguntar al asesor virtual"
+    },
+    {
+      "key": "VehicleDetailModal.9ce3b95a858e",
+      "section": "Ficha del vehículo",
+      "kind": "text",
+      "label": "Texto destacado: Simular crédito para este valor ($",
+      "value": "Simular crédito para este valor ($ "
+    },
+    {
+      "key": "WhatsAppFloatingButton.1e1290783f11",
+      "section": "Bot · Botón de atención",
+      "kind": "text",
+      "label": "Párrafo: ¿Asesoría inmediata?",
+      "value": "¿Asesoría inmediata?"
+    },
+    {
+      "key": "WhatsAppFloatingButton.60b3444ff44f",
+      "section": "Bot · Botón de atención",
+      "kind": "text",
+      "label": "Párrafo: ¡Habla con nuestro asesor virtual!",
+      "value": "¡Habla con nuestro asesor virtual!"
+    },
+    {
+      "key": "WhatsAppFloatingButton.d4231114127d",
+      "section": "Bot · Botón de atención",
+      "kind": "text",
+      "label": "Descripción accesible: Cerrar aviso",
+      "value": "Cerrar aviso"
+    },
+    {
+      "key": "WhatsAppFloatingButton.89a3c521972c",
+      "section": "Bot · Botón de atención",
+      "kind": "text",
+      "label": "Descripción accesible: Abrir asesoría inmediata",
+      "value": "Abrir asesoría inmediata"
+    },
+    {
+      "key": "company.7dcbb3737f2d",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Nombre: AUTOS QP S.A.S.",
+      "value": "AUTOS QP S.A.S."
+    },
+    {
+      "key": "company.065000a20af8",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Marca: Autos QP",
+      "value": "Autos QP"
+    },
+    {
+      "key": "company.7d3ed5335323",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Identificación en las políticas: 901.263.615-6",
+      "value": "901.263.615-6"
+    },
+    {
+      "key": "company.6f70f683592b",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Eslogan: Abriendo caminos contigo",
+      "value": "Abriendo caminos contigo"
+    },
+    {
+      "key": "company.36b316943c37",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Eslogan secundario: MÁS QUE AUTOS, CREAMOS CONEXIONES",
+      "value": "MÁS QUE AUTOS, CREAMOS CONEXIONES"
+    },
+    {
+      "key": "company.d8b22e8cf6f0",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Subtítulo: Encuentra el auto que se adapta a tu vida. Calidad, confianza y el mejor servicio.",
+      "value": "Encuentra el auto que se adapta a tu vida. Calidad, confianza y el mejor servicio."
+    },
+    {
+      "key": "company.9908cf3ed647",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Dirección completa: C.C. Outlet Factory, Av. de las Américas #62-84, Local 128, Puente Aranda, Bogotá",
+      "value": "C.C. Outlet Factory, Av. de las Américas #62-84, Local 128, Puente Aranda, Bogotá"
+    },
+    {
+      "key": "company.11929a5d8819",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Dirección corta: C.C. Outlet Factory, Local 128, Bogotá",
+      "value": "C.C. Outlet Factory, Local 128, Bogotá"
+    },
+    {
+      "key": "company.a617b74e68a6",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Teléfono principal visible: 321 891 2903",
+      "value": "321 891 2903"
+    },
+    {
+      "key": "company.462a906adeb4",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Teléfono principal para llamadas (con código de país): 573218912903",
+      "value": "573218912903"
+    },
+    {
+      "key": "company.278c9d0e9a73",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Teléfono secundario visible: 300 252 3226",
+      "value": "300 252 3226"
+    },
+    {
+      "key": "company.06f6a2dcfd76",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Teléfono secundario para llamadas (con código de país): 573002523226",
+      "value": "573002523226"
+    },
+    {
+      "key": "company.60c4cd5e891a",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Correo visible en la web (no cambia el SMTP): autosqpc@gmail.com",
+      "value": "autosqpc@gmail.com"
+    },
+    {
+      "key": "company.080f7b7e1f32",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Horario entre semana: Lunes a sábado 9:00 a.m. – 6:00 p.m.",
+      "value": "Lunes a sábado 9:00 a.m. – 6:00 p.m."
+    },
+    {
+      "key": "company.bd8694dd1194",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Horario fines de semana: Domingos y festivos 10:00 a.m. – 3:00 p.m.",
+      "value": "Domingos y festivos 10:00 a.m. – 3:00 p.m."
+    },
+    {
+      "key": "company.c1e252662528",
+      "section": "Datos de contacto y empresa",
+      "kind": "link",
+      "label": "Enlace de Facebook: https://www.facebook.com/share/19fMWb1pLP/?mibextid=wwXIfr",
+      "value": "https://www.facebook.com/share/19fMWb1pLP/?mibextid=wwXIfr"
+    },
+    {
+      "key": "company.a27546ad9a78",
+      "section": "Datos de contacto y empresa",
+      "kind": "link",
+      "label": "Enlace de Instagram: https://www.instagram.com/autosqp?vrfl=ZGtucHlndDI4bjM2&utm_source=qr",
+      "value": "https://www.instagram.com/autosqp?vrfl=ZGtucHlndDI4bjM2&utm_source=qr"
+    },
+    {
+      "key": "company.2a3bce221520",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Usuario de Instagram: @autosqp",
+      "value": "@autosqp"
+    },
+    {
+      "key": "company.639cced2c440",
+      "section": "Datos de contacto y empresa",
+      "kind": "link",
+      "label": "Enlace de TikTok Autos QP: https://www.tiktok.com/@autosqp?_r=1&_t=ZS-9BKQB0VbcOb",
+      "value": "https://www.tiktok.com/@autosqp?_r=1&_t=ZS-9BKQB0VbcOb"
+    },
+    {
+      "key": "company.74f4c653570a",
+      "section": "Datos de contacto y empresa",
+      "kind": "link",
+      "label": "Enlace de TikTok asesoría: https://www.tiktok.com/@jenn_quimba?_r=1&_t=ZS-9BKPyEk75AV",
+      "value": "https://www.tiktok.com/@jenn_quimba?_r=1&_t=ZS-9BKPyEk75AV"
+    },
+    {
+      "key": "company.7b93c12920ef",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Usuario de TikTok asesoría: @jenn_quimba",
+      "value": "@jenn_quimba"
+    },
+    {
+      "key": "company.d6f6a75e96c5",
+      "section": "Datos de contacto y empresa",
+      "kind": "link",
+      "label": "Enlace de WhatsApp: https://wa.me/573218912903",
+      "value": "https://wa.me/573218912903"
+    },
+    {
+      "key": "company.fb8792abe52f",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Nombre: Banco Santander",
+      "value": "Banco Santander"
+    },
+    {
+      "key": "company.5cc572ed25b7",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Nombre: Banco de Occidente",
+      "value": "Banco de Occidente"
+    },
+    {
+      "key": "company.67e7543af0d4",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Nombre: Finandina",
+      "value": "Finandina"
+    },
+    {
+      "key": "company.2e27ef674086",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Nombre: Banco W",
+      "value": "Banco W"
+    },
+    {
+      "key": "company.cee4c10f9407",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Nombre: Bancamía",
+      "value": "Bancamía"
+    },
+    {
+      "key": "company.07b3d10a3ea1",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Nombre: Cooperativas de Crédito",
+      "value": "Cooperativas de Crédito"
+    },
+    {
+      "key": "company.88aa11fee61d",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Nombre: La Equidad Seguros",
+      "value": "La Equidad Seguros"
+    },
+    {
+      "key": "company.18ad8d270637",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Nombre: Mapfre",
+      "value": "Mapfre"
+    },
+    {
+      "key": "company.de4630303d1d",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Nombre: Qualitas",
+      "value": "Qualitas"
+    },
+    {
+      "key": "company.684f0ec52018",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Nombre: HDI Seguros",
+      "value": "HDI Seguros"
+    },
+    {
+      "key": "company.95f295b58cf5",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Nombre: Zurich",
+      "value": "Zurich"
+    },
+    {
+      "key": "company.9f19a586e9a9",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Nombre: Sura Seguros",
+      "value": "Sura Seguros"
+    },
+    {
+      "key": "company.7345acbdfa4c",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Aviso de garantía: Servicio opcional con costo, otorgado por un aliado (no por Autos QP). Solo caja y mo",
+      "value": "Servicio opcional con costo, otorgado por un aliado (no por Autos QP). Solo caja y motor. Pregunta a tu asesor."
+    },
+    {
+      "key": "company.c4413558ee43",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Condiciones de garantía: Servicio opcional, no incluido en el precio del vehículo. El cliente debe solicitarlo",
+      "value": "Servicio opcional, no incluido en el precio del vehículo. El cliente debe solicitarlo y tiene un costo adicional que paga el cliente. La garantía de caja y motor es otorgada por una empresa aliada (un tercero), no por Autos QP S.A.S., que actúa solo como intermediario. Aplica únicamente a vehículos de modelo menor a 10 años y cubre solo caja y motor. Cobertura, vigencia, exclusiones y valor dependen del proveedor y se entregan por escrito antes de contratar."
+    },
+    {
+      "key": "faqs.a5cf621aa5c5",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Compra de Vehículos",
+      "value": "Compra de Vehículos"
+    },
+    {
+      "key": "faqs.4e893f4629ab",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Los vehículos son 100% asegurables?",
+      "value": "¿Los vehículos son 100% asegurables?"
+    },
+    {
+      "key": "faqs.b43825c13f2a",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Sí. Todos nuestros vehículos pasan por un riguroso proceso de verificación jurídica y",
+      "value": "Sí. Todos nuestros vehículos pasan por un riguroso proceso de verificación jurídica y mecánica, y son asegurables en cualquier compañía de seguros del mercado nacional."
+    },
+    {
+      "key": "faqs.bc1527b1ce8e",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Hacen peritaje?",
+      "value": "¿Hacen peritaje?"
+    },
+    {
+      "key": "faqs.156fb136b073",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Sí. Todos nuestros vehículos son inspeccionados minuciosamente antes de ofrecerse al ",
+      "value": "Sí. Todos nuestros vehículos son inspeccionados minuciosamente antes de ofrecerse al cliente. Te entregamos el carro en excelentes condiciones y con total transparencia en su historial."
+    },
+    {
+      "key": "faqs.d890c2261cb4",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Puedo hacer retoma (entregar mi carro como parte de pago)?",
+      "value": "¿Puedo hacer retoma (entregar mi carro como parte de pago)?"
+    },
+    {
+      "key": "faqs.af235aac19dd",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Sí. Recibimos tu vehículo como parte de pago. Lo evaluamos técnicamente y te hacemos ",
+      "value": "Sí. Recibimos tu vehículo como parte de pago. Lo evaluamos técnicamente y te hacemos una oferta justa de mercado que puedes aplicar inmediatamente a la compra de tu nuevo vehículo."
+    },
+    {
+      "key": "faqs.99847b8b6859",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Qué documentos necesito para comprar un vehículo?",
+      "value": "¿Qué documentos necesito para comprar un vehículo?"
+    },
+    {
+      "key": "faqs.cab47d152ee3",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Cédula de ciudadanía, comprobante de ingresos (extractos bancarios recientes o certif",
+      "value": "Cédula de ciudadanía, comprobante de ingresos (extractos bancarios recientes o certificación laboral) y, si aplica según el análisis de crédito, la información del codeudor."
+    },
+    {
+      "key": "faqs.5b7e8561dd0c",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Los precios son negociables?",
+      "value": "¿Los precios son negociables?"
+    },
+    {
+      "key": "faqs.d2eacceb9a28",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Trabajamos con precios altamente competitivos del mercado. En muchos casos existe mar",
+      "value": "Trabajamos con precios altamente competitivos del mercado. En muchos casos existe margen razonable de negociación. Consúltanos directamente para brindarte la mejor oferta."
+    },
+    {
+      "key": "faqs.9bebd8cada05",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Financiamiento",
+      "value": "Financiamiento"
+    },
+    {
+      "key": "faqs.d48a25c40fbe",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Con qué bancos trabajan?",
+      "value": "¿Con qué bancos trabajan?"
+    },
+    {
+      "key": "faqs.d96fdd4851f2",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Trabajamos con las principales entidades financieras del país: Banco Santander, Banco",
+      "value": "Trabajamos con las principales entidades financieras del país: Banco Santander, Banco de Occidente, Finandina, Banco W, Bancamía y diversas cooperativas de crédito, entre otros aliados."
+    },
+    {
+      "key": "faqs.d46191a0c421",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Trabajan con Davivienda?",
+      "value": "¿Trabajan con Davivienda?"
+    },
+    {
+      "key": "faqs.e725b2d6bfc3",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Por el momento no tenemos alianza activa con Davivienda, pero contamos con muchas otr",
+      "value": "Por el momento no tenemos alianza activa con Davivienda, pero contamos con muchas otras entidades financieras aliadas que pueden ofrecerte excelentes condiciones, tasas competitivas y plazos flexibles."
+    },
+    {
+      "key": "faqs.80224898da29",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿La consulta del crédito afecta mi historial?",
+      "value": "¿La consulta del crédito afecta mi historial?"
+    },
+    {
+      "key": "faqs.9161883b6d4f",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: No. La consulta inicial de perfil crediticio con nuestros asesores no afecta tu punta",
+      "value": "No. La consulta inicial de perfil crediticio con nuestros asesores no afecta tu puntaje ni historial. Solo cuando se radica formalmente ante la entidad bancaria elegida puede quedar un registro de solicitud."
+    },
+    {
+      "key": "faqs.0ddc26cd2209",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Puedo financiar si estoy reportado en Datacrédito?",
+      "value": "¿Puedo financiar si estoy reportado en Datacrédito?"
+    },
+    {
+      "key": "faqs.25ea4d31f58a",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Dependiendo de tu situación específica, sí puede haber opciones. Además contamos con ",
+      "value": "Dependiendo de tu situación específica, sí puede haber opciones. Además contamos con nuestro servicio exclusivo y diferencial de Reactivación Financiera para ayudarte a mejorar tu perfil y buscar alternativas viables."
+    },
+    {
+      "key": "faqs.3d6e98ee2b52",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Cuánto tiempo tarda la aprobación del crédito?",
+      "value": "¿Cuánto tiempo tarda la aprobación del crédito?"
+    },
+    {
+      "key": "faqs.75dcf70834ee",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Los tiempos varían según cada entidad y la documentación suministrada, pero en la gra",
+      "value": "Los tiempos varían según cada entidad y la documentación suministrada, pero en la gran mayoría de casos obtenemos una respuesta preliminar o definitiva en 24 a 72 horas hábiles."
+    },
+    {
+      "key": "faqs.1cd8c7e71c08",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Puedo financiar el 100% del vehículo?",
+      "value": "¿Puedo financiar el 100% del vehículo?"
+    },
+    {
+      "key": "faqs.5ea49e9309e5",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Depende de tu perfil crediticio e ingresos comprobados. Algunas de nuestras entidades",
+      "value": "Depende de tu perfil crediticio e ingresos comprobados. Algunas de nuestras entidades aliadas financian hasta el 100% del valor comercial. Nuestros asesores te orientan sin costo según tu caso puntual."
+    },
+    {
+      "key": "faqs.b24b3b7204a7",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Venta de Vehículos",
+      "value": "Venta de Vehículos"
+    },
+    {
+      "key": "faqs.4a12df3db7a0",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Compran vehículos particulares?",
+      "value": "¿Compran vehículos particulares?"
+    },
+    {
+      "key": "faqs.55d0fb968d55",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Sí. Compramos tu vehículo de contado. Realizamos una inspección profesional rápida y ",
+      "value": "Sí. Compramos tu vehículo de contado. Realizamos una inspección profesional rápida y te presentamos una oferta en firme a precio justo y con pago seguro e inmediato."
+    },
+    {
+      "key": "faqs.7270ddd01872",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Pueden vender mi carro en consignación?",
+      "value": "¿Pueden vender mi carro en consignación?"
+    },
+    {
+      "key": "faqs.c46dd7aa6f7f",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Sí. Si prefieres no venderlo directamente, lo publicamos en nuestras plataformas y vi",
+      "value": "Sí. Si prefieres no venderlo directamente, lo publicamos en nuestras plataformas y vitrina física en el C.C. Outlet Factory, encargándonos de toda la exhibición, filtrado de compradores y gestión comercial por ti."
+    },
+    {
+      "key": "faqs.da3f97c6f064",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Puedo vender mi vehículo si todavía está financiado?",
+      "value": "¿Puedo vender mi vehículo si todavía está financiado?"
+    },
+    {
+      "key": "faqs.348cc1a14d40",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Sí, es totalmente posible. Nuestros asesores jurídicos y comerciales te guían paso a ",
+      "value": "Sí, es totalmente posible. Nuestros asesores jurídicos y comerciales te guían paso a paso para realizar el levantamiento de prenda y la cancelación del saldo de forma 100% segura y transparente."
+    },
+    {
+      "key": "faqs.5dcfe6a11e96",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Reactivación Financiera ★",
+      "value": "Reactivación Financiera ★"
+    },
+    {
+      "key": "faqs.ea7a9bcdf616",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Qué es la Reactivación Financiera?",
+      "value": "¿Qué es la Reactivación Financiera?"
+    },
+    {
+      "key": "faqs.f552c700026d",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Es un servicio exclusivo y diferencial de Autos QP en el que una consultora jurídica ",
+      "value": "Es un servicio exclusivo y diferencial de Autos QP en el que una consultora jurídica y financiera aliada analiza tu situación en centrales de riesgo (Datacrédito, TransUnion) y te orienta de forma personalizada para sanear tu historial y volver a acceder a financiamiento vehicular."
+    },
+    {
+      "key": "faqs.7cfd2d140ab5",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Tiene costo la consulta?",
+      "value": "¿Tiene costo la consulta?"
+    },
+    {
+      "key": "faqs.f34ca9f85924",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Consúltanos directamente a través de WhatsApp o nuestro formulario para conocer las c",
+      "value": "Consúltanos directamente a través de WhatsApp o nuestro formulario para conocer las condiciones vigentes de atención y diagnóstico inicial."
+    },
+    {
+      "key": "faqs.b27e55091bcb",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Mi información es confidencial?",
+      "value": "¿Mi información es confidencial?"
+    },
+    {
+      "key": "faqs.c7901a15c561",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Sí, absolutamente. Toda la información personal y financiera que compartas es tratada",
+      "value": "Sí, absolutamente. Toda la información personal y financiera que compartas es tratada con estricta confidencialidad bajo los lineamientos de la Ley 1581 de 2012 de Protección de Datos Personales."
+    },
+    {
+      "key": "faqs.a426de270ea1",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Cuánto tiempo toma el proceso de reactivación?",
+      "value": "¿Cuánto tiempo toma el proceso de reactivación?"
+    },
+    {
+      "key": "faqs.25abad0dae92",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Depende de la complejidad de cada caso y de las entidades involucradas. Tras la consu",
+      "value": "Depende de la complejidad de cada caso y de las entidades involucradas. Tras la consulta inicial, nuestro equipo legal aliado te entregará un diagnóstico claro y un plan de acción con tiempos estimados realistas."
+    },
+    {
+      "key": "faqs.de8d837b5d51",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Seguros y Garantía Mecánica",
+      "value": "Seguros y Garantía Mecánica"
+    },
+    {
+      "key": "faqs.497bb26c24cc",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Los vehículos incluyen garantía?",
+      "value": "¿Los vehículos incluyen garantía?"
+    },
+    {
+      "key": "faqs.7685feb29a97",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Los vehículos se entregan inspeccionados y en las condiciones acordadas en el negocio",
+      "value": "Los vehículos se entregan inspeccionados y en las condiciones acordadas en el negocio. Adicionalmente, para modelos menores a 10 años, tienes la posibilidad de solicitar de forma opcional una garantía mecánica especializada de caja y motor."
+    },
+    {
+      "key": "faqs.2d0dc8382333",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Quién otorga la garantía de caja y motor?",
+      "value": "¿Quién otorga la garantía de caja y motor?"
+    },
+    {
+      "key": "faqs.b51749cc139c",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: La otorga una empresa aliada especializada (un tercero), no directamente Autos QP S.A",
+      "value": "La otorga una empresa aliada especializada (un tercero), no directamente Autos QP S.A.S. Nosotros te conectamos con el proveedor y te acompañamos durante todo el proceso de contratación."
+    },
+    {
+      "key": "faqs.617e821c7f3a",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Tiene costo la garantía?",
+      "value": "¿Tiene costo la garantía?"
+    },
+    {
+      "key": "faqs.04ab1b549c84",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Sí. Es un servicio opcional con valor agregado que paga el cliente; no viene incluido",
+      "value": "Sí. Es un servicio opcional con valor agregado que paga el cliente; no viene incluido dentro del precio base del vehículo. Debes solicitarla al momento de la negociación y tu asesor te presentará los costos y coberturas por escrito."
+    },
+    {
+      "key": "faqs.5e3cf601215c",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Qué cubre la garantía y para qué vehículos aplica?",
+      "value": "¿Qué cubre la garantía y para qué vehículos aplica?"
+    },
+    {
+      "key": "faqs.cd03a237ea1a",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Cubre exclusivamente componentes de caja de cambios y motor. Aplica únicamente a vehí",
+      "value": "Cubre exclusivamente componentes de caja de cambios y motor. Aplica únicamente a vehículos con año de modelo menor a 10 años. Las especificaciones de cobertura, vigencia y exclusiones son estipuladas por la compañía proveedora antes de contratar."
+    },
+    {
+      "key": "faqs.3fe5a7ffaa3f",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Pregunta: ¿Puedo cotizar el seguro del vehículo con ustedes?",
+      "value": "¿Puedo cotizar el seguro del vehículo con ustedes?"
+    },
+    {
+      "key": "faqs.ff9af63e61d5",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Respuesta: Sí. Mantenemos convenios con aseguradoras líderes como La Equidad, Mapfre, Qualitas, ",
+      "value": "Sí. Mantenemos convenios con aseguradoras líderes como La Equidad, Mapfre, Qualitas, HDI, Zurich y Sura. Te entregamos una cotización comparativa sin costo de seguro todo riesgo y SOAT para que salgas del concesionario con todo resuelto."
+    },
+    {
+      "key": "ContactoView.00894c12978f.2",
+      "section": "Contacto",
+      "kind": "text",
+      "label": "Texto destacado: Chatea con nosotros",
+      "value": "Chatea con nosotros"
+    },
+    {
+      "key": "InventoryView.ff1f2d19999e.2",
+      "section": "Inventario",
+      "kind": "text",
+      "label": "Nombre de opción: Todas",
+      "value": "Todas"
+    },
+    {
+      "key": "LegalModal.7dcbb3737f2d.2",
+      "section": "Políticas y privacidad",
+      "kind": "text",
+      "label": "Texto resaltado: AUTOS QP S.A.S.",
+      "value": "AUTOS QP S.A.S."
+    },
+    {
+      "key": "Navbar.c2fc94c262a6.2",
+      "section": "Menú principal",
+      "kind": "text",
+      "label": "Etiqueta: Inventario",
+      "value": "Inventario"
+    },
+    {
+      "key": "NosotrosView.c34e7623a5c1.2",
+      "section": "Nosotros",
+      "kind": "text",
+      "label": "Título de sección: Nuestros",
+      "value": "Nuestros "
+    },
+    {
+      "key": "SocialLinks.98958b4395e7.2",
+      "section": "Botones de redes",
+      "kind": "text",
+      "label": "Etiqueta: TikTok",
+      "value": "TikTok"
+    },
+    {
+      "key": "company.2a3bce221520.2",
+      "section": "Datos de contacto y empresa",
+      "kind": "text",
+      "label": "Usuario de TikTok Autos QP: @autosqp",
+      "value": "@autosqp"
+    },
+    {
+      "key": "faqs.a5cf621aa5c5.2",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Compra de Vehículos",
+      "value": "Compra de Vehículos"
+    },
+    {
+      "key": "faqs.a5cf621aa5c5.3",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Compra de Vehículos",
+      "value": "Compra de Vehículos"
+    },
+    {
+      "key": "faqs.a5cf621aa5c5.4",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Compra de Vehículos",
+      "value": "Compra de Vehículos"
+    },
+    {
+      "key": "faqs.a5cf621aa5c5.5",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Compra de Vehículos",
+      "value": "Compra de Vehículos"
+    },
+    {
+      "key": "faqs.9bebd8cada05.2",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Financiamiento",
+      "value": "Financiamiento"
+    },
+    {
+      "key": "faqs.9bebd8cada05.3",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Financiamiento",
+      "value": "Financiamiento"
+    },
+    {
+      "key": "faqs.9bebd8cada05.4",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Financiamiento",
+      "value": "Financiamiento"
+    },
+    {
+      "key": "faqs.9bebd8cada05.5",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Financiamiento",
+      "value": "Financiamiento"
+    },
+    {
+      "key": "faqs.9bebd8cada05.6",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Financiamiento",
+      "value": "Financiamiento"
+    },
+    {
+      "key": "faqs.b24b3b7204a7.2",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Venta de Vehículos",
+      "value": "Venta de Vehículos"
+    },
+    {
+      "key": "faqs.b24b3b7204a7.3",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Venta de Vehículos",
+      "value": "Venta de Vehículos"
+    },
+    {
+      "key": "faqs.5dcfe6a11e96.2",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Reactivación Financiera ★",
+      "value": "Reactivación Financiera ★"
+    },
+    {
+      "key": "faqs.5dcfe6a11e96.3",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Reactivación Financiera ★",
+      "value": "Reactivación Financiera ★"
+    },
+    {
+      "key": "faqs.5dcfe6a11e96.4",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Reactivación Financiera ★",
+      "value": "Reactivación Financiera ★"
+    },
+    {
+      "key": "faqs.de8d837b5d51.2",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Seguros y Garantía Mecánica",
+      "value": "Seguros y Garantía Mecánica"
+    },
+    {
+      "key": "faqs.de8d837b5d51.3",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Seguros y Garantía Mecánica",
+      "value": "Seguros y Garantía Mecánica"
+    },
+    {
+      "key": "faqs.de8d837b5d51.4",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Seguros y Garantía Mecánica",
+      "value": "Seguros y Garantía Mecánica"
+    },
+    {
+      "key": "faqs.de8d837b5d51.5",
+      "section": "Preguntas frecuentes · Respuestas",
+      "kind": "text",
+      "label": "Nombre de categoría: Seguros y Garantía Mecánica",
+      "value": "Seguros y Garantía Mecánica"
+    }
+  ],
+  "testimonials": [
+    {
+      "id": "test-1",
+      "name": "Carlos Méndez",
+      "role": "Cliente verificado de Google Reviews",
+      "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
+      "rating": 5,
+      "comment": "Excelente atención y transparencia en todo el proceso. Compré mi carro con total confianza. ¡Recomendados!",
+      "vehiclePurchased": "Renault Duster 2019",
+      "date": "Hace 2 semanas"
+    },
+    {
+      "id": "test-2",
+      "name": "Mariana Duarte",
+      "role": "Cliente verificado de Google Reviews",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
+      "rating": 5,
+      "comment": "Tenía dudas por estar reportada y gracias al servicio de Reactivación Financiera pude sanear mi caso y estrenar camioneta para mi familia. Un equipo humano increíble.",
+      "vehiclePurchased": "Chevrolet Tracker 2022",
+      "date": "Hace 1 mes"
+    },
+    {
+      "id": "test-3",
+      "name": "Felipe Salamanca",
+      "role": "Cliente verificado de Google Reviews",
+      "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
+      "rating": 5,
+      "comment": "Vendí mi anterior vehículo con ellos en consignación en tiempo récord y a un precio justo, y de inmediato me financiaron el nuevo con Finandina. Todo en un solo lugar.",
+      "vehiclePurchased": "Ford Fiesta Titanium",
+      "date": "Hace 3 semanas"
+    },
+    {
+      "id": "test-4",
+      "name": "Johana Cárdenas",
+      "role": "Cliente verificado de Google Reviews",
+      "avatar": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80",
+      "rating": 5,
+      "comment": "La garantía opcional de caja y motor me dio una tranquilidad total para viajar por carretera. Los asesores en Outlet Factory me atendieron como reyes.",
+      "vehiclePurchased": "Mazda CX-30 Grand Touring",
+      "date": "Hace 1 mes"
+    }
+  ]
+}

@@ -1,15 +1,14 @@
+import { webText } from "../content";
 import React, { useState } from 'react';
 import { Vehicle } from '../types';
 import { COMPANY_INFO } from '../data/company';
 import { openChat } from '../chat';
 import { X, ShieldCheck, Check, MessageSquare, Calculator, Calendar, Gauge, Fuel, Cog, Palette, MapPin } from 'lucide-react';
-
 interface VehicleDetailModalProps {
   vehicle: Vehicle | null;
   onClose: () => void;
   onSimulateCredit: (price: number) => void;
 }
-
 export const VehicleDetailModal: React.FC<VehicleDetailModalProps> = ({
   vehicle,
   onClose,
@@ -17,26 +16,19 @@ export const VehicleDetailModal: React.FC<VehicleDetailModalProps> = ({
 }) => {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   if (!vehicle) return null;
-
   const handleWhatsAppInquiry = () => {
     const text = `Hola Autos QP, estoy interesado en el ${vehicle.make} ${vehicle.model} ${vehicle.version} (${vehicle.year}) publicado por $ ${vehicle.price?.toLocaleString('es-CO')} COP. ¿Sigue disponible?`;
-    openChat(vehicle.id); onClose();
+    openChat(vehicle.id);
+    onClose();
   };
-
   const handleSimulate = () => {
     onSimulateCredit(vehicle.price);
     onClose();
   };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+  return <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
       <div className="relative w-full max-w-4xl bg-[#11161d] border border-[#232c37] rounded-3xl shadow-2xl overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
         {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 z-30 p-2 rounded-full bg-[#0a0d10]/80 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-          aria-label="Cerrar modal"
-        >
+        <button onClick={onClose} className="absolute top-4 right-4 z-30 p-2 rounded-full bg-[#0a0d10]/80 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer" aria-label={webText("VehicleDetailModal.0c4bfc3411d1", "Cerrar modal")}>
           <X className="w-5 h-5" />
         </button>
 
@@ -46,45 +38,26 @@ export const VehicleDetailModal: React.FC<VehicleDetailModalProps> = ({
             <div className="space-y-3">
               {/* Main Image */}
               <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-slate-900 border border-slate-800">
-                <img
-                  src={vehicle.images[selectedImageIndex] || vehicle.images[0]}
-                  alt={`${vehicle.make} ${vehicle.model}`}
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
+                <img src={vehicle.images[selectedImageIndex] || vehicle.images[0]} alt={`${vehicle.make} ${vehicle.model}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 <div className="absolute top-3 left-3 flex items-center gap-1 bg-[#0b0e12]/85 px-2.5 py-1 rounded-md border border-slate-700">
-                  <span className="text-[10px] font-bold text-white">Autos</span>
-                  <span className="text-[10px] font-bold text-[#00C896]">QP</span>
+                  <span className="text-[10px] font-bold text-white">{webText("VehicleDetailModal.48df5b18cbf7", "Autos")}</span>
+                  <span className="text-[10px] font-bold text-[#00C896]">{webText("VehicleDetailModal.0e97614e3af8", "QP")}</span>
                 </div>
-                {vehicle.isNewArrival && (
-                  <div className="absolute top-3 right-3 bg-[#00C896] text-slate-950 text-[10px] font-black uppercase px-2 py-0.5 rounded">
-                    Nuevo ingreso
-                  </div>
-                )}
+                {vehicle.isNewArrival && <div className="absolute top-3 right-3 bg-[#00C896] text-slate-950 text-[10px] font-black uppercase px-2 py-0.5 rounded">{webText("VehicleDetailModal.e56b811685ae", "Nuevo ingreso")}</div>}
               </div>
 
               {/* Thumbnails if multiple images exist */}
-              {vehicle.images.length > 1 && (
-                <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                  {vehicle.images.map((img, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setSelectedImageIndex(idx)}
-                      className={`relative w-16 h-12 rounded-lg overflow-hidden border-2 cursor-pointer shrink-0 transition-all ${
-                        selectedImageIndex === idx ? 'border-[#00C896]' : 'border-transparent opacity-60 hover:opacity-100'
-                      }`}
-                    >
-                      <img src={img} alt="Miniatura" className="w-full h-full object-cover" />
-                    </button>
-                  ))}
-                </div>
-              )}
+              {vehicle.images.length > 1 && <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                  {vehicle.images.map((img, idx) => <button key={idx} onClick={() => setSelectedImageIndex(idx)} className={`relative w-16 h-12 rounded-lg overflow-hidden border-2 cursor-pointer shrink-0 transition-all ${selectedImageIndex === idx ? 'border-[#00C896]' : 'border-transparent opacity-60 hover:opacity-100'}`}>
+                      <img src={img} alt={webText("VehicleDetailModal.8a213f026e95", "Miniatura")} className="w-full h-full object-cover" />
+                    </button>)}
+                </div>}
             </div>
 
             {/* Quick 100% asegurabilidad notice */}
             <div className="mt-4 p-3 rounded-xl bg-[#00C896]/10 border border-[#00C896]/30 flex items-center gap-2.5 text-xs text-slate-200">
               <ShieldCheck className="w-5 h-5 text-[#00C896] shrink-0" />
-              <span>Vehículo verificado en historial, libre de embargos y <strong>100% asegurable</strong>.</span>
+              <span>{webText("VehicleDetailModal.0e32369f876b", "Veh\xEDculo verificado en historial, libre de embargos y ")}<strong>{webText("VehicleDetailModal.26b3a062aaa7", "100% asegurable")}</strong>{"."}</span>
             </div>
           </div>
 
@@ -107,90 +80,77 @@ export const VehicleDetailModal: React.FC<VehicleDetailModalProps> = ({
               {/* Price */}
               <div className="py-2 border-y border-slate-800 flex items-baseline justify-between">
                 <div>
-                  <span className="text-[11px] text-slate-400 block uppercase">Precio de contado:</span>
-                  <p className="text-2xl sm:text-3xl font-black text-white tabular-nums">
-                    $ {vehicle.price?.toLocaleString('es-CO')} COP
-                  </p>
+                  <span className="text-[11px] text-slate-400 block uppercase">{webText("VehicleDetailModal.c31be6d7e73a", "Precio de contado:")}</span>
+                  <p className="text-2xl sm:text-3xl font-black text-white tabular-nums">{"$ "}{vehicle.price?.toLocaleString('es-CO')}{webText("VehicleDetailModal.d22fc6cdb8ac", " COP")}</p>
                 </div>
-                <span className="text-xs text-[#00C896] font-semibold">Listo para traspaso</span>
+                <span className="text-xs text-[#00C896] font-semibold">{webText("VehicleDetailModal.77f6ca1996bb", "Listo para traspaso")}</span>
               </div>
 
               {/* Ficha Técnica Grid */}
               <div className="space-y-2">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Ficha técnica y especificaciones
-                </h3>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">{webText("VehicleDetailModal.ff2e8906a443", "Ficha t\xE9cnica y especificaciones")}</h3>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="p-2 rounded-lg bg-[#0b0e12] border border-[#1f2834] flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-slate-400" />
-                    <span><strong>Año:</strong> {vehicle.year}</span>
+                    <span><strong>{webText("VehicleDetailModal.2ee99d841775", "A\xF1o:")}</strong> {vehicle.year}</span>
                   </div>
                   <div className="p-2 rounded-lg bg-[#0b0e12] border border-[#1f2834] flex items-center gap-2">
                     <Gauge className="w-4 h-4 text-slate-400" />
-                    <span><strong>Km:</strong> {vehicle.mileage?.toLocaleString('es-CO')}</span>
+                    <span><strong>{webText("VehicleDetailModal.fa39d9ee8ad7", "Km:")}</strong> {vehicle.mileage?.toLocaleString('es-CO')}</span>
                   </div>
                   <div className="p-2 rounded-lg bg-[#0b0e12] border border-[#1f2834] flex items-center gap-2">
                     <Cog className="w-4 h-4 text-slate-400" />
-                    <span><strong>Caja:</strong> {vehicle.transmission}</span>
+                    <span><strong>{webText("VehicleDetailModal.fdaf71a9174d", "Caja:")}</strong> {vehicle.transmission}</span>
                   </div>
                   <div className="p-2 rounded-lg bg-[#0b0e12] border border-[#1f2834] flex items-center gap-2">
                     <Fuel className="w-4 h-4 text-slate-400" />
-                    <span><strong>Combustible:</strong> {vehicle.fuel}</span>
+                    <span><strong>{webText("VehicleDetailModal.250373750547", "Combustible:")}</strong> {vehicle.fuel}</span>
                   </div>
                   <div className="p-2 rounded-lg bg-[#0b0e12] border border-[#1f2834] flex items-center gap-2">
                     <Palette className="w-4 h-4 text-slate-400" />
-                    <span><strong>Color:</strong> {vehicle.specs.color}</span>
+                    <span><strong>{webText("VehicleDetailModal.64c7b6857d9d", "Color:")}</strong> {vehicle.specs.color}</span>
                   </div>
                   <div className="p-2 rounded-lg bg-[#0b0e12] border border-[#1f2834] flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-slate-400" />
-                    <span><strong>Placa:</strong> Termina en {vehicle.specs.plateEnding}</span>
+                    <span><strong>{webText("VehicleDetailModal.c3479adee835", "Placa:")}</strong>{webText("VehicleDetailModal.ab607d1687ef", " Termina en ")}{vehicle.specs.plateEnding}</span>
                   </div>
                 </div>
               </div>
 
               {/* Engine & Docs */}
               <div className="text-xs text-slate-300 space-y-1 p-3 rounded-xl bg-[#0d1217] border border-slate-800">
-                <p><strong>Motor:</strong> {vehicle.specs.engine}</p>
-                <p><strong>SOAT vigente:</strong> {vehicle.specs.soatValidUntil}</p>
-                <p><strong>Tecnomecánica:</strong> {vehicle.specs.technoValidUntil}</p>
+                <p><strong>{webText("VehicleDetailModal.07bdb417da0a", "Motor:")}</strong> {vehicle.specs.engine}</p>
+                <p><strong>{webText("VehicleDetailModal.91f7121bcf30", "SOAT vigente:")}</strong> {vehicle.specs.soatValidUntil}</p>
+                <p><strong>{webText("VehicleDetailModal.9f35f7722e43", "Tecnomec\xE1nica:")}</strong> {vehicle.specs.technoValidUntil}</p>
                 <p className="pt-1 text-slate-400">{vehicle.description}</p>
               </div>
 
               {/* Optional Warranty Legal Notice for vehicles < 10 years */}
-              {vehicle.hasOptionalWarranty && (
-                <div className="p-3.5 rounded-xl bg-[#141b22] border border-[#00C896]/30 text-[11px] text-slate-300 space-y-1">
+              {vehicle.hasOptionalWarranty && <div className="p-3.5 rounded-xl bg-[#141b22] border border-[#00C896]/30 text-[11px] text-slate-300 space-y-1">
                   <div className="flex items-center gap-1.5 text-[#00C896] font-bold">
                     <ShieldCheck className="w-4 h-4" />
-                    <span>Garantía Opcional de Caja y Motor Disponible</span>
+                    <span>{webText("VehicleDetailModal.88448a35c45e", "Garant\xEDa Opcional de Caja y Motor Disponible")}</span>
                   </div>
                   <p className="text-slate-400 text-[10px] leading-relaxed">
                     {COMPANY_INFO.warrantyLegalFull}
                   </p>
-                </div>
-              )}
+                </div>}
             </div>
 
             {/* CTAs */}
             <div className="space-y-2 pt-2 border-t border-slate-800">
-              <button
-                onClick={handleWhatsAppInquiry}
-                className="w-full py-3 px-4 rounded-xl font-bold text-slate-950 bg-[#00C896] hover:bg-[#00B486] transition-all transform hover:-translate-y-0.5 shadow-lg shadow-[#00C896]/20 cursor-pointer flex items-center justify-center gap-2 text-sm"
-              >
+              <button onClick={handleWhatsAppInquiry} className="w-full py-3 px-4 rounded-xl font-bold text-slate-950 bg-[#00C896] hover:bg-[#00B486] transition-all transform hover:-translate-y-0.5 shadow-lg shadow-[#00C896]/20 cursor-pointer flex items-center justify-center gap-2 text-sm">
                 <MessageSquare className="w-4 h-4" />
-                <span>Preguntar al asesor virtual</span>
+                <span>{webText("VehicleDetailModal.2da04d14a13c", "Preguntar al asesor virtual")}</span>
               </button>
 
-              <button
-                onClick={handleSimulate}
-                className="w-full py-2.5 px-4 rounded-xl font-semibold text-slate-300 hover:text-white bg-[#19222c] hover:bg-[#222e3b] transition-colors cursor-pointer flex items-center justify-center gap-2 text-xs"
-              >
+              <button onClick={handleSimulate} className="w-full py-2.5 px-4 rounded-xl font-semibold text-slate-300 hover:text-white bg-[#19222c] hover:bg-[#222e3b] transition-colors cursor-pointer flex items-center justify-center gap-2 text-xs">
                 <Calculator className="w-4 h-4 text-[#00C896]" />
-                <span>Simular crédito para este valor ($ {vehicle.price?.toLocaleString('es-CO')})</span>
+                <span>{webText("VehicleDetailModal.9ce3b95a858e", "Simular cr\xE9dito para este valor ($ ")}{vehicle.price?.toLocaleString('es-CO')}{")"}</span>
               </button>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    </div>;
 };

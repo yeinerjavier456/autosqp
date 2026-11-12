@@ -8,7 +8,7 @@ from unittest.mock import patch
 import zipfile
 import tracemalloc
 
-from sqlalchemy import create_engine, event, MetaData, Table, Column, Integer, String, ForeignKey, DateTime, select, update
+from sqlalchemy import create_engine, event, MetaData, Table, Column, Integer, String, ForeignKey, DateTime, JSON, select, update
 from sqlalchemy.orm import Session
 from backend import company_backup as backups
 
@@ -144,6 +144,21 @@ class CompanyBackupTests(unittest.TestCase):
         self.db.commit()
         backups.restore_archive(self.db, self.meta, 1, saved['id'], self.static)
         self.assertEqual(self.db.execute(select(contacts.c.id)).scalars().all(), [2])
+
+    def test_website_content_and_local_images_are_scoped_and_old_backup_remains_restorable(self):
+        saved_before_cms = self.snapshot()
+        content = Table('company_website_content', self.meta, Column('company_id', ForeignKey('companies.id'), primary_key=True), Column('website_content', JSON))
+        content.create(self.engine)
+        self.db.execute(content.insert(), [dict(company_id=1,website_content={'values':{'image':'/api/static/one.txt'}}), dict(company_id=2,website_content={'values':{'image':'/api/static/two.txt'}})])
+        self.db.commit()
+        current = self.snapshot()
+        with zipfile.ZipFile(backups.archive_path(1,current['id'])) as archive:
+            data=json.loads(archive.read('data.json'))
+            self.assertEqual([row['company_id'] for row in data['tables']['company_website_content']], [1])
+            self.assertIn('files/one.txt', archive.namelist())
+            self.assertNotIn('files/two.txt', archive.namelist())
+        backups.restore_archive(self.db,self.meta,1,saved_before_cms['id'],self.static)
+        self.assertEqual(self.db.execute(select(content.c.company_id)).scalars().all(), [2])
 
     def test_cross_company_reference_blocks_archive(self):
         # An unscoped child connected to another tenant's lead must never leak.

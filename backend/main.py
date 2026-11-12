@@ -38,6 +38,7 @@ from fastapi.responses import FileResponse
 from fastapi.responses import StreamingResponse
 from schema_ensure import ensure_mysql_schema
 from public_website import ContactMessage, inventory_page, submit_contact, client_ip
+import website_content
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
@@ -5579,6 +5580,37 @@ def update_company_finance_password(
 @app.get('/public/website/inventory')
 def get_website_inventory(request: Request, before_id: Optional[int] = Query(default=None, ge=1), db: Session = Depends(get_db)):
     return inventory_page(db, resolve_public_company(db, request), before_id)
+
+
+@app.get('/companies/{company_id}/website')
+def get_company_website(company_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    website_content.ensure_global_editor(current_user)
+    return website_content.read_content(db, company_id)
+
+
+@app.put('/companies/{company_id}/website')
+def update_company_website(company_id: int, payload: website_content.WebsiteContentUpdate,
+                           db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    website_content.ensure_global_editor(current_user)
+    return website_content.save_content(db, company_id, payload, current_user.id)
+
+
+@app.post('/companies/{company_id}/website/images')
+def upload_company_website_image(company_id: int, file: UploadFile = File(...), db: Session = Depends(get_db),
+                                 current_user: models.User = Depends(get_current_user)):
+    website_content.ensure_global_editor(current_user)
+    if not db.query(models.Company.id).filter_by(id=company_id).first():
+        raise HTTPException(404, 'Empresa no encontrada')
+    return website_content.save_image(file.file.read(8 * 1024 * 1024 + 1), company_id)
+
+
+@app.get('/public/website/content')
+def get_public_website_content(request: Request, response: Response, db: Session = Depends(get_db)):
+    company = resolve_public_company(db, request)
+    if company is None:
+        raise HTTPException(404, 'Este dominio no tiene una empresa configurada')
+    response.headers['Cache-Control'] = 'no-store'
+    return website_content.read_content(db, company.id)
 
 
 @app.post('/public/website/contact')
