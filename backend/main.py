@@ -39,7 +39,7 @@ from fastapi.responses import StreamingResponse
 from schema_ensure import ensure_mysql_schema
 from public_website import ContactMessage, inventory_page, submit_contact, client_ip
 import website_content
-from dashboard_management import management_metrics
+from dashboard_management import management_metrics, management_transition_leads
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
@@ -9552,6 +9552,32 @@ def get_dashboard_period_bounds(
         return f"{dt_value.day:02d}"
 
     return normalized_period, start, end, bucket_labels, bucket_label
+
+@app.get('/stats/advisor/transitions')
+def read_dashboard_transition_leads(
+    status: str = Query(..., min_length=1, max_length=50),
+    start_date: str = Query(..., min_length=10, max_length=10),
+    end_date: str = Query(..., min_length=10, max_length=10),
+    employee_id: Optional[int] = Query(None, ge=1),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if get_user_role_name(current_user) not in {'admin', 'super_admin'}:
+        raise HTTPException(403, 'Solo los administradores pueden consultar estas métricas')
+    if not current_user.company_id:
+        raise HTTPException(400, 'Selecciona una empresa para consultar sus leads')
+    if employee_id and not db.query(models.User.id).filter(
+        models.User.id == employee_id, models.User.company_id == current_user.company_id
+    ).first():
+        raise HTTPException(404, 'Empleado no encontrado en esta empresa')
+    _, start, end, _, _ = get_dashboard_period_bounds('custom', start_date, end_date)
+    start = start.replace(tzinfo=BOGOTA_TZ).astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    end = end.replace(tzinfo=BOGOTA_TZ).astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    return management_transition_leads(db, current_user.company_id, start, end, status,
+                                       [employee_id] if employee_id else None, offset, limit)
+
 
 @app.get("/stats/advisor", response_model=schemas.RoleDashboardStats)
 def read_advisor_stats(

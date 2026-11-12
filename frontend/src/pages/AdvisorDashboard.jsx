@@ -16,6 +16,7 @@ import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import { useAuth } from '../context/AuthContext';
 import { getRoleName, getRolePermissions } from '../config/views';
 import { useNavigate } from 'react-router-dom';
+import DashboardTransitionLeads from '../components/DashboardTransitionLeads';
 
 ChartJS.register(
     CategoryScale,
@@ -137,11 +138,11 @@ const buildBarData = (entries, label, color) => ({
     ],
 });
 
-const DashboardMetric = ({ title, value, helper, onClick, className = 'border-slate-200 bg-white text-slate-900', helperClassName = 'text-slate-500' }) => {
+const DashboardMetric = ({ title, value, helper, onClick, disabled = false, className = 'border-slate-200 bg-white text-slate-900', helperClassName = 'text-slate-500' }) => {
     const sharedClassName = `rounded-2xl border p-5 shadow-sm text-left transition ${className}`;
     if (onClick) {
         return (
-            <button type="button" onClick={onClick} className={`${sharedClassName} hover:-translate-y-0.5 hover:shadow-md cursor-pointer`}>
+            <button type="button" disabled={disabled} onClick={onClick} className={`${sharedClassName} hover:-translate-y-0.5 hover:shadow-md cursor-pointer disabled:cursor-wait disabled:opacity-50`}>
                 <p className="text-sm font-medium opacity-80">{title}</p>
                 <p className="mt-2 text-3xl font-bold">{value}</p>
                 <p className={`mt-2 text-xs ${helperClassName}`}>{helper}</p>
@@ -163,6 +164,7 @@ const AdvisorDashboard = () => {
     const [stats, setStats] = useState(null);
     const [loadingStats, setLoadingStats] = useState(true);
     const [statsError, setStatsError] = useState('');
+    const [transitionSelection, setTransitionSelection] = useState(null);
     const [dashboardView, setDashboardView] = useState('autosqp');
     const todayBogota = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
     const defaultRange = ['admin', 'super_admin'].includes(getRoleName(user)) ? { start: todayBogota, end: todayBogota } : getLast7DaysRange();
@@ -788,6 +790,9 @@ const AdvisorDashboard = () => {
                             <DashboardMetric key={status}
                                 title={status === 'credit_study' ? 'Solicitudes de crédito · Estudio' : formatLabel(status, LEAD_STATUS_LABELS)}
                                 value={stats.management_transition_distribution?.[status] || 0}
+                                disabled={loadingStats || Boolean(statsError)}
+                                onClick={() => setTransitionSelection({ ...appliedFilters, status,
+                                    employeeName: isEmployeeFiltered ? (employees.find(employee => String(employee.id) === String(appliedFilters.employee))?.full_name || 'Empleado seleccionado') : 'Todos los empleados' })}
                                 helper={`Leads que pasaron a ${formatLabel(status, LEAD_STATUS_LABELS).toLocaleLowerCase()} ${rangeLabel}.`}
                                 className={['lost', 'discarded'].includes(status) ? 'border-rose-200 bg-rose-50 text-rose-900' : 'border-blue-200 bg-blue-50 text-blue-900'}
                                 helperClassName={['lost', 'discarded'].includes(status) ? 'text-rose-700' : 'text-blue-700'} />
@@ -1258,6 +1263,7 @@ const AdvisorDashboard = () => {
                 )}
             </div>
             )}
+            {transitionSelection && <DashboardTransitionLeads selection={transitionSelection} statusLabels={LEAD_STATUS_LABELS} onClose={() => setTransitionSelection(null)} />}
         </div>
     );
 };

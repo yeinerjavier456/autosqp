@@ -39,12 +39,7 @@ def human_management(entry):
     return True
 
 
-def management_metrics(db, company_id, start, end, actor_ids=None, bucket=None):
-    """Count unique leads per destination; repeated visits do not inflate cards.
-
-    Stream scalar rows, not ORM lead graphs. Date filtering occurs in SQL and
-    includes soft-deleted/reassigned leads. Hard-purged history cannot be rebuilt.
-    """
+def history_query(db, company_id, start, end, actor_ids=None):
     query = db.query(models.LeadHistory.user_id, models.LeadHistory.lead_id,
                      models.LeadHistory.previous_status, models.LeadHistory.new_status,
                      models.LeadHistory.comment, models.LeadHistory.created_at,
@@ -55,6 +50,27 @@ def management_metrics(db, company_id, start, end, actor_ids=None, bucket=None):
              models.LeadHistory.user_id.isnot(None))
     if actor_ids is not None:
         query = query.filter(models.LeadHistory.user_id.in_(actor_ids))
+    return query
+
+
+def transition_target(entry):
+    if not human_management(entry):
+        return None
+    previous = canonical_status(entry.previous_status)
+    target = canonical_status(entry.new_status)
+    # Legacy soft deletions intentionally kept previous_status == new_status.
+    if normalized(entry.comment).startswith('lead eliminado del tablero'):
+        target = 'discarded'
+    return target if target and target != previous else None
+
+
+def management_metrics(db, company_id, start, end, actor_ids=None, bucket=None):
+    """Count unique leads per destination; repeated visits do not inflate cards.
+
+    Stream scalar rows, not ORM lead graphs. Date filtering occurs in SQL and
+    includes soft-deleted/reassigned leads. Hard-purged history cannot be rebuilt.
+    """
+    query = history_query(db, company_id, start, end, actor_ids)
     destinations = defaultdict(set)
     managed = {}
     daily = defaultdict(set)
@@ -68,12 +84,8 @@ def management_metrics(db, company_id, start, end, actor_ids=None, bucket=None):
         sources[entry.lead_id] = entry.source or 'sin_fuente'
         if bucket:
             daily[bucket(entry.created_at)].add(entry.lead_id)
-        previous = canonical_status(entry.previous_status)
-        target = canonical_status(entry.new_status)
-        # Legacy soft deletions intentionally kept previous_status == new_status.
-        if normalized(entry.comment).startswith('lead eliminado del tablero'):
-            target = 'discarded'
-        if target and target != previous:
+        target = transition_target(entry)
+        if target:
             destinations[target].add(entry.lead_id)
     current = defaultdict(int)
     for status in managed.values():
@@ -89,3 +101,31 @@ def management_metrics(db, company_id, start, end, actor_ids=None, bucket=None):
         'management_leads_by_day': {day: len(ids) for day, ids in daily.items()},
         'management_source_distribution': dict(source_counts),
     }
+
+
+def management_transition_leads(db, company_id, start, end, status, actor_ids=None, offset=0, limit=50):
+    """Same event predicate as the cards; one row per lead, even after reassignment."""
+    status = canonical_status(status)
+    latest = {}
+    for entry in history_query(db, company_id, start, end, actor_ids).yield_per(500):
+        if transition_target(entry) == status:
+            latest[entry.lead_id] = max(latest.get(entry.lead_id, entry.created_at), entry.created_at)
+    ordered = sorted(latest, key=lambda lead_id: (latest[lead_id], lead_id), reverse=True)
+    page_ids = ordered[offset:offset + limit]
+    items = []
+    if page_ids:
+        rows = db.query(models.Lead.id, models.Lead.name, models.Lead.phone, models.Lead.email,
+                        models.Lead.status, models.Lead.deleted_at,
+                        models.User.full_name.label('assigned_name'), models.User.email.label('assigned_email')).outerjoin(
+            models.User, models.User.id == models.Lead.assigned_to_id
+        ).filter(models.Lead.company_id == company_id, models.Lead.id.in_(page_ids)).all()
+        by_id = {row.id: row for row in rows}
+        for lead_id in page_ids:
+            row = by_id.get(lead_id)
+            if row is None:
+                continue
+            items.append({'id': row.id, 'name': row.name, 'phone': row.phone, 'email': row.email,
+                          'current_status': 'discarded' if row.deleted_at else canonical_status(row.status),
+                          'assigned_name': row.assigned_name or row.assigned_email,
+                          'transitioned_at': latest[lead_id]})
+    return {'items': items, 'total': len(ordered), 'offset': offset, 'limit': limit, 'status': status}

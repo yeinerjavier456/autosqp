@@ -20,7 +20,8 @@ async function main() {
   const browser=await chromium.launch({channel:'msedge',headless:true});
   try {
     const page=await browser.newPage({viewport:{width:1440,height:1050}});
-    const errors=[], calls=[];
+    const errors=[], calls=[], detailCalls=[];
+    let discardAttempts=0;
     page.on('pageerror',error=>errors.push(error.message));
     await page.addInitScript(()=>localStorage.setItem('token','dashboard-fixture'));
     await page.route('**/api/**',route=>{
@@ -29,6 +30,15 @@ async function main() {
       let data=[];
       if(endpoint==='/api/users/me') data={id:1,company_id:1,full_name:'Admin Prueba',email:'admin@test.local',role:{id:1,name:'admin',base_role_name:'admin'}};
       else if(endpoint==='/api/users/') data={items:[{id:7,company_id:1,full_name:'Camila Prueba'},{id:8,company_id:1,full_name:'Otro empleado'}]};
+      else if(endpoint==='/api/stats/advisor/transitions') {
+        const params=Object.fromEntries(url.searchParams);detailCalls.push(params);
+        if(params.status==='discarded' && discardAttempts++===0) return route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({detail:'Error de prueba, reintenta'})});
+        const offset=Number(params.offset||0),total=params.status==='new'?0:params.status==='contacted'?51:1;
+        const items=Array.from({length:Math.min(50,Math.max(0,total-offset))},(_,index)=>({id:offset+index+1,
+          name:params.status==='lost'?'Lead perdido y reasignado':`Cliente ${offset+index+1}`,phone:'3001234567',email:'cliente@test.local',
+          transitioned_at:'2026-11-12T15:00:00',current_status:params.status==='discarded'?'discarded':'new',assigned_name:'Responsable actual distinto'}));
+        data={items,total,offset,limit:50,status:params.status};
+      }
       else if(endpoint==='/api/stats/advisor') {
         calls.push(Object.fromEntries(url.searchParams));
         const selected=url.searchParams.get('employee_id')==='7';
@@ -62,13 +72,40 @@ async function main() {
     await page.getByText('Estado actual de los leads gestionados',{exact:true}).waitFor();
     const call=calls.at(-1);
     assert.equal(call.employee_id,'7');assert.equal(call.start_date,'2026-11-12');assert.equal(call.end_date,'2026-11-12');
+    // Unsaved filters must not alter what a metric click queries.
+    await page.getByRole('combobox',{name:'Empleado'}).selectOption('8');
+    await inputs.nth(0).fill('2026-11-11');
+    await section.getByRole('button').filter({has:page.getByText('Perdidos',{exact:true})}).click();
+    let dialog=page.getByRole('dialog');
+    await dialog.getByText('Lead perdido y reasignado',{exact:true}).waitFor();
+    assert.equal(detailCalls.at(-1).employee_id,'7');assert.equal(detailCalls.at(-1).start_date,'2026-11-12');
+    assert.equal(detailCalls.at(-1).end_date,'2026-11-12');assert.equal(detailCalls.at(-1).status,'lost');
+    await dialog.getByText('Responsable actual distinto',{exact:true}).waitFor();
+    assert((await dialog.innerText()).includes('10:00'),'must display 15:00 UTC as 10:00 Bogota');
+    if(process.env.SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.SCREENSHOT_DIR,'dashboard-transition-leads.png')});
+    await page.keyboard.press('Escape');await dialog.waitFor({state:'detached'});
+    await section.getByRole('button').filter({has:page.getByText('Contactados',{exact:true})}).click();
+    dialog=page.getByRole('dialog');await dialog.getByText('Cliente 1',{exact:true}).waitFor();
+    await dialog.getByRole('button',{name:'Siguiente',exact:true}).click();
+    await dialog.getByText('Cliente 51',{exact:true}).waitFor();
+    assert.equal(detailCalls.at(-1).offset,'50');
+    assert(await dialog.getByRole('button',{name:'Siguiente',exact:true}).isDisabled());
+    await dialog.getByRole('button',{name:'Cerrar',exact:true}).click();
+    await section.getByRole('button').filter({has:page.getByText('Descartados',{exact:true})}).click();
+    dialog=page.getByRole('dialog');await dialog.getByRole('alert').waitFor();
+    await dialog.getByRole('button',{name:'Reintentar',exact:true}).click();
+    await dialog.getByText('Cliente 1',{exact:true}).waitFor();
+    await dialog.getByRole('button',{name:'Cerrar',exact:true}).click();
+    await section.getByRole('button').filter({has:page.getByText('Nuevos',{exact:true})}).click();
+    dialog=page.getByRole('dialog');await dialog.getByText('No hay leads que coincidan con este estado, empleado y rango.',{exact:true}).waitFor();
+    await dialog.getByRole('button',{name:'Cerrar',exact:true}).click();
     if(process.env.SCREENSHOT_DIR) {
       await mkdir(process.env.SCREENSHOT_DIR,{recursive:true});
       await section.scrollIntoViewIfNeeded();
       await page.screenshot({path:path.join(process.env.SCREENSHOT_DIR,'dashboard-management.png')});
     }
     assert.deepEqual(errors,[]);
-    console.log('Dashboard: applied actor/date filters, transition cards, discarded/lost management and current-state chart passed.');
+    console.log('Dashboard: applied filters, clickable states, historical leads after reassignment, Bogota time, pagination, retry and empty results passed.');
   } finally {await browser.close();}
 }
 main().catch(error=>{console.error(error);process.exitCode=1;}).finally(()=>server.close());

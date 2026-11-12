@@ -12,7 +12,7 @@ class ManagementTests(unittest.TestCase):
 import datetime as dt
 import models
 from database import Base, engine, SessionLocal
-from dashboard_management import management_metrics
+from dashboard_management import management_metrics, management_transition_leads
 Base.metadata.create_all(engine)
 db=SessionLocal()
 db.add_all([models.Company(id=1,name='One'),models.Company(id=2,name='Two')]);db.flush()
@@ -49,6 +49,47 @@ assert management_metrics(db,1,start,end,[8])['management_transition_distributio
 assert management_metrics(db,1,start,end,[])['management_actions_total']==0
 assert management_metrics(db,1,start,end)['management_leads_total']==5
 assert management_metrics(db,2,start,end,[7])['management_transition_distribution']=={'sold':1}
+for status, count in r['management_transition_distribution'].items():
+    detail=management_transition_leads(db,1,start,end,status,[7])
+    assert detail['total']==count,(status,detail,r)
+    assert len({item['id'] for item in detail['items']})==count
+credit=management_transition_leads(db,1,start,end,'credit_study',[7])
+assert credit['items'][0]['id']==2 and credit['items'][0]['assigned_name']=='9'
+lost=management_transition_leads(db,1,start,end,'lost',[7])
+assert lost['items'][0]['id']==1 and lost['items'][0]['current_status']=='new'
+assert management_transition_leads(db,1,start,end,'discarded',[7])['items'][0]['id']==3
+assert management_transition_leads(db,1,start,end,'sold',[7])['total']==0
+assert management_transition_leads(db,1,start,end,'new',[7])['total']==0 # automatic transfer excluded
+p1=management_transition_leads(db,1,start,end,'contacted',[7],offset=0,limit=1)
+p2=management_transition_leads(db,1,start,end,'contacted',[7],offset=1,limit=1)
+assert p1['total']==p2['total']==2 and p1['items'][0]['id']!=p2['items'][0]['id']
+assert management_transition_leads(db,1,start,end,'contacted',[7],offset=2)['items']==[]
+# Execute the real endpoint and real date parser against the fixture database.
+import ast
+from pathlib import Path
+from types import SimpleNamespace
+from zoneinfo import ZoneInfo
+from fastapi import Query, Depends, HTTPException
+source=ast.parse(Path('backend/main.py').read_text(encoding='utf-8'))
+definitions=[node for node in source.body if isinstance(node,ast.FunctionDef) and node.name in {'read_dashboard_transition_leads','get_dashboard_period_bounds'}]
+for node in definitions:
+    node.decorator_list=[];node.returns=None
+    for arg in node.args.args:arg.annotation=None
+ns=dict(datetime=dt,Query=Query,Depends=Depends,HTTPException=HTTPException,models=models,
+    BOGOTA_TZ=ZoneInfo('America/Bogota'),get_db=lambda:None,get_current_user=lambda:None,
+    get_user_role_name=lambda user:user.role,management_transition_leads=management_transition_leads)
+exec(compile(ast.Module(body=definitions,type_ignores=[]),'<dashboard detail endpoint>','exec'),ns)
+endpoint=ns['read_dashboard_transition_leads']
+args=dict(status='lost',start_date='2026-11-12',end_date='2026-11-12',employee_id=7,offset=0,limit=50,db=db)
+assert endpoint(**args,current_user=SimpleNamespace(company_id=1,role='admin'))['total']==1
+for actor,expected in [(SimpleNamespace(company_id=1,role='asesor'),403),(SimpleNamespace(company_id=None,role='super_admin'),400),(SimpleNamespace(company_id=2,role='admin'),404)]:
+    try:endpoint(**args,current_user=actor)
+    except HTTPException as error:assert error.status_code==expected
+    else:raise AssertionError('unauthorized dashboard details')
+for dates in [('2026-11-13','2026-11-12'),('2026-99-12','2026-11-12')]:
+    try:endpoint(**dict(args,start_date=dates[0],end_date=dates[1]),current_user=SimpleNamespace(company_id=1,role='admin'))
+    except HTTPException as error:assert error.status_code==400
+    else:raise AssertionError('invalid date range')
 '''
         env = dict(os.environ, DATABASE_URL='sqlite://', PYTHONPATH=str(Path(__file__).resolve().parent))
         result = subprocess.run([sys.executable, '-c', script], env=env, capture_output=True, text=True, timeout=45)
