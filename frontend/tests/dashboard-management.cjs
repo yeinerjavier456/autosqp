@@ -28,7 +28,7 @@ async function main() {
       const url=new URL(route.request().url());
       const endpoint=url.pathname.replace('/crm/api','/api');
       let data=[];
-      if(endpoint==='/api/users/me') data={id:1,company_id:1,full_name:'Admin Prueba',email:'admin@test.local',role:{id:1,name:'admin',base_role_name:'admin'}};
+      if(endpoint==='/api/users/me') data={id:1,company_id:1,company:{id:1,name:'AutosQP',public_domain:'autosqp.com',website_url:''},full_name:'Admin Prueba',email:'admin@test.local',role:{id:1,name:'admin',base_role_name:'admin'}};
       else if(endpoint==='/api/users/') data={items:[{id:7,company_id:1,full_name:'Camila Prueba'},{id:8,company_id:1,full_name:'Otro empleado'}]};
       else if(endpoint==='/api/stats/advisor/transitions') {
         const params=Object.fromEntries(url.searchParams);detailCalls.push(params);
@@ -56,6 +56,7 @@ async function main() {
       return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
     });
     await page.goto(`http://127.0.0.1:${server.address().port}/crm/admin/dashboard`,{waitUntil:'domcontentloaded'});
+    assert.equal(await page.getByRole('link',{name:'Ver Web Publica',exact:true}).getAttribute('href'),'https://autosqp.com/');
     await page.getByRole('combobox',{name:'Empleado'}).selectOption('7');
     const inputs=page.locator('input[type=date]');
     await inputs.nth(0).fill('2026-11-12');await inputs.nth(1).fill('2026-11-12');

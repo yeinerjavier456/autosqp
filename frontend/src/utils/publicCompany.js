@@ -232,6 +232,15 @@ export const getPublicCompanyHomeUrl = (companyOrDomain) => {
   const company = typeof companyOrDomain === 'object' && companyOrDomain !== null ? companyOrDomain : null;
   const websiteUrl = normalizeAbsolutePublicUrl(company?.website_url);
   if (websiteUrl) {
+    // AutosQP's old preview/catalog URLs have been replaced by the root site.
+    // Keep custom landing pages and other companies' configured sites intact.
+    try {
+      const parsed = new URL(websiteUrl);
+      if (parsed.hostname.replace(/^www\./, '').toLowerCase() === 'autosqp.com'
+          && ['/', '/preview', '/preview/', '/crm/autos', '/crm/autos/'].includes(parsed.pathname)) {
+        return 'https://autosqp.com/';
+      }
+    } catch { /* Preserve the existing handling of configured URLs. */ }
     return websiteUrl;
   }
 
@@ -240,5 +249,10 @@ export const getPublicCompanyHomeUrl = (companyOrDomain) => {
   const publicBaseUrl = normalizedDomain
     ? `${window.location.protocol}//${normalizedDomain}`
     : window.location.origin;
+  try {
+    if (new URL(publicBaseUrl).hostname.replace(/^www\./, '').toLowerCase() === 'autosqp.com') {
+      return 'https://autosqp.com/';
+    }
+  } catch { /* Other company domains retain the legacy inventory fallback. */ }
   return `${publicBaseUrl}/crm/autos`;
 };

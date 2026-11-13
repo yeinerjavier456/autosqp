@@ -678,7 +678,7 @@ const AdminCompanySettings = () => {
                                 className="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black bg-white"
                             />
                             <p className="mt-1 text-xs text-slate-400">
-                                Si lo dejas vacío, el botón enviará al inventario público /crm/autos.
+                                Si lo dejas vacío, usa la página pública predeterminada: la portada en AutosQP o el inventario /crm/autos en las demás empresas.
                             </p>
                         </div>
 
