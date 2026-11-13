@@ -16,4 +16,4 @@ sudo find "$SITE_ROOT" -type d -exec chmod 755 {} \;
 sudo find "$SITE_ROOT" -type f -exec chmod 644 {} \;
 
 echo "Web estatica copiada en $SITE_ROOT"
-echo "Siguiente paso: ajustar Nginx para usar root $SITE_ROOT en el bloque principal de autosqp.com."
+echo "Siguiente paso: sudo python3 public-site/activate-homepage.py (desde la raíz del repositorio)."

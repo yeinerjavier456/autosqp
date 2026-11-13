@@ -19,9 +19,25 @@ Para servir esta web sin WordPress, en /etc/nginx/sites-available/autosqp cambia
        try_files $uri $uri/ /index.html;
    }
 
+   Importante: elimina la redirección antigua de la portada, por ejemplo:
+   location = / { return 302 /crm/autos; }
+   Si hay un return a /crm/autos en el propio server HTTPS, también debe
+   retirarse. No retires las redirecciones HTTP -> HTTPS ni www -> dominio
+   principal. No agregues un segundo location / ni un segundo location = /.
+
+   Revisa además los location de assets genéricos (si existen): los archivos
+   /assets/ de la portada deben salir de /var/www/html/autosqp-site/assets/,
+   no del directorio antiguo de WordPress o del CRM. /crm/assets/ no se cambia.
+
 4. El bloque PHP de WordPress ya no es necesario para la web estatica. Puedes comentarlo si no usaras WordPress:
    location ~ \.php$ { ... }
 
 5. Valida y recarga:
    sudo nginx -t
    sudo systemctl reload nginx
+
+Antes de editar, guarda una copia de /etc/nginx/sites-available/autosqp.
+No reemplaces todo el archivo: conserva certificados TLS, API, CRM y Adminer.
+El cierre de sesión explícito del CRM vuelve a / mediante navegación completa.
+La web usa navegación hash y rutas relativas, por lo que el mismo build sirve
+en / o /preview/. El inventario público anterior sigue en /crm/autos.

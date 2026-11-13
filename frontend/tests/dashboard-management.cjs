@@ -23,7 +23,7 @@ async function main() {
     const errors=[], calls=[], detailCalls=[];
     let discardAttempts=0;
     page.on('pageerror',error=>errors.push(error.message));
-    await page.addInitScript(()=>localStorage.setItem('token','dashboard-fixture'));
+    await page.addInitScript(()=>{ if (location.pathname.startsWith('/crm/')) localStorage.setItem('token','dashboard-fixture'); });
     await page.route('**/api/**',route=>{
       const url=new URL(route.request().url());
       const endpoint=url.pathname.replace('/crm/api','/api');
@@ -108,6 +108,17 @@ async function main() {
       await section.scrollIntoViewIfNeeded();
       await page.screenshot({path:path.join(process.env.SCREENSHOT_DIR,'dashboard-management.png')});
     }
+    // Explicit logout must leave the /crm router for the domain root.
+    const home=`http://127.0.0.1:${server.address().port}/`;
+    await page.route(home,route=>route.fulfill({contentType:'text/html; charset=utf-8',body:'<meta charset="utf-8"><h1>Portada pública</h1>'}));
+    await page.getByRole('button',{name:'Cerrar Sesion',exact:true}).click();
+    await page.getByRole('button',{name:'Cancelar',exact:true}).click();
+    assert.equal(await page.evaluate(()=>localStorage.getItem('token')),'dashboard-fixture');
+    await page.getByRole('button',{name:'Cerrar Sesion',exact:true}).click();
+    await page.getByRole('button',{name:'Si, cerrar sesion',exact:true}).click();
+    await page.waitForURL(home);
+    assert.equal(await page.evaluate(()=>localStorage.getItem('token')),null);
+    await page.getByRole('heading',{name:'Portada pública',exact:true}).waitFor();
     assert.deepEqual(errors,[]);
     console.log('Dashboard: applied filters, clickable states, historical leads after reassignment, Bogota time, pagination, retry and empty results passed.');
   } finally {await browser.close();}

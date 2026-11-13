@@ -102,6 +102,25 @@ Para publicar la portada, ejecutar `bash public-site/deploy-static-site.sh` y
 comprobar que el server HTTPS utiliza `/var/www/html/autosqp-site` como root,
 sin cambiar `/api/`, `/crm/api/` ni `/crm/`. La compilación usa rutas relativas
 y navegación hash, compatible tanto con `/` como con `/preview/`.
+La redirección antigua de `/` hacia `/crm/autos` debe retirarse del bloque HTTPS
+de AutosQP; consultar `public-site/nginx-autosqp-static-notes.txt` y conservar
+las redirecciones de HTTP a HTTPS y del alias www al dominio principal.
+El cierre de sesión confirmado del CRM elimina el token y navega a `/`, fuera
+del router `/crm`. Se debe recompilar el frontend del CRM para publicar ese cambio.
+
+Para la configuración Nginx original de AutosQP compartida en este proyecto:
+
+```bash
+bash public-site/deploy-static-site.sh
+sudo python3 public-site/activate-homepage.py
+```
+
+La activación solo modifica el bloque HTTPS principal: cambia el directorio de la
+portada y su fallback a index.html y retira los saltos de `/` y `/web/` al inventario.
+Conserva HTTP→HTTPS, www, certificados, CRM, API, preview y Adminer. Guarda una
+copia `autosqp.pre-public-home-*`, valida Nginx y restaura el archivo si falla la
+validación o recarga. Si encuentra una configuración distinta, se detiene sin
+cambiarla. No sustituye todo el archivo ni publica otros dominios automáticamente.
 
 El SMTP y la asociación de dominio deben configurarse desde el CRM. No se
 incluyen contraseñas, claves de IA ni correos de destino suministrados por el navegador.

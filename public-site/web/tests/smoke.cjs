@@ -115,6 +115,10 @@ async function main() {
     await page.evaluate(() => new Promise(resolve => { window.scrollTo(0, 0); requestAnimationFrame(() => requestAnimationFrame(resolve)); }));
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'mobile horizontal overflow');
     if (process.env.SCREENSHOT_DIR) await page.screenshot({ path: path.join(process.env.SCREENSHOT_DIR, 'website-mobile.png'), fullPage: true });
+    await page.goto(base + '/');
+    await page.locator('h1').waitFor();
+    assert.equal(new URL(page.url()).pathname, '/', 'production home must not redirect to preview or CRM');
+    assert(await page.locator('link[rel=stylesheet]').count()>0);
     assert.deepEqual(errors, []);
     console.log('Website smoke checks passed: preview, pagination, inventory modal, shared bot, SMTP success/error, duplicate clicks, mobile layout.');
   } finally { await browser.close(); }

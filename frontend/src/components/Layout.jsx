@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import Swal from 'sweetalert2';
@@ -49,7 +49,6 @@ const Layout = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
     const location = useLocation();
-    const navigate = useNavigate();
     const { user, logout, loading } = useAuth();
     const { unreadCount } = useChat();
 
@@ -98,7 +97,9 @@ const Layout = () => {
         }).then((result) => {
             if (result.isConfirmed) {
                 logout();
-                navigate('/autos', { replace: true });
+                // Leave the CRM router/base path and return to this domain's
+                // public homepage, not /crm/autos or the preview deployment.
+                window.location.replace('/');
             }
         });
     };
