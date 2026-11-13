@@ -900,6 +900,10 @@ class VehicleUpdate(BaseModel):
     sold_by_external_name: Optional[str] = None
 
 class Vehicle(VehicleBase):
+    # Existing/imported vehicles may not have a plate yet. Response validation
+    # must not make an entire sale/receipt/inventory list fail for that reason.
+    # Keep VehicleCreate's required string validation unchanged.
+    plate: Optional[str] = None
     id: int
     company_id: int
     sold_price: Optional[int] = None
@@ -1181,6 +1185,18 @@ class PaymentReceiptUpdate(BaseModel):
     bank: Optional[str] = None
 
 
+class FinancialAccountReference(BaseModel):
+    """Account identification for receipts, never wallet balances/details."""
+    id: int
+    name: str
+    account_type: str = "bank"
+    institution: Optional[str] = None
+    last_four: Optional[str] = None
+    is_active: bool = True
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class PaymentReceipt(PaymentReceiptMinimal):
     sale: Optional[Sale] = None
     user: Optional[User] = None
@@ -1188,7 +1204,7 @@ class PaymentReceipt(PaymentReceiptMinimal):
     resolved_customer_document: Optional[str] = None
     resolved_customer_email: Optional[str] = None
     resolved_customer_phone: Optional[str] = None
-    account: Optional["FinancialAccount"] = None
+    account: Optional[FinancialAccountReference] = None
 
     model_config = ConfigDict(from_attributes=True)
 
